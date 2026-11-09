@@ -459,6 +459,25 @@ def write_audit_rows(rows):
     return ok, failed, now
 
 
+# PURGE-COVERAGE-FLOOR-1 (agent_issues 1002668, GitHub 9661): a guard run that classified only 4 workers still declared scope "all" and the
+# purge deleted the ~110 managed rows it did not write, so worker_health_failure_rate read 2/4 = 0.5 instead of a fleet measure. A purge now
+# also needs the run to cover at least this share of the rows already in the table.
+PURGE_COVERAGE_FLOOR = 0.8
+
+
+def live_row_count():
+    res = d1("SELECT COUNT(*) AS n FROM worker_live_audit", [])
+    try:
+        return int(res["result"][0]["results"][0]["n"])
+    except Exception:
+        return None
+
+
+def purge_allowed(existing, classified):
+    """True when a purge cannot shrink the audit surface: empty/unreadable table or the run covers the floor."""
+    return not existing or classified >= PURGE_COVERAGE_FLOOR * existing
+
+
 def purge_stale(now):
     """AUDIT-STALE-ROWS-1: after a FULL audit, drop rows this run did not advance.
 
@@ -791,9 +810,13 @@ def main():
             sys.exit(0)
     d = run_guard()
     rows = classify(d)
+    existing = live_row_count()
     ok, failed, now = write_audit_rows(rows)
     purged, purge_err = (None, None)
-    if d.get("scope") == "all":
+    if d.get("scope") == "all" and not purge_allowed(existing, len(rows)):
+        purge_err = f"purge skipped: run classified {len(rows)} workers, table held {existing}; a partial report must not shrink the audit surface"
+        print(f"::warning::{purge_err}")
+    elif d.get("scope") == "all":
         purged, purge_err = purge_stale(now)
         if purge_err:
             print(f"::warning::stale-row purge failed: {purge_err}")
