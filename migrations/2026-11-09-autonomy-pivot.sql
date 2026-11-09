@@ -1,5 +1,6 @@
 -- APPLY-BY: ci
 -- DB: qnfo-audit
+-- BACKUP: reach_audience_matrix_bak_20261109
 -- Rollback: DELETE FROM ops_config WHERE key IN ('OWNER_DIRECTIVE_2026_11_09_AUTONOMY_PIVOT_1','outreach_pivot_autonomy'); UPDATE reach_channel_profiles SET status = 'withdrawn', updated_at = datetime('now') WHERE status = 'draft'; (ops_config outreach_pivot_autonomy = off alone restores the quantum cold-email queue and releases every held row)
 -- spof-review: no new cron, trigger, binding, host or credential; two ops_config rows, rewritten draft text nothing posts from, one decision_log row.
 -- AUTONOMY-PIVOT-1 (2026-11-09, charter pillar reach; owner directive 2026-11-09): quantum-computing cold email to academics drew declines and no collaboration, so the owner's
@@ -86,3 +87,12 @@ SELECT 'AUTONOMY-PIVOT-1.4: build the practitioner target feed (named people at 
  'closing probe: SELECT 0 WHERE (SELECT COUNT(*) FROM outreach_log WHERE sent_at > datetime(''now'',''-14 days'') AND email NOT LIKE ''%.edu'' AND email NOT LIKE ''%.ac.%'') = 0',
  'session:autonomy-pivot', 'feature', 'high', 'open', CAST(strftime('%s', 'now') AS INTEGER) * 1000, CAST(strftime('%s', 'now') AS INTEGER) * 1000
 WHERE NOT EXISTS (SELECT 1 FROM agent_issues WHERE title LIKE 'AUTONOMY-PIVOT-1.4%');
+
+-- AUTONOMY-PIVOT-1.5: the fleet's audience matrix (read by the social and reach loops) carries the same positioning. Prior text of each updated row is in
+-- reach_audience_matrix_bak_20261109 (created below before any UPDATE).
+CREATE TABLE IF NOT EXISTS reach_audience_matrix_bak_20261109 AS SELECT * FROM reach_audience_matrix;
+UPDATE reach_audience_matrix SET message = 'I am a systems researcher studying autonomous AI systems: how they operate, fail and get audited. One case study a month with live numbers, including what failed. One researcher with an AI-assisted pipeline, not a lab.', updated_at = datetime('now') WHERE audience = 'employers-industry-leaders';
+UPDATE reach_audience_matrix SET cadence = 'passive only (papers findable by search; no direct outreach to academics since 2026-11-09)', updated_at = datetime('now') WHERE audience = 'academics-quantum-math';
+UPDATE reach_audience_matrix SET lead_channels = 'lesswrong, hacker news, x, bluesky', updated_at = datetime('now') WHERE audience = 'ai-ml-safety-researchers';
+INSERT OR IGNORE INTO reach_audience_matrix (audience, lead_channels, message, proof_asset, actor, cadence, measure, state)
+VALUES ('practitioners-autonomous-systems', 'one-to-one email from public routes, linkedin, bluesky, amsterdam meetups, qnfo.org/work-with-me', 'I study how autonomous AI systems operate, fail and get audited, and I run one in the open with a public failure record. I would like to compare notes and, if useful, work on a concrete problem together.', 'the fleet failure ledger, the Universal Ignorance Audit, merged code-fix pull requests', 'fleet drafts and queues within the outreach caps; owner approves meetings', '5 named people a week (outreach_audiences ranks 2 to 5)', 'positive replies and meetings from non-academic addresses (outreach_reply_rate_30d, warm_conversations_30d)', 'active');
