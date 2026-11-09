@@ -3849,7 +3849,7 @@ async function v3CodeStart(env, b) {
 }
 async function v3CodeStatus(env, id) {
   const r = await cmdOpsFetch(env, "/agents/ops-exec", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ op: "result", id: id }) });
-  const run = r.json && r.json.run;
+  const run = r.json && (r.json.latest || r.json.run);
   if (!run) return v3Json({ ok: r.http !== 404, status: r.http === 404 ? "lost" : "running", steps: [], miss: r.http !== 404, note: r.http !== 404 ? String(r.error || "executor http " + r.http).slice(0, 120) : null, error: r.http === 404 ? "the executor no longer has this run" : null });
   const steps = (run.steps || []).map(function(s) { return { tool: String(s.tool || ""), args: String(s.args || "").replace(/\s+/g, " ").slice(0, 160), ms: Number(s.ms) || 0 }; });
   // Any status other than queued/running is final, as in cmdAgentPoll: an unknown one ("timeout", "cancelled") must end the poll, not spin it for 25 minutes.
@@ -14233,7 +14233,8 @@ function cmdAgentTrace(steps) {
 }
 async function cmdAgentPoll(env, id) {
   const r = await cmdOpsFetch(env, "/agents/ops-exec", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ op: "result", id: id }) });
-  const run = r.json && r.json.run;
+  // SESSION-AUTOCONTINUE-1: follow a continued chain to its last run, so a partial first run is not settled as the answer.
+  const run = r.json && (r.json.latest || r.json.run);
   if (!run) {
     // The run is unknown to the agent (evicted or never stored): fail the row instead of polling for 30 minutes.
     const msg = "agent run lost: " + (r.error || (r.json && r.json.error) || "http " + r.http);
