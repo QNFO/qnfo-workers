@@ -8682,7 +8682,7 @@ async function vxTranscribe(request, env) {
     if (typeof globalThis.__vxStt === "function") return j(await globalThis.__vxStt(buf, request.headers.get("Content-Type") || "audio/webm", env), 200);
     var fr = await fetch(VX_STT_URL, { method: "POST", headers: { "Content-Type": request.headers.get("Content-Type") || "audio/webm", "x-voice-fwd": "1" }, body: buf });
     var fj = await fr.json();
-    return j(fj, fr.status === 200 ? 200 : 502);
+    return j(fj, fr.ok ? 200 : 502);
   } catch (e) { return j({ ok: false, error: "Could not reach the speech service." }, 502); }
 }
 function vxAttach(target, workerName) {
@@ -8701,7 +8701,7 @@ function vxAttach(target, workerName) {
         var ct = (res && res.headers.get("Content-Type") || "").toLowerCase();
         if (!res || res.status === 101 || ct.indexOf("text/html") !== 0) return res;
         var out = res;
-        if (request.method === "GET" && res.status === 200 && typeof HTMLRewriter !== "undefined" && !/script-src[^;]*'none'/.test(res.headers.get("Content-Security-Policy") || "")) {
+        if (request.method === "GET" && res.ok && typeof HTMLRewriter !== "undefined" && !/script-src[^;]*'none'/.test(res.headers.get("Content-Security-Policy") || "")) {
           out = new HTMLRewriter().on("body", { element: function (el) { el.onEndTag(function (t) { t.before('<script src="/__voice.js" defer></script>', { html: true }); }); } }).transform(res);
           out.headers.delete("Content-Length"); out.headers.delete("ETag");
         } else {
