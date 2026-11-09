@@ -112,7 +112,7 @@ function clampMaxTokens(requested, isReason) {
 __name(clampMaxTokens, "clampMaxTokens");
 __name2(clampMaxTokens, "clampMaxTokens");
 __name22(clampMaxTokens, "clampMaxTokens");
-var VERSION = "4.38.5";
+var VERSION = "4.38.6";
 // 4.37.2 KERNEL-PERSONAL-PRIVACY-1: preserve all ten registered reply categories across the content-free telemetry boundary.
 // 4.37.1 KERNEL-PERSONAL-PRIVACY-1: classify twin replies inside the personal plane; AUDIT receives only fixed categories and random event ids, never reply text or excerpts.
 // 4.37.0 KERNEL-EVERYWHERE-1 (2026-11-06, owner directive "IMPLEMENT EVERYWHERE ACROSS ALL AI APPS AND SERVICES AND SURFACES", pillar personal): the twin SYSTEM_PROMPT carries the DOCTRINE-1 kernel 8.2.1 reply recognitions (KERNEL-REPLY-4): end every reply on the answer or result, never on a question, conditional offer or menu; ambiguity gets a stated assumption; a refusal or limit with its reason is a disposition stated declaratively; reversible tool actions are taken and reported in the same reply, and a requested change is made with the tool, not described. Each twin reply is also mirrored to qnfo-audit.personal_replies so the kernel false-stop scan covers this surface. prior 4.36.2
@@ -5081,7 +5081,7 @@ function getKey(){try{var k=localStorage.getItem('cmp-key');if(k)return k;var o=
 function hdrs(){var h={'X-Companion':'1'};var k=getKey();if(k)h.Authorization='Bearer '+k;return h}
 function showLogin(){closeGp();$('composer').classList.add('hide');Array.prototype.forEach.call(document.querySelectorAll('.v'),function(s){s.classList.add('hide')});$('login').classList.remove('hide')}
 function sendCode(){$('li-out').innerHTML='';fetch('/companion/api/login/code',{method:'POST',headers:{'X-Companion':'1'}}).then(function(r){return r.json()}).then(function(r){say($('li-out'),r.reply||r.error,!r.ok);if(r.ok){$('li-step').classList.remove('hide');$('li-send').textContent='Send another code';$('li-code').focus()}}).catch(warn)}
-function verifyCode(){$('li-out').innerHTML='';fetch('/companion/api/login/verify',{method:'POST',headers:{'Content-Type':'application/json','X-Companion':'1'},body:JSON.stringify({code:$('li-code').value})}).then(function(r){return r.json()}).then(function(r){if(!r.ok){say($('li-out'),r.error,true);return}$('login').classList.add('hide');fromHash();go('today')}).catch(warn)}
+function verifyCode(){$('li-out').innerHTML='';fetch('/companion/api/login/verify',{method:'POST',headers:{'Content-Type':'application/json','X-Companion':'1'},body:JSON.stringify({code:$('li-code').value})}).then(function(r){return r.json()}).then(function(r){if(!r.ok){say($('li-out'),r.error,true);return}$('login').classList.add('hide');go('today');fromHash()}).catch(warn)}
 function signOut(){(qstore?qstore.clear().catch(warn):Promise.resolve()).then(function(){showPending();return api('/companion/api/logout',{json:{}})}).then(function(){try{localStorage.removeItem('cmp-key')}catch(e){warn(e)}showLogin()}).catch(warn)}
 function api(path,opt){opt=opt||{};opt.headers=Object.assign(hdrs(),opt.headers||{});if(opt.json!==undefined){opt.method=opt.method||'POST';opt.headers['Content-Type']='application/json';opt.body=JSON.stringify(opt.json);delete opt.json}
  var q=CMPQ.queueable(path,opt);
@@ -5306,7 +5306,7 @@ function fromHash(){var h=location.hash.slice(1);if(!h)return;if(h==='focus'){hi
 // MOOD-HASH-1: with mood prompts off Today has no mood card, so a check-in tap would land on nothing to answer: show the one-tap scale on top.
 api('/companion/api/today').then(function(t){var v=$('v-today'),c=moodCard(t);v.insertBefore(c,v.children[1]||null);c.scrollIntoView()}).catch(warn)},800);return}if(q.n&&(q.a==='done'||q.a==='no'))api('/companion/api/nudge',{json:{id:Number(q.n),state:q.a==='done'?'done':'declined'}}).then(load)}
 if('serviceWorker' in navigator)navigator.serviceWorker.register('/companion/sw.js',{scope:'/companion'}).catch(warn);
-fromHash();go('today')
+go('today');fromHash()
 window.addEventListener('hashchange',fromHash);
 window.addEventListener('online',flushQueue);document.addEventListener('visibilitychange',function(){if(!document.hidden)flushQueue()});
 flushQueue();showPending();
