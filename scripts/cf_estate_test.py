@@ -363,5 +363,56 @@ with tempfile.TemporaryDirectory() as tmp:
         if v is not None:
             os.environ[k] = v
 
+# ------------------------------------------------------------------------------------------------------- D1-REPORT-STORE-1 (R2 store)
+STORE, CALLS = {}, []
+
+
+def fake_r2(method, path, token, data=None, timeout=60):
+    CALLS.append((method, path))
+    if method == "PUT":
+        STORE[urllib_unquote(path.split("/objects/", 1)[1])] = data
+        return 200, b""
+    if method == "GET" and "/objects?prefix=" in path:
+        pre = urllib_unquote(path.split("prefix=", 1)[1].split("&", 1)[0])
+        return 200, json.dumps({"success": True, "result": [{"key": k} for k in STORE if k.startswith(pre)]}).encode()
+    if method == "GET":
+        k = urllib_unquote(path.split("/objects/", 1)[1])
+        return (200, STORE[k]) if k in STORE else (404, b"")
+    return 500, b""
+
+
+from urllib.parse import unquote as urllib_unquote  # noqa: E402
+real_r2 = m.r2_request
+m.r2_request = fake_r2
+ok(m.report_key("qnfo-audit", 0) == "d1-query-report/qnfo-audit/19700101T000000Z.json", "report key is prefix/DB/UTC-timestamp.json", m.report_key("qnfo-audit", 0))
+ok(m.r2_save_report("a", "t", "other/prefix.json", {})[0] is False and not [c for c in CALLS if c[0] == "PUT"], "a key outside d1-query-report/ is refused without a request")
+ok(m.r2_save_report("a", "t", "d1-query-report/../x.json", {})[0] is False, "a traversal key is refused")
+ok(m.newest_baseline_r2("a", "t", "qnfo-audit", 6) is None, "no stored report is not an error (None)")
+STORE["d1-query-report/qnfo-audit/20261104T000000Z.json"] = json.dumps({"d1": {"hours": 6, "tables": [{"table": "hot", "rows_read": 10, "ms": 1}]}}).encode()
+STORE["d1-query-report/qnfo-audit/20261105T000000Z.json"] = json.dumps({"d1": {"hours": 6, "tables": [{"table": "hot", "rows_read": 20, "ms": 2}]}}).encode()
+STORE["d1-query-report/qnfo-audit/20261106T000000Z.json"] = json.dumps({"d1": {"hours": 1, "tables": [{"table": "hot", "rows_read": 99, "ms": 9}]}}).encode()
+STORE["d1-query-report/other-db/20261107T000000Z.json"] = json.dumps({"d1": {"hours": 6, "tables": []}}).encode()
+bl = m.newest_baseline_r2("a", "t", "qnfo-audit", 6)
+ok(bl and bl["_baseline_key"].endswith("20261105T000000Z.json"), "newest earlier report of the same database AND hours is chosen", bl and bl.get("_baseline_key"))
+ok(m.run_d1({"db": "qnfo-audit", "hours": 6, "groups": [], "databases": []}, str(ROOT), bl)["delta"] == [], "a stored baseline feeds compare_d1")
+with tempfile.TemporaryDirectory() as tmp2:
+    dq2 = os.path.join(tmp2, "d.json")
+    write(dq2, json.dumps({"db": "qnfo-audit", "hours": 6, "groups": groups, "databases": [], "errors": []}))
+    os.environ["CLOUDFLARE_API_TOKEN"], os.environ["CLOUDFLARE_ACCOUNT_ID"] = "t", "a"
+    n0 = len(STORE)
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        rc2 = m.main(["d1-query-report", "--input", dq2, "--root", tmp2, "--db", "qnfo-audit", "--hours", "6", "--baseline-r2", "--save"])
+    out2 = buf.getvalue()
+    ok(rc2 == 0 and len(STORE) == n0 + 1 and "baseline: d1-query-report/qnfo-audit/20261105" in out2 and "saved: d1-query-report/qnfo-audit/" in out2, "--baseline-r2 --save reads then writes one object", out2[-400:])
+    puts = [c for c in CALLS if c[0] == "PUT"]
+    ok(len(puts) == 1 and "/objects/d1-query-report/qnfo-audit/" in puts[0][1], "the only PUT is under d1-query-report/", puts)
+    for k in ("CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID"):
+        os.environ.pop(k, None)
+    with contextlib.redirect_stdout(io.StringIO()):
+        ok(m.main(["d1-query-report", "--input", dq2, "--root", tmp2, "--save"]) == 2, "--save without a token exits 2")
+        ok(m.main(["r2-inventory", "--input", dq2, "--root", tmp2, "--save"]) == 2, "--save on another action exits 2")
+m.r2_request = real_r2
+
 print("%d passed, %d failed" % (passed, failed))
 sys.exit(1 if failed else 0)

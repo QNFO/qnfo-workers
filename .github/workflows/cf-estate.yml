@@ -4,7 +4,7 @@ run-name: cf-estate ${{ inputs.action }}
 
 # CF-ESTATE-1 (2026-11-05, pillar core; roadmap rows NEXT-QNFO.INFRA.WORK, PAGE, DNS, D1 and R2). The five read-only estate reports of scripts/cf_estate.py, run with the
 # repository's Cloudflare token (an agent session holds none; CLAUDE.md, Cloudflare actions without a token): worker-inventory, pages-inventory, dns-drift, d1-query-report,
-# r2-inventory. Each prints a markdown summary (also the job summary) and one RESULT_JSON line. Nothing here writes to Cloudflare: scripts/cf-estate.test.mjs fails on a PUT,
+# r2-inventory (d1-query-report also stores its RESULT_JSON in R2 qnfo-backups/d1-query-report/ and compares with the last one: the single write). Each prints a markdown summary (also the job summary) and one RESULT_JSON line. Nothing here writes to Cloudflare: scripts/cf-estate.test.mjs fails on a PUT,
 # PATCH or DELETE call in the script, and the job token is read-only. A verdict (retire, detach, disable) is carried out by a separate guarded step after a dependency check.
 # A separate workflow, not another option of cf-ops-actions.yml, so the reports can change without queueing behind the write actions of that file.
 # Dispatch only (GitHub schedule never fires on this repository); a recurring run belongs to a Cloudflare cron. Style: step names colon-free, no heredocs, no inline python.
@@ -59,4 +59,7 @@ jobs:
       - name: Run the estate report
         run: |
           set -uo pipefail
-          python3 scripts/cf_estate.py "$IN_ACTION" --live --db "${IN_DB:-qnfo-audit}" --hours "${IN_HOURS:-6}"
+          extra=()
+          # D1-REPORT-STORE-1: keep each d1-query-report in R2 and compare it with the newest earlier one of the same database and hours.
+          if [ "$IN_ACTION" = "d1-query-report" ]; then extra=(--save --baseline-r2); fi
+          python3 scripts/cf_estate.py "$IN_ACTION" --live --db "${IN_DB:-qnfo-audit}" --hours "${IN_HOURS:-6}" "${extra[@]}"
