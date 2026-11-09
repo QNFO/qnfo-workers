@@ -2053,7 +2053,7 @@ export async function today(env, deps) {
   let week = null;
   const wk = weekWindow({ day: st.day, hour: st.hour, dow: st.dow });
   if (st.cfg.wellbeing_prompts === true && wk && st.cfg.week_seen !== wk) { try { const w = await weekLookback(env, st.nowIso, wk); if (w.enough) week = { week: w.week, title: w.title, lines: w.lines }; } catch (e) { week = null; } }
-  const trip = await tripCard(db, st.day).catch(() => null);
+  const trip = await tripCard(db, st.day).catch((e) => { console.error(JSON.stringify({ where: "today-trip-card", error: String(e && e.message || e) })); return null; });
   const res = {
     day: st.day, greeting: greet, hour: Math.round(st.hour * 100) / 100, mood: st.mood, sleep, weather, week, travel: st.away, trip, events_today: st.events.length, light_day: st.events.length >= LIGHT_DAY_EVENTS, busy_now: st.events.some((e) => !e.allDay && e.startMs <= Date.parse(st.nowIso) && Date.parse(st.nowIso) < e.endMs),
     low_day: st.crisisLevel24h >= 2,
