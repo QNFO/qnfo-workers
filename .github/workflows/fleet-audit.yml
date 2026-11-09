@@ -1,0 +1,39 @@
+name: fleet-audit
+run-name: fleet-audit
+
+# SELF-AUDIT-1 / CLOSE-OWN-LOOPS-1 runtime (owner directive 2026-11-06, pillar core). AGENTS.md promised scripts/audit.py on a 6-hour cadence with no code behind it.
+# This workflow runs it: claims in AGENTS.md, CLAUDE.md and docs/handoff that name a missing script or workflow, loop issues without a closing probe, and human PRs
+# without a Self-audit section. It files one fleet-audit issue per new finding and closes the ones that stopped reporting, with evidence.
+# Dispatch only (GitHub schedule never fires on this repository); the 6-hour trigger is the qnfo-ops cron (sweepWorkflowDispatch).
+# Style: step names colon-free, no heredocs, no inline python.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+
+concurrency:
+  group: fleet-audit
+  cancel-in-progress: false
+
+jobs:
+  run:
+    # RUNNER-PIN-2: ubuntu-24.04 until an ubuntu-26.04 trial run is green.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Unit test
+        run: python3 scripts/audit_test.py
+
+      - name: Audit and file
+        run: |
+          set -uo pipefail
+          python3 scripts/audit.py --file 2> summary.json | tee findings.jsonl
+          echo "fleet-audit $(cat summary.json)" >> "$GITHUB_STEP_SUMMARY"
