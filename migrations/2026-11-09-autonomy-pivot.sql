@@ -43,3 +43,11 @@ SELECT 'AUTONOMY-PIVOT-1.2: rewrite the private Identity doc, CV and resume (qnf
  'closing probe: {"url": "https://qnfo.org/work-with-me", "status": 200, "contains": "systems researcher studying autonomous AI systems"}',
  'session:autonomy-pivot', 'feature', 'high', 'open', CAST(strftime('%s', 'now') AS INTEGER) * 1000, CAST(strftime('%s', 'now') AS INTEGER) * 1000
 WHERE NOT EXISTS (SELECT 1 FROM agent_issues WHERE title LIKE 'AUTONOMY-PIVOT-1.2%');
+
+INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at)
+SELECT 'AUTONOMY-PIVOT-1.3: point the arXiv radar seeds at autonomous-AI-systems ideas so the cold-email queue refills with autonomy authors, not held quantum rows',
+ 'Charter pillar reach. radar-hub builds its arXiv query from accepted owner ideas in idea_proposals (NO-TOPIC-HARDCODE-1), so it keeps enqueuing quantum papers that OUTREACH-PIVOT-1 now holds (status held-pivot-quantum).' || char(10) ||
+ 'Doer: the idea-hub intake loop. Accept owner-corpus ideas on autonomous AI systems, agent reliability, oversight and the fleet failure ledger, so arxivSeedGroups yields autonomy terms. No radar code change and no fixed topic table.' || char(10) ||
+ 'closing probe: SELECT 0 WHERE (SELECT COUNT(*) FROM outreach_queue WHERE status = ''pending'' AND created_at > datetime(''now'', ''-7 days'')) > 0 AND (SELECT COUNT(*) FROM outreach_queue WHERE status = ''held-pivot-quantum'' AND created_at > datetime(''now'', ''-7 days'')) > 10 * (SELECT COUNT(*) FROM outreach_queue WHERE status = ''pending'' AND created_at > datetime(''now'', ''-7 days''))',
+ 'session:autonomy-pivot', 'feature', 'medium', 'open', CAST(strftime('%s', 'now') AS INTEGER) * 1000, CAST(strftime('%s', 'now') AS INTEGER) * 1000
+WHERE NOT EXISTS (SELECT 1 FROM agent_issues WHERE title LIKE 'AUTONOMY-PIVOT-1.3%');
