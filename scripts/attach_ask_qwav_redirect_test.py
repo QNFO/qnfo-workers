@@ -20,11 +20,12 @@ def ok(c, msg):
 
 e = m.redirect_entry()
 tu = e["action_parameters"]["from_value"]["target_url"]
+ok("name" not in e and e.get("ref") == m.REDIRECT_RULE_NAME, "a ruleset rule carries ref, never the unknown field name (Cloudflare 400 on 2026-11-09)")
 ok("value" not in tu and "http.request.uri.path" in tu["expression"] and "$uri" not in json.dumps(e), "target is an expression, no static $uri")
 ok(e["action_parameters"]["from_value"]["status_code"] == 301 and e["action_parameters"]["from_value"]["preserve_query_string"], "301 and query kept")
 
 calls = []
-old_rule = {"id": "r1", "name": m.REDIRECT_RULE_NAME, "expression": e["expression"],
+old_rule = {"id": "r1", "ref": m.REDIRECT_RULE_NAME, "expression": e["expression"],
             "action_parameters": {"from_value": {"status_code": 301, "target_url": {"value": "https://ask.qwav.org$uri"}}}}
 
 
