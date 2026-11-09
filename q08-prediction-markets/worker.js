@@ -1,6 +1,6 @@
 // q08-prediction-markets: the one paper-trading prediction-market worker (PM-CONSOLIDATE-1).
 // Paper money only. No wallet, no exchange key, no order ever leaves this worker.
-var VERSION = "1.1.0";
+var VERSION = "1.2.0";
 const CFG = { START: 10000, POS_PCT: 0.10, EXPO_PCT: 0.30, STOP: 0.15, TAKE: 0.30, SLIP: 0.01, MIN_MOVE: 0.05, MIN_VOL: 5000, MAX_OPEN: 8 };
 
 // ---------- pure engine (tested in engine.test.mjs) ----------
@@ -21,8 +21,10 @@ export function syntheticMarkets(now = Date.now()) {
   });
 }
 export const priceOf = (side, yes) => (side === "yes" ? yes : 1 - yes);
+// the mark of a position in its own side's price; with no current YES price the entry (already side-priced) is the mark
+export const markOf = (p, px) => (px[p.slug] == null ? p.entry : priceOf(p.side, px[p.slug]));
 export function equity(acct, positions, px) {
-  return acct.cash + positions.reduce((s, p) => s + p.qty * priceOf(p.side, px[p.slug] ?? p.entry), 0);
+  return acct.cash + positions.reduce((s, p) => s + p.qty * markOf(p, px), 0);
 }
 const isFade = (m, cfg) => m.vol24 >= cfg.MIN_VOL && Math.abs(m.move) >= 0.15 && ((m.yes >= 0.8 && m.yes < 0.9) || (m.yes > 0.1 && m.yes <= 0.2)) && Math.sign(m.move) === (m.yes > 0.5 ? 1 : -1);
 export function entries(markets, positions, acct, cfg = CFG) {
@@ -82,7 +84,7 @@ export function stats(curve, closed) {
 
 // ---------- storage ----------
 const DDL = [
-  "CREATE TABLE IF NOT EXISTS pt_account (id INTEGER PRIMARY KEY, cash REAL NOT NULL, start_cash REAL NOT NULL, created_at TEXT)",
+  "CREATE TABLE IF NOT EXISTS pt_account (id INTEGER PRIMARY KEY, cash REAL NOT NULL, start_cash REAL NOT NULL, created_at TEXT, lock_until INTEGER DEFAULT 0)",
   "CREATE TABLE IF NOT EXISTS pt_position (id INTEGER PRIMARY KEY AUTOINCREMENT, slug TEXT, title TEXT, side TEXT, qty REAL, entry REAL, strategy TEXT, opened_at TEXT, closed_at TEXT, exit REAL, pnl REAL, reason TEXT)",
   "CREATE TABLE IF NOT EXISTS pt_market (slug TEXT PRIMARY KEY, title TEXT, yes REAL, vol24 REAL, move REAL, closed INTEGER, source TEXT, updated_at TEXT)",
   "CREATE TABLE IF NOT EXISTS pt_equity (ts TEXT PRIMARY KEY, equity REAL, cash REAL, open_n INTEGER, source TEXT)",
@@ -104,51 +106,81 @@ async function fetchMarkets() {
 const openPositions = async (db) => (await db.prepare("SELECT * FROM pt_position WHERE closed_at IS NULL").all()).results;
 const account = async (db) => await db.prepare("SELECT * FROM pt_account WHERE id=1").first();
 
+// One writer at a time (a scheduled tick, a dashboard tick and a manual order can overlap): a 30 s lease on the account row.
+// Cash changes are relative deltas applied under the lease, so a stale read can never overwrite another writer's change.
+async function lock(db) {
+  const now = Date.now();
+  const r = await db.prepare("UPDATE pt_account SET lock_until=? WHERE id=1 AND COALESCE(lock_until,0) < ?").bind(now + 30000, now).run();
+  return (r.meta?.changes ?? r.changes ?? 0) > 0;
+}
+const unlock = (db) => db.prepare("UPDATE pt_account SET lock_until=0 WHERE id=1").run();
+async function fetchHeld(slugs) {
+  if (!slugs.length) return [];
+  try {
+    const r = await fetch("https://gamma-api.polymarket.com/markets?" + slugs.map((s) => "slug=" + encodeURIComponent(s)).join("&"), { headers: { accept: "application/json" } });
+    if (!r.ok) throw new Error("gamma " + r.status);
+    return (await r.json()).map(parseMarket).filter(Boolean);
+  } catch (e) { console.error("held refresh failed", String(e)); return []; }
+}
+
 export async function tick(env, feed) {
   await init(env);
   const db = env.TRADES_DB, now = new Date().toISOString();
   const { markets, source } = feed || (await fetchMarkets());
-  await db.batch(markets.map((m) => db.prepare("INSERT OR REPLACE INTO pt_market VALUES (?,?,?,?,?,?,?,?)").bind(m.slug, m.title, m.yes, m.vol24, m.move, m.closed, source, now)));
-  let acct = await account(db), pos = await openPositions(db);
-  // markets we hold but the feed no longer lists keep their last stored price
-  const held = pos.filter((p) => !markets.find((m) => m.slug === p.slug));
-  const all = markets.concat(held.length ? (await db.prepare(`SELECT slug,title,yes,vol24,move,closed FROM pt_market WHERE slug IN (${held.map(() => "?").join(",")})`).bind(...held.map((p) => p.slug)).all()).results : []); // standards-ok: only "?" placeholders are interpolated, every value goes through .bind()
-  const closed = exits(pos, all);
-  let cash = acct.cash;
-  for (const x of closed) {
-    const p = pos.find((q) => q.id === x.id), pnl = p.qty * (x.exit - p.entry);
-    cash += p.qty * x.exit;
-    await db.prepare("UPDATE pt_position SET closed_at=?, exit=?, pnl=?, reason=? WHERE id=?").bind(now, x.exit, pnl, x.reason, x.id).run();
-  }
-  pos = pos.filter((p) => !closed.find((x) => x.id === p.id));
-  const opened = entries(source === "polymarket" ? markets : markets, pos, { cash }, CFG);
-  for (const o of opened) {
-    cash -= o.usd;
-    await db.prepare("INSERT INTO pt_position (slug,title,side,qty,entry,strategy,opened_at) VALUES (?,?,?,?,?,?,?)").bind(o.slug, o.title, o.side, o.qty, o.entry, o.strategy, now).run();
-  }
-  await db.prepare("UPDATE pt_account SET cash=? WHERE id=1").bind(cash).run();
-  pos = await openPositions(db);
-  const px = Object.fromEntries(all.map((m) => [m.slug, m.yes]));
-  const eq = equity({ cash }, pos, px);
-  await db.prepare("INSERT OR REPLACE INTO pt_equity VALUES (?,?,?,?,?)").bind(now, eq, cash, pos.length, source).run();
-  return { source, markets: markets.length, opened: opened.length, closed: closed.length, equity: eq, cash };
+  // held markets that left the active feed (closed, resolved, outside the top 100) are fetched by slug so they can still settle
+  const heldSlugs = (await openPositions(db)).map((p) => p.slug).filter((sl) => !markets.find((m) => m.slug === sl));
+  const refreshed = feed || source !== "polymarket" ? [] : await fetchHeld(heldSlugs);
+  if (!(await lock(db))) return { busy: true };
+  try {
+    const stamp = markets.concat(refreshed);
+    await db.batch(stamp.map((m) => db.prepare("INSERT OR REPLACE INTO pt_market VALUES (?,?,?,?,?,?,?,?)").bind(m.slug, m.title, m.yes, m.vol24, m.move, m.closed, source, now)));
+    let pos = await openPositions(db);
+    const held = pos.filter((p) => !stamp.find((m) => m.slug === p.slug));
+    const stored = held.length ? (await db.prepare(`SELECT slug,title,yes,vol24,move,closed FROM pt_market WHERE slug IN (${held.map(() => "?").join(",")})`).bind(...held.map((p) => p.slug)).all()).results : []; // standards-ok: only "?" placeholders are interpolated, every value goes through .bind()
+    const all = stamp.concat(stored);
+    const closed = exits(pos, all);
+    let delta = 0;
+    for (const x of closed) {
+      const p = pos.find((q) => q.id === x.id), pnl = p.qty * (x.exit - p.entry);
+      delta += p.qty * x.exit;
+      await db.prepare("UPDATE pt_position SET closed_at=?, exit=?, pnl=?, reason=? WHERE id=?").bind(now, x.exit, pnl, x.reason, x.id).run();
+    }
+    pos = pos.filter((p) => !closed.find((x) => x.id === p.id));
+    const cash0 = (await account(db)).cash + delta;
+    const opened = entries(markets, pos, { cash: cash0 }, CFG);
+    for (const o of opened) {
+      delta -= o.usd;
+      await db.prepare("INSERT INTO pt_position (slug,title,side,qty,entry,strategy,opened_at) VALUES (?,?,?,?,?,?,?)").bind(o.slug, o.title, o.side, o.qty, o.entry, o.strategy, now).run();
+    }
+    await db.prepare("UPDATE pt_account SET cash=cash+? WHERE id=1").bind(delta).run();
+    const cash = (await account(db)).cash;
+    pos = await openPositions(db);
+    const px = Object.fromEntries(all.map((m) => [m.slug, m.yes]));
+    const eq = equity({ cash }, pos, px);
+    await db.prepare("INSERT OR REPLACE INTO pt_equity VALUES (?,?,?,?,?)").bind(now, eq, cash, pos.length, source).run();
+    return { source, markets: markets.length, opened: opened.length, closed: closed.length, equity: eq, cash };
+  } finally { await unlock(db); }
 }
 export async function manualOrder(env, { slug, side, usd }) {
   await init(env);
   const db = env.TRADES_DB;
   if (!["yes", "no"].includes(side) || !(usd > 0)) return { error: "side yes|no and usd > 0 required" };
-  const m = await db.prepare("SELECT * FROM pt_market WHERE slug=?").bind(slug).first();
-  if (!m || m.closed) return { error: "unknown or closed market" };
-  const acct = await account(db), pos = await openPositions(db);
-  const eq = equity(acct, pos, { [slug]: m.yes });
-  if (usd > acct.cash) return { error: "insufficient paper cash" };
-  if (usd > eq * CFG.POS_PCT) return { error: `position limit ${(CFG.POS_PCT * 100)}% of equity` };
-  const fill = Math.min(0.99, priceOf(side, m.yes) * (1 + CFG.SLIP));
-  await db.batch([
-    db.prepare("INSERT INTO pt_position (slug,title,side,qty,entry,strategy,opened_at) VALUES (?,?,?,?,?,?,?)").bind(slug, m.title, side, usd / fill, fill, "manual", new Date().toISOString()),
-    db.prepare("UPDATE pt_account SET cash=cash-? WHERE id=1").bind(usd),
-  ]);
-  return { ok: true, fill, qty: usd / fill };
+  if (!(await lock(db))) return { error: "another update is running, retry in a moment" };
+  try {
+    const m = await db.prepare("SELECT * FROM pt_market WHERE slug=?").bind(slug).first();
+    if (!m || m.closed) return { error: "unknown or closed market" };
+    const acct = await account(db), pos = await openPositions(db);
+    const px = Object.fromEntries((await db.prepare("SELECT slug,yes FROM pt_market").all()).results.map((r) => [r.slug, r.yes]));
+    const eq = equity(acct, pos, px);
+    if (usd > acct.cash) return { error: "insufficient paper cash" };
+    if (usd > eq * CFG.POS_PCT) return { error: `position limit ${(CFG.POS_PCT * 100)}% of equity` };
+    const fill = Math.min(0.99, priceOf(side, m.yes) * (1 + CFG.SLIP));
+    await db.batch([
+      db.prepare("INSERT INTO pt_position (slug,title,side,qty,entry,strategy,opened_at) VALUES (?,?,?,?,?,?,?)").bind(slug, m.title, side, usd / fill, fill, "manual", new Date().toISOString()),
+      db.prepare("UPDATE pt_account SET cash=cash-? WHERE id=1").bind(usd),
+    ]);
+    return { ok: true, fill, qty: usd / fill };
+  } finally { await unlock(db); }
 }
 async function state(env) {
   await init(env);
@@ -161,7 +193,7 @@ async function state(env) {
   const realized = (await db.prepare("SELECT COALESCE(SUM(pnl),0) s, COUNT(*) n, SUM(pnl>0) w FROM pt_position WHERE closed_at IS NOT NULL").first());
   const eq = equity(acct, pos, px);
   return { paper: true, start: acct.start_cash, cash: acct.cash, equity: eq, return_pct: (eq / acct.start_cash - 1) * 100,
-    open: pos.map((p) => ({ ...p, mark: priceOf(p.side, px[p.slug] ?? p.entry), unrealized: p.qty * (priceOf(p.side, px[p.slug] ?? p.entry) - p.entry) })),
+    open: pos.map((p) => ({ ...p, mark: markOf(p, px), unrealized: p.qty * (markOf(p, px) - p.entry) })),
     closed: history, stats: stats(curve, (await db.prepare("SELECT strategy,pnl FROM pt_position WHERE closed_at IS NOT NULL").all()).results), realized: realized.s, trades_closed: realized.n, win_rate: realized.n ? realized.w / realized.n : null, curve, markets: mk.slice(0, 30) };
 }
 
@@ -186,7 +218,7 @@ export default {
       if (p === "/health") return json({ ok: true, worker: "q08-prediction-markets", version: VERSION, paper_trading: true, features: ["paper-trading", "momentum", "fade", "stats"] });
       if (p === "/api/state") return json(await state(env));
       if (p === "/api/markets") return json((await state(env)).markets);
-      if (p === "/api/tick" && req.method === "POST") return json(await tick(env));
+      if (p === "/api/tick" && req.method === "POST") { const r = await tick(env); return json(r, r.busy ? 409 : 200); }
       if (p === "/api/order" && req.method === "POST") { const r = await manualOrder(env, await req.json()); return json(r, r.error ? 400 : 200); }
       if (p === "/" || p === "/dashboard") return new Response(PAGE, { headers: { "content-type": "text/html; charset=utf-8" } });
       return json({ error: "not found" }, 404);
