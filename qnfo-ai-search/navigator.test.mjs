@@ -99,7 +99,7 @@ const call = (path, headers) => X.worker_default.fetch(new Request("https://ask.
   ok(/headers/.test("headers") && a.headers.get("x-frame-options") === "DENY", "pages carry the security headers");
   const robots = await (await call("/robots.txt")).text(), sm = await (await call("/sitemap.xml")).text();
   ok(/Disallow: \/api\/consistency/.test(robots) && /Disallow: \/api\/ask/.test(robots), "robots keeps crawlers off the comparison route");
-  ok(/ask\.qwav\.tech\/concepts/.test(sm) && /ask\.qwav\.tech\/consistency/.test(sm) && /<loc>https:\/\/ask\.qwav\.tech\/<\/loc>/.test(sm), "sitemap lists both pages and the home page");
+  ok(/ask.qwav.org\/concepts/.test(sm) && /ask.qwav.org\/consistency/.test(sm) && /<loc>https:\/\/ask.qwav.org\/<\/loc>/.test(sm), "sitemap lists both pages and the home page");
 }
 // 4. passage picker
 {

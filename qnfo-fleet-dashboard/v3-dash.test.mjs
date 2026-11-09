@@ -182,7 +182,7 @@ ok(html.includes("Your four numbers") && !html.includes("Metrics off target") &&
 r = await get("/classic");
 ok(r.status === 200 && !(await r.text()).includes('id="n-code"'), "V5 /classic is still the old overview");
 r = await get("/health");
-ok(r.status === 200 && /^1\.(8[2-9]|9\d)\.\d+$/.test((await r.json()).version), "V5 version is at least 1.82.0");
+ok(r.status === 200 && /^1\.(8[2-9]|9\d|[1-9]\d\d)\.\d+$/.test((await r.json()).version), "V5 version is at least 1.82.0");
 ok(readFileSync(join(here, "deployed-current.worker.js"), "utf8") === src, "V5 mirror equals worker.js");
 console.log(pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);
