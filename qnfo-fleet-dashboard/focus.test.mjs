@@ -34,7 +34,7 @@ ok(r.status === 200 && /Research focus/.test(html), "GET /focus answers", r.stat
 const first = db.prepare("SELECT * FROM owner_asks WHERE answered_at IS NULL ORDER BY priority, id LIMIT 1").get();
 ok(html.includes(first.question.replace(/&/g, "&amp;").slice(0, 40)), "the next question is on the page", first.question);
 ok(!/<form method="post" action="\/focus"/.test(html) && /me\.q08\.org/.test(html), "not signed in: no buttons, says where to answer");
-ok(/Where attention goes now/.test(html) && /not asked yet/.test(html), "the focus table is shown before any answer");
+ok(/Where attention goes now/.test(html) && /not asked yet/i.test(html), "the focus table is shown before any answer");
 ok(!/<script/i.test(html), "no script on the page (the owner CSP forbids it)");
 
 r = await get("/focus", { "x-loop-token": LOOP });
@@ -57,7 +57,7 @@ ok(/Pick%20one%20of%20the%20buttons/.test(r.headers.get("Location") || ""), "a v
 
 r = await get("/focus?done=Saved%3A%20Yes", { "x-loop-token": LOOP });
 html = await r.text();
-ok(/Saved: Yes/.test(html) && /<strong>Do more<\/strong>/.test(html), "the page confirms and shows the new stance");
+ok(/Saved: Yes/.test(html) && /class="ds-badge ds-badge-good">Do more<\/span>/.test(html) && /DESIGN-SYSTEM-1 v/.test(html), "the page confirms and shows the new stance");
 ok(/Your last answers/.test(html), "recent answers are listed");
 
 r = await get("/api/focus");
