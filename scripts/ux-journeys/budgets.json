@@ -200,6 +200,10 @@
   "order-form": {
    "taps": 0,
    "typing": 0
+  },
+  "whitepaper": {
+   "taps": 0,
+   "typing": 0
   }
  },
  "signal": {
