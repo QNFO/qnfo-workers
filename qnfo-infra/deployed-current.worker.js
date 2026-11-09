@@ -80,7 +80,7 @@ function infraManifestRoute(url, env) {
 }
 __name(infraManifestRoute, "infraManifestRoute");
 __name2(infraManifestRoute, "infraManifestRoute");
-var VERSION = "1.17.1-codeagent";
+var VERSION = "1.17.2-codeagent";
 // D1-RESULT-CAP-1 (#9794, DATA-SPINE-W0-1): D1 refuses a result payload over 50 MB. d1ReadAll runs a read; a statement that fails with a result-size
 // error is retried once as LIMIT/OFFSET pages over the same statement, and a payload at or over D1_RESULT_NEAR_BYTES is logged either way as a
 // cloud_ops_events row of kind d1_result_cap_near (fail-soft, never blocks the read).
@@ -2416,7 +2416,7 @@ async function credentialStatus(env) {
   res.items = items;
   return res;
 }
-var CRON_GRID_CFG = {"worker": "qnfo-infra", "tick": "30 * * * *", "tickMin": 60, "jobs": [{"cron": "30 6 * * *", "periodMin": 1440, "retry": true}, {"cron": "0 18 * * *", "periodMin": 1440, "retry": true}], "own": "0 * * * *", "ownWhenDue": false};
+var CRON_GRID_CFG = {"worker": "qnfo-infra", "tick": "30 * * * *", "tickMin": 60, "jobs": [{"cron": "30 6 * * *", "periodMin": 1440, "retry": true}, {"cron": "0 18 * * *", "periodMin": 1440, "retry": true}], "own": "0 * * * *", "ownWhenDue": true};
 var worker_default = {
   async scheduled(event, env, ctx) {
     env = __aiAttrEnv(env, "qnfo-infra", "AI", "AUDIT");
