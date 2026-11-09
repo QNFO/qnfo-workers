@@ -4,14 +4,14 @@
   "redirect_from": "ask.qwav.tech",
   "service": "qnfo-ai-search",
   "token_present": true,
-  "stage": "redirect",
-  "status": "failed",
-  "http": 400,
-  "error": "add rule body={\"result\": null, \"success\": false, \"errors\": [{\"message\": \"invalid JSON: unknown field \\\"name\\\"\"}], \"messages\": []}",
+  "stage": "verified",
+  "status": "success",
+  "http": 200,
+  "error": null,
   "zone_id": "4df9cb76facef38e78f6f6fc61cbb7c7",
   "route_id": "38a23917a5f448e692c4c225036bea5c",
-  "redirect_rule_id": null,
+  "redirect_rule_id": "033686873f804fad9c33e15f2be952ac",
   "old_zone_id": "331e4363fd05e8e4fc123ea7d2775411",
   "worker_version": "2.19.7-codeagent",
-  "ts": "2026-11-09T11:23:12Z"
+  "ts": "2026-11-09T11:25:29Z"
 }
