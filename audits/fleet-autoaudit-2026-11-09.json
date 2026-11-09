@@ -1,7 +1,7 @@
 {
-  "audited_at": "2026-11-09 04:09:14",
+  "audited_at": "2026-11-09 04:46:12",
   "d1_write_failures": [],
-  "d1_writes_ok": 5,
+  "d1_writes_ok": 4,
   "guard": {
     "_guard_rc": 0,
     "ahead": [],
@@ -35,17 +35,12 @@
       {
         "http": 200,
         "version": null,
-        "worker": "q08-prediction-markets"
-      },
-      {
-        "http": 200,
-        "version": null,
-        "worker": "q08-prediction-markets-production"
-      },
-      {
-        "http": 200,
-        "version": null,
         "worker": "qnfo-ai-yield"
+      },
+      {
+        "http": 404,
+        "version": null,
+        "worker": "qnfo-companion-guard"
       },
       {
         "http": 404,
@@ -61,22 +56,6 @@
   },
   "purge_error": null,
   "rows": {
-    "q08-prediction-markets": {
-      "before": null,
-      "http": 200,
-      "live": null,
-      "match": 0,
-      "note": "UNMANAGED_OK",
-      "worker": "q08-prediction-markets"
-    },
-    "q08-prediction-markets-production": {
-      "before": null,
-      "http": 200,
-      "live": null,
-      "match": 0,
-      "note": "UNMANAGED_OK",
-      "worker": "q08-prediction-markets-production"
-    },
     "qnfo-ai-yield": {
       "before": null,
       "http": 200,
@@ -84,6 +63,14 @@
       "match": 0,
       "note": "UNMANAGED_OK",
       "worker": "qnfo-ai-yield"
+    },
+    "qnfo-companion-guard": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "UNMANAGED_NO_HEALTH",
+      "worker": "qnfo-companion-guard"
     },
     "qnfo-doc-gate": {
       "before": null,
@@ -102,5 +89,5 @@
       "worker": "qnfo-workers"
     }
   },
-  "stale_rows_purged": 38
+  "stale_rows_purged": 0
 }
