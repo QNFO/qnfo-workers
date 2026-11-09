@@ -100,6 +100,7 @@ ok(sc.signature.kid === kdoc.keys[0].kid && sc.statement.key_id === kdoc.keys[0]
 const body = PAPERS["prov-1"].body_md;
 const hex = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(body)))).map((x) => x.toString(16).padStart(2, "0")).join("");
 ok(sc.statement.subject.content_sha256 === hex, "the statement binds the sha256 of the paper text");
+ok(/after its YAML front matter and the blank line that follows it/.test(sc.statement.subject.content_basis) && !/^body_md \(UTF-8\), the text served/.test(sc.statement.subject.content_basis), "content_basis says the hash starts after the front matter (BP26-PROVENANCE-BASIS-1)", sc.statement.subject.content_basis);
 ok(sc.statement.claims.provenance === "fleet-generated" && sc.statement.claims.human_review_recorded === false && sc.statement.claims.digital_source_type.endsWith("trainedAlgorithmicMedia"), "the claims say fleet-generated, no review recorded, trainedAlgorithmicMedia", sc.statement.claims);
 ok(sc.statement.c2pa_shaped["c2pa.actions"].actions[0].action === "c2pa.created" && /not a C2PA credential/.test(sc.statement.c2pa_shaped.note), "the C2PA-shaped assertion is present and says it is not a C2PA credential");
 const tampered = JSON.parse(sr.t); tampered.statement.claims.provenance = "ai-assisted-human-reviewed";
