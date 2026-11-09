@@ -24,7 +24,7 @@ export const CHARTER = {
 const CFG = { START: 10000, POS_PCT: 0.10, EXPO_PCT: 0.30, STOP: 0.15, TAKE: 0.30, SLIP: 0.01, MAX_OPEN: 8,
   HORIZON_D: 14, SIG_MIN_VOL: 10000, MIN_EDGE: 0.10, SIG_POS_PCT: 0.05, MAX_EST: 2, EST_TTL_H: 6, CONVERGE: 0.03, MAX_SPREAD: 0.25, MIN_MEMBERS: 2,
   EDGE_MIN: 0.08, EDGE_MAX: 0.20, BREAKER_DD: 15, PAUSE_H: 24 };
-const ENSEMBLE = ["glm-5.3-flash", "deepseek-v4-flash", "qwen3-30b-a3b"]; // three model families, none of which sees the market price
+const ENSEMBLE = ["glm-5.3-flash", "kimi-k2.6", "gpt-oss-120b"]; // three model families (zai, moonshot, openai) from the MODEL-FLOOR-1 allowed table, none of which sees the market price
 
 // ---------- pure engine (tested in engine.test.mjs) ----------
 export function parseMarket(m) {
