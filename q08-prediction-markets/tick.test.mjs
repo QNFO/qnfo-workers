@@ -229,3 +229,33 @@ test("the charter endpoint exposes the frozen sample, the split by domain, the p
   for (const k of ["evaluation", "evaluation_frozen", "by_domain", "log_loss", "lead_hours", "params", "track_record", "calibration", "decisions", "graduation"]) assert.ok(k in c, k);
   assert.equal(c.params.version, 1); assert.equal(c.track_record.count, 1); assert.equal(c.mode, "paper");
 });
+
+test("a decision the position cap rejects is not marked traded (issue 8840)", async () => {
+  const env = { TRADES_DB: fakeD1() };
+  await tick(env, feed([mk("seed", 0.5)]), deps({ a: 0.5, b: 0.5, c: 0.5 })); // initialises the schema, no trade
+  const raw = env.TRADES_DB._raw;
+  for (let i = 0; i < 8; i++) raw.exec("INSERT INTO pt_position (slug,title,side,qty,entry,strategy,opened_at) VALUES ('held" + i + "','held','yes',10,0.5,'signal','2026-01-01T00:00:00Z')");
+  const r = await tick(env, feed([mk("vote", 0.55)]), agree80);
+  assert.equal(r.opened, 0);
+  assert.equal(raw.prepare("SELECT traded FROM pt_estimate WHERE slug='vote'").get().traded, 0, "no position, so not TRADED");
+});
+test("settlement polling rotates: twenty unresolved rows cannot hold every batch (issue 8840)", async () => {
+  const env = { TRADES_DB: fakeD1() };
+  await tick(env, feed([mk("seed", 0.5)]), deps({ a: 0.5, b: 0.5, c: 0.5 }));
+  const raw = env.TRADES_DB._raw;
+  for (let i = 0; i < 25; i++) raw.prepare("INSERT INTO pt_estimate (slug,title,fair,market,confidence,ends_at,updated_at,traded) VALUES (?,?,?,?,?,?,?,?)").run("m" + String(i).padStart(2, "0"), "t", 0.6, 0.5, "high", new Date(Date.now() - 86400000 + i * 1000).toISOString(), "2026-01-01", 0);
+  const asked = [];
+  const bySlug = async (slugs) => { asked.push(...slugs); return slugs.map((s) => ({ slug: s, title: s, yes: s === "m24" ? 1 : 0.5, vol24: 0, move: 0, closed: 0, ends_at: null })); };
+  await tick(env, feed([]), { ...deps({}), bySlug });
+  assert.ok(!asked.includes("m24"), "the first batch is the 20 oldest");
+  const r = await tick(env, feed([]), { ...deps({}), bySlug });
+  assert.ok(asked.includes("m24"), "the second batch reaches the rows the first did not check");
+  assert.equal(r.settled, 1);
+  assert.equal(raw.prepare("SELECT outcome FROM pt_estimate WHERE slug='m24'").get().outcome, 1);
+});
+test("the charter reports the proof split by confidence once a level has enough resolved forecasts (issue 8840)", async () => {
+  const env = { TRADES_DB: fakeD1() };
+  await tick(env, feed([mk("seed", 0.5)]), deps({ a: 0.5, b: 0.5, c: 0.5 }));
+  const c = await get(env, "/api/charter");
+  assert.ok(c.evaluation && "by_confidence" in c.evaluation);
+});

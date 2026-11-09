@@ -26,7 +26,7 @@ test("the pre-registered numbers in the paper are the charter's numbers", () => 
   assert.ok(md.includes("at least " + g.min_days + " days of paper trading, " + g.min_resolved_estimates + " resolved forecasts and " + g.min_resolved_trades + " qualifying trades"), "sample sizes");
   assert.ok(md.includes("drawdown under " + g.max_drawdown_pct + " percent")); assert.ok(md.includes(CHARTER.risk.breaker_drawdown_pct + " percent drawdown"));
   assert.ok(md.includes("95 percent bootstrap interval")); assert.equal(g.confidence, 0.95); assert.equal(g.frozen_sample, true);
-  assert.ok(/version 1\.6/.test(md)); assert.ok(/^1\.6\./.test(src.match(/var VERSION = "([^"]+)"/)[1]));
+  const mm = src.match(/var VERSION = "(\d+\.\d+)\./)[1]; assert.ok(md.includes("version " + mm), "the paper names the worker's major.minor version"); assert.ok(md.includes("`q08-prediction-markets` " + mm + " |"));
 });
 test("every recommendation the paper marks implemented points at something the worker really has", async () => {
   for (const route of ["/api/charter", "/api/track-record", "/whitepaper"]) assert.ok(src.includes('"' + route + '"'), route);

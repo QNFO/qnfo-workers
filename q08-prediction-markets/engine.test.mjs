@@ -1,5 +1,5 @@
 import test from "node:test"; import assert from "node:assert/strict";
-import { CHARTER, isQuant, ceLines, ceMatch, domainOf, applyRecal, fitRecal, fitBlend, kellyStake, sha256Hex, chainHash, verifyChain, logLoss, byDomain, tuneActions, wikiItems, hnQuery, gdeltDelay, parseMarket, isSports, parseEstimate, newsQuery, aggregate, decide, signalEntries, exits, equity, markOf, priceOf, candidates, stats, currentDrawdown, bootstrapCI, evaluate, graduation, reviewActions, syntheticMarkets } from "./worker.js";
+import { CHARTER, isQuant, ceLines, ceMatch, domainOf, applyRecal, fitRecal, fitBlend, kellyStake, sha256Hex, chainHash, verifyChain, logLoss, byDomain, byConfidence, tuneActions, wikiItems, hnQuery, gdeltDelay, parseMarket, isSports, parseEstimate, newsQuery, aggregate, decide, signalEntries, exits, equity, markOf, priceOf, candidates, stats, currentDrawdown, bootstrapCI, evaluate, graduation, reviewActions, syntheticMarkets } from "./worker.js";
 
 test("parseMarket reads gamma outcomePrices and the end date", () => {
   const m = parseMarket({ slug: "a", question: "Q", outcomePrices: '["0.4","0.6"]', endDate: "2026-11-20T00:00:00Z" });
@@ -250,4 +250,16 @@ test("verifyChain carries the last hash across pages", async () => {
   const p1 = await verifyChain([a, b]), p2 = await verifyChain([c], p1.head);
   assert.ok(p1.ok && p2.ok && p2.head === c.hash);
   assert.equal((await verifyChain([c], "")).ok, false);
+});
+test("byConfidence reports a level only once it has the minimum resolved forecasts", () => {
+  const mk = (n, conf, hit) => Array.from({ length: n }, () => ({ fair: hit ? 0.8 : 0.5, market: 0.5, outcome: 1, confidence: conf, domain: "politics" }));
+  const g = byConfidence([...mk(30, "high", true), ...mk(5, "medium", true)]);
+  assert.equal(g.high.n, 30); assert.ok(g.high.brier_gain > 0 && "shadow_roi" in g.high);
+  assert.equal(g.medium.n, 5); assert.match(g.medium.note, /fewer than 30/);
+});
+
+test("a position opened by the retired momentum strategy closes at the mark, signal and manual positions are untouched", () => {
+  const m = [{ slug: "a", yes: 0.6, closed: 0 }, { slug: "b", yes: 0.6, closed: 0 }, { slug: "c", yes: 0.6, closed: 0 }];
+  const x = exits([{ id: 1, slug: "a", side: "yes", entry: 0.58, strategy: "momentum" }, { id: 2, slug: "b", side: "yes", entry: 0.58, strategy: "signal", fair: 0.9 }, { id: 3, slug: "c", side: "yes", entry: 0.58, strategy: "manual" }], m);
+  assert.deepEqual(x.map((e) => [e.id, e.reason]), [[1, "retired"]]);
 });
