@@ -37,7 +37,7 @@
 // Q08-ASCII-SOURCE-1 (2026-10-01): this file is ASCII-only; every typographic character is a \uXXXX escape. The deploy path
 // double-encoded raw UTF-8, so live pages read "... \u00e2 q08" and posts "\u00e2\u0080\u0094". Keep new literals escaped.
 // VERSION-NOTES-MOVED-1: release notes live in the block below
-var VERSION = "0.48.2";
+var VERSION = "0.49.0";
 /* 0.43.0 Q08-TICK-ALLOWANCE-1 (2026-11-04, pillar cost; minor: the engine now decides on its own whether a tick starts an attempt; BUDGET-SOFT-ROUTE-1, attempts slow down and never stop): ai_call_counters showed 119,552, 129,547 and 110,450 neurons on 2026-11-01..03 against the 50,000 target (ops_config q08_daily_neurons) because q08Budget() only steered the first writer model and nothing bounded the attempts a tick starts (40 a day, the attempt cap, at about 2,760 neurons each). Now the :00 cron and the :30 stall retry go through governedGenerate: tick k of 48 starts an attempt only while the day is under the pace line budget x (k + 1) / 48, an essay after a forecast attempt that spent model calls starts only while the day is still under it, and 150 minutes without an attempt starts one whatever the line says (8 a day at least). No row is written for a tick that waits. The writer gate, reader panels, fact-check, final read and accuracy audit are unchanged, and an attempt already started runs all its rounds. ops_config q08_tick_governor = off restores the old behaviour. tick-allowance.test.mjs replays a UTC day. */
 /* 0.42.0 RM-FORECAST-UPDATE-SCORING-1 (#5578; research): score the last valid update before the horizon with the resolved outcome. */
 /* 0.41.6 FORECAST-CALIBRATION-BUCKET-COVERAGE-1 (#5576, charter pillar research; patch): calibration buckets include probabilities across the full [0,1] range, including the tails, rather than silently omitting forecasts below 5% or above 96%. */
@@ -1050,6 +1050,31 @@ function preferNonTech(list, domains) {
 }
 // A second arXiv request for the policy and science categories; the technology request in scrapeArxiv is untouched. A paper is kept only when its
 // title or abstract carries one of the domain keywords, and its domain is policy for the economics and society categories and science for the rest.
+// Q08-FEDREG-LANE-1 (issue 8005, agent_issues 1001954, charter pillar reach): primary policy documents from the Federal Register JSON API
+// (documents.json; body_html_url carries the full text) as candidates with source "federalregister" and domain "policy". They flow through the
+// same gates and domain prompts as an arXiv policy candidate, and only while the policy token of ops_config q08_domains is on. EK-2 and EK-3
+// (agent_issues 1000713, 1000714) are not built yet, so a title on a contested subject is left out until they are: FR_CONTESTED below.
+var FR_API = "https://www.federalregister.gov/api/v1/documents.json?per_page=40&order=newest&conditions[type][]=RULE&conditions[type][]=PRORULE&conditions[type][]=NOTICE&fields[]=document_number&fields[]=title&fields[]=abstract&fields[]=html_url&fields[]=body_html_url&fields[]=type&fields[]=publication_date&fields[]=agencies";
+var FR_KEEP = 6;
+var FR_CONTESTED = /\b(abortion|reproductive|immigration|asylum|border|firearm|gun|election|voting|ballot|transgender|gender identity|affirmative action|death penalty|capital punishment)\b/i;
+async function scrapeFederalRegister(env, domains) {
+  var d = domains || parseDomains(null);
+  if (!d.policy) return [];
+  var resp = await fetch(FR_API, { headers: { "User-Agent": UA, "Accept": "application/json" }, signal: AbortSignal.timeout(20000) });
+  if (!resp.ok) throw new Error("federalregister " + resp.status);
+  var j = await resp.json();
+  var out = [];
+  (j && Array.isArray(j.results) ? j.results : []).forEach(function (r) {
+    var title = String(r && r.title || "").replace(/\s+/g, " ").trim(), abs = String(r && r.abstract || "").replace(/\s+/g, " ").trim();
+    var id = String(r && r.document_number || "").trim();
+    if (!id || !title || abs.length < 120 || FR_CONTESTED.test(title + " " + abs)) return;
+    var agency = ((r.agencies || [])[0] || {}).name || "";
+    var weight = (r.type === "Rule" ? 3 : r.type === "Proposed Rule" ? 3 : 1) + Math.min(3, Math.floor(abs.length / 400));
+    out.push({ source: "federalregister", id: id, title: title, url: String(r.html_url || "https://www.federalregister.gov/d/" + id), fulltext_url: String(r.body_html_url || ""), points: weight, num_comments: 0, ratio: 0, volatility_score: weight * 20, abstract: abs, agency: agency, domain: "policy" });
+  });
+  out.sort(function (a, b) { return b.volatility_score - a.volatility_score; });
+  return out.slice(0, FR_KEEP);
+}
 async function scrapeArxivDomain(env, domains) {
   var d = domains || parseDomains(null), cats = [].concat(d.policy ? DOMAIN_ARXIV_CATS.policy : [], d.science ? DOMAIN_ARXIV_CATS.science : []);
   if (!cats.length) return [];
@@ -1565,6 +1590,7 @@ function sourceKind(src) {
   var s = String(src && src.source || "hn"), host = hostOf(src && src.url);
   if (s === "github") return "a GitHub repository (" + String(src.title || "") + ")";
   if (s === "arxiv") return "a research paper posted to arXiv";
+  if (s === "federalregister") return "a primary policy document published in the Federal Register" + (src.agency ? " by " + src.agency : "");
   return host ? "an article at " + host + ", discussed on Hacker News" : "a Hacker News discussion";
 }
 function ledeWords(t) { return String(t || "").toLowerCase().replace(/[\u2010-\u2015\u2212]/g, "-").split(/[^a-z0-9]+/).filter(function (w) { return w.length >= 4 && !LEDE_STOP.test(w); }); }
@@ -2578,9 +2604,9 @@ async function finalRead(env, text, writerModel, seedText, domain) {
 // fact-check ground had only bare text, so "Apple posted a product page on apple.com" and "a commenter on Hacker News noted ..." were
 // listed as not in source. The ground now carries the same source description and labels each part with what it is.
 function labelledGround(story, friction, article, background, ownerNotes) {
-  var src = { source: story && story.source || "hn", title: story && story.title || "", url: story && story.url || "" };
+  var src = { source: story && story.source || "hn", title: story && story.title || "", url: story && story.url || "", agency: story && story.agency || "" };
   var kind = String(src.source);
-  var sigLabel = kind === "github" ? "Repository description and README excerpt" : kind === "arxiv" ? "Paper abstract" : "Hacker News discussion comments on it";
+  var sigLabel = kind === "github" ? "Repository description and README excerpt" : kind === "arxiv" ? "Paper abstract" : kind === "federalregister" ? "Document abstract" : "Hacker News discussion comments on it";
   var parts = ["SOURCE: " + sourceKind(src) + ". Title: " + src.title + (src.url ? ". Link: " + src.url + " (site: " + hostOf(src.url) + ")" : "") + "."];
   // Q08-GROUND-PROVENANCE-1 (0.27.0; engine_runs 404, 413, 415, 417 of 2026-10-14): the lede must name the item and where it appeared
   // (ledeProblems), and the reviewers flagged exactly that ("the paper appears on arxiv.org -- source is linked but not stated") because the
@@ -2657,6 +2683,7 @@ async function generate(env) {
       var seenIds = new Set(stories.map(function (s) { return String((s.source || "hn") + ":" + s.id); }));
       stories = stories.concat(domainStories.filter(function (s) { return !seenIds.has("arxiv:" + s.id); }));
     } catch (e) { console.error(JSON.stringify({ evt: "q08-signal-engine:scrapeArxivDomain:caught", error: String((e && e.message) || e) })); }
+    try { stories = stories.concat(await scrapeFederalRegister(env, domains)); } catch (e) { console.error(JSON.stringify({ evt: "q08-signal-engine:scrapeFederalRegister:caught", error: String((e && e.message) || e) })); }
   }
   if (!stories.length) return await quit("skipped", "no signals scraped");
   // Skip already-processed signal IDs (source-scoped). Q08-SIGNAL-RETRY-1 (2026-10-17): a 7-day window over EVERY
@@ -2686,7 +2713,7 @@ async function generate(env) {
     var f = null;
     try {
       if ((cand.source||"hn") === "github") f = await extractGitHubFriction(cand.id, cand.description || "");
-      else if ((cand.source||"hn") === "arxiv") f = { core_concept: cand.title, friction_point: (String(cand.title||"") + ". " + String(cand.abstract||"")).slice(0,FRICTION_MAX), signal_strength: "Medium" };
+      else if ((cand.source||"hn") === "arxiv" || (cand.source||"hn") === "federalregister") f = { core_concept: cand.title, friction_point: (String(cand.title||"") + ". " + String(cand.abstract||"")).slice(0,FRICTION_MAX), signal_strength: "Medium" };
       else f = await extractFriction(cand.id);
     } catch (e) { f = null; }
     if (f && f.friction_point && f.friction_point.length >= 60) {
@@ -3359,6 +3386,7 @@ function githubReadmeUrl(u) {
   return m ? "https://raw.githubusercontent.com/" + m[1] + "/" + m[2] + "/HEAD/README.md" : "";
 }
 function articleUrlFor(story) {
+  if (story && story.source === "federalregister" && story.fulltext_url) return String(story.fulltext_url);
   var u = String(story && story.url || "");
   var m = u.match(/^https?:\/\/arxiv\.org\/abs\/(.+)$/i);
   return m ? "https://arxiv.org/html/" + m[1] : (githubReadmeUrl(u) || u);
@@ -4593,6 +4621,8 @@ function buildSources(story) {
   } else if (src === "github") {
     var repo = String(story.id || "").replace(/^.*?([^\/]+\/[^\/]+)$/, "$1");
     out.push({ label: "GitHub repository: " + (repo || story.title), url: u || "https://github.com/" + repo });
+  } else if (src === "federalregister") {
+    out.push({ label: "Federal Register: " + String(story.title || "").slice(0, 120), url: u || "https://www.federalregister.gov/d/" + story.id });
   } else if (src === "arxiv") {
     out.push({ label: "arXiv: " + String(story.title || "").slice(0, 120), url: u || "https://arxiv.org/abs/" + story.id });
   } else {
@@ -5093,7 +5123,7 @@ function cleanNote(v) {
 }
 // Q08-QUALITY-1: pure helpers exposed for the offline suite (quality.test.mjs); no route uses this export.
 export const __forecast = { forecastClarificationText: forecastClarificationText, sweepForecastCriteria: sweepForecastCriteria, forecastClarification: forecastClarification, forecastResolutionGaps: forecastResolutionGaps, recordForecastUpdate: recordForecastUpdate, renderCalibration: renderCalibration, forecastPostText: forecastPostText, gatherEvidence: gatherEvidence, forecastDue: forecastDue, resolveForecasts: resolveForecasts, ensureForecastSchema: ensureForecastSchema, generateForecast: generateForecast, forecastStats: forecastStats, parseForecastBlock: parseForecastBlock, validateForecast: validateForecast, forecastXform: forecastXform, forecastProblems: forecastProblems, buildForecastPrompt: buildForecastPrompt, calibration: calibration, lastForecastUpdateScore: lastForecastUpdateScore, parseJudgeVerdict: parseJudgeVerdict, aggregateJudges: aggregateJudges, parseForecastCap: parseForecastCap, publicHttpsUrl: publicHttpsUrl, fcStatus: fcStatus, renderForecastBox: renderForecastBox, renderForecasts: renderForecasts, FORECAST_DIRECTIVE: FORECAST_DIRECTIVE, FORECAST_EVERY: FORECAST_EVERY, FORECAST_MAX_CHECKS: FORECAST_MAX_CHECKS };
-export const __domain = { parseDomains: parseDomains, q08Domains: q08Domains, resetDomains: function () { __domains = { at: 0, d: parseDomains(null) }; }, classifyDomain: classifyDomain, storyDomain: storyDomain, preferNonTech: preferNonTech, scrapeArxivDomain: scrapeArxivDomain, domainForm: domainForm, buildPrompt: buildPrompt, READER_PROMPT: READER_PROMPT, READER_PROMPT_DOMAIN: READER_PROMPT_DOMAIN, FINAL_READER_PROMPT: FINAL_READER_PROMPT, FINAL_READER_PROMPT_DOMAIN: FINAL_READER_PROMPT_DOMAIN, readerPromptFor: readerPromptFor, finalReaderPromptFor: finalReaderPromptFor, sourceKindOf: sourceKindOf, DOMAIN_ROTATE: DOMAIN_ROTATE, Q08_DIRECTIVE: Q08_DIRECTIVE };
+export const __domain = { parseDomains: parseDomains, q08Domains: q08Domains, resetDomains: function () { __domains = { at: 0, d: parseDomains(null) }; }, classifyDomain: classifyDomain, storyDomain: storyDomain, preferNonTech: preferNonTech, scrapeArxivDomain: scrapeArxivDomain, scrapeFederalRegister: scrapeFederalRegister, articleUrlFor: articleUrlFor, FR_API: FR_API, domainForm: domainForm, buildPrompt: buildPrompt, READER_PROMPT: READER_PROMPT, READER_PROMPT_DOMAIN: READER_PROMPT_DOMAIN, FINAL_READER_PROMPT: FINAL_READER_PROMPT, FINAL_READER_PROMPT_DOMAIN: FINAL_READER_PROMPT_DOMAIN, readerPromptFor: readerPromptFor, finalReaderPromptFor: finalReaderPromptFor, sourceKindOf: sourceKindOf, DOMAIN_ROTATE: DOMAIN_ROTATE, Q08_DIRECTIVE: Q08_DIRECTIVE };
 export const __gen = { thinPassedOver: thinPassedOver, parseArxivPool: parseArxivPool, arxivPoolSize: arxivPoolSize, resetArxivPool: function () { __arxivPool = { at: 0, n: ARXIV_POOL_DEFAULT }; }, scrapeArxiv: scrapeArxiv, ARXIV_POOL_DEFAULT: ARXIV_POOL_DEFAULT, parseComposeOrder: parseComposeOrder, q08Budget: q08Budget, Q08_DAILY_NEURONS_DEFAULT: Q08_DAILY_NEURONS_DEFAULT, resetRunColumns: function () { __runColsOk = false; __runColsTried = 0; }, sourceFloorFrom: sourceFloorFrom, groundBarFrom: groundBarFrom, learnedGroundBar: learnedGroundBar, get GROUND_BAR_CAP() { return GROUND_BAR_CAP; }, get GROUND_EXPLORE_EVERY() { return GROUND_EXPLORE_EVERY; }, learnedSourceFloor: learnedSourceFloor, thinSourceVerdict: thinSourceVerdict, sourceKindOf: sourceKindOf, markThinSkipped: markThinSkipped, ensureRunColumns: ensureRunColumns, insertRun: insertRun, meterCall: meterCall, claimClassesOf: claimClassesOf, get SOURCE_FLOOR_MIN_OK() { return SOURCE_FLOOR_MIN_OK; }, get THIN_MIN_ARTICLE() { return THIN_MIN_ARTICLE; }, get MIN_GROUND_CHARS() { return MIN_GROUND_CHARS; }, composeOrder: composeOrder, COMPOSE_MODELS: COMPOSE_MODELS, COMPOSE_MODELS_AT_CAP: COMPOSE_MODELS_AT_CAP, generate: generate, get TICK_BUDGET_MS() { return TICK_BUDGET_MS; }, get ESSAY_AFTER_FORECAST_MS() { return ESSAY_AFTER_FORECAST_MS; }, q08TickAllowance: q08TickAllowance, q08TickConfig: q08TickConfig, q08LastAttemptMs: q08LastAttemptMs, q08TickMore: q08TickMore, governedGenerate: governedGenerate };
 export const __stall = { stallRetryDue: stallRetryDue, stallDetector: stallDetector, stallDigest: stallDigest, stallStage: stallStage, get STALL_RETRY_H() { return STALL_RETRY_H; } };
 export const __factledger = { groundPreCheck: groundPreCheck, sourceLedger: sourceLedger, ledgerBlock: ledgerBlock, stripLedgerTags: stripLedgerTags, groundPreCheckMode: groundPreCheckMode, resetGroundPreCheck: function () { __groundPre = { at: 0, mode: "on" }; __groundPreCalls = 0; }, get groundPreCalls() { return __groundPreCalls; }, stallStage: stallStage, buildPrompt: buildPrompt, labelledGround: labelledGround, groundingProblems: groundingProblems, normalizeDraft: normalizeDraft, runLevels: runLevels, generate: generate, generateForecast: generateForecast, Q08_DIRECTIVE: Q08_DIRECTIVE, get LEDGER_MAX_LINES() { return LEDGER_MAX_LINES; }, get LEDGER_MAX_CHARS() { return LEDGER_MAX_CHARS; } };

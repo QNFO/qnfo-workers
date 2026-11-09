@@ -41,8 +41,8 @@ const lineH = 13 * 1.45;
 ok(2 * padA + lineH >= 24, "each footer link is at least 24px tall", { height: 2 * padA + lineH });
 
 // the markup still carries the four links after </main>, before the command bar
-const h = src.indexOf("function v3Html(env)");
-const html = src.slice(h, h + 6000);
+const h = src.indexOf("function v3Html(");
+const html = src.slice(h, h + 14000);
 const mainEnd = html.indexOf("</main>"), moreAt = html.indexOf('class="more"'), cbar = html.indexOf('id="cbar"');
 ok(mainEnd > 0 && moreAt > mainEnd && cbar > moreAt, "the More paragraph follows </main> and precedes the command bar");
 for (const href of ["/overview", "/changelog", "/api", "/managers"]) ok(html.indexOf('<a href="' + href + '">', moreAt) > moreAt, "the More paragraph links " + href);

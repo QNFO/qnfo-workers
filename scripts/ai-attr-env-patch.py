@@ -74,6 +74,8 @@ TARGETS = {
     "qnfo-infra": ("qnfo-infra", "AI", "AUDIT", ["  async scheduled(event, env, ctx) {", "  async fetch(request, env) {"]),
     "qnfo-memory-mcp": ("qnfo-memory-mcp", "AI", "AUDIT", ["  async fetch(request, env) {"]),
     "qnfo-youtube-shorts": ("qnfo-youtube-shorts", "AI", "QNFO_AUDIT", ["  async fetch(request, env, ctx) {", "  async scheduled(event, env, ctx) {"]),
+    # BP26-GW-MODEL-EVAL-1 (agent_issues 1001884): the battery, canary and benchmark call env.AI.run in six places that no table counted.
+    "qnfo-model-eval": ("qnfo-model-eval", "AI", "AUDIT", ["  async fetch(req, env) {", "  async scheduled(_event, env, ctx) {"]),
 }
 
 
