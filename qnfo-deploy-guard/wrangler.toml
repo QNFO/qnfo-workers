@@ -52,7 +52,8 @@ binding = "CH_PERSONAL_WATCH"
 service = "personal-watch"
 environment = "production"
 
-# DEPLOY-GUARD-HEALTH-BINDING-2 (issue 9708): CH_<WORKER> /health bindings for every deployable worker with a /health route (each answered 200 on 2026-11-09), so refreshRegistryVersion reads over the binding.
+# DEPLOY-GUARD-HEALTH-BINDING-2 (issue 9708): one CH_<WORKER> binding per live worker directory with a /health route (all 200 on 2026-11-09), so refreshRegistryVersion never needs the public workers.dev hop.
+
 [[services]]
 binding = "CH_IDEA_HUB"
 service = "idea-hub"
@@ -96,6 +97,11 @@ environment = "production"
 [[services]]
 binding = "CH_QNFO_AI_SEARCH"
 service = "qnfo-ai-search"
+environment = "production"
+
+[[services]]
+binding = "CH_QNFO_AI_YIELD"
+service = "qnfo-ai-yield"
 environment = "production"
 
 [[services]]
@@ -227,4 +233,3 @@ environment = "production"
 binding = "CH_RADAR_HUB"
 service = "radar-hub"
 environment = "production"
-

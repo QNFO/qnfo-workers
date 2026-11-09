@@ -15,7 +15,7 @@ on:
   workflow_dispatch:
     inputs:
       action:
-        description: "report | worker-history | kv-secret-scan | blocker-redteam | delete-worker | delete-vectorize-index | gateway-logs | ai-neurons | gateway-cost | access-probe | access-ensure-cloudflare | r2-get"
+        description: "report | worker-history | kv-secret-scan | blocker-redteam | delete-worker | delete-vectorize-index | delete-pages-project | gateway-logs | ai-neurons | gateway-cost | access-probe | access-ensure-cloudflare | r2-get"
         required: true
         type: choice
         options:
@@ -34,6 +34,7 @@ on:
           - access-ensure-cloudflare
           - delete-worker
           - delete-vectorize-index
+          - delete-pages-project
           - zaraz-remove-tool
           - zaraz-get
           - zaraz-set-ga4
@@ -50,7 +51,7 @@ on:
           - secrets-inventory
           - obs-sampling
       target:
-        description: "worker name (worker-history, delete-worker, obs-sampling), KV namespace id (kv-secret-scan), index name (delete-vectorize-index) ops-workspace path (r2-get) or zone (zaraz-remove-tool, edge-rules: comma list, empty means every zone) or database name (d1-backup, delete-d1) or WORKER:BINDING (unbind-d1, unbind-service)"
+        description: "worker name (worker-history, delete-worker, obs-sampling), KV namespace id (kv-secret-scan), index name (delete-vectorize-index), Pages project name (delete-pages-project) ops-workspace path (r2-get) or zone (zaraz-remove-tool, edge-rules: comma list, empty means every zone) or database name (d1-backup, delete-d1) or WORKER:BINDING (unbind-d1, unbind-service)"
         required: false
         default: ""
       model:

@@ -813,8 +813,10 @@ def main():
     existing = live_row_count()
     ok, failed, now = write_audit_rows(rows)
     purged, purge_err = (None, None)
+    purge_skipped = False
     if d.get("scope") == "all" and not purge_allowed(existing, len(rows)):
         purge_err = f"purge skipped: run classified {len(rows)} workers, table held {existing}; a partial report must not shrink the audit surface"
+        purge_skipped = True  # PURGE-SKIP-NOT-FAIL-1: a guarded skip is the guard working, not a failed run
         print(f"::warning::{purge_err}")
     elif d.get("scope") == "all":
         purged, purge_err = purge_stale(now)
@@ -838,7 +840,7 @@ def main():
     else:
         print("issue publish skipped in --apply: the --audit step of this job published this report (APPLY-NO-REPUBLISH-1)")
 
-    rc = 1 if (failed or purge_err) else 0
+    rc = 1 if (failed or (purge_err and not purge_skipped)) else 0
     if mode == "--apply":
         rc = 1 if apply_ahead(d) else rc
     sys.exit(rc)
