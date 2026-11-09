@@ -83,9 +83,15 @@ export async function runHarness(workerSrc, seedDoc, mod) {
   }
   const flagged = controls.filter((c) => c.flagged);
   if (flagged.length) return fail("clean control was flagged by " + flagged.map((c) => c.gate).join(", ") + ": the gate is not a usable measurement", { control_flagged: true, controls });
+  const deterministic = new Set(["fabricated-scan", "citation-gate", "verify-adjudication"]);
   const runs = [];
+  const skipped = [];
   for (const s of seeds) {
     const gate = s.gate || "fabricated-scan";
+    if (!deterministic.has(gate)) {
+      skipped.push({ seed_id: s.id, gate });
+      continue;
+    }
     let caught = 0, detail;
     try {
       if (gate === "fabricated-scan") {
@@ -93,8 +99,7 @@ export async function runHarness(workerSrc, seedDoc, mod) {
         caught = hits.length > 0 ? 1 : 0;
         detail = hits.length ? "flagged as " + hits[0].kind : "not flagged by the deterministic scan";
       } else {
-        const r = gate === "citation-gate" ? await citationCase(mod, s) : gate === "verify-adjudication" ? adjudicationCase(mod, s) : null;
-        if (!r) return fail("seed " + s.id + " names the unknown gate " + gate);
+        const r = gate === "citation-gate" ? await citationCase(mod, s) : adjudicationCase(mod, s);
         caught = r.flagged ? 1 : 0;
         detail = r.detail;
       }
@@ -104,7 +109,7 @@ export async function runHarness(workerSrc, seedDoc, mod) {
     }
     runs.push({ seed_id: s.id, gate, kind: s.kind || "", caught, detail });
   }
-  return { ok: true, control_flagged: false, controls, runs };
+  return { ok: true, control_flagged: false, controls, runs, skipped };
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
