@@ -165,7 +165,7 @@ function formatPaper(source, record) {
 }
 // PAPER-FORMAT-2:END
 // 3.48.7 PAPER-REVISION-QUALITY-1 (2026-11-03, pillar reach): recover split revision titles and record abstracts at public rendering, and reject cached refusals from both summary surfaces.
-var VERSION="3.62.0-codeagent";
+var VERSION="3.63.0-codeagent";
 /* 3.54.2 SEO-404-PATHS-1 follow-up: the paper page script no longer requests /api/paper-context/undefined when the page data block is missing (first path recorded in seo_404_paths). */ /* 3.54.0 SEO-404-PATHS-1 and INDEXNOW-BACKOFF-1 (merged): see the two notes below. GET /api/seo/crawl also returns notFound, the top 50 crawler 404 paths of the window, so the dashboard UX auditor reads them from the open route. INDEXNOW-BACKOFF-1: an IndexNow endpoint that failed its last 6 logged runs is tried once per 3 hours and a 429 is not retried. */ /* SEO-404-PATHS-1 (2026-11-04, pillar reach): a crawler request that answers 404 records its path in living-paper seo_404_paths (day, host, path, n; 500 paths a day, 14 days kept). seo_crawl_log counted 1,875 crawler 404s on 2026-11-02 (qnfo.org, every bot, kind other) and kept no path to fix. */ // 3.52.0 QWAV-DEMOS-1 (2026-11-04, pillar reach; minor: the QWAV page lists the ten interactive demos that only the retired Pages site linked, with a Demos nav item, a hero action and a footer link; the page is now the whole of qwav.org through a qwav.org/* route, so unknown paths redirect home instead of answering 200). Revert: restore 3.51.0. // 3.51.0 earlier history follows: // 3.51.0 CROSS-LINK-1 (2026-11-04, pillar reach; minor: every QDS page gains a family bar linking QNFO, QWAV and q08, a Keep exploring module (newest and random papers from the open API, the three family sites, topic chips) and a family line in the footer; QDS 1.1.0; visible ask links use ask.qwav.org per DOMAIN-PLANE-1). Prediction: pages per session on qwav.org and qnfo.org rise and clicks between the three sites become non-zero. Revert: restore 3.50.0. // 3.50.0 earlier history follows: // 3.50.0 PAPER-CITATION-ALIASES-1 (#5577, pillar research; minor): expose the documented /papers/<slug>/cite.* routes alongside the existing API exports. /* main 3.53.1 */ // 3.53.1 PAPER-TTFB-1 (2026-11-04, pillar reach; patch): a paper page whose plain summary kept failing the readability gate ran two model generations inside every request (17 to 44 s to first byte for a-minimal-generative-grammar-of-coordination..., 1.2 s for its neighbours); the fill now runs after the response and once per PLAIN_RETRY_MS per paper per colo. Revert: restore 3.53.0. // 3.53.0 earlier history follows: // 3.53.0 CROSS-LINK-2 (2026-11-04, pillar reach; minor: papers.qnfo.org index and paper pages, rendered by lpDoc, gain the family bar and a Keep exploring strip linking QWAV, Ask, ideas and q08, so the pages a search lands on lead to the rest of the family). Revert: restore 3.52.0. // 3.52.0 earlier history follows: // 3.52.0 QWAV-DEMOS-1 (2026-11-04, pillar reach; minor: the QWAV page lists the ten interactive demos that only the retired Pages site linked, with a Demos nav item, a hero action and a footer link; the page is now the whole of qwav.org through a qwav.org/* route, so unknown paths redirect home instead of answering 200). Revert: restore 3.51.0. // 3.51.0 earlier history follows: // 3.51.0 CROSS-LINK-1 (2026-11-04, pillar reach; minor: every QDS page gains a family bar linking QNFO, QWAV and q08, a Keep exploring module (newest and random papers from the open API, the three family sites, topic chips) and a family line in the footer; QDS 1.1.0; visible ask links use ask.qwav.org per DOMAIN-PLANE-1). Prediction: pages per session on qwav.org and qnfo.org rise and clicks between the three sites become non-zero. Revert: restore 3.50.0. // 3.50.0 earlier history follows: // 3.50.0 PAPER-CITATION-ALIASES-1 (#5577, pillar research; minor): expose the documented /papers/<slug>/cite.* routes alongside the existing API exports.
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
@@ -4589,6 +4589,17 @@ async function sha256Hex(text) {
 function paperVersionOf(row) {
   return String(row.version_semver || String(row.version || "").replace(/^v/i, "").replace(/-zeno\x64o[-\w]*/i, "")) || "";
 }
+async function pinPaperVersion(env, slug, version, sha) {
+  if (!env || !env.AUDIT) return "unknown";
+  try {
+    const ins = await env.AUDIT.prepare("INSERT OR IGNORE INTO paper_version_pins (slug, version, sha256) VALUES (?1, ?2, ?3)").bind(slug, version, sha).run();
+    if (ins && ins.meta && ins.meta.changes > 0) return "new";
+    const pin = await env.AUDIT.prepare("SELECT sha256 FROM paper_version_pins WHERE slug = ?1 AND version = ?2").bind(slug, version).first();
+    if (!pin || pin.sha256 === sha) return "pinned";
+    await env.AUDIT.prepare("INSERT INTO paper_version_drift (slug, version, pinned_sha256, served_sha256) VALUES (?1, ?2, ?3, ?4)").bind(slug, version, pin.sha256, sha).run();
+    return "drifted";
+  } catch (e) { console.error("pin-paper-version failed: " + String(e && e.message || e).slice(0, 160)); return "unknown"; }
+}
 async function handlePaperVersion(env, slug, version, head) {
   const row = await env.LIVING_PAPER.prepare("SELECT " + OPEN_COLS + ",body_md FROM papers WHERE " + OPEN_WHERE + " AND slug = ?").bind(slug).first();
   if (!row) return openJson({ error: "not found" }, 404);
@@ -4602,7 +4613,9 @@ async function handlePaperVersion(env, slug, version, head) {
   if (body == null || body === "") return openJson({ error: "no recoverable body for this version", slug, version: want }, 404);
   const text = retiredLines(String(body));
   const sha = await sha256Hex(text);
-  const headers = { "Content-Type": "text/markdown; charset=utf-8", "Access-Control-Allow-Origin": "*", "X-Content-SHA256": sha, "X-Paper-Version": want, "Link": '<https://papers.qnfo.org/papers/' + slug + '/v/' + want + '>; rel="canonical"', "Cache-Control": current ? "public, max-age=300" : "public, max-age=31536000, immutable" };
+  // PAPER-PIDS-PIN-2 (issue 9790): pin the first-served hash of this version; a later different hash is drift. Fail-soft: no AUDIT binding or any D1 error leaves the pin status unknown.
+  const pinStatus = await pinPaperVersion(env, slug, want, sha);
+  const headers = { "X-Content-Pin-Status": pinStatus, "Content-Type": "text/markdown; charset=utf-8", "Access-Control-Allow-Origin": "*", "X-Content-SHA256": sha, "X-Paper-Version": want, "Link": '<https://papers.qnfo.org/papers/' + slug + '/v/' + want + '>; rel="canonical"', "Cache-Control": current ? "public, max-age=300" : "public, max-age=31536000, immutable" };
   return new Response(head ? null : text, { status: 200, headers });
 }
 async function handleOpenData(request, env, p) {
