@@ -13,14 +13,16 @@ export function roadmapStatements(rows) {
   }));
 }
 
-export async function insertRoadmap(rows, { fetchImpl = fetch, tok = process.env.CLOUDFLARE_API_TOKEN, acct = process.env.CLOUDFLARE_ACCOUNT_ID } = {}) {
+export async function insertRoadmap(rows, { fetchImpl = fetch, tok = process.env.CLOUDFLARE_API_TOKEN, acct = process.env.CLOUDFLARE_ACCOUNT_ID, size = 50 } = {}) {
   if (!tok || !acct) return { skipped: "no Cloudflare credentials", rows: rows.length };
+  const sts = roadmapStatements(rows);
   let inserted = 0, failed = 0;
-  for (const st of roadmapStatements(rows)) {
-    const r = await fetchImpl(`https://api.cloudflare.com/client/v4/accounts/${acct}/d1/database/${AUDIT_DB}/query`, { method: "POST", headers: { authorization: `Bearer ${tok}`, "content-type": "application/json" }, body: JSON.stringify(st) });
+  for (let i = 0; i < sts.length; i += size) {
+    const chunk = sts.slice(i, i + size);
+    const r = await fetchImpl(`https://api.cloudflare.com/client/v4/accounts/${acct}/d1/database/${AUDIT_DB}/query`, { method: "POST", headers: { authorization: `Bearer ${tok}`, "content-type": "application/json" }, body: JSON.stringify({ batch: chunk }) });
     const j = await r.json().catch(() => ({}));
-    if (!j.success) { failed++; continue; }
-    inserted += j.result?.[0]?.meta?.changes || 0;
+    if (!j.success) { failed += chunk.length; continue; }
+    inserted += (j.result || []).reduce((n, x) => n + (x?.meta?.changes || 0), 0);
   }
   return { rows: rows.length, inserted, already_present: rows.length - inserted - failed, failed };
 }
