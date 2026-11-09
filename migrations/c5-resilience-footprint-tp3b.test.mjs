@@ -57,7 +57,7 @@ for (const i of issues) {
   const file = readFileSync(join(root, path), "utf8");
   ok(file.split(anchor).length - 1 === 1, "the anchor occurs exactly once in " + path, anchor);
   const marker = JSON.parse(probe);
-  ok(marker.paths[0] === path && /^TP-3[BCD]-/.test(marker.contains) && d.includes(marker.contains) && !file.includes(marker.contains), "the closing marker is named in the issue and absent from the file today", marker);
+  ok(marker.paths[0] === path && /^TP-3[BCD]-/.test(marker.contains) && d.includes(marker.contains), "the closing marker is named in the issue (the doer may have landed it since)", marker);
 }
 const d1issue = issues.find((i) => /TP-3C-D1-FOLD-1/.test(i.title)).description;
 ok(/0458a344-090d-4264-a0e0-c95d7fa237f3/.test(d1issue) && /D1-SPLIT/.test(d1issue) && /ops audit trail|ops_ai_tool/.test(d1issue), "the D1 issue names the database, the opposite D1-SPLIT direction and the usage check");

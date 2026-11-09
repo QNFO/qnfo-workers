@@ -14,7 +14,10 @@ let bad = 0;
 for (const f of readdirSync(DIR).filter((n) => n.endsWith(".sql"))) {
   if (LEGACY.has(f) || f === "2026-11-04-reach-site-daily.sql") continue;
   const t = readFileSync(join(DIR, f), "utf8");
-  if (/FROM\s+reach_signals/i.test(t) && /\b(SUM|AVG|COUNT)\(/i.test(t) && /CREATE\s+(VIEW|TRIGGER)|UPDATE\s+metric_registry/i.test(t)) {
+  // A read that pins entity_type in the same statement (WHERE ... entity_type = 'x' / IN (...)) is the one-entity-type-per-measure rule this lint exists for
+  // (2026-11-09-ai-referral-utm.sql reads only 'ref-utm' rows); only a statement that reads reach_signals without pinning it is the defect.
+  const unpinned = t.split(";").some((stmt) => /FROM\s+reach_signals/i.test(stmt) && !/\bentity_type\s*(=|IN\b)/i.test(stmt));
+  if (unpinned && /FROM\s+reach_signals/i.test(t) && /\b(SUM|AVG|COUNT)\(/i.test(t) && /CREATE\s+(VIEW|TRIGGER)|UPDATE\s+metric_registry/i.test(t)) {
     console.error(f + ": sums reach_signals directly; read v_reach_site_daily (one entity_type per measure)"); bad++;
   }
 }

@@ -76,7 +76,7 @@ ok(path === "scripts/direct_content_deploy.py" && anchor && probe, "it carries c
 const file = rd("../" + path);
 ok(file.split(anchor).length - 1 === 1, "the anchor occurs exactly once in " + path, anchor);
 const marker = JSON.parse(probe);
-ok(marker.contains === "DIRECT-DEPLOY-WINDOWS-1" && d.includes(marker.contains) && !file.includes(marker.contains), "the closing marker is named in the issue and absent today");
+ok(marker.contains === "DIRECT-DEPLOY-WINDOWS-1" && d.includes(marker.contains), "the closing marker is named in the issue (the doer may have landed it since)");
 
 const r5 = one("SELECT status, evidence FROM roadmap_implementation WHERE id = 5");
 ok(r5.status === "partial" && r5.evidence.startsWith(EVID) && r5.evidence.includes("C5-RESILIENCE-5B") && /VERIFIED LIVE/.test(r5.evidence) && /00:35:02Z/.test(r5.evidence) && /not built/.test(r5.evidence), "row 5 stays partial, keeps its evidence, quotes the live reading and says what is not built", r5.status);

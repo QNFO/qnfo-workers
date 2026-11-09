@@ -39,7 +39,7 @@ const oldCount = db.prepare(`SELECT COUNT(*) as cnt FROM personal_replies
 assert.equal(oldCount, 3, 'Should have 3 old rows (>30 days)');
 
 // Apply migration
-const migrationSQL = readFileSync('migrations/2026-11-07-personal-replies-retention.sql', 'utf8');
+const migrationSQL = readFileSync('migrations/retired/2026-11-07-personal-replies-retention.sql.txt', 'utf8');
 db.exec(migrationSQL);
 
 // Test 1: Backup table was created

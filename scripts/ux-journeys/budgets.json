@@ -225,5 +225,11 @@
    "taps": 0,
    "typing": 0
   }
+ },
+ "me-companion-regression-guard": {
+  "companion-no-fleet-asks": {
+   "taps": 0,
+   "typing": 0
+  }
  }
 }
