@@ -55,7 +55,7 @@ const env = () => ({
     async run(model, input, opts) {
       calls.push({ model, input, opts });
       if (failAutoRouter && model === "cloudflare/auto") throw new Error("provider details not returned");
-      if (model === "@cf/zai-org/glm-5.3-flash" || model === "@cf/meta/llama-3.3-70b-instruct-fp8-fast") {
+      if (model === "@cf/zai-org/glm-5.3-flash" || model === "@cf/openai/gpt-oss-20b") {
         if (judgeMode === "fail") throw new Error("judge down");
         const c = input.messages[0].content;
         const autoFirst = c.indexOf("Answer A:\nA comparable") >= 0;

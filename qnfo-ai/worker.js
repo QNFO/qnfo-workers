@@ -11,6 +11,7 @@ var VERSION = "5.50.0-codeagent";
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
+// MODEL-MATRIX-1: rates for gemma-4-26b and deepseek-v4-pro-0813 (neurons per 1M tokens, in/out) are in this table; copies elsewhere must match.
 var __AI_ATTR_RATES = { "@cf/zai-org/glm-5.3": [127273, 400000], "@cf/zai-org/glm-4.7-flash": [5500, 36364], "@cf/zai-org/glm-5.3-flash": [13636, 45455], "@cf/nvidia/nemotron-3-120b-a12b": [45455, 136364], "@cf/moonshotai/kimi-k2.6": [86364, 363636], "@cf/moonshotai/kimi-k2.7-code": [86364, 363636], "@cf/openai/gpt-oss-120b": [31818, 68182], "@cf/openai/gpt-oss-20b": [18182, 27273], "@cf/deepseek-ai/deepseek-v4-pro-0813": [120000, 360000], "@cf/deepseek-ai/deepseek-v4-flash-0731": [40000, 120000], "@cf/meta/llama-3.3-70b-instruct-fp8-fast": [26668, 204805], "@cf/qwen/qwen3-30b-a3b-fp8": [4625, 30475], "@cf/qwen/qwen3.8-27b": [40909, 290909], "@cf/baai/bge-base-en-v1.5": [6058, 0], "@cf/baai/bge-small-en-v1.5": [1841, 0], "@cf/baai/bge-large-en-v1.5": [18582, 0], "@cf/google/gemma-4-26b-a4b-it": [9091, 27273] };
 // CF-OBS-ISSUE-1 (#1000902, RED-DRAIN-1): D1 overload root cause. Every AI call wrote up to two analytics
 // counter rows through the binding, and on a D1 "overloaded / queued for too long" error each write retried
@@ -127,6 +128,8 @@ function __aiAttrEnv(env, worker, aiKey, dbKey) {
           var outTok = Number(u.completion_tokens || u.output_tokens || 0);
           var r = __AI_ATTR_RATES[String(model)] || [0, 0];
           var neurons = (inTok * r[0] + outTok * r[1]) / 1e6;
+          // AI-METER-KIMI-1: while the D1 breaker is open the counter write below is skipped, so the call is counted in Analytics Engine instead.
+          if (d1AttrWriteSkip() && typeof aiMeterWrite === "function" && !/bge|embed|whisper|m2m100|resnet|flux|sdxl/i.test(String(model))) aiMeterWrite(env, aiMeterPoint("workers-ai", model, (env && env.__spendCaller) || worker, inTok, outTok, 0, 0, {}));
           for (var _j = 0; !d1AttrWriteSkip() && _j < 5; _j++) {
   try {
     await db.prepare("INSERT INTO ai_call_counters (day, worker, purpose, model, calls, errors, in_chars, ms, in_tok, out_tok, neurons) VALUES (?1,?2,'binding',?3,1,?4,?5,?6,?7,?8,?9) ON CONFLICT(day, worker, purpose, model) DO UPDATE SET calls=calls+1, errors=errors+excluded.errors, in_chars=in_chars+excluded.in_chars, ms=ms+excluded.ms, in_tok=in_tok+excluded.in_tok, out_tok=out_tok+excluded.out_tok, neurons=neurons+excluded.neurons")
@@ -533,8 +536,8 @@ function spendRecord(env, provider, model, inTok, outTok, flags) {
       // that is a pricing artifact shows up as a count by model (purpose spend-price-fallback). Telemetry only; the price is unchanged.
       if (calls && typeof spendPriceFallback === "function" && spendPriceFallback(provider, model)) {
         try {
-          await db.prepare("INSERT INTO ai_call_counters (day, worker, purpose, model, calls, errors, in_tok, out_tok, neurons) VALUES (?1, 'qnfo-ai', 'spend-price-fallback', ?2, 1, 0, 0, 0, 0) ON CONFLICT(day, worker, purpose, model) DO UPDATE SET calls = calls + 1")
-            .bind(spendDay(0), String(model).slice(0, 120)).run();
+          await db.prepare("INSERT INTO ai_call_counters (day, worker, purpose, model, calls, errors, in_tok, out_tok, neurons) VALUES (?1, 'qnfo-ai', 'spend-price-fallback', ?2, 1, 0, ?3, ?4, ?5) ON CONFLICT(day, worker, purpose, model) DO UPDATE SET calls = calls + 1, in_tok = in_tok + excluded.in_tok, out_tok = out_tok + excluded.out_tok, neurons = neurons + excluded.neurons")
+            .bind(spendDay(0), String(model).slice(0, 120), Math.round(Number(inTok) || 0), Math.round(Number(outTok) || 0), Math.round(usd / SPEND_NEURON_USD)).run();
         } catch (e2) {
         }
       }
@@ -2218,7 +2221,7 @@ __name2(executeBuiltinTools, "executeBuiltinTools");
 __name22(executeBuiltinTools, "executeBuiltinTools");
 async function runModelTurn(env, effSpec, messages, maxTokens, tools, effTemp, effTopP, toolChoice) {
   const route = chatRoute(effSpec.wa || effSpec.api || effSpec.model);
-  const out = await runDynamicChat(env, route, messages, maxTokens, false, { tools, temperature: effTemp, top_p: effTopP, tool_choice: toolChoice });
+  const out = await runDynamicChat(env, route, messages, maxTokens, false, { tools, temperature: effTemp, top_p: effTopP, tool_choice: toolChoice, reasoning_effort: reasoningEffortFor(effSpec.wa || effSpec.model, maxTokens, null, !!(tools && tools.length)) });
   return { content: extractWAContent(out), toolCalls: extractWAToolCalls(out), provider: out.provider || "gateway", served_by: out.model || route };
 }
 __name(runModelTurn, "runModelTurn");
@@ -4394,7 +4397,7 @@ async function autoRouterShadowRun(env, limit) {
 // AUTOROUTER-QUALITY-1: pairwise judge over anonymous answers, asked once with each order. Returns better / same / worse for the Auto Router answer, split when the two
 // orders disagree, unjudged when the judge fails or the spend governor does not allow the call (skipped, not failed). No answer text is kept.
 function autoRouterShadowJudgeModel(baselineModel, selectedModel) {
-  const fam = /glm|zai/i.test(String(baselineModel || "") + " " + String(selectedModel || "")) ? "@cf/meta/llama-3.3-70b-instruct-fp8-fast" : "@cf/zai-org/glm-5.3-flash";
+  const fam = /glm|zai/i.test(String(baselineModel || "") + " " + String(selectedModel || "")) ? "@cf/openai/gpt-oss-20b" : "@cf/zai-org/glm-5.3-flash";
   return fam;
 }
 async function autoRouterShadowJudge(env, prompt, baseline, auto, baselineModel, selectedModel) {
