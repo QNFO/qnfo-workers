@@ -64,5 +64,7 @@ ok(/path === "\/api\/cmd\/session-tasks"/.test(src) && /path === "\/api\/cmd\/sk
 ok(/cmdTasksPanelHtml\(\) \+ cmdPanelsHtml\(\)/.test(src), "the /cmd page carries the panels");
 ok(/actions_json\) VALUES \(\?1, \?2, \?3, 'agent-stream'/.test(src), "the stream row keeps its session id so the task list survives settling");
 
+const iGuard = src.indexOf('error: "method_not_allowed", path: path, allow: ["POST"]');
+ok(iGuard > 0 && src.indexOf('path === "/api/cmd/session-tasks"') > 0 && src.indexOf('path === "/api/cmd/session-tasks"') < iGuard && src.indexOf('path === "/api/cmd/skills"') < iGuard, "the GET panel routes sit before the POST-only guard, so a GET reaches them");
 console.log((fail ? "FAIL" : "PASS") + " cmd-panels " + pass + " ok, " + fail + " failed");
 process.exit(fail ? 1 : 0);

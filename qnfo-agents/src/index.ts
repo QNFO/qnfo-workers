@@ -776,14 +776,16 @@ async function skillLookup(env: Env, kind: "search" | "use", text: string, calle
   let result: any;
   if (kind === "search") {
     const hits = skillSearch(q, FLEET_SKILLS, 5);
-    result = { ok: true, query: q, count: hits.length, skills: hits.map((h: any) => ({ name: h.name, what: h.what, score: h.score })), next: hits.length ? "call skill_get with a name to read the steps" : "no skill matches: try other words, or list them all with GET /skills" };
+    result = { ok: true, query: q, count: hits.length, skills: hits.map((h: any) => ({ name: h.name, what: h.what, score: h.score })), next: hits.length ? "call skill_get with a name to read the steps" : "no skill matches: try other words, or list them all with GET /skill-repo" };
   } else {
     const s = skillGet(q, FLEET_SKILLS);
     result = s ? { ok: true, skill: { name: s.name, what: s.what, steps: s.steps } } : { ok: false, error: "no skill named '" + q + "'; use skill_search" };
   }
   try {
-    await env.AUDIT_DB.prepare("INSERT INTO agent_skill_events (kind, query, hit, hits, caller, created_ms) VALUES (?1, ?2, ?3, ?4, ?5, ?6)")
-      .bind(kind, q, kind === "use" && result.ok ? q.toLowerCase() : (result.skills && result.skills[0] ? result.skills[0].name : null), result.count == null ? (result.ok ? 1 : 0) : result.count, clip(caller || "", 80), Date.now()).run();
+    const names = kind === "search" ? (result.skills || []).map((h: any) => h.name).join(",") : null;
+    const hit = kind === "use" ? (result.ok ? result.skill.name : null) : (result.skills && result.skills[0] ? result.skills[0].name : null);
+    await env.AUDIT_DB.prepare("INSERT INTO agent_skill_events (kind, query, hit, hits, ok, names, caller, created_ms) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)")
+      .bind(kind, q, hit, result.count == null ? (result.ok ? 1 : 0) : result.count, result.ok ? 1 : 0, names, clip(caller || "", 80), Date.now()).run();
   } catch (e) { logErr("skill-log", e); }
   return result;
 }

@@ -51,5 +51,20 @@ const r2 = await oneWorkerCount({ AUDIT: db2 }, ["a"], "2026-10-06T11:00:00Z");
 const ev2 = writes.find((w) => /cloud_ops_events/.test(w.sql));
 check(r2.disagreement === 0 && ev2 && ev2.args[4] === "ok" && !/only live/.test(ev2.args[2]) && writes.find((w) => /metric='worker_count_disagreement'/.test(w.sql)).args[0] === "0", "agreement writes 0 and an ok event", ev2 && ev2.args);
 
+// 4. TOMBSTONE-CLASS-1
+const regQ = [{ service: "a", kind: "worker", state: "live" }];
+d = workerCountDiff(["a", "qnfo-workers"], regQ, ["qnfo-workers"]);
+check(d.disagreement === 0 && d.only_live.length === 0 && d.tombstones.join() === "qnfo-workers" && d.live === 2, "a tombstone leaves only_live, is reported, still counts live", d);
+d = workerCountDiff(["a", "ghost"], regQ, ["qnfo-workers"]);
+check(d.disagreement === 1 && d.only_live.join() === "ghost" && d.tombstones.length === 0, "a non-tombstone script still disagrees", d);
+const mk = (tomb, w) => ({ prepare(sql) { let args = []; const s = { bind(...a) { args = a; return s; }, async all() { return { results: /worker_live_audit/.test(sql) ? tomb : regQ }; }, async run() { w.push({ sql, args }); return { meta: { changes: 1 } }; } }; return s; } });
+let w3 = [];
+let r3 = await oneWorkerCount({ AUDIT: mk([{ service: "qnfo-workers" }], w3) }, ["a", "qnfo-workers"], "2026-11-05T10:00:00Z");
+let ev3 = w3.find((x) => /cloud_ops_events/.test(x.sql));
+check(r3.disagreement === 0 && ev3.args[4] === "ok" && JSON.parse(ev3.args[3]).tombstones.join() === "qnfo-workers", "retired row plus 410 audit row agrees; meta carries tombstones", ev3 && ev3.args);
+w3 = [];
+r3 = await oneWorkerCount({ AUDIT: mk([], w3) }, ["a", "qnfo-workers"], "2026-11-05T10:00:00Z");
+check(r3.disagreement === 1, "no 410 audit row (script answers 200 or no audit row) still disagrees", r3);
+
 console.log(fails ? fails + " FAILED" : "one-worker-count: all assertions passed");
 process.exit(fails ? 1 : 0);
