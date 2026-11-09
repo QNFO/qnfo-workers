@@ -1,5 +1,6 @@
 name = "qnfo-github-steward"
 main = "worker.js"
+# compat-advance: reviewed 2026-11-09 (compat-risk-scan clean; no COMPAT_FLIPS entry between 2026-10-10 and 2026-11-04)
 compatibility_date = "2026-11-04"
 workers_dev = true
 # charter-pillar: autonomy (GITHUB-STEWARD-1)

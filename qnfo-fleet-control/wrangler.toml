@@ -13,7 +13,7 @@ main = "worker.js"
 # 2026-10-01 Durable Object eviction (pending I/O keeps this worker's Durable Object in memory until it completes). /ops/deploy reads /health through its
 # COMPAT-HEALTH-BINDINGS-2 binding before the upload, keeps the date only when /health answers with the deployed VERSION
 # and otherwise restores the previous date (deployment_history compat-restore).
-# compat-advance: reviewed 2026-10-12
+# compat-advance: reviewed 2026-11-09 (compat-risk-scan clean; no COMPAT_FLIPS entry between 2026-10-10 and 2026-11-04)
 compatibility_date = "2026-11-04"
 # FLEET-PROBE-1042-1 (2026-09-30): without global_fetch_strictly_public a subrequest from this worker
 # to another *.q08.workers.dev worker is Cloudflare error 1042 (same-zone), served as HTTP 404. Measured:
