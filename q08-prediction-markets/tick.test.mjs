@@ -13,7 +13,7 @@ const soon = (d) => new Date(Date.now() + d * 86400000).toISOString();
 const feed = (markets) => ({ source: "polymarket", markets });
 const mk = (slug, yes, x = {}) => ({ slug, title: "Will " + slug + " happen?", yes, vol24: 50000, move: 0, closed: 0, ends_at: soon(5), sports: 0, ...x });
 const news = async () => [1, 2, 3, 4].map((i) => ({ title: "h" + i, domain: "x.com", date: "20261109", src: "gdelt" }));
-const said = (ps) => (m, n, model) => Promise.resolve(JSON.stringify({ p: ps[model] ?? 0.5, confidence: "medium", why: "Three outlets report it (" + model + ")." }));
+const said = (ps) => (m, n, model, opts = {}) => Promise.resolve(JSON.stringify({ p: opts.ask === "no" ? 1 - (ps[model] ?? 0.5) : ps[model] ?? 0.5, confidence: "medium", why: "Three outlets report it (" + model + ")." }));
 const deps = (ps) => ({ news, ask: said(ps), models: Object.keys(ps) });
 const agree80 = deps({ a: 0.78, b: 0.8, c: 0.82 });
 const get = async (env, path) => (await worker.fetch(new Request("https://x" + path), env)).json();
@@ -228,4 +228,96 @@ test("the charter endpoint exposes the frozen sample, the split by domain, the p
   const c = await get(env, "/api/charter");
   for (const k of ["evaluation", "evaluation_frozen", "by_domain", "log_loss", "lead_hours", "params", "track_record", "calibration", "decisions", "graduation"]) assert.ok(k in c, k);
   assert.equal(c.params.version, 1); assert.equal(c.track_record.count, 1); assert.equal(c.mode, "paper");
+});
+
+test("a decision the position cap rejects is not marked traded (issue 8840)", async () => {
+  const env = { TRADES_DB: fakeD1() };
+  await tick(env, feed([mk("seed", 0.5)]), deps({ a: 0.5, b: 0.5, c: 0.5 })); // initialises the schema, no trade
+  const raw = env.TRADES_DB._raw;
+  for (let i = 0; i < 8; i++) raw.exec("INSERT INTO pt_position (slug,title,side,qty,entry,strategy,opened_at) VALUES ('held" + i + "','held','yes',10,0.5,'signal','2026-01-01T00:00:00Z')");
+  const r = await tick(env, feed([mk("vote", 0.55)]), agree80);
+  assert.equal(r.opened, 0);
+  assert.equal(raw.prepare("SELECT traded FROM pt_estimate WHERE slug='vote'").get().traded, 0, "no position, so not TRADED");
+});
+test("settlement polling rotates: twenty unresolved rows cannot hold every batch (issue 8840)", async () => {
+  const env = { TRADES_DB: fakeD1() };
+  await tick(env, feed([mk("seed", 0.5)]), deps({ a: 0.5, b: 0.5, c: 0.5 }));
+  const raw = env.TRADES_DB._raw;
+  for (let i = 0; i < 25; i++) raw.prepare("INSERT INTO pt_estimate (slug,title,fair,market,confidence,ends_at,updated_at,traded) VALUES (?,?,?,?,?,?,?,?)").run("m" + String(i).padStart(2, "0"), "t", 0.6, 0.5, "high", new Date(Date.now() - 86400000 + i * 1000).toISOString(), "2026-01-01", 0);
+  const asked = [];
+  const bySlug = async (slugs) => { asked.push(...slugs); return slugs.map((s) => ({ slug: s, title: s, yes: s === "m24" ? 1 : 0.5, vol24: 0, move: 0, closed: 0, ends_at: null })); };
+  await tick(env, feed([]), { ...deps({}), bySlug });
+  assert.ok(!asked.includes("m24"), "the first batch is the 20 oldest");
+  const r = await tick(env, feed([]), { ...deps({}), bySlug });
+  assert.ok(asked.includes("m24"), "the second batch reaches the rows the first did not check");
+  assert.equal(r.settled, 1);
+  assert.equal(raw.prepare("SELECT outcome FROM pt_estimate WHERE slug='m24'").get().outcome, 1);
+});
+test("the charter reports the proof split by confidence once a level has enough resolved forecasts (issue 8840)", async () => {
+  const env = { TRADES_DB: fakeD1() };
+  await tick(env, feed([mk("seed", 0.5)]), deps({ a: 0.5, b: 0.5, c: 0.5 }));
+  const c = await get(env, "/api/charter");
+  assert.ok(c.evaluation && "by_confidence" in c.evaluation);
+});
+
+// ---- issue 9107: consistency and fake-date probes ----
+const probeAsk = (script) => (m, n, model, opts = {}) => Promise.resolve(JSON.stringify({ p: opts.ask === "no" ? script.no : opts.daysBack ? script.fake : script.yes, confidence: "medium", why: "Three outlets report it (" + model + ")." }));
+const sampledSlug = (() => { for (let i = 0; i < 500; i++) { const s = "vote" + i; if (probeSampledFor(s)) return s; } })();
+function probeSampledFor(s) { let h = 2166136261; for (const c of s) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619) >>> 0; } return h % 100 < 20; }
+const unsampledSlug = (() => { for (let i = 0; i < 500; i++) { const s = "plain" + i; if (!probeSampledFor(s)) return s; } })();
+const pd = (script, slug) => ({ news, models: ["a", "b", "c"], ask: probeAsk(script) });
+test("a probed market whose NO wording does not complement YES is recorded inconsistent and not traded", async () => {
+  const env = { TRADES_DB: fakeD1() };
+  const r = await tick(env, feed([mk(sampledSlug, 0.55)]), pd({ yes: 0.8, no: 0.6, fake: 0.8 }));
+  assert.equal(r.opened, 0);
+  const row = env.TRADES_DB._raw.prepare("SELECT confidence, traded, probe FROM pt_estimate WHERE slug=?").get(sampledSlug);
+  assert.equal(row.confidence, "inconsistent"); assert.equal(row.traded, 0); assert.equal(JSON.parse(row.probe).complement.ok, false);
+  const c = await get(env, "/api/charter");
+  assert.equal(c.probes.n, 1); assert.equal(c.probes.inconsistent, 1); assert.equal(c.probes.inconsistent_share, 1);
+});
+test("a probed market whose answer moves with the stated date excludes that model, and a consistent one trades", async () => {
+  const env = { TRADES_DB: fakeD1() };
+  const r = await tick(env, feed([mk(sampledSlug, 0.55)]), pd({ yes: 0.8, no: 0.2, fake: 0.4 }));
+  const row = env.TRADES_DB._raw.prepare("SELECT models, probe, traded FROM pt_estimate WHERE slug=?").get(sampledSlug);
+  assert.equal(JSON.parse(row.models).length, 2, "the model that looked ahead is out of the ensemble"); assert.equal(JSON.parse(row.probe).fake.ok, false);
+  const ok = { TRADES_DB: fakeD1() };
+  const r2 = await tick(ok, feed([mk(sampledSlug, 0.55)]), pd({ yes: 0.8, no: 0.2, fake: 0.78 }));
+  assert.equal(r2.opened, 1); assert.equal(JSON.parse(ok.TRADES_DB._raw.prepare("SELECT probe FROM pt_estimate WHERE slug=?").get(sampledSlug).probe).fake.ok, true);
+});
+test("an unsampled market is never probed, so the extra calls stay within the sample", async () => {
+  const env = { TRADES_DB: fakeD1() }; let calls = 0;
+  const ask = (m, n, model, opts) => { calls++; return probeAsk({ yes: 0.8, no: 0.2, fake: 0.8 })(m, n, model, opts); };
+  await tick(env, feed([mk(unsampledSlug, 0.55)]), { news, models: ["a", "b", "c"], ask });
+  assert.equal(calls, 3); assert.equal(env.TRADES_DB._raw.prepare("SELECT probe FROM pt_estimate WHERE slug=?").get(unsampledSlug).probe, null);
+});
+
+// ---- issue 9106: the arbitrage ledger ----
+const mkEvent = (slug, asks, x = {}) => ({ slug, title: "Event " + slug, negRisk: true, markets: asks.map((a, i) => ({ slug: slug + "-" + i, bestAsk: a, bestBid: a - 0.01, closed: false, active: true })), ...x });
+test("a gap opens one paper basket in its own ledger, is logged once, is not re-opened, and settles as one unit", async () => {
+  const env = { TRADES_DB: fakeD1() }; let events = [mkEvent("gap", [0.2, 0.2, 0.2, 0.2]), mkEvent("fair", [0.25, 0.25, 0.25, 0.25])];
+  const r = await tick(env, feed([]), { ...deps({}), events: async () => events });
+  assert.equal(r.arb.scanned, 2); assert.equal(r.arb.gaps, 1); assert.equal(r.arb.opened, 1);
+  const raw = env.TRADES_DB._raw;
+  assert.equal(raw.prepare("SELECT COUNT(*) n FROM pt_arb_basket WHERE status='open'").get().n, 1);
+  assert.equal(raw.prepare("SELECT cash FROM pt_account").get().cash, 10000, "the paper account is untouched");
+  const r2 = await tick(env, feed([]), { ...deps({}), events: async () => events });
+  assert.equal(r2.arb.scanned, 0, "the scan is throttled"); raw.exec("DELETE FROM pt_control WHERE key='arb_checked_at'");
+  const r3 = await tick(env, feed([]), { ...deps({}), events: async () => events });
+  assert.equal(r3.arb.opened, 0); assert.equal(raw.prepare("SELECT COUNT(*) n FROM pt_arb_gap").get().n, 1, "the same gap is not logged again within hours");
+  assert.throws(() => raw.exec("UPDATE pt_arb_gap SET ret = 0"), /append-only/); assert.throws(() => raw.exec("DELETE FROM pt_arb_gap"), /append-only/);
+  const mid = await get(env, "/api/charter");
+  assert.equal(mid.arbitrage.gaps_seen, 1); assert.equal(mid.arbitrage.baskets_open, 1); assert.equal(mid.arbitrage.baskets_settled, 0);
+  const r4 = await tick(env, feed([]), { ...deps({}), bySlug: async (slugs) => slugs.map((s) => ({ slug: s, yes: s === "gap-1" ? 1 : 0 })) });
+  assert.equal(r4.arb.settled, 1);
+  const c = await get(env, "/api/charter");
+  assert.equal(c.arbitrage.baskets_settled, 1); assert.ok(c.arbitrage.realised_pnl > 100 && c.arbitrage.realised_return > 0.2, "buying every outcome of a set that sums to 0.8 pays 1");
+});
+test("a basket stays open while any leg is undecided, and a failing events fetch never breaks the tick", async () => {
+  const env = { TRADES_DB: fakeD1() };
+  await tick(env, feed([]), { ...deps({}), events: async () => [mkEvent("gap", [0.2, 0.2, 0.2, 0.2])] });
+  const r = await tick(env, feed([]), { ...deps({}), bySlug: async (slugs) => slugs.map((s) => ({ slug: s, yes: s === "gap-1" ? 1 : 0.5 })) });
+  assert.equal(r.arb.settled, 0);
+  env.TRADES_DB._raw.exec("DELETE FROM pt_control WHERE key='arb_checked_at'");
+  const bad = await tick(env, feed([]), { ...deps({}), events: async () => { throw new Error("gamma 503"); } });
+  assert.equal(bad.arb.error, true); assert.equal(bad.ai, "ok");
 });
