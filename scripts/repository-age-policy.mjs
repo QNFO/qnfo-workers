@@ -10,8 +10,9 @@ export const ISSUE_MINUTES = 7 * 24 * 60;
 // opens and closes the mirror from the D1 status, and D1's own age ladder (v_issue_age_ladder) advances the work. The seven-day policy
 // is for issues that have no D1 row, so it never closes a mirror (134 open D1 issues had their mirror closed not_planned on 2026-11-06).
 export const MIRROR_LABEL = "fleet-issue";
+// Both signs the steward writes: the label and the "[#<agent_issues id>]" title prefix. A label alone (set by hand) does not exempt an issue.
 export function isD1Mirror(issue) {
-  return (issue?.labels || []).some((l) => String(l?.name ?? l) === MIRROR_LABEL);
+  return (issue?.labels || []).some((l) => String(l?.name ?? l) === MIRROR_LABEL) && /^\[#\d+\]/.test(String(issue?.title || ""));
 }
 const MARKER = "<!-- repository-age-policy:v1 -->";
 const READY = `mutation Ready($id: ID!) {
