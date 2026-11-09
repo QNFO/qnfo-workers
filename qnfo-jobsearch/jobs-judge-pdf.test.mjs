@@ -99,3 +99,20 @@ console.log(`jobs-judge-pdf (with page): ${pass} checks passed`);
   const ok = o.by_score_band.unscored && !o.by_score_band.weak_under_60?.matches_null && o.by_channel.unknown && !o.by_channel.undefined;
   console.log(ok ? "ok null score and url get their own buckets" : "FAIL null buckets"); if (!ok) process.exitCode = 1;
 }
+
+// JOBSEARCH-TAILOR-1: the resume follows the posting, not only its cluster tags
+{
+  const mk = (title, desc) => ({ id: "t", company: "Acme", title, location: "Amsterdam", url: "", desc });
+  const a = mk("Quantum software engineer", "Quantum computing, qubit control, Python, research publications, simulation of quantum systems.");
+  const b = mk("Transport policy analyst", "Transport modeling, federal policy research, program evaluation, stakeholder reporting.");
+  const ra = T.buildResume(a, { clusters: [] }), rb = T.buildResume(b, { clusters: [] });
+  const facts = (r) => (r.match(/<!--F:([^>]+?)-->/g) || []).join("|");
+  ok(facts(ra) !== facts(rb), "two different postings get different fact selections even with no clusters");
+  ok(!T.verify(ra, a).length && !T.verify(rb, b).length, "tailored resumes still pass the verified-only check: " + T.verify(ra, a).join(";"));
+  const firstId = (r) => ((r.match(/<!--F:([^>]+?)-->/) || [])[1]);
+  const all = (rb.match(/<!--F:([^>]+?)-->/g) || []).map((x) => x.slice(7, -3));
+  const pick = ((T.buildResume(a, { clusters: [] }).match(/<!--F:([^>]+?)-->/g) || []).map((x) => x.slice(7, -3)));
+  const other = all.find((id) => !pick.includes(id));
+  if (other) { const rj = T.buildResume(a, { clusters: [], judge: { matched_fact_ids: [other] } }); ok(rj.includes("<!--F:" + other + "-->"), "a fact the judge matched is on the resume"); }
+  ok((ra.match(/<!--F:/g) || []).length <= 12, "at most 12 bullets");
+}

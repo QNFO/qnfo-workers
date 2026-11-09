@@ -24,6 +24,18 @@
         "resume.pdf",
         "/api/funnel"
       ]
+    },
+    {
+      "url": "https://qnfo-jobsearch.q08.workers.dev/api/funnel",
+      "contains": [
+        "by_channel"
+      ]
+    },
+    {
+      "url": "https://qnfo-jobsearch.q08.workers.dev/api/matches?limit=1",
+      "contains": [
+        "\"matches\""
+      ]
     }
   ]
 }
