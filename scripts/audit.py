@@ -54,9 +54,15 @@ def pr_findings(prs):
     return out
 
 
+UNREACHABLE = []
+
+
 def gh_json(args):
     r = subprocess.run(["gh", "api", *args], capture_output=True, text=True)
-    return json.loads(r.stdout) if r.returncode == 0 and r.stdout.strip() else []
+    if r.returncode != 0:
+        UNREACHABLE.append(args[0].split("?")[0])
+        return []
+    return json.loads(r.stdout) if r.stdout.strip() else []
 
 
 DEFAULT_REPOS = ["QNFO/qnfo-workers", "QNFO/qnfo-research", "QNFO/.github", "QNFO/qnfo-fleet-issues", "rwnq8/qnfo-fleet-dashboard", "rwnq8/ipatent", "rwnq8/rwnq8"]
@@ -118,7 +124,7 @@ if __name__ == "__main__":
         print(json.dumps(f))
     if "--file" in sys.argv:
         subprocess.run(["gh", "label", "create", "fleet-audit", "--repo", repo, "--color", "D93F0B", "--description", "scripts/audit.py finding"], capture_output=True)
-        print(json.dumps(file_and_close(findings, repo)), file=sys.stderr)
+        print(json.dumps({**file_and_close(findings, repo), "unreachable": sorted(set(UNREACHABLE))}), file=sys.stderr)
     else:
-        print(json.dumps({"open_findings": len(findings)}), file=sys.stderr)
+        print(json.dumps({"open_findings": len(findings), "unreachable": sorted(set(UNREACHABLE))}), file=sys.stderr)
     sys.exit(1 if findings and "--file" not in sys.argv else 0)
