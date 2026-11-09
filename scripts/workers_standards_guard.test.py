@@ -203,6 +203,11 @@ with tempfile.TemporaryDirectory() as t7:
     sh(t7, "git", "add", "-A")
     r = guard(t7)
     ok(r.returncode == 1 and "worker-budget-net-zero" in r.stdout, "a new Worker at the cap needs a same-change retirement: " + r.stdout)
+    ok("new/wrangler.toml" in r.stdout, "WORKER-BUDGET-PATH-1: the violation names the offending Worker's own path: " + r.stdout)
+    # an exception for a different Worker, or the old synthetic stamp, must not match this Worker's violation
+    ok(not W.allowed([("qnfo-waste-agent/wrangler.toml", "worker-budget-net-zero", "qnfo-waste-agent")], "new/wrangler.toml", "worker-budget-net-zero", "new"), "an allowlist line for another Worker does not suppress this one")
+    ok(not W.allowed([("scripts/workers_standards_guard.py", "worker-budget-net-zero", "wrangler.toml")], "new/wrangler.toml", "worker-budget-net-zero", "new"), "the old blanket synthetic-path line no longer matches")
+    ok(W.allowed([("new/wrangler.toml", "worker-budget-net-zero", "new")], "new/wrangler.toml", "worker-budget-net-zero", "new"), "an exception naming this Worker still works")
     (q / "w00/RETIRED").write_text("retired with live-consumer evidence\n")
     sh(t7, "git", "add", "-A")
     r = guard(t7)

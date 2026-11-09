@@ -36,7 +36,7 @@ import { Workspace, unsafeToRepeat } from "@cloudflare/computer";
 import { WorkerJavaScriptBackend } from "@cloudflare/computer/backends/worker-javascript";
 import { generateText, jsonSchema, stepCountIs, streamText, tool } from "ai";
 import { z } from "zod";
-import { MAINTAIN_REQUESTER, MAINTAIN_PROMPT, maintainDue, verifyGithubSignature, githubEventRoute, githubEventPrompt, stepUsages, stepUsageStatements, trimCells, LEAN_CELL_CHARS, compactMessages, callerOf, clip, scopeOf, codeTaskText, opsToolAllowed, readOnlySql, repoPathOk, runId, safeToolName, scheduleWhen, sliceLines, DRAIN_PER_TICK, agentDrainPlan, agentNeurons, AGENT_DAILY_NEURONS_DEFAULT, AGENT_RUN_NEURONS_EST_DEFAULT, AGENT_SHED_MIN, loopInstance, validateRequest, EMPTY_TEXT, FINAL_ANSWER_ASK, pickAnswer, stripToolMarkup, toolTranscript, codeSessionNeurons, codeSessionCost, isDynamicRoute, leanCaller, leanConfigOn, capResult, LEAN_MAX_STEPS, LEAN_RESULT_CHARS, approvalPayload, pendingApprovalMatches, stagedActionArgs, APPROVAL_SUFFIX, approvalNext } from "./lib.js";
+import { filedMismatch, MAINTAIN_REQUESTER, MAINTAIN_PROMPT, maintainDue, verifyGithubSignature, githubEventRoute, githubEventPrompt, stepUsages, stepUsageStatements, trimCells, LEAN_CELL_CHARS, compactMessages, callerOf, clip, scopeOf, codeTaskText, opsToolAllowed, readOnlySql, repoPathOk, runId, safeToolName, scheduleWhen, sliceLines, DRAIN_PER_TICK, agentDrainPlan, agentNeurons, AGENT_DAILY_NEURONS_DEFAULT, AGENT_RUN_NEURONS_EST_DEFAULT, AGENT_SHED_MIN, loopInstance, validateRequest, EMPTY_TEXT, FINAL_ANSWER_ASK, pickAnswer, stripToolMarkup, toolTranscript, codeSessionNeurons, codeSessionCost, isDynamicRoute, leanCaller, leanConfigOn, capResult, LEAN_MAX_STEPS, LEAN_RESULT_CHARS, approvalPayload, pendingApprovalMatches, stagedActionArgs, APPROVAL_SUFFIX, approvalNext, searchSkills } from "./lib.js";
 import { approvalModules, approvalSource } from "./approval.js";
 import { FLEET_SKILLS, skillSearch, skillGet, tasksFromPlan, taskUpdate, taskSummary } from "./skills.js";
 import { withLifecycle, sessionBudgetStep, sessionTurnRoute, sessionBudgetFrom, sandboxGate, sandboxPlan, sandboxPrRef, CODE_SESSION_BUDGET_DEFAULT, CODE_SESSION_REPLAY_REQUESTER, CODE_SESSION_REPLAY_BUDGET, CODE_SESSION_REPLAY_TURNS, sessionLaneStep, codeSessionDailyCap, codeSessionLaneAllowed, CODE_SESSION_LANE_CHEAP, APPROVAL_SELFTEST_REQUESTER, approvalSelftestSeed } from "./session.js";
@@ -523,6 +523,14 @@ export class FleetCodeAgent extends Agent<Env, State> {
         } catch (eF) { logErr("final-answer", eF); }
       }
       result = result || EMPTY_TEXT;
+      // SWEEP-CLAIMS-FILED-1: "Issues Filed: N" counts only when N file_issue calls returned ids; otherwise say so and file the gap.
+      if (/(^|:)cmdline-maintain/.test(String(r.caller))) {
+        const mm = filedMismatch(result, out.steps);
+        if (mm) {
+          result += "\n\nVerified: the sweep claimed " + mm.claimed + " issue(s) filed but " + mm.recorded + " file_issue call(s) returned an id" + (mm.ids.length ? " (" + mm.ids.join(", ") + ")" : "") + ".";
+          try { await fileIssue(this.env, { title: "SWEEP-CLAIMS-FILED-1: sweep run " + id + " claimed " + mm.claimed + " filed, recorded " + mm.recorded, description: "Run " + id + " (" + r.caller + ") reported Issues Filed: " + mm.claimed + " but only " + mm.recorded + " file_issue calls returned an id. Findings in its answer were not filed; read runs.result for " + id + " and file each finding.", priority: "high", category: "code-change" }, r.caller); } catch (eM) { logErr("sweep-claims-filed", eM); }
+        }
+      }
     } catch (e) {
       status = "failed";
       error = errText(e);
@@ -1404,6 +1412,14 @@ export default {
       if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: { "access-control-allow-origin": "*", "access-control-allow-methods": "GET, POST, DELETE, OPTIONS", "access-control-allow-headers": "content-type, mcp-session-id, mcp-protocol-version, accept" } });
       if (path === "/health") return json({ ok: true, worker: WORKER, version: VERSION, sdk: SDK, capabilities: CAPABILITIES, limitations: LIMITATIONS, ts: new Date().toISOString() });
       if (path === "/" && request.method === "GET") return json(selfDoc(caller, scope));
+      if (path === "/skills" && request.method === "GET") {
+        const c: ToolCtx = { env, scope: caller ? "write" : "public", caller, agent: null, proposals: [] };
+        const d = directTools(c);
+        const items: { name: string; description: string; source: string }[] = Object.keys(d).map((k) => ({ name: k, description: String(d[k].description || ""), source: "direct" }));
+        if (caller) for (const o of await opsTools(env)) items.push({ name: "ops_" + o.name, description: String(o.description || ""), source: "ops" });
+        const q = url.searchParams.get("q") || "";
+        return json({ ok: true, version: VERSION, q, skills: searchSkills(items, q, Number(url.searchParams.get("limit")) || 10), total: items.length });
+      }
       if (path === "/tools" && request.method === "GET") {
         const c: ToolCtx = { env, scope: caller ? "write" : "public", caller, agent: null, proposals: [] };
         const d = directTools(c);
@@ -1429,14 +1445,14 @@ export default {
       if (!caller) return json({ ok: false, error: "This route is for the fleet console and the ops endpoint. Use https://fleet.qnfo.org/cmd (cfagent <request>) or https://ops.qnfo.org/v1/agents.", open: ["/", "/health", "/tools", "/mcp"] }, 403);
       if (path.indexOf("/agents/") === 0) return (await routeAgentRequest(request, env)) || json({ ok: false, error: "no such agent" }, 404);
       const b = request.method === "POST" ? await body(request) : {};
-      // SKILL-SEARCH-1: GET /skills?q=<words> searches the skill repository; GET /skills/<name> reads one (counts as using it).
-      if (path === "/skills" && request.method === "GET") {
+      // SKILL-SEARCH-1: GET /skill-repo?q=<words> searches the skill repository; GET /skill-repo/<name> reads one (counts as using it).
+      if (path === "/skill-repo" && request.method === "GET") {
         const q = String(url.searchParams.get("q") || "").trim();
         if (!q) return json({ ok: true, count: FLEET_SKILLS.length, skills: FLEET_SKILLS.map((x: any) => ({ name: x.name, what: x.what })) });
         return json(await skillLookup(env, "search", q, caller));
       }
       let skillMatch: RegExpExecArray | null;
-      if ((skillMatch = /^\/skills\/([a-z0-9-]{2,60})$/.exec(path)) && request.method === "GET") { const sk: any = await skillLookup(env, "use", skillMatch[1], caller); return json(sk, sk.ok ? 200 : 404); }
+      if ((skillMatch = /^\/skill-repo\/([a-z0-9-]{2,60})$/.exec(path)) && request.method === "GET") { const sk: any = await skillLookup(env, "use", skillMatch[1], caller); return json(sk, sk.ok ? 200 : 404); }
       if (path === "/code-sessions" && request.method === "POST") {
         const text = String(b.text || "").trim();
         if (text.length < 1 || text.length > 8000) return json({ ok: false, error: "text must contain 1 to 8000 characters" }, 400);

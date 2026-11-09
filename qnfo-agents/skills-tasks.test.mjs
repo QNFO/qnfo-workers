@@ -27,7 +27,7 @@ ok(/INSERT INTO code_session_tasks/.test(src) && /tasksFromPlan\(p\.plan\.steps\
 ok(/t\.update_task = tool\(/.test(src) && /updateTask: \(input\) => this\.updateTaskStatus\(turn, input\)/.test(src), "the agent moves tasks with update_task through the gate");
 ok(/plan\|tasks/.test(src) && /sessionMatch\[2\] === "tasks"/.test(src), "GET /code-sessions/<id>/tasks serves the list");
 ok(/t\.skill_search = tool\(/.test(src) && /t\.skill_get = tool\(/.test(src), "the agent has skill_search and skill_get");
-ok(/path === "\/skills"/.test(src) && /agent_skill_events/.test(src), "GET /skills searches the repository and logs the lookup");
+ok(/path === "\/skill-repo"/.test(src) && /agent_skill_events/.test(src), "GET /skill-repo searches the repository and logs the lookup");
 
 console.log((fail ? "FAIL" : "PASS") + " skills-tasks " + pass + " ok, " + fail + " failed");
 process.exit(fail ? 1 : 0);

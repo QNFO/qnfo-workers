@@ -241,12 +241,13 @@ check("--apply does not publish it again", fa.should_publish("--apply") is False
 
 def run_main(argv):
     calls = {"publish": 0, "apply": 0, "failure_events": 0}
-    saved = {k: getattr(fa, k) for k in ("run_guard", "classify", "write_audit_rows", "purge_stale", "publish_issue", "apply_ahead", "_record_publish_failure", "ROOT")}
+    saved = {k: getattr(fa, k) for k in ("run_guard", "classify", "write_audit_rows", "purge_stale", "live_row_count", "publish_issue", "apply_ahead", "_record_publish_failure", "ROOT")}
     saved_argv = sys.argv
     fa.run_guard = lambda: {"scope": "subset", "ahead": [], "_guard_rc": 0}
     fa.classify = lambda d: {"w": {"note": "SYNC"}}
     fa.write_audit_rows = lambda rows: (1, [], "2026-10-02 09:00:00")
     fa.purge_stale = lambda now: (0, None)
+    fa.live_row_count = lambda: None
     def _pub(body, has_findings=True):
         calls["publish"] += 1
         return "updated", 52, "HTTP 403: rate limit"
@@ -294,7 +295,7 @@ except Exception as e:
 def run_main_real(argv, guard_out):
     """main() with the REAL classify(); only the guard, D1, GitHub and the deployer are faked."""
     calls = {"rows": None, "apply": 0}
-    saved = {k: getattr(fa, k) for k in ("run_guard", "write_audit_rows", "purge_stale", "publish_issue", "apply_ahead", "_record_publish_failure", "ROOT")}
+    saved = {k: getattr(fa, k) for k in ("run_guard", "write_audit_rows", "purge_stale", "live_row_count", "publish_issue", "apply_ahead", "_record_publish_failure", "ROOT")}
     saved_argv = sys.argv
     fa.run_guard = lambda: dict(guard_out)
     def _wr(rows):
@@ -302,6 +303,7 @@ def run_main_real(argv, guard_out):
         return len(rows), [], "2026-10-26 06:00:00"
     fa.write_audit_rows = _wr
     fa.purge_stale = lambda now: (0, None)
+    fa.live_row_count = lambda: None
     fa.publish_issue = lambda body, has_findings=True: ("updated", 52, None)
     fa._record_publish_failure = lambda *a: None
     def _apply(d):
@@ -546,6 +548,11 @@ _hput({"worker": "w", "http": 0, "live": None, "before": None, "match": 0, "note
 check("a later failed read clears the stamp and records why (a stamp never outlives its read)", _hdb.execute("SELECT health_probed_at, health_error FROM worker_live_audit WHERE worker = 'w'").fetchone() == (None, "/health answered http 0 (LIVE_ERR)"))
 _hput({"worker": "w", "http": 200, "live": "1.0.1", "before": "1.0.1", "match": 1, "note": "SYNC"}, "2026-11-05 03:00:00")
 check("a recovered read stamps again with the new version", _hdb.execute("SELECT live_version, health_probed_at, health_error FROM worker_live_audit WHERE worker = 'w'").fetchone() == ("1.0.1", "2026-11-05 03:00:00", None))
+
+check("purge floor: empty or unreadable table allows the purge", fa.purge_allowed(0, 3) and fa.purge_allowed(None, 3))
+check("purge floor: a 4-row partial run against 114 rows is refused", not fa.purge_allowed(114, 4))
+check("purge floor: a run covering 80 percent of the table purges", fa.purge_allowed(100, 80) and not fa.purge_allowed(100, 79))
+check("purge floor: a purge-skipped warning is an actionable finding", any("purge skipped" in x for x in fa.actionable({}, {}, [], "purge skipped: run classified 4 workers")))
 
 print("\n%d failure(s)" % len(fails))
 sys.exit(1 if fails else 0)
