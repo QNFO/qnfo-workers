@@ -165,7 +165,7 @@ function formatPaper(source, record) {
 }
 // PAPER-FORMAT-2:END
 // 3.48.7 PAPER-REVISION-QUALITY-1 (2026-11-03, pillar reach): recover split revision titles and record abstracts at public rendering, and reject cached refusals from both summary surfaces.
-var VERSION="3.61.2-codeagent";
+var VERSION="3.61.3-codeagent";
 /* 3.54.2 SEO-404-PATHS-1 follow-up: the paper page script no longer requests /api/paper-context/undefined when the page data block is missing (first path recorded in seo_404_paths). */ /* 3.54.0 SEO-404-PATHS-1 and INDEXNOW-BACKOFF-1 (merged): see the two notes below. GET /api/seo/crawl also returns notFound, the top 50 crawler 404 paths of the window, so the dashboard UX auditor reads them from the open route. INDEXNOW-BACKOFF-1: an IndexNow endpoint that failed its last 6 logged runs is tried once per 3 hours and a 429 is not retried. */ /* SEO-404-PATHS-1 (2026-11-04, pillar reach): a crawler request that answers 404 records its path in living-paper seo_404_paths (day, host, path, n; 500 paths a day, 14 days kept). seo_crawl_log counted 1,875 crawler 404s on 2026-11-02 (qnfo.org, every bot, kind other) and kept no path to fix. */ // 3.52.0 QWAV-DEMOS-1 (2026-11-04, pillar reach; minor: the QWAV page lists the ten interactive demos that only the retired Pages site linked, with a Demos nav item, a hero action and a footer link; the page is now the whole of qwav.org through a qwav.org/* route, so unknown paths redirect home instead of answering 200). Revert: restore 3.51.0. // 3.51.0 earlier history follows: // 3.51.0 CROSS-LINK-1 (2026-11-04, pillar reach; minor: every QDS page gains a family bar linking QNFO, QWAV and q08, a Keep exploring module (newest and random papers from the open API, the three family sites, topic chips) and a family line in the footer; QDS 1.1.0; visible ask links use ask.qwav.org per DOMAIN-PLANE-1). Prediction: pages per session on qwav.org and qnfo.org rise and clicks between the three sites become non-zero. Revert: restore 3.50.0. // 3.50.0 earlier history follows: // 3.50.0 PAPER-CITATION-ALIASES-1 (#5577, pillar research; minor): expose the documented /papers/<slug>/cite.* routes alongside the existing API exports. /* main 3.53.1 */ // 3.53.1 PAPER-TTFB-1 (2026-11-04, pillar reach; patch): a paper page whose plain summary kept failing the readability gate ran two model generations inside every request (17 to 44 s to first byte for a-minimal-generative-grammar-of-coordination..., 1.2 s for its neighbours); the fill now runs after the response and once per PLAIN_RETRY_MS per paper per colo. Revert: restore 3.53.0. // 3.53.0 earlier history follows: // 3.53.0 CROSS-LINK-2 (2026-11-04, pillar reach; minor: papers.qnfo.org index and paper pages, rendered by lpDoc, gain the family bar and a Keep exploring strip linking QWAV, Ask, ideas and q08, so the pages a search lands on lead to the rest of the family). Revert: restore 3.52.0. // 3.52.0 earlier history follows: // 3.52.0 QWAV-DEMOS-1 (2026-11-04, pillar reach; minor: the QWAV page lists the ten interactive demos that only the retired Pages site linked, with a Demos nav item, a hero action and a footer link; the page is now the whole of qwav.org through a qwav.org/* route, so unknown paths redirect home instead of answering 200). Revert: restore 3.51.0. // 3.51.0 earlier history follows: // 3.51.0 CROSS-LINK-1 (2026-11-04, pillar reach; minor: every QDS page gains a family bar linking QNFO, QWAV and q08, a Keep exploring module (newest and random papers from the open API, the three family sites, topic chips) and a family line in the footer; QDS 1.1.0; visible ask links use ask.qwav.org per DOMAIN-PLANE-1). Prediction: pages per session on qwav.org and qnfo.org rise and clicks between the three sites become non-zero. Revert: restore 3.50.0. // 3.50.0 earlier history follows: // 3.50.0 PAPER-CITATION-ALIASES-1 (#5577, pillar research; minor): expose the documented /papers/<slug>/cite.* routes alongside the existing API exports.
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
@@ -3212,6 +3212,15 @@ __name2222222222(json, "json");
 // PAPERS-INDEX-EDGE-CACHE-1 (issue 2562): /papers read the whole papers table (abstracts included) from D1 on every request;
 // during the D1 overload 134 of those answered 500. Serve the rendered index from the edge cache for 5 minutes, and keep a
 // 1-hour stale copy that answers when D1 fails, so a D1 overload no longer reaches the reader.
+// The edge store keeps a copy for an hour; the client gets the policy the handler set (5 min), and a stale fallback
+// is told to revalidate within 30 s so it is not held as fresh after D1 recovers.
+function papersClientCopy(hit, stale) {
+  const r = new Response(hit.body, hit);
+  r.headers.set("Cache-Control", stale ? "public, max-age=30" : (hit.headers.get("x-orig-cc") || "public, max-age=300"));
+  r.headers.delete("x-orig-cc");
+  if (stale) r.headers.set("x-stale-on-error", "1");
+  return r;
+}
 async function handlePapers(request, env) {
   const cache = typeof caches !== "undefined" ? caches.default : null;
   const canCache = cache && request.method === "GET";
@@ -3223,7 +3232,7 @@ async function handlePapers(request, env) {
       u.searchParams.set("__v", acc.includes("text/html") || !acc.includes("application/json") ? "h" : "j");
       key = new Request(u.toString(), { method: "GET" });
       const hit = await cache.match(key);
-      if (hit) { const age = Date.now() - Number(hit.headers.get("x-cached-at") || 0); if (age < 300000) return hit; }
+      if (hit) { const age = Date.now() - Number(hit.headers.get("x-cached-at") || 0); if (age < 300000) return papersClientCopy(hit, false); }
     } catch (e) { key = null; }
   }
   const res = await handlePapersUncached(request, env);
@@ -3232,11 +3241,12 @@ async function handlePapers(request, env) {
       if (res.status === 200) {
         const copy = new Response(res.clone().body, res);
         copy.headers.set("x-cached-at", String(Date.now()));
+        copy.headers.set("x-orig-cc", res.headers.get("Cache-Control") || "public, max-age=300");
         copy.headers.set("Cache-Control", "public, max-age=3600");
         await cache.put(key, copy);
       } else if (res.status >= 500) {
         const stale = await cache.match(key);
-        if (stale) { const r = new Response(stale.body, stale); r.headers.set("x-stale-on-error", "1"); return r; }
+        if (stale) { return papersClientCopy(stale, true); }
       }
     } catch (e) { /* the cache is an optimisation, never a failure */ }
   }
