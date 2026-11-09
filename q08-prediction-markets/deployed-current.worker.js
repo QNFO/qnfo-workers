@@ -1,6 +1,6 @@
 // q08-prediction-markets: the paper-trading proving ground for q08's information edge (PM-CHARTER-1).
 // Paper money only. No wallet, no exchange key, no order ever leaves this worker: the only executor in this file writes D1 rows.
-var VERSION = "1.9.0";
+var VERSION = "1.9.1";
 
 // ---------- charter (the machine-readable form; GET /api/charter serves it with the live evidence) ----------
 export const CHARTER = {
@@ -530,10 +530,10 @@ async function currentEventLines(nowMs = Date.now()) {
 // q08's own published, still-open forecasts about the same entity (issue 8961, link 2), offered to the ensemble as one more evidence line. Off unless Q08_EVIDENCE is "on" and the Q08 service binding exists;
 // a forecast is another forecaster's estimate rather than news, so it is labelled as such in the prompt, recorded under sources as q08, and never counts toward the three pieces of evidence a question needs.
 export function q08Lines(items, nowMs = Date.now()) {
-  const day = new Date(nowMs).toISOString().slice(0, 10).replace(/-/g, "");
+  const today = new Date(nowMs).toISOString().slice(0, 10).replace(/-/g, "");
   return (Array.isArray(items) ? items : []).filter((i) => i && i.claim && Number.isFinite(Number(i.probability))).slice(0, 3).map((i) => ({
     title: ("q08 forecast: " + String(i.claim).slice(0, 160) + " (" + Math.round(Number(i.probability) * 100) + "% by " + String(i.horizon || "?").slice(0, 10) + (i.resolution ? "; counts as true if: " + String(i.resolution).slice(0, 90) : "") + ")").slice(0, 330),
-    domain: "q08.org", date: day, src: "q08" }));
+    domain: "q08.org", date: /^\d{4}-\d{2}-\d{2}/.test(String(i.created_at || "")) ? String(i.created_at).slice(0, 10).replace(/-/g, "") : today, src: "q08" })); // the forecast's own publication day, so an old opinion never reads as fresh
 }
 export async function q08Evidence(env, title, nowMs = Date.now()) {
   if (!env || env.Q08_EVIDENCE !== "on" || !env.Q08 || typeof env.Q08.fetch !== "function") return [];
@@ -602,7 +602,7 @@ async function estimate(env, db, cands, now, deps) {
       }
       const agg = aggregate(members);
       if (agg && probe?.complement && !probe.complement.ok) agg.confidence = "inconsistent"; // the two wordings disagree: recorded, never traded
-      rows.push({ m, agg, probe, headlines: real, sources, evidence: n.slice(0, 12).map((x) => ({ t: String(x.title).slice(0, 100), s: x.src || "other", d: x.date })), members: members.map((x) => ({ model: x.model, p: x.p, c: x.confidence })) });
+      rows.push({ m, agg, probe, headlines: real, sources, evidence: [...n.filter((x) => x.src !== "q08").slice(0, 9), ...n.filter((x) => x.src === "q08")].map((x) => ({ t: String(x.title).slice(0, 100), s: x.src || "other", d: x.date })), members: members.map((x) => ({ model: x.model, p: x.p, c: x.confidence })) });
     } catch (e) { console.error("estimate failed", m.slug, String(e)); }
   }));
   return { rows, status };
