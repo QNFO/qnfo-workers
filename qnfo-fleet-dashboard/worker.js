@@ -11,7 +11,7 @@ var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target,
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
 // 1.77.2 ERRATA-CHAIN-DISPATCH-1 (pillar research): wake the folded errata consumer and retry its legacy parked receipts.
 // VERSION-LINE-SPLIT-1 (agent_issues 100220): the release notes sit one per line below this statement, newest first, so a VERSION bump is a one-line patch; add a new note as the first line under it.
-var VERSION = "1.96.0";
+var VERSION = "1.96.1";
 // 1.89.0 NOW-NORTH-1 and HOME-MORE-1 (pillar core; minor): the Now screen opens with four numbers tied to the owner goals (readers, fleet cost, owner load, reliability) and drops the count of metrics off target (95 of 297; nothing can be done with it); a quiet footer on the home links the full dashboard, changelog, data index and managers.
 // 1.89.0 (cont.) MONEY-FIX-1 (pillar cost; patch): the Money card subtracted the subscription figure from a pace that never included it (fleet scope of v_cost_forecast), so it showed the fleet at 701 instead of 1151 a month; it now shows the fleet line, the subscriptions line and both together.
 // 1.85.0 (cont.) NOW-REVIEW-1: independent review fixes: Snooze and Not needed hide the card; a tap removes the card at once and reloads fresh, and the hand-back claims the card before filing (no duplicate tickets); strangers get no card keys or raw error text; only the signed-in owner (not the loop token) can run commands or hand work back; bound cards are read first; an unrefreshed metric reads n/a, not 0; one refresh in flight at a time and a failed refresh retries in 10 s; the Code poll says when the executor does not answer.
@@ -13765,6 +13765,11 @@ async function cmdRoutes(request, env, ctx, path, owner) {
     return ownerJson({ ok: tl.ok, count: tl.ok ? tl.tools.length : 0, tools: tl.tools || [], error: tl.error || null, holder }, tl.ok ? 200 : 502);
   }
   if (request.method === "POST" && path === "/api/cmd/transcribe") return await cmdTranscribe(request, env, holder);
+  if (request.method === "GET" && path === "/api/cmd/tasks") {
+    if (!holder) return ownerJson({ ok: false, need: "code", error: "The task list needs your email code. Type login." }, 401);
+    const [tasks, mg] = await Promise.all([cmdTaskRows(env), cmdAgentMerges(env)]);
+    return ownerJson({ ok: true, tasks, merges: mg.merges, merges_error: mg.ok ? null : mg.error });
+  }
   if (request.method !== "POST") return ownerJson({ error: "method_not_allowed", path: path, allow: ["POST"], hint: "Use POST /api/cmd to send a command; GET /api lists the read-only endpoints." }, 405, { Allow: "POST" });
   if (request.headers.get("x-fleet-ui") !== "1") return ownerJson({ error: "missing x-fleet-ui header" }, 400);
   let b = null;
@@ -13772,11 +13777,6 @@ async function cmdRoutes(request, env, ctx, path, owner) {
     b = await request.json();
   } catch (e) {
     return ownerJson({ error: "invalid JSON" }, 400);
-  }
-  if (request.method === "GET" && path === "/api/cmd/tasks") {
-    if (!holder) return ownerJson({ ok: false, need: "code", error: "The task list needs your email code. Type login." }, 401);
-    const [tasks, mg] = await Promise.all([cmdTaskRows(env), cmdAgentMerges(env)]);
-    return ownerJson({ ok: true, tasks, merges: mg.merges, merges_error: mg.ok ? null : mg.error });
   }
   if (request.method === "POST" && path === "/api/cmd/undo") {
     if (!holder) return ownerJson({ ok: false, need: "code", error: "Undo needs your email code. Type login." }, 401);

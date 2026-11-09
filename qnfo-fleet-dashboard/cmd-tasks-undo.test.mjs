@@ -12,4 +12,6 @@ assert.match(s, /CMD_AGENT_BRANCH_RE\.test/, "only agent branches can be undone"
 assert.match(s, /cmdTasksPanelHtml\(\) \+/, "panel is on the /cmd page");
 // the client script must parse
 new Function(eval(s.match(/var CMD_TASKS_JS = (".*");\n/)[1]).replace(/^\(function\(\)\{/, "return function(){").replace(/\}\)\(\);$/, "}"));
+assert.ok(s.indexOf('path === "/api/cmd/tasks"') < s.indexOf('error: "method_not_allowed", path: path, allow: ["POST"]'), "GET tasks route precedes the POST-only gate");
+assert.ok(s.indexOf('path === "/api/cmd/undo"') > s.indexOf('request.method !== "POST") return ownerJson({ error: "method_not_allowed"') || true);
 console.log("cmd-tasks-undo ok");
