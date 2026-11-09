@@ -6,9 +6,17 @@ export const journeys = [
     async run(u) {
       await u.open("/");
       await u.see("Simulated money only");
+      await u.see("Predictions");
       await u.expect(async () => /Equity \$/.test((await u.page.locator("#s").innerText()) || ""), "the account line shows no equity on " + u.page.url());
       await u.tap("Run tick now", { wait: 1500 });
       await u.see("Open positions");
       await u.screen("paper-dashboard");
+    } },
+  { id: "order-form", title: "See the manual paper order form and its Buy buttons on a phone", modes: ["live"],
+    async run(u) {
+      await u.open("/");
+      await u.see("Order size");
+      await u.page.getByRole("button", { name: "Buy YES" }).first().waitFor({ state: "visible", timeout: 15000 }).catch(() => { throw new Error("no Buy YES button on " + u.page.url()); });
+      await u.screen("order-form");
     } }
 ];

@@ -1,5 +1,5 @@
 import test from "node:test"; import assert from "node:assert/strict";
-import { stats, parseMarket, entries, exits, equity, priceOf, syntheticMarkets } from "./worker.js";
+import { isSports, parseEstimate, newsQuery, decide, stats, parseMarket, entries, exits, equity, priceOf, syntheticMarkets } from "./worker.js";
 const A = { cash: 10000 };
 test("parseMarket reads gamma outcomePrices string", () => {
   assert.equal(parseMarket({ slug: "a", question: "Q", outcomePrices: '["0.4","0.6"]' }).yes, 0.4);
@@ -43,4 +43,26 @@ test("a closed market with no resolved price exits at its mark, not at a rounded
   const x = exits([{ id: 1, slug: "c", side: "yes", qty: 10, entry: 0.5 }], [{ slug: "c", yes: 0.55, closed: 1 }]);
   assert.equal(x[0].reason, "closed"); assert.equal(x[0].exit, 0.55);
   assert.equal(exits([{ id: 2, slug: "r", side: "yes", qty: 1, entry: 0.5 }], [{ slug: "r", yes: 1, closed: 1 }])[0].exit, 1);
+});
+
+test("isSports flags games and leagues but not finance or politics", () => {
+  for (const t of ["Lakers vs. Celtics", "Will the Chiefs win the Super Bowl?", "Premier League: Arsenal to win on 2026-11-09", "Will Verstappen win the Grand Prix?", "Points spread: Team A (-3.5)"]) assert.ok(isSports({ title: t }), t);
+  for (const t of ["Will the Fed cut rates in December?", "Will credit spread widen above 300 basis points?", "Will Bitcoin close above $100k on Friday?", "Will the Senate pass the funding bill by Nov 20?"]) assert.ok(!isSports({ title: t }), t);
+  assert.ok(isSports({ title: "x", category: "Sports" }));
+});
+test("parseEstimate accepts JSON in prose, clamps p and rejects junk", () => {
+  assert.deepEqual(parseEstimate('Sure: {"p": 0.7, "confidence": "High", "why": "ok"}'), { p: 0.7, confidence: "high", why: "ok" });
+  assert.equal(parseEstimate('{"p": 1.4}'), null); assert.equal(parseEstimate("no json"), null);
+  assert.equal(parseEstimate('{"p": 0.999, "confidence": "high"}').p, 0.97);
+  assert.equal(parseEstimate('{"p": 0.5, "confidence": "certain"}').confidence, "low");
+});
+test("newsQuery keeps the distinctive words", () => {
+  assert.equal(newsQuery("Will the Fed cut interest rates by December 2026?"), "Fed cut interest rates December");
+});
+test("decide needs a clear gap, enough confidence and a tradable price", () => {
+  const m = { slug: "s", title: "t", yes: 0.5, ends_at: null };
+  assert.equal(decide({ p: 0.55, confidence: "high", why: "" }, m), null);
+  assert.equal(decide({ p: 0.9, confidence: "low", why: "" }, m), null);
+  assert.equal(decide({ p: 0.2, confidence: "medium", why: "w" }, m).side, "no");
+  assert.equal(decide({ p: 0.97, confidence: "high", why: "" }, { ...m, yes: 0.93 }), null);
 });
