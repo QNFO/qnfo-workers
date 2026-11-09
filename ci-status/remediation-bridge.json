@@ -1,8 +1,282 @@
 {
- "ok": false,
+ "ok": true,
  "marker": "REMEDIATION-CONTRACT-BRIDGE-1",
- "error": "HTTP Error 429: Too Many Requests",
- "head": "3c5b46e686f25dbe8b3b65b5c8d1880eafd88944",
+ "probe_map_entries": 44,
+ "open_issues": 699,
+ "with_contract_before": 699,
+ "upgraded_sentinel_to_active": 0,
+ "inserted_active": 0,
+ "inserted_needs_machine_probe": 0,
+ "active_contracts": 1751,
+ "active_with_executable_probe": 1149,
+ "active_with_prose_probe": 602,
+ "prose_probe_contracts": [
+  {
+   "class": "issue-2017",
+   "issue_id": 2017,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "issue-2305",
+   "issue_id": 2305,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "issue-2342",
+   "issue_id": 2342,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "issue-2397",
+   "issue_id": 2397,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "issue-2402",
+   "issue_id": 2402,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "issue-2403",
+   "issue_id": 2403,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "issue-2404",
+   "issue_id": 2404,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "issue-2405",
+   "issue_id": 2405,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "issue-2407",
+   "issue_id": 2407,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "belief-deploy-loop-attempts-every-target",
+   "issue_id": null,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "fm-honeypot-named-for-autofill",
+   "issue_id": null,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "fm-math-delim-pairing-shift",
+   "issue_id": null,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "issue-2480",
+   "issue_id": 2480,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "fm-edge-copy-version-skew",
+   "issue_id": null,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "fm-factcheck-waits-for-slowest",
+   "issue_id": null,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "fm-code-read-stale-checkout",
+   "issue_id": null,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "fm-write-200-only",
+   "issue_id": null,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "fm-watchdog-action-blind",
+   "issue_id": null,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "fm-patch-calls-undefined-helper",
+   "issue_id": null,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "fm-second-path-flagged-non-canonical",
+   "issue_id": null,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "fm-companion-context-invented",
+   "issue_id": null,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "fm-blockquote-quote-unchecked",
+   "issue_id": null,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "fm-exec-log-shared-signature",
+   "issue_id": null,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "fm-ci-excerpt-noise-first",
+   "issue_id": null,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "fm-companion-analysis-judged-as-reporting",
+   "issue_id": null,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "fm-companion-final-text-unread",
+   "issue_id": null,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "fm-companion-split-lede-uncounted",
+   "issue_id": null,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "fm-companion-length-lede-undercount",
+   "issue_id": null,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "fm-companion-reasoning-stated-as-fact",
+   "issue_id": null,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "issue-2521",
+   "issue_id": 2521,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "issue-2521-radar",
+   "issue_id": 2521,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "issue-2521-intent",
+   "issue_id": 2521,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "issue-2521-outreach",
+   "issue_id": 2521,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "issue-2538",
+   "issue_id": 2538,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "fm-companion-analysis-line-misplaced",
+   "issue_id": null,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "fm-companion-critic-no-date",
+   "issue_id": null,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "fm-companion-ground-ascii-names",
+   "issue_id": null,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "fm-companion-symbol-draft-discarded",
+   "issue_id": null,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "fm-companion-year-range-flagged",
+   "issue_id": null,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "fm-companion-edit-drops-analysis-line",
+   "issue_id": null,
+   "reason": "not-a-select"
+  }
+ ],
+ "contracts_needs_machine_probe": 34,
+ "open_issues_without_active_contract": 183,
+ "residual_gap_ids": [
+  1893,
+  2375,
+  2376,
+  2546,
+  2971,
+  2972,
+  3002,
+  99909,
+  99930,
+  99935,
+  99938,
+  99943,
+  99948,
+  100222,
+  100226,
+  100301,
+  100423,
+  100464,
+  1000155,
+  1000216,
+  1000274,
+  1000363,
+  1000364,
+  1000403,
+  1000416,
+  1000434,
+  1000435,
+  1000481,
+  1000482,
+  1000486,
+  1000519,
+  1000520,
+  1000521,
+  1000523,
+  1000529,
+  1000530,
+  1000531,
+  1000618,
+  1000621,
+  1000670,
+  1000672,
+  1000684,
+  1000691,
+  1000702,
+  1000741,
+  1000978,
+  1000979,
+  1001004,
+  1001579,
+  1001590,
+  1001635,
+  1001646,
+  1001677,
+  1001734,
+  1001735,
+  1001766,
+  1001767,
+  1001768,
+  1001769,
+  1001825
+ ],
+ "head": "1236bda3e500fbc167445f5f9da109719d7437e9",
  "job_status": "success",
- "ts": "2026-11-09T11:05:50Z"
+ "ts": "2026-11-09T11:06:59Z"
 }
