@@ -37,7 +37,7 @@
 // Q08-ASCII-SOURCE-1 (2026-10-01): this file is ASCII-only; every typographic character is a \uXXXX escape. The deploy path
 // double-encoded raw UTF-8, so live pages read "... \u00e2 q08" and posts "\u00e2\u0080\u0094". Keep new literals escaped.
 // VERSION-NOTES-MOVED-1: release notes live in the block below
-var VERSION = "0.46.1";
+var VERSION = "0.47.0";
 /* 0.43.0 Q08-TICK-ALLOWANCE-1 (2026-11-04, pillar cost; minor: the engine now decides on its own whether a tick starts an attempt; BUDGET-SOFT-ROUTE-1, attempts slow down and never stop): ai_call_counters showed 119,552, 129,547 and 110,450 neurons on 2026-11-01..03 against the 50,000 target (ops_config q08_daily_neurons) because q08Budget() only steered the first writer model and nothing bounded the attempts a tick starts (40 a day, the attempt cap, at about 2,760 neurons each). Now the :00 cron and the :30 stall retry go through governedGenerate: tick k of 48 starts an attempt only while the day is under the pace line budget x (k + 1) / 48, an essay after a forecast attempt that spent model calls starts only while the day is still under it, and 150 minutes without an attempt starts one whatever the line says (8 a day at least). No row is written for a tick that waits. The writer gate, reader panels, fact-check, final read and accuracy audit are unchanged, and an attempt already started runs all its rounds. ops_config q08_tick_governor = off restores the old behaviour. tick-allowance.test.mjs replays a UTC day. */
 /* 0.42.0 RM-FORECAST-UPDATE-SCORING-1 (#5578; research): score the last valid update before the horizon with the resolved outcome. */
 /* 0.41.6 FORECAST-CALIBRATION-BUCKET-COVERAGE-1 (#5576, charter pillar research; patch): calibration buckets include probabilities across the full [0,1] range, including the tails, rather than silently omitting forecasts below 5% or above 96%. */
@@ -55,9 +55,7 @@ var VERSION = "0.46.1";
 // 0.34.0 NO-REGISTRAR-1 (2026-10-21): release notes no longer name the closed registrar.
 
 // Register new metric key
-if (typeof Q08_METRIC_KEYS !== 'undefined') {
-  Q08_METRIC_KEYS.push(["q08_retraction_rate_30d", "retraction_rate_30d"]);
-}
+// (the push that stood here ran before the var below existed, so typeof was "undefined" and it never ran: the keys are in the array literal now)
 
 // Compute retraction_rate_30d metric
 async function computeRetractionRate30d(db) {
@@ -230,6 +228,8 @@ async function metrics7d(env) {
     forecasts_void: fst.void,
     forecast_void_share: fst.void_share,
     forecast_brier: fst.calibration.brier,
+    pm_forecast_brier: fst.pm && fst.pm.n >= 30 ? fst.pm.brier_model : null,
+    pm_forecast_resolved: fst.pm ? fst.pm.n : null,
     published: published,
     finished_runs: finished,
     gate_pass_rate: ratio(ok, finished),
@@ -248,7 +248,7 @@ async function metrics7d(env) {
 }
 // q08 writes its own registry values (the rows, targets and triggers are in migrations/2026-10-02-q08-metrics.sql). A value
 // that is not a finite number is not written: unknown is never a value.
-var Q08_METRIC_KEYS = [["q08_gate_pass_rate_7d", "gate_pass_rate"], ["q08_neurons_per_published_piece_7d", "neurons_per_published_piece"], ["q08_human_reads_7d", "human_reads"], ["q08_verified_votes_7d", "verified_votes"], ["q08_reader_sentiment_7d", "reader_sentiment"], ["q08_confirmed_subscribers", "confirmed_subscribers"], ["q08_retraction_rate_30d", "retraction_rate_30d"], ["q08_panel_unavailable_share_7d", "panel_unavailable_share_7d"], ["q08_forecasts_overdue_open", "forecasts_overdue_open"], ["q08_forecast_void_share", "forecast_void_share"]];
+var Q08_METRIC_KEYS = [["q08_gate_pass_rate_7d", "gate_pass_rate"], ["q08_neurons_per_published_piece_7d", "neurons_per_published_piece"], ["q08_human_reads_7d", "human_reads"], ["q08_verified_votes_7d", "verified_votes"], ["q08_reader_sentiment_7d", "reader_sentiment"], ["q08_confirmed_subscribers", "confirmed_subscribers"], ["q08_retraction_rate_30d", "retraction_rate_30d"], ["q08_panel_unavailable_share_7d", "panel_unavailable_share_7d"], ["q08_forecasts_overdue_open", "forecasts_overdue_open"], ["q08_forecast_void_share", "forecast_void_share"], ["q08_retraction_rate_30d", "retraction_rate_30d"], ["pm_forecast_brier", "pm_forecast_brier"]];
 // Hours from an ISO timestamp (or epoch ms) to nowMs, rounded to 0.1; null when unparseable or in the future.
 function hoursSince(t, nowMs) {
   if (t == null || t === "") return null;
@@ -4422,8 +4422,21 @@ function calibration(rows) {
   });
   return out;
 }
+// PM-Q08-TIE-1 (issue 8961): the short-term prediction-market program resolves forecasts in days, so its calibration is the fast signal this slow ledger (14 to 730 days) lacks.
+// Read through the PM service binding from the program's own public charter (no key, no copy of its data); null when unbound or unreachable, and the Brier score is withheld under 30 resolved forecasts.
+async function pmCalibration(env) {
+  if (!env.PM || typeof env.PM.fetch !== "function") return null;
+  try {
+    var r = await env.PM.fetch("https://pm.internal/api/charter");
+    if (!r.ok) return null;
+    var c = (await r.json()).calibration;
+    if (!c || !isFinite(Number(c.n))) return null;
+    return { n: Number(c.n), brier_model: c.brier_model == null ? null : Number(c.brier_model), brier_market: c.brier_market == null ? null : Number(c.brier_market) };
+  } catch (e) { console.error(JSON.stringify({ evt: "q08-signal-engine:pmCalibration:caught", error: String((e && e.message) || e) })); return null; }
+}
 async function forecastStats(env) {
-  var out = { published_7d: 0, open: 0, overdue_open: 0, resolved: 0, void: 0, void_share: null, calibration: calibration([]) };
+  var out = { published_7d: 0, open: 0, overdue_open: 0, resolved: 0, void: 0, void_share: null, calibration: calibration([]), pm: null };
+  out.pm = await pmCalibration(env); // independent of the forecast tables
   if (!(await ensureForecastSchema(env))) return out;
   try {
     var since = new Date(Date.now() - 7 * 864e5).toISOString();
@@ -4518,6 +4531,7 @@ function renderForecasts(rows, stats) {
   var fin = rows.filter(function (f) { return f.status !== "open"; });
   var c = stats.calibration;
   var cal = c.n ? ('Scored so far: ' + c.n + ' resolved, mean Brier score ' + c.brier + ' (always saying 50% scores 0.25; lower is better), mean log score ' + c.log_score + ' (always saying 50% scores ' + c.baseline_log_score + '; higher is better; <a href="/forecasts/calibration">calibration by probability bucket</a>)' + (c.reliable ? "" : '. Under 20 resolved forecasts a score is mostly noise') + '. Void: ' + stats.void + (stats.void_share != null ? ' (' + Math.round(stats.void_share * 100) + '% of finished)' : "") + '.') : 'No forecast has been scored yet. Void so far: ' + stats.void + '.';
+  if (stats.pm && stats.pm.n > 0) cal += ' Short-term market questions (resolved in days, scored against the market price): ' + stats.pm.n + ' resolved' + (stats.pm.n >= 30 && stats.pm.brier_model != null ? ', model Brier ' + stats.pm.brier_model + ' vs market ' + stats.pm.brier_market : ', too few to score yet') + '.';
   var body = '<section class="q08-hero"><h1>Forecasts</h1><p class="q-lede">Each forecast takes a mechanism q08 has described and says where it most likely leads: one dated scenario, its probability, the rivals, and a condition anyone can check. When the date passes, two judges from different model families settle it from public evidence and the score is recorded here, misses included. A forecast the evidence cannot settle after four checks is marked void in public.</p><p class="q-meta">' + cal + '</p></section>' +
     '<section class="q08-feed" aria-label="Open forecasts"><h2 class="q-h3">Open</h2>' + (open.length ? '<ul class="q-list">' + open.map(item).join("") + '</ul>' : '<div class="q-note">No open forecasts yet. Researched forecasts can draw on the essay archive.</div>') + '</section>' +
     (fin.length ? '<section class="q08-feed" aria-label="Settled forecasts"><h2 class="q-h3">Settled</h2><ul class="q-list">' + fin.map(item).join("") + '</ul></section>' : "") + q08Sub(true);
