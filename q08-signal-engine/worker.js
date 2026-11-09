@@ -37,7 +37,7 @@
 // Q08-ASCII-SOURCE-1 (2026-10-01): this file is ASCII-only; every typographic character is a \uXXXX escape. The deploy path
 // double-encoded raw UTF-8, so live pages read "... \u00e2 q08" and posts "\u00e2\u0080\u0094". Keep new literals escaped.
 // VERSION-NOTES-MOVED-1: release notes live in the block below
-var VERSION = "0.47.0";
+var VERSION = "0.48.0";
 /* 0.43.0 Q08-TICK-ALLOWANCE-1 (2026-11-04, pillar cost; minor: the engine now decides on its own whether a tick starts an attempt; BUDGET-SOFT-ROUTE-1, attempts slow down and never stop): ai_call_counters showed 119,552, 129,547 and 110,450 neurons on 2026-11-01..03 against the 50,000 target (ops_config q08_daily_neurons) because q08Budget() only steered the first writer model and nothing bounded the attempts a tick starts (40 a day, the attempt cap, at about 2,760 neurons each). Now the :00 cron and the :30 stall retry go through governedGenerate: tick k of 48 starts an attempt only while the day is under the pace line budget x (k + 1) / 48, an essay after a forecast attempt that spent model calls starts only while the day is still under it, and 150 minutes without an attempt starts one whatever the line says (8 a day at least). No row is written for a tick that waits. The writer gate, reader panels, fact-check, final read and accuracy audit are unchanged, and an attempt already started runs all its rounds. ops_config q08_tick_governor = off restores the old behaviour. tick-allowance.test.mjs replays a UTC day. */
 /* 0.42.0 RM-FORECAST-UPDATE-SCORING-1 (#5578; research): score the last valid update before the horizon with the resolved outcome. */
 /* 0.41.6 FORECAST-CALIBRATION-BUCKET-COVERAGE-1 (#5576, charter pillar research; patch): calibration buckets include probabilities across the full [0,1] range, including the tails, rather than silently omitting forecasts below 5% or above 96%. */
@@ -4434,6 +4434,26 @@ async function pmCalibration(env) {
     return { n: Number(c.n), brier_model: c.brier_model == null ? null : Number(c.brier_model), brier_market: c.brier_market == null ? null : Number(c.brier_market) };
   } catch (e) { console.error(JSON.stringify({ evt: "q08-signal-engine:pmCalibration:caught", error: String((e && e.message) || e) })); return null; }
 }
+// PM-Q08-TIE-1 (issue 8961), link 2: the published, still-open forecasts that bear on a question, so the prediction-market ensemble can read what q08 already forecast about the same entity.
+// Read-only and public like /forecasts (it returns only what that page shows); a few words from the question, never more than five rows.
+var EVIDENCE_STOP = { will: 1, would: 1, have: 1, from: 1, that: 1, this: 1, with: 1, before: 1, after: 1, than: 1, over: 1, under: 1, into: 1, more: 1, most: 1, been: 1, does: 1, when: 1, what: 1, which: 1, their: 1, about: 1, price: 1 };
+function evidenceWords(q) {
+  var seen = {}, out = [];
+  String(q || "").toLowerCase().replace(/[^a-z0-9 ]+/g, " ").split(/\s+/).forEach(function (w) {
+    if (w.length >= 4 && w.length <= 30 && !EVIDENCE_STOP[w] && !seen[w] && out.length < 4) { seen[w] = 1; out.push(w); }
+  });
+  return out;
+}
+async function forecastEvidence(env, q) {
+  var words = evidenceWords(q);
+  if (!words.length || !env.DB || !(await ensureForecastSchema(env))) return [];
+  var where = words.map(function (_, i) { return "claim LIKE ?" + (i + 1); }).join(" OR ");
+  var st = env.DB.prepare("SELECT slug, claim, probability, horizon, resolution, created_at FROM q08_forecasts WHERE status = 'open' AND (" + where + ") ORDER BY created_at DESC LIMIT 5"); // standards-ok: only ?N placeholders are built here, every value is bound
+  var rows = await st.bind.apply(st, words.map(function (w) { return "%" + w + "%"; })).all();
+  return (rows.results || []).map(function (r) {
+    return { slug: r.slug, claim: String(r.claim || "").slice(0, 240), probability: Number(r.probability), horizon: r.horizon, resolution: String(r.resolution || "").slice(0, 200), url: ORIGIN + "/forecasts/" + r.slug };
+  });
+}
 async function forecastStats(env) {
   var out = { published_7d: 0, open: 0, overdue_open: 0, resolved: 0, void: 0, void_share: null, calibration: calibration([]), pm: null };
   out.pm = await pmCalibration(env); // independent of the forecast tables
@@ -5283,6 +5303,10 @@ async function q08Fetch(req, env, ctx) {
     await ensureForecastSchema(env); // Q08-FORECAST-1: idempotent, one flag check after the first request in an isolate
     if (path === "/api/ensemble") {
       return json(Object.assign({ ok: true, worker: WORKER, version: VERSION, generated_at: nowIso() }, await ensembleReport(env)));
+    }
+    if (path === "/api/evidence") {
+      var evq = (url.searchParams.get("q") || "").slice(0, 200);
+      return json({ ok: true, worker: WORKER, version: VERSION, q: evq, words: evidenceWords(evq), items: await forecastEvidence(env, evq).catch(function (e) { console.error(JSON.stringify({ evt: "q08-signal-engine:evidence:caught", error: String((e && e.message) || e) })); return []; }) });
     }
     if (path === "/api/metrics") {
       return json({ ok: true, worker: WORKER, version: VERSION, generated_at: nowIso(), windows: { "7d": await metrics7d(env) } });

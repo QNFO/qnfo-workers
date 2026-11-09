@@ -7,7 +7,7 @@
 1. **There is no demonstrated general edge.** In the sources reviewed for this paper, language-model forecasters at best match the aggregate of a human forecasting crowd, and they trail the best human forecasters. None of the studies compares them with liquid market prices after trading costs, and I found no peer-reviewed evidence of a profit from doing so.
 2. **An edge is plausible only in specific places.** The evidence points to six hypotheses (section 3): combining a model with the crowd, structural mispricing between related contracts, systematic crowd biases such as the favourite-longshot bias, breadth across many low-attention markets, speed on thin or newly listed markets, and domains where the model's sources lead the crowd.
 3. **Most published comparisons cannot tell us whether an edge is real.** Leakage of future information, human forecasts in training data, metric choices and small samples all inflate or obscure results (section 4).
-4. **So the Q08 program is built to prove or refute an edge on paper, not to assume one.** Fourteen recommendations follow from the evidence (section 6). Thirteen are implemented in the open-source worker `q08-prediction-markets` (version 1.8), and one is recorded on the live-trading decision item. Real money stays out of reach of the code until a pre-registered gate passes (section 7).
+4. **So the Q08 program is built to prove or refute an edge on paper, not to assume one.** Fourteen recommendations follow from the evidence (section 6). Thirteen are implemented in the open-source worker `q08-prediction-markets` (version 1.9), and one is recorded on the live-trading decision item. Real money stays out of reach of the code until a pre-registered gate passes (section 7).
 
 *What this paper does not claim:* that Q08 has an edge. It claims that the question is testable, describes the test, and publishes the result as it accrues at `/api/charter` and `/api/track-record`.
 
@@ -66,11 +66,11 @@ A forecast is not a profit. Takers pay the spread and sometimes a fee, and the K
 
 ## 6. Recommendations and what was done
 
-| # | Recommendation | Basis | Status in `q08-prediction-markets` 1.8 |
+| # | Recommendation | Basis | Status in `q08-prediction-markets` 1.9 |
 |---|---|---|---|
 | R1 | Hide the market price from the model | [2], [9] | Implemented; tested |
 | R2 | Use several model families and aggregate with the median | [2], [8] | Implemented: three families from the fleet's approved model table; agreement and spread rules |
-| R3 | Retrieve fresh evidence from several independent sources and keep a snapshot | [1], [9] | Implemented: Hacker News, GDELT, Wikipedia search and the Wikipedia current-events portal; per-source counts and an evidence digest in every log row |
+| R3 | Retrieve fresh evidence from several independent sources and keep a snapshot | [1], [9] | Implemented: Hacker News, GDELT, Wikipedia search and the Wikipedia current-events portal; per-source counts and an evidence digest in every log row. A fifth source, q08's own open forecasts on the same entity, is built behind a switch that is off: it is shown to the models as another forecaster's estimate, recorded under sources, and never counted toward the three pieces of evidence a question needs, because an earlier model's number is an anchor rather than news |
 | R4 | Learn a recalibration (stretch or shrink) from resolved outcomes | [6], [7], [8] | Implemented: logistic recalibration fitted on raw ensemble probabilities, bounded, applied only after 50 resolved estimates |
 | R5 | Blend the model with the market price and size by fractional Kelly | [1], [2] | Implemented: blend weight chosen by Brier score on resolved estimates; quarter-Kelly sizing capped at the position limit |
 | R6 | Score the first forecast on each market, with lead time | section 4 | Implemented |

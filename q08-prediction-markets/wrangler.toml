@@ -21,6 +21,12 @@ crons = ["*/5 * * * *"]
 
 # PM-SIGNALS-1: short-term news-driven probability estimates go through the fleet AI router, never a per-worker key
 # (INTERNAL-CALLER-PROPS-1 #1703: qnfo-ai authenticates this binding by ctx.props.caller; installed by the canonical deploy).
+# PM-Q08-TIE-1 (issue 8961): read-only link to q08's public forecast evidence route; used only when Q08_EVIDENCE is "on" (default off).
+[[services]]
+binding = "Q08"
+service = "q08-signal-engine"
+environment = "production"
+
 [[services]]
 binding = "QNFO_AI"
 service = "qnfo-ai"
