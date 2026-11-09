@@ -3,7 +3,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 var PROBER_CRON = "*/20 * * * *";
 
 // worker.js
-var VERSION = "1.9.6-codeagent";
+var VERSION = "1.9.7-codeagent";
 /* 1.6.6 MODEL-PROBE-FALLBACK-1 (2026-11-01, pillar cost): retain router 5xx as route failures while using direct confirmation for known model IDs before updating model health. */ /* 1.6.1 BUDGET-PROBE-REFRESH-1 (2026-10-19, pillar cost, agent_issues 2828 and 2829 closeout): the prober member skipped an ok row for 9 hours after its last probe (PROBE_OK_INTERVAL_MS), so the rows BUDGET-PROBE-1 exists for kept the verdict of the OLD ping-only probe after the 12:25Z deploy: glm-5.3-flash (last probed 12:00:37Z, 0.506 error share over 6,346 calls) and qwen3.8-27b (09:30:42Z, 0.763 over 118) were still ok, and eight other rows were probed only as their own 9 hours lapsed. An ok row whose last probe predates BUDGET_PROBE_SINCE_MS (the 1.6.0 deploy) is now due on the next tick, once; after that probe it carries a budget-shaped verdict and the 9-hour interval applies again. The sweep already probes every model on its full tick. Tests: budget-probe.test.mjs. */ /* 1.6.0 BUDGET-PROBE-1 (2026-10-19, pillar cost, agent_issues 2829 path A): ai_model_health stops reading ok for a model that answers a one-token ping and an empty reply to a real request (glm-5.3-flash 0.53 error share over 5,991 calls, qwen3.8-27b 0.77 over 105, both ok). Both writers of status ok, the sweep (probeBudgetCompletion) and the folded prober member 2.3.16 (applyBudgetProbe), keep the cheap ping and send text models one more request: a trivial sum, max_tokens 256, a DONE marker; empty content (finish_reason length) or no marker is a failed probe on the existing degraded then failing path, with no new status value. Models with a Workers AI id are probed through env.AI.run by both writers (probeBudgetDirect): the router's small-answer lane (reasoning_effort low or none at max_tokens <= 2048) would hide the empty reply; only deepseek-v4-flash and -thinking use the router. ai_calibration_config budget_probe = off reverts to the ping-only verdict without a deploy (control_registry ai-calibration-budget-probe-switch); fm-health-ok-but-empty detects ok rows with a 0.5 error share. */
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
@@ -3276,7 +3276,8 @@ const AB_RETRY_MAX_TOKENS = 4096;
 // tick whether or not ai_call_counters still shows a model change (rev 1 scored a length-empty reply as a loss; rev 2 retries it).
 // A pass or an inconclusive row keeps its 7-day dedupe, except an inconclusive row that lost fixtures to an unavailable retry (see
 // abAlreadyRun), and no row is edited or deleted (they are history).
-const AB_HARNESS_REV = 2;
+// Rev 3 (MODEL-AB-HARNESS-REV3-1): a router 5xx is asked once more (AB-5XX-RETRY-1) and the reply of a fixture that scored below 0.5 is kept (AB-EVIDENCE-1).
+const AB_HARNESS_REV = 3;
 const AB_POLICY_URL = "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/scripts/model-policy.json";
 // Judges, in preference order. One model per family; the pair under test and (preferably) the worker's families are skipped.
 const AB_JUDGE_POOL = [
@@ -3499,7 +3500,9 @@ async function abDirect(env, model, content, maxTokens, timeoutMs) {
   } finally { clearTimeout(timer); }
 }
 async function abCall(env, model, content, maxTokens) {
-  const r = await abChat(env, model, content, maxTokens, 90000);
+  let r = await abChat(env, model, content, maxTokens, 90000);
+  // AB-5XX-RETRY-1: a gateway 5xx is transient; ask the router once more before the direct path
+  if (!r.ok && /^http 5\d\d/.test(String(r.error || ""))) { await new Promise((res) => setTimeout(res, 1500)); r = await abChat(env, model, content, maxTokens, 90000); }
   if (r.ok && abSameModel(r.served, model)) return Object.assign(r, { via: "router" });
   const d = await abDirect(env, model, content, maxTokens, 90000);
   if (d.ok) return d;
@@ -3593,14 +3596,14 @@ async function abRunPair(env, c) {
   return Object.assign({}, s, {
     judges: pick.judges.map((j) => j.model), independent: pick.independent, pre_source: c.live_pre ? "live" : "baseline",
     skipped: items.filter((i) => i.score == null).map((i) => ({ id: i.id, why: i.why })),
-    items: items.filter((i) => i.score != null).map((i) => ({ id: i.id, s: i.score, js: i.judge_scores, via: i.via, why: i.why, retried: i.retried })),
+    items: items.filter((i) => i.score != null).map((i) => ({ id: i.id, s: i.score, js: i.judge_scores, via: i.via, why: i.why, retried: i.retried, post: i.score < 0.5 && i.post ? String(i.post).slice(0, 100) : undefined })),
     post_paths: items.reduce((a, i) => { if (i.via) a[i.via] = (a[i.via] || 0) + 1; return a; }, {}),
   });
 }
 
 async function abWorkerModels(env, worker) {
   try {
-    const r = await env.AUDIT.prepare("SELECT DISTINCT model FROM ai_call_counters WHERE worker=?1 AND day >= date('now','-15 day') AND model IS NOT NULL").bind(worker).all();
+    const r = await env.AUDIT.prepare("SELECT DISTINCT model FROM ai_call_counters WHERE worker=?1 AND day >= date('now','-15 day') AND model IS NOT NULL AND COALESCE(purpose,'') <> 'quality-floor-read'").bind(worker).all();
     return (r.results || []).map((x) => x.model);
   } catch (_) { return []; }
 }
@@ -3688,8 +3691,8 @@ async function abObservedCandidates(env, notes) {
   const minCalls = Math.max(5, Number(await cfg(env, "ab_min_calls", "20")) || 20);
   const defSet = await cfg(env, "ab_default_task_set", "grounded-qa");
   const r = await env.AUDIT.prepare(
-    `WITH recent AS (SELECT worker, model, SUM(calls) c FROM ai_call_counters WHERE day >= date('now','-1 day') AND model IS NOT NULL GROUP BY worker, model HAVING SUM(calls) >= ?1),
-          prior AS (SELECT worker, model, SUM(calls) c FROM ai_call_counters WHERE day < date('now','-1 day') AND day >= date('now','-15 day') AND model IS NOT NULL GROUP BY worker, model)
+    `WITH recent AS (SELECT worker, model, SUM(calls) c FROM ai_call_counters WHERE day >= date('now','-1 day') AND model IS NOT NULL AND COALESCE(purpose,'') <> 'quality-floor-read' GROUP BY worker, model HAVING SUM(calls) >= ?1),
+          prior AS (SELECT worker, model, SUM(calls) c FROM ai_call_counters WHERE day < date('now','-1 day') AND day >= date('now','-15 day') AND model IS NOT NULL AND COALESCE(purpose,'') <> 'quality-floor-read' GROUP BY worker, model)
      SELECT r.worker, r.model AS post_model, r.c AS recent_calls,
             (SELECT p2.model FROM prior p2 WHERE p2.worker = r.worker AND p2.model <> r.model AND p2.c >= ?1 ORDER BY p2.c DESC LIMIT 1) AS pre_model
        FROM recent r LEFT JOIN prior p ON p.worker = r.worker AND p.model = r.model
