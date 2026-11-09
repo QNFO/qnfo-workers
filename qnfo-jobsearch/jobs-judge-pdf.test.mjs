@@ -99,3 +99,35 @@ console.log(`jobs-judge-pdf (with page): ${pass} checks passed`);
   const ok = o.by_score_band.unscored && !o.by_score_band.weak_under_60?.matches_null && o.by_channel.unknown && !o.by_channel.undefined;
   console.log(ok ? "ok null score and url get their own buckets" : "FAIL null buckets"); if (!ok) process.exitCode = 1;
 }
+
+// JOBSEARCH-TAILOR-1: the resume follows the posting, not only its cluster tags
+{
+  const mk = (title, desc) => ({ id: "t", company: "Acme", title, location: "Amsterdam", url: "", desc });
+  const a = mk("Quantum software engineer", "Quantum computing, qubit control, Python, research publications, simulation of quantum systems.");
+  const b = mk("Transport policy analyst", "Transport modeling, federal policy research, program evaluation, stakeholder reporting.");
+  const ra = T.buildResume(a, { clusters: [] }), rb = T.buildResume(b, { clusters: [] });
+  const facts = (r) => (r.match(/<!--F:([^>]+?)-->/g) || []).join("|");
+  ok(facts(ra) !== facts(rb), "two different postings get different fact selections even with no clusters");
+  ok(!T.verify(ra, a).length && !T.verify(rb, b).length, "tailored resumes still pass the verified-only check: " + T.verify(ra, a).join(";"));
+  const firstId = (r) => ((r.match(/<!--F:([^>]+?)-->/) || [])[1]);
+  const all = (rb.match(/<!--F:([^>]+?)-->/g) || []).map((x) => x.slice(6, -3));
+  const pick = ((T.buildResume(a, { clusters: [] }).match(/<!--F:([^>]+?)-->/g) || []).map((x) => x.slice(6, -3)));
+  const other = all.find((id) => !pick.includes(id));
+  if (other) { const rj = T.buildResume(a, { clusters: [], judge: { matched_fact_ids: [other] } }); ok(rj.includes("<!--F:" + other + "-->"), "a fact the judge matched is on the resume"); }
+  ok((ra.match(/<!--F:/g) || []).length <= 12, "at most 12 bullets");
+}
+
+// JOBSEARCH-TAILOR-2: judgeTop lifts a backed reading, skips stretch tier and stays fail-soft
+{
+  const fid = (T.buildResume({ id: "x", company: "A", title: "t", location: "", url: "", desc: "quantum" }, { clusters: [] }).match(/<!--F:([^>]+?)-->/g) || []).slice(0, 2).map((x) => x.slice(6, -3));
+  const jobs = [
+    { id: "1", company: "A", title: "Generic role", desc: "x", match: { tier: "B", score: 49, why: [] } },
+    { id: "2", company: "B", title: "Stretch", desc: "x", match: { tier: "C", score: 40, why: [] } },
+  ];
+  const envAi = { AI: { run: async () => ({ response: JSON.stringify({ fit: 72, verdict: "strong", reasons: ["a"], gaps: [], matched_fact_ids: fid }) }) } };
+  const out = await T.judgeTop(envAi, jobs);
+  ok(out[0].id === "1" && out[0].match.score === 69 && out[0].match.judge, "a backed judge reading lifts a capped posting to at most 69: " + JSON.stringify(out[0].match.score));
+  ok(!out[1].match.judge, "stretch tier is not judged");
+  const out2 = await T.judgeTop({}, [{ id: "3", company: "C", title: "t", desc: "x", match: { tier: "B", score: 49, why: [] } }]);
+  ok(out2[0].match.score === 49, "no binding: fail-soft, order and score unchanged");
+}
