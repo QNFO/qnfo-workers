@@ -1,6 +1,6 @@
 {
  "mode": "live",
- "at": "2026-11-09T16:28:30.497Z",
+ "at": "2026-11-09T16:35:52.672Z",
  "sha": "5360dfbb758214144106c913fe32a3f91c02aa8c",
  "apps": [
   {
@@ -30,7 +30,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 3039,
+     "ms": 1431,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -59,7 +59,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 2679,
+     "ms": 1199,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -90,7 +90,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1596,
+     "ms": 1488,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -126,7 +126,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 8749,
+     "ms": 9147,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -155,7 +155,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1215,
+     "ms": 1156,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -182,7 +182,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 2826,
+     "ms": 3899,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -209,7 +209,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 363,
+     "ms": 319,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -255,7 +255,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 2175,
+     "ms": 2364,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -392,7 +392,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 5704,
+     "ms": 5443,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -522,7 +522,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 2246,
+     "ms": 6032,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -554,7 +554,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1857,
+     "ms": 1827,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -595,7 +595,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 10270,
+     "ms": 10237,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -615,7 +615,7 @@
      "ok": false,
      "error": "expected to see \"Order size\" on https://markets.q08.org/",
      "attempts": 2,
-     "ms": 14230,
+     "ms": 14324,
      "grade": {
       "status": "broken",
       "reasons": [
@@ -646,7 +646,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1285,
+     "ms": 1061,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -682,7 +682,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 8490,
+     "ms": 8392,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -880,7 +880,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 5856,
+     "ms": 4315,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -1038,7 +1038,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 5664,
+     "ms": 4252,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -1112,7 +1112,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 17122,
+     "ms": 13811,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -1141,7 +1141,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 8533,
+     "ms": 8476,
      "grade": {
       "status": "new",
       "reasons": [
@@ -1174,7 +1174,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 5039,
+     "ms": 4339,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -1205,7 +1205,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1424,
+     "ms": 1445,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -1236,7 +1236,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 9016,
+     "ms": 8893,
      "grade": {
       "status": "new",
       "reasons": [
@@ -1273,7 +1273,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 8978,
+     "ms": 8873,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -1415,7 +1415,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 2311,
+     "ms": 1881,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -2768,7 +2768,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 3026,
+     "ms": 2991,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -2893,7 +2893,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 2563,
+     "ms": 1936,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -2918,17 +2918,13 @@
        "axe": []
       }
      ],
-     "consoleErrors": [
-      "Failed to load resource: the server responded with a status of 500 ()"
-     ],
+     "consoleErrors": [],
      "pageErrors": [],
-     "badResponses": [
-      "500 https://fleet.qnfo.org/api/cmd/whoami"
-     ],
+     "badResponses": [],
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 15313,
+     "ms": 15097,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3045,7 +3041,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 11209,
+     "ms": 9078,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3076,7 +3072,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 9434,
+     "ms": 9253,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3105,7 +3101,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 916,
+     "ms": 949,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3227,7 +3223,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1979,
+     "ms": 1564,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3256,7 +3252,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 8745,
+     "ms": 8649,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3270,8 +3266,6 @@
     "home papers.qnfo.org: 263 tap target(s) under 24px, e.g. \"QNFO\" 31x19, \"QWAV\" 34x19, \"q08\" 21x19",
     "home papers.qnfo.org: an empty 32x20 bar (#q-toast) floats over the page",
     "home archive.qnfo.org: 19 tap target(s) under 24px, e.g. \"QNFO\" 37x20, \"QWAV\" 36x20, \"q08\" 22x20",
-    "console error in fleet-qnfo-org: Failed to load resource: the server responded with a status of 500 ()",
-    "HTTP 500 https://fleet.qnfo.org/api/cmd/whoami during fleet-qnfo-org",
     "home ideas.qnfo.org: 17 tap target(s) under 24px, e.g. \"QNFO\" 37x20, \"QWAV\" 36x20, \"q08\" 22x20",
     "home qwav.org: 17 tap target(s) under 24px, e.g. \"QNFO\" 34x20, \"QWAV\" 37x20, \"q08\" 22x20",
     "home qwav.org: accessibility serious scrollable-region-focusable (1x): Scrollable region must have keyboard access"
@@ -3314,7 +3308,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 4513,
+     "ms": 4899,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3345,7 +3339,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 5363,
+     "ms": 4438,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3376,7 +3370,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 4412,
+     "ms": 4288,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3418,7 +3412,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1087,
+     "ms": 984,
      "grade": {
       "status": "ok",
       "reasons": []
