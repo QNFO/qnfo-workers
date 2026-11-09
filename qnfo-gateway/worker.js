@@ -165,7 +165,7 @@ function formatPaper(source, record) {
 }
 // PAPER-FORMAT-2:END
 // 3.48.7 PAPER-REVISION-QUALITY-1 (2026-11-03, pillar reach): recover split revision titles and record abstracts at public rendering, and reject cached refusals from both summary surfaces.
-var VERSION="3.61.0-codeagent";
+var VERSION="3.61.1-codeagent";
 /* 3.54.2 SEO-404-PATHS-1 follow-up: the paper page script no longer requests /api/paper-context/undefined when the page data block is missing (first path recorded in seo_404_paths). */ /* 3.54.0 SEO-404-PATHS-1 and INDEXNOW-BACKOFF-1 (merged): see the two notes below. GET /api/seo/crawl also returns notFound, the top 50 crawler 404 paths of the window, so the dashboard UX auditor reads them from the open route. INDEXNOW-BACKOFF-1: an IndexNow endpoint that failed its last 6 logged runs is tried once per 3 hours and a 429 is not retried. */ /* SEO-404-PATHS-1 (2026-11-04, pillar reach): a crawler request that answers 404 records its path in living-paper seo_404_paths (day, host, path, n; 500 paths a day, 14 days kept). seo_crawl_log counted 1,875 crawler 404s on 2026-11-02 (qnfo.org, every bot, kind other) and kept no path to fix. */ // 3.52.0 QWAV-DEMOS-1 (2026-11-04, pillar reach; minor: the QWAV page lists the ten interactive demos that only the retired Pages site linked, with a Demos nav item, a hero action and a footer link; the page is now the whole of qwav.org through a qwav.org/* route, so unknown paths redirect home instead of answering 200). Revert: restore 3.51.0. // 3.51.0 earlier history follows: // 3.51.0 CROSS-LINK-1 (2026-11-04, pillar reach; minor: every QDS page gains a family bar linking QNFO, QWAV and q08, a Keep exploring module (newest and random papers from the open API, the three family sites, topic chips) and a family line in the footer; QDS 1.1.0; visible ask links use ask.qwav.org per DOMAIN-PLANE-1). Prediction: pages per session on qwav.org and qnfo.org rise and clicks between the three sites become non-zero. Revert: restore 3.50.0. // 3.50.0 earlier history follows: // 3.50.0 PAPER-CITATION-ALIASES-1 (#5577, pillar research; minor): expose the documented /papers/<slug>/cite.* routes alongside the existing API exports. /* main 3.53.1 */ // 3.53.1 PAPER-TTFB-1 (2026-11-04, pillar reach; patch): a paper page whose plain summary kept failing the readability gate ran two model generations inside every request (17 to 44 s to first byte for a-minimal-generative-grammar-of-coordination..., 1.2 s for its neighbours); the fill now runs after the response and once per PLAIN_RETRY_MS per paper per colo. Revert: restore 3.53.0. // 3.53.0 earlier history follows: // 3.53.0 CROSS-LINK-2 (2026-11-04, pillar reach; minor: papers.qnfo.org index and paper pages, rendered by lpDoc, gain the family bar and a Keep exploring strip linking QWAV, Ask, ideas and q08, so the pages a search lands on lead to the rest of the family). Revert: restore 3.52.0. // 3.52.0 earlier history follows: // 3.52.0 QWAV-DEMOS-1 (2026-11-04, pillar reach; minor: the QWAV page lists the ten interactive demos that only the retired Pages site linked, with a Demos nav item, a hero action and a footer link; the page is now the whole of qwav.org through a qwav.org/* route, so unknown paths redirect home instead of answering 200). Revert: restore 3.51.0. // 3.51.0 earlier history follows: // 3.51.0 CROSS-LINK-1 (2026-11-04, pillar reach; minor: every QDS page gains a family bar linking QNFO, QWAV and q08, a Keep exploring module (newest and random papers from the open API, the three family sites, topic chips) and a family line in the footer; QDS 1.1.0; visible ask links use ask.qwav.org per DOMAIN-PLANE-1). Prediction: pages per session on qwav.org and qnfo.org rise and clicks between the three sites become non-zero. Revert: restore 3.50.0. // 3.50.0 earlier history follows: // 3.50.0 PAPER-CITATION-ALIASES-1 (#5577, pillar research; minor): expose the documented /papers/<slug>/cite.* routes alongside the existing API exports.
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
@@ -10145,3 +10145,41 @@ function wmAttach(target, workerName) {
 // ---- WEBMCP-FLEET-1:END ----
 // ---- WEBMCP-FLEET-1:ATTACH qnfo-gateway ----
 wmAttach(gateway_worker_default, "qnfo-gateway");
+
+// ---- REACH-FOCUS-1.4:BEGIN ----
+// REACH-FOCUS-1.4 (ROADMAP-1, issue #1001826, RED-DRAIN-1 dispatch, pillar reach): qnfo.org/work-with-me leads
+// with the owner pitch -- AI systems that research, ask the right questions and maintain themselves -- before any
+// offer, so the page sells what the owner actually sells (owner words 2026-11-04) instead of leading with a metric.
+(function () {
+  var PITCH = '<p class="wwm-lead">I build AI systems that research, ask the right questions and maintain themselves. ' +
+    'They do the slow, tedious work of research, ask the right questions through the Universal Ignorance Audit, ' +
+    'and deploy and maintain themselves with autonomous code fixes.</p>';
+  var base = gateway_worker_default && gateway_worker_default.fetch;
+  if (typeof base !== "function" || gateway_worker_default.__wwm14) return;
+  gateway_worker_default.fetch = async function (request, env, ctx) {
+    var res = await base.call(this, request, env, ctx);
+    try {
+      var u = new URL(request.url);
+      var m = String(request.method || "GET").toUpperCase();
+      var ct = (res && res.headers && res.headers.get("Content-Type")) || "";
+      if (m === "GET" && res && res.status === 200 && u.hostname === "qnfo.org" &&
+          (u.pathname === "/work-with-me" || u.pathname === "/work-with-me/") &&
+          ct.indexOf("text/html") === 0) {
+        var html = await res.text();
+        if (html.indexOf("wwm-lead") < 0 && html.indexOf("</h1>") >= 0) {
+          html = html.replace("</h1>", "</h1>" + PITCH);
+          var h = new Headers(res.headers);
+          h.delete("Content-Length");
+          h.delete("ETag");
+          h.set("X-WWM-Lead", "REACH-FOCUS-1.4");
+          return new Response(html, { status: res.status, headers: h });
+        }
+      }
+    } catch (e) {
+      console.error(JSON.stringify({ error: "REACH-FOCUS-1.4 lead pitch injection failed", message: String(e), url: String(request && request.url) }));
+    }
+    return res;
+  };
+  gateway_worker_default.__wwm14 = "REACH-FOCUS-1.4";
+})();
+// ---- REACH-FOCUS-1.4:END ----
