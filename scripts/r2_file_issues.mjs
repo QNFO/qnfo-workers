@@ -30,14 +30,15 @@ export async function insertRoadmap(rows, { fetchImpl = fetch, tok = process.env
 if (import.meta.url === `file://${process.argv[1]}`) {
   const [file, cap = "25", roadmapFile] = process.argv.slice(2);
   const items = readFileSync(file, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l));
-  const openIssues = JSON.parse(execFileSync("gh", ["issue", "list", "--state", "open", "--limit", "1000", "--json", "title,number,body"], { encoding: "utf8" }));
+  const openIssues = JSON.parse(execFileSync("gh", ["issue", "list", "--state", "open", "--label", "doc-orphan", "--limit", "1000", "--json", "title,number"], { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 }));
   const open = new Map(openIssues.map((i) => [i.title, i]));
   let made = 0, skipped = 0, updated = 0;
   for (const it of items) {
     const ex = open.get(it.title);
     if (ex) {
       // a group issue's checklist shrinks as documents are implemented or retired: keep the body current
-      if ((ex.body || "").trim() !== it.body.trim()) { execFileSync("gh", ["issue", "edit", String(ex.number), "--body", it.body], { stdio: "inherit" }); updated++; }
+      const cur = JSON.parse(execFileSync("gh", ["issue", "view", String(ex.number), "--json", "body"], { encoding: "utf8" })).body || "";
+      if (cur.trim() !== it.body.trim()) { execFileSync("gh", ["issue", "edit", String(ex.number), "--body", it.body], { stdio: "inherit" }); updated++; }
       else skipped++;
       continue;
     }
