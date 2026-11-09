@@ -1,4 +1,4 @@
-var VERSION = "1.1.0";
+var VERSION = "1.1.1";
 // WORKER-SOURCE-IN-REPO-1 (issue 9663): tracked copy of the deployed script, plus /health.
 const URLS=["https://me.q08.org/"];
 const ACCOUNT="edb167b78c9fb901ea5bca3ce58ccc4b", SERVED_BY="personal-api";
@@ -11,6 +11,8 @@ async function rollback(env){
   const j=await (await fetch(base,{headers:h})).json();
   const dl=(j.result&&j.result.deployments)||[];
   if(dl.length<2) return "rollback unavailable: fewer than two deployments";
+  const msg=(dl[0].annotations&&dl[0].annotations["workers/message"])||"";
+  if(msg.indexOf("COMPANION-GUARD-ROLLBACK-1")>=0) return "rollback skipped: current deployment is already a guard rollback; waiting for a new deploy";
   const prev=dl[1], vs=(prev.versions||[]).map(function(v){return {version_id:v.version_id,percentage:v.percentage};});
   if(!vs.length) return "rollback unavailable: previous deployment lists no versions";
   const r=await fetch(base,{method:"POST",headers:h,body:JSON.stringify({strategy:"percentage",versions:vs,annotations:{"workers/message":"COMPANION-GUARD-ROLLBACK-1: probe failed twice"}})});
@@ -36,9 +38,14 @@ async function probe(env){
     while((m=re.exec(html))!==null){ if(ids.indexOf(m[1])<0&&ids.length<80) ids.push(m[1]); }
     const texts=[]; const tre=/<(?:button|h[1-3]|label|a|summary|option)\b[^>]*>([^<]{2,60})</gi; let tm2;
     while((tm2=tre.exec(html))!==null){ const t=tm2[1].replace(/\s+/g," ").trim(); if(t.length>=2&&texts.indexOf(t)<0&&texts.length<80) texts.push(t); }
+    const uiBad=[];
+    if(status===200&&/<nav[^>]*class="tabs"/.test(html)) uiBad.push("tab-based UI present (COMPANION-UI-REGRESSION)");
+    const secN=(html.match(/<section/g)||[]).length;
+    if(status===200&&secN>5) uiBad.push("companion_ui_section_count "+secN+" > 5");
     const base=await q(env,"SELECT * FROM companion_baseline WHERE url=?1",[url]);
     const reasons=[]; let missing=[];
     if(status!==200){ reasons.push("status "+status+(err?" "+err:"")); }
+    else if(uiBad.length){ reasons.push.apply(reasons,uiBad); }
     else if(!base.length){
       await q(env,"INSERT INTO companion_baseline (url,title,len,ids,captured_at) VALUES (?1,?2,?3,?4,?5)",[url,title,html.length,JSON.stringify(ids),now]);
     } else {
@@ -57,9 +64,6 @@ async function probe(env){
         await q(env,"UPDATE companion_baseline SET texts=?1 WHERE url=?2",[JSON.stringify(mt),url]);
       }
     }
-    if(status===200&&/<nav[^>]*class="tabs"/.test(html)) reasons.push("tab-based UI present (COMPANION-UI-REGRESSION)");
-    const secN=(html.match(/<section/g)||[]).length;
-    if(status===200&&secN>5) reasons.push("companion_ui_section_count "+secN+" > 5");
     const ok=reasons.length===0?1:0;
     await q(env,"INSERT INTO companion_probe_runs (ts,url,status,len,title,ids_total,ids_missing,ok,reason) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9)",[now,url,status,html.length,title,ids.length,missing.length,ok,reasons.join("; ")]);
     if(!ok){
