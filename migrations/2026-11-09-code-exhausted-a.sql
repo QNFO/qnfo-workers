@@ -10,7 +10,7 @@
 --   ct_im1002039 qnfo-cloud-ops/worker.js       PROBE-REVIEW-ROOT-CAUSE-1: probe review skips the root-cause template module
 --   ct_im1002045 q08-signal-engine              EK-6-ADOPT-1: ANALYSIS-FORM-1 block inlined, domainForm uses its rules
 --   ct_im1002036 q08-signal-engine              Q08-GATE-RATE-1: three essay attempts an hour after twelve gate failures
---   ct_im1001954 q08-signal-engine              Q08-DOMAIN-FORM-2: Federal Register lane behind the policy token
+--   ct_im1001954 q08-signal-engine              moot: Q08-FEDREG-LANE-1 (issue 8005) is on main, the Federal Register lane
 -- Marking the tasks superseded lets code-loop-superseded-reconcile close the tickets, and stops the code loop from re-running a task whose change is on main.
 -- The cloud-ops change also puts back the contracts PROBE-REVIEW-1 refused on the root-cause template probe (the probe is the ticket's own definition of done).
 -- APPLY-BY: ci
@@ -18,12 +18,12 @@
 -- Rollback: UPDATE code_tasks SET status = 'queued', step = 'read', attempts = 0, lease_until = NULL WHERE merge_note LIKE 'CODE-EXHAUSTED-A %'; UPDATE remediation_contracts SET status = 'probe-review-refused' WHERE module = 'root-cause-probe-at-birth-1' AND last_verdict = 'restored:CODE-EXHAUSTED-A';
 
 UPDATE code_tasks SET status = 'superseded', lease_until = NULL, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
-  merge_note = 'CODE-EXHAUSTED-A 2026-11-09: moot; the change is on main (cf_ops_actions.py delete_pages_project( commit 1d8003195 PR 9747; fleet_graph.mjs ARCHIVE-MARKER-READ-2; qnfo-gateway ATLAS-GATEWAY-ROUTE-1 issue 8095)'
-WHERE id IN ('ct_im1001933', 'ct_im1002076', 'ct_im1002087') AND status NOT IN ('merged', 'superseded');
+  merge_note = 'CODE-EXHAUSTED-A 2026-11-09: moot; the change is on main (cf_ops_actions.py delete_pages_project( commit 1d8003195 PR 9747; fleet_graph.mjs ARCHIVE-MARKER-READ-2; qnfo-gateway ATLAS-GATEWAY-ROUTE-1 issue 8095; q08 Q08-FEDREG-LANE-1 issue 8005)'
+WHERE id IN ('ct_im1001933', 'ct_im1002076', 'ct_im1002087', 'ct_im1001954') AND status NOT IN ('merged', 'superseded');
 
 UPDATE code_tasks SET status = 'superseded', lease_until = NULL, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
   merge_note = 'CODE-EXHAUSTED-A 2026-11-09: implemented by hand in the pull request of branch claude/code-exhausted-a (QNFO/qnfo-workers); the code loop must not re-run it'
-WHERE id IN ('ct_im1002107', 'ct_e6wbg1q46obarm', 'ct_2v6kx6dhn3tuwx', 'ct_bxwyq0agp1na9j', 'ct_im1002039', 'ct_im1002045', 'ct_im1002036', 'ct_im1001954')
+WHERE id IN ('ct_im1002107', 'ct_e6wbg1q46obarm', 'ct_2v6kx6dhn3tuwx', 'ct_bxwyq0agp1na9j', 'ct_im1002039', 'ct_im1002045', 'ct_im1002036')
   AND status NOT IN ('merged', 'superseded');
 
 UPDATE remediation_contracts SET status = 'active', last_verdict = 'restored:CODE-EXHAUSTED-A', next_due_at = datetime('now')
