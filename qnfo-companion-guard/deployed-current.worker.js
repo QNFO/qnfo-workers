@@ -1,4 +1,4 @@
-var VERSION = "1.0.1";
+var VERSION = "1.0.2";
 // WORKER-SOURCE-IN-REPO-1 (issue 9663): tracked copy of the deployed script, plus /health.
 const URLS=["https://me.q08.org/"];
 async function q(env,sql,params){
@@ -10,7 +10,7 @@ async function q(env,sql,params){
 async function probe(env){
   await q(env,"CREATE TABLE IF NOT EXISTS companion_probe_runs (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT, url TEXT, status INTEGER, len INTEGER, title TEXT, ids_total INTEGER, ids_missing INTEGER, ok INTEGER, reason TEXT)");
   await q(env,"CREATE TABLE IF NOT EXISTS companion_baseline (url TEXT PRIMARY KEY, title TEXT, len INTEGER, ids TEXT, captured_at TEXT)");
-  try{ await q(env,"ALTER TABLE companion_baseline ADD COLUMN texts TEXT"); }catch(e){}
+  try{ await q(env,"ALTER TABLE companion_baseline ADD COLUMN texts TEXT"); }catch(e){ console.error(JSON.stringify({worker:"qnfo-companion-guard",step:"add-texts-column",error:String(e).slice(0,120)})); }
   const now=new Date().toISOString();
   const res=[];
   for(const url of URLS){
