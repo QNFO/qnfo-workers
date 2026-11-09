@@ -45,3 +45,9 @@ id = "d3768b93a76640be83151b00a8b42717"
 
 [triggers]
 crons = ["*/20 * * * *"]
+
+# DEPLOY-GUARD-HEALTH-BINDING-1 (issue 9680): refreshRegistryVersion reads personal-watch /health through this binding (CH_<WORKER> convention), public host as fallback.
+[[services]]
+binding = "CH_PERSONAL_WATCH"
+service = "personal-watch"
+environment = "production"

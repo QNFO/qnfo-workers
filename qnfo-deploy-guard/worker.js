@@ -4,7 +4,7 @@
 // NOTE: source of truth is this file; GET /workers/scripts/<name> TRUNCATES large bodies - never patch from a GET.
 // Trivial change to trigger Workers build check for PR #8592 layer 6 migration
 var LEDGER_GRACE_MS = 180000;
-var VERSION = "1.6.5-codeagent";
+var VERSION = "1.6.6-codeagent";
 /* SCHEDULED-FLEET-PROBE-SHARING-1 (#6669): reuse the same scheduled fleet probe across scan and capability snapshot. */ /* OPS-PROBE-TIMEOUT-RECOVERY-1 (#6429): bounded retry and request cleanup. */ /* 1.4.1 DEPLOY-LEDGER-EVENT-ORDER-1: use deploy event time, not ledger insertion order, when choosing the last code deploy. 1.4.0 BP26-LEASES-KILLSWITCH-1 (2026-10-28, pillar autonomy, agent_issues 1000361; minor: two capabilities and a decision this worker now takes on its own). (a) Global kill switch: ops_config fleet_kill_switch = on makes workAcquire (fresh claims and renewals) and POST /lock/acquire (deploy locks and secret leases) answer 503 reason kill-switch, so no new claim, deploy or secret write starts while it is on; releases, reads, the sweep and /health keep working; the first refusal in five minutes writes one cloud_ops_events row of kind kill-switch.observed; GET /kill-switch reads the state. The flag is read with a 30 second cache, off when the row or table is absent. (b) Fencing tokens: every fresh work claim takes the next fence number for its path (work_claims.fence, migration 2026-10-28-bp26-leases-killswitch.sql; the claim still works while the column is absent), acquire and renew return it, and POST /work-lock/check {key, token, fence} answers valid only when the token holds the live claim and the fence is the live one, so a writer that lost its lease cannot pass. docs/KILL-SWITCH-DRILL.md and docs/LEASES-FENCING.md. prior 1.3.34-codeagent */ /* LEASE-EXPIRY-SWEEP-1 (2026-10-26, orphaned_leases 215): a work_claims row past expires_at and never released is closed with outcome expired on every acquire and on the 20-minute tick, so the BP26 lease metric counts sessions that died holding a claim and then settles. */ /* COMPAT-RISK-TIMER-NAME-1 (2026-10-25, unblocks red main): the four fetch-timeout blocks named their setTimeout handle `t`, and a DIFFERENT `t` (a timestamp from ms(row.ts)) in another function is compared numerically within 60 lines, so scripts/compat-risk-scan.mjs linked them by name across function scopes and reported timer-ids for a worker that never reads a timer id as a number. Renamed to timerId; scan is clean and the guard keeps its full meaning. */ /* WORKERS-BUILDS-TOMBSTONE-1 (2026-10-25, agent_issues 1000142): a Workers Builds rebuild of the retired repository-root stub is ledgered, not filed. CLAIM-TERMINAL-RELEASE-1 (2026-10-18): CODE_TASK_DONE now includes superseded, so the guard stops counting a superseded task as live work on its file. */
 var WORKER = "qnfo-deploy-guard";
 var LOCK_PREFIX = "deploylock:";
@@ -140,7 +140,21 @@ async function ensureRegistry(env, fleet) {
 // restarting, and one 8 s abort logged "The operation was aborted" about once a day (22 times since 2026-10-14) with no worker name. The read now tries twice (6 s each, a short
 // pause between) and logs only when both fail, with the worker and the attempt count. A worker that ANSWERS (any status) is never retried. A failed read still leaves the
 // version empty exactly as before, so VERIFY-BEFORE-ADVANCE below is unchanged.
-async function readLiveHealthVersion(w, pauseMs) {
+// DEPLOY-GUARD-HEALTH-BINDING-1 (issue 9680): a worker with a service binding named CH_<WORKER> (upper case, dashes to underscores) is read through it first, like qnfo-ops
+// COMPAT_HEALTH_BINDINGS, so no public workers.dev hop can abort; any miss or error falls through to the public read below.
+async function readHealthViaBinding(env, w) {
+  var b = env && env["CH_" + String(w).toUpperCase().replace(/-/g, "_")];
+  if (!b || typeof b.fetch !== "function") return null;
+  try {
+    var r = await b.fetch("https://binding.internal/health", { headers: { accept: "application/json" } });
+    if (!r.ok) return null;
+    var j = await r.json();
+    return j && j.version ? String(j.version) : null;
+  } catch (e) { return null; }
+}
+async function readLiveHealthVersion(w, pauseMs, env) {
+  var viaBinding = await readHealthViaBinding(env, w);
+  if (viaBinding) return viaBinding;
   var url = "https://" + w + ".q08.workers.dev/health";
   var lastErr = "";
   for (var attempt = 0; attempt < 2; attempt++) {
@@ -168,7 +182,7 @@ async function refreshRegistryVersion(env, w, explicitVer) {
     // every later deploy (registry-as-truth, deploy-guard expected_version). Now the claim is
     // recorded ONLY when the live worker agrees; a claim the live worker does not report is
     // REFUSED (no registry write), so a failed deploy can never wedge the guard.
-    var liveVer = await readLiveHealthVersion(w, 1500);
+    var liveVer = await readLiveHealthVersion(w, 1500, env);
     var ver = "";
     if (explicitVer && String(explicitVer)) {
       if (liveVer && liveVer !== String(explicitVer)) return null;
