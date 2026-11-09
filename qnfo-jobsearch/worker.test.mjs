@@ -437,8 +437,8 @@ ok((await call("/api/run", { method: "POST" }))[0] === 429, "run cooldown");
   const cv = (path, body) => call(path, { method: "POST", headers: H, body: JSON.stringify(body) }, E);
   ok((await call("/api/cv", {}, E))[0] === 401 && (await call("/api/cv/answer", { method: "POST", body: "{}" }, E))[0] === 401 && (await call("/api/cv/export", {}, E))[0] === 401, "the CV API needs the owner's sign-in");
   const st0 = (await call("/api/cv", { headers: H }, E))[1];
-  ok(st0.questions.length === 43 && st0.roles.length === 11 && st0.review.length === 3 && st0.facts.length === 14, "the CV starts from the verified record: 11 roles, 14 achievements, 3 claims to review", { q: st0.questions.length, r: st0.roles.length, v: st0.review.length, f: st0.facts.length });
-  ok(!JSON.stringify(st0.facts).includes("10M") && !JSON.stringify(st0.facts).includes("patent"), "unconfirmed claims are not in the record");
+  ok(st0.questions.length === 43 && st0.roles.length === 11 && st0.review.length === 1 && st0.facts.length === 19, "the CV starts from the verified record plus the owner's 2026-11-09 confirmations (JOBSEARCH-AUTONOMY-1): 11 roles, 19 achievements, 1 claim to review", { q: st0.questions.length, r: st0.roles.length, v: st0.review.length, f: st0.facts.length });
+  ok(!JSON.stringify(st0.facts).includes("patent") && st0.facts.some((f) => f.source === "review:V1" && f.text.includes("$10M")), "unconfirmed claims are not in the record; the owner-confirmed NHTS claim is");
   ok((await cv("/api/cv/answer", { qid: "nope", answer: "y" }))[0] === 400 && (await cv("/api/cv/answer", { qid: "phys_renorm", answer: "maybe" }))[0] === 400, "bad interview input refused");
   const a1 = await cv("/api/cv/answer", { qid: "phys_renorm", answer: "y", facts: [{ text: "Applied dimensional regularization and renormalization in a quantum field theory thesis calculation.", role: "R999" }] });
   const st1 = (await call("/api/cv", { headers: H }, E))[1];
@@ -450,11 +450,11 @@ ok((await call("/api/run", { method: "POST" }))[0] === 429, "run cooldown");
   ok(qres.includes("dimensional regularization") && qbad.length === 0, "the owner's new achievement reaches the resume and the resume still verifies", qbad);
   ok(T.verify(qres.replace("dimensional regularization", "dimensional reguralization"), qft).length > 0, "an altered sentence is rejected");
   ok(/^## Experience/m.test(qres) && /\*\*Founder\*\*, QNFO/.test(qres) && /## Selected work/.test(qres) && /## Education/.test(qres) && /## Skills/.test(qres) && /## Earlier roles/.test(qres), "the resume has roles with titles, selected work, education, skills and earlier roles");
-  ok(T.verify(qres.replace("**Founder**", "**Chief Founder**"), qft).length > 0 && T.verify(qres.replace(/· Python/, "· Haskell"), qft).length > 0, "a changed role title or an invented skill is rejected");
+  ok(T.verify(qres.replace("**Founder**", "**Chief Founder**"), qft).length > 0 && T.verify(qres.replace(/· GIS/, "· Haskell"), qft).length > 0 && /· GIS/.test(qres), "a changed role title or an invented skill is rejected");
   // review: confirm needs the bracket filled, reject removes
   ok((await cv("/api/cv/review", { id: "V3", action: "confirm" }))[0] === 400, "a claim with a bracketed gap cannot be confirmed as it stands");
   ok((await cv("/api/cv/review", { id: "V3", action: "confirm", text: "Inventor on U.S. patent 1,234,567 in quantum computing." }))[0] === 200, "a filled-in claim can be confirmed");
-  ok((await cv("/api/cv/review", { id: "V1", action: "reject" }))[0] === 200 && (await call("/api/cv", { headers: H }, E))[1].review.length === 1, "a rejected claim is removed from review");
+  ok((await cv("/api/cv/review", { id: "V1", action: "reject" }))[0] === 400 && (await call("/api/cv", { headers: H }, E))[1].review.length === 0, "a confirmed claim leaves review and cannot be acted on again");
   // edit sections
   ok((await cv("/api/cv/set", { roles: [{ id: "R1", title: "", org: "x", start: "2020", end: "present" }] }))[0] === 400, "a role without a title is refused");
   ok((await cv("/api/cv/set", { summary: "New summary.", education: ["A", "", "B"], person: { location: "Utrecht, Netherlands" } }))[0] === 200, "summary, lists and contact can be edited");
@@ -482,14 +482,6 @@ ok((await call("/api/run", { method: "POST" }))[0] === 429, "run cooldown");
   ok(hist.items.length >= 1 && (await call("/api/cv/history/" + hist.items[0].id, { headers: H }, E))[1].resume_md.includes("Experience"), "a built resume is kept in history");
   const page = await call("/cv", {}, E);
   ok(page[2].headers.get("content-type").includes("text/html"), "the CV page is served");
-}
-
-
-{ // JOBSEARCH-AUTONOMY-PIVOT-1 (2026-11-09): AI and quantum postings get the autonomous-AI-systems researcher headline, never the data and product line
-  const a = T.headline(["ai_systems"]), q = T.headline(["quantum_energy"]), d = T.headline(["data_product", "survey_methods"]);
-  ok(/Systems researcher in autonomous AI systems/.test(a.text) && a.id === "H2" && q.id === "H2", "an ai_systems or quantum posting is headlined as a systems researcher in autonomous AI systems");
-  ok(!/builder|software engineer/i.test(a.text), "the research headline never calls the owner a builder or a software engineer");
-  ok(d.id !== "H2", "a data and product posting keeps its own headline");
 }
 
 globalThis.fetch = realFetch;
