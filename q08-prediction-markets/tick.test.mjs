@@ -52,3 +52,13 @@ test("dashboard escapes market titles", async () => {
   const html = await (await worker.fetch(new Request("https://x/"), {})).text();
   assert.match(html, /const E=v=>String\(v\)\.replace\(/);
 });
+
+test("state marks a held market that fell outside the top 100 at its stored price, not its entry", async () => {
+  const env = { TRADES_DB: fakeD1() };
+  await tick(env, { source: "test", markets: [{ slug: "held", title: "H", yes: 0.5, vol24: 1, move: 0.2, closed: 0 }].concat(Array.from({ length: 100 }, (_, i) => ({ slug: "f" + i, title: "f", yes: 0.5, vol24: 1e6 + i, move: 0, closed: 0 }))) }).catch(() => {});
+  await worker.fetch(new Request("https://x/api/order", { method: "POST", body: JSON.stringify({ slug: "held", side: "yes", usd: 500 }) }), env);
+  await env.TRADES_DB.prepare("UPDATE pt_market SET yes=0.7 WHERE slug=?").bind("held").run();
+  const st = await (await worker.fetch(new Request("https://x/api/state"), env)).json();
+  const p = st.open.find((x) => x.slug === "held");
+  assert.ok(p && Math.abs(p.mark - 0.7) < 1e-9);
+});

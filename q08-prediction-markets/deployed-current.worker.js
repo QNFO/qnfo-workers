@@ -1,6 +1,6 @@
 // q08-prediction-markets: the one paper-trading prediction-market worker (PM-CONSOLIDATE-1).
 // Paper money only. No wallet, no exchange key, no order ever leaves this worker.
-var VERSION = "1.2.1";
+var VERSION = "1.2.2";
 const CFG = { START: 10000, POS_PCT: 0.10, EXPO_PCT: 0.30, STOP: 0.15, TAKE: 0.30, SLIP: 0.01, MIN_MOVE: 0.05, MIN_VOL: 5000, MAX_OPEN: 8 };
 
 // ---------- pure engine (tested in engine.test.mjs) ----------
@@ -192,7 +192,11 @@ async function state(env) {
   await init(env);
   const db = env.TRADES_DB;
   const acct = await account(db), pos = await openPositions(db);
-  const mk = (await db.prepare("SELECT * FROM pt_market ORDER BY vol24 DESC LIMIT 100").all()).results;
+  const top = (await db.prepare("SELECT * FROM pt_market ORDER BY vol24 DESC LIMIT 100").all()).results;
+  // held markets outside the top 100 by volume still need their current price for the mark and the equity
+  const missing = pos.filter((p) => !top.find((m) => m.slug === p.slug));
+  const extra = missing.length ? (await db.prepare(`SELECT * FROM pt_market WHERE slug IN (${missing.map(() => "?").join(",")})`).bind(...missing.map((p) => p.slug)).all()).results : []; // standards-ok: only "?" placeholders are interpolated, every value goes through .bind()
+  const mk = top.concat(extra);
   const px = Object.fromEntries(mk.map((m) => [m.slug, m.yes]));
   const history = (await db.prepare("SELECT * FROM pt_position WHERE closed_at IS NOT NULL ORDER BY closed_at DESC LIMIT 50").all()).results;
   const curve = (await db.prepare("SELECT ts,equity FROM pt_equity ORDER BY ts DESC LIMIT 288").all()).results.reverse();
