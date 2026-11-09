@@ -9,7 +9,7 @@
 // JOBSEARCH-CV-1 (1.5.0): the CV is part of this worker (page /cv): a yes/no interview that builds the claim bank, review of unconfirmed claims, roles, achievements and publications edited in D1, a resume per job (summary, roles, selected work, education, skills) and a cover note, history and backup. The search is tied to that bank (evidence the owner can back up weighs more; what the CV lacks is shown as a gap), decided postings (rejected, applied, approved) never come back under another id, rejections carry a reason the search learns from, and a wider net: stretch matches outside the stated preferences, more boards and aggregators.
 // Routes: GET / (web UI) | GET /api | GET /api/matches | GET /api/matches/:id | GET /api/runs | GET /api/ledger | POST /api/run | POST /api/matches/:id/status | GET /health
 // Port of the jobsearch/ Python modules (tests: jobsearch/test_jobsearch.py, qnfo-jobsearch/worker.test.mjs).
-var VERSION = "1.16.0-codeagent";
+var VERSION = "1.17.0-codeagent";
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -2793,7 +2793,7 @@ function cardHtml(x){
   +(mine?'':'<button data-do="decide" data-s="approved">Save for later</button><button data-do="decide" data-s="applied">I already applied</button>')
   +'<button data-do="referral">Referral</button><select data-do="stage"><option value="">Interview stage</option>'+['recruiter_screen','hiring_manager','technical','take_home','panel','final','reference_check'].map(function(t){return '<option>'+t+'</option>'}).join('')+'</select></div><div class="art"></div></div>';
  return h}
-function emptyHtml(){var s=$('#status').value;return '<p class="mute">'+(s==='mine'?'No applications yet. Jobs you apply to move here and leave the new list.':s?'Nothing with this status.':'No new jobs right now. Jobs you applied to or turned down never come back.')+'</p>'}
+function emptyHtml(){var s=$('#status').value;return '<div class="ds-empty">'+(s==='mine'?'<b>No applications yet</b>Jobs you apply to move here and leave the new list.':s?'<b>Nothing with this status</b>Pick another view above.':'<b>No new jobs right now</b>The search runs every hour. Jobs you applied to or turned down never come back.')+'</div>'}
 $('#list').addEventListener('click',function(e){var b=e.target.closest&&e.target.closest('[data-do]');if(!b||b.tagName==='SELECT')return;var card=b.closest('.card'),id=card.id.slice(2),d=b.dataset.do;
  if(d==='more')card.querySelector('.more').classList.toggle('on');else if(d==='reject')reject(id);else if(d==='decide')decide(id,b.dataset.s);else if(d==='show')show(id);else if(d==='referral')referral(id)});
 $('#list').addEventListener('change',function(e){var s=e.target.closest&&e.target.closest('select[data-do="stage"]');if(s)stage(s.closest('.card').id.slice(2),s)});
@@ -2801,16 +2801,16 @@ $('#list').addEventListener('change',function(e){var s=e.target.closest&&e.targe
 function runRecall(box,qs,done){var i=0,added=[];
  function post(q,body){return authed(function(){return api('/api/recall/answer',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(Object.assign({key:q.key},body))})})}
  function next(){if(i>=qs.length){done(added);return}var q=qs[i];
-  box.innerHTML='<div class="rq"><div class="mute">Question '+(i+1)+' of '+qs.length+'</div><div class="t">'+esc(q.ask)+'</div>'+(q.cue?'<div class="mute cue">'+esc(q.cue)+'</div>':'')
-   +'<div class="acts big"><button class="p" data-a="yes">Yes</button><button data-a="no">No</button><button data-a="unsure">Not sure</button></div><div class="rstep"></div><div class="rmsg mute"></div></div>';
+  box.innerHTML='<div class="rq"><div class="ds-step">Question '+(i+1)+' of '+qs.length+'</div><div class="ds-progress" aria-hidden="true"><i style="width:'+Math.round((i+1)/qs.length*100)+'%"></i></div><div class="ds-q">'+esc(q.ask)+'</div>'+(q.cue?'<div class="mute cue">'+esc(q.cue)+'</div>':'')
+   +'<div class="ds-choices" role="group" aria-label="Your answer"><button data-a="yes">Yes</button><button data-a="no">No</button><button data-a="unsure">Not sure</button></div><div class="rstep"></div><div class="rmsg mute" role="status"></div></div>';
   var step=box.querySelector('.rstep'),msg=box.querySelector('.rmsg');
   function save(body){msg.textContent='Saving...';post(q,body).then(function(r){if(r.added)added.push(r.added);msg.textContent=r.added?'Added to your CV: “'+r.added+'”':'Noted.';i++;setTimeout(next,r.added?1100:250)}).catch(function(err){msg.textContent=err.message})}
   box.querySelector('[data-a="no"]').onclick=function(){save({answer:'no'})};
   box.querySelector('[data-a="unsure"]').onclick=function(){save({answer:'unsure'})};
-  box.querySelector('[data-a="yes"]').onclick=function(){
-   step.innerHTML='<h4>Where?</h4><div class="acts big">'+q.roles.map(function(r){return '<button data-r="'+esc(r.id)+'">'+esc(r.label)+'</button>'}).join('')+'<button data-r="">Somewhere else</button></div>';
+  box.querySelector('[data-a="yes"]').onclick=function(){box.querySelectorAll('[data-a]').forEach(function(x){x.setAttribute('aria-pressed',x.dataset.a==='yes'?'true':'false')});
+   step.innerHTML='<h4>Where?</h4><div class="ds-options">'+q.roles.map(function(r){return '<button data-r="'+esc(r.id)+'">'+esc(r.label)+'</button>'}).join('')+'<button data-r="">Somewhere else</button></div>';
    step.querySelectorAll('[data-r]').forEach(function(rb){rb.onclick=function(){var role=rb.dataset.r;
-    step.innerHTML='<h4>How involved were you?</h4><div class="acts big col">'+q.depths.map(function(d){return '<button data-d="'+d.id+'"><b>'+esc(d.label)+'</b><br><span class="mute">Adds: “'+esc(d.draft)+'”</span></button>'}).join('')+'</div>';
+    step.innerHTML='<h4>How involved were you?</h4><div class="ds-options">'+q.depths.map(function(d){return '<button data-d="'+d.id+'"><b>'+esc(d.label)+'</b><br><span class="mute">Adds: “'+esc(d.draft)+'”</span></button>'}).join('')+'</div>';
     step.querySelectorAll('[data-d]').forEach(function(db){db.onclick=function(){save({answer:'yes',role:role,depth:db.dataset.d})}})}})}}
  next()}
 // before every application: the questions for this job, then the kit is rebuilt with the new lines
@@ -2823,46 +2823,241 @@ async function recallGate(card,id,el){var d;el.innerHTML='<div class="mute">Chec
   el.innerHTML='<div class="note">'+(added.length?'<b>Added '+added.length+' line'+(added.length>1?'s':'')+' to your CV.</b> This resume now includes '+(added.length>1?'them':'it')+'.':'<b>Done.</b> Nothing new to add for this job.')+'</div><div class="acts big"><button class="p ap" data-id="'+esc(id)+'">Build my application</button></div>'});
  return false}
 // "Questions about you": the queue across all open jobs, most-asked first, plus questions about the work that leads to autonomous systems research
-async function openRecall(){var p=$('#recallpanel');p.style.display='';p.innerHTML='<div class="mute">Loading questions...</div>';var d;
+async function openRecall(){var p=$('#recallpanel');['#vnew','#vmine','#ready'].forEach(function(k){$(k).setAttribute('aria-pressed','false')});$('#recallbtn').setAttribute('aria-pressed','true');p.style.display='';p.innerHTML='<div class="mute">Loading questions...</div>';var d;
  try{d=await authed(function(){return api('/api/recall?limit=15')})}catch(err){p.innerHTML='<div class="flag">'+esc(err.message)+'</div>';return}
  if(!d.questions.length){p.innerHTML='<div class="note">No open questions. New ones appear when new jobs ask for something your CV does not show.</div>';return}
  p.innerHTML='<div class="note"><b>Questions about you</b> ('+d.total+' open). Yes / no / not sure; nothing to type. A yes adds the line shown on the button to your CV.</div><div class="rbox"></div>';
  runRecall(p.querySelector('.rbox'),d.questions,function(added){p.innerHTML='<div class="note"><b>Thanks.</b> '+added.length+' new line'+(added.length===1?'':'s')+' on your CV. <button id="rmore">More questions</button> <button id="rclose">Close</button></div>';$('#rmore').onclick=openRecall;$('#rclose').onclick=function(){p.style.display='none'};load()})}
 $('#recallbtn').onclick=openRecall;
-$('#vnew').onclick=function(){$('#status').value='';load()};$('#vmine').onclick=function(){$('#status').value='mine';load()};
+$('#vnew').onclick=function(){$('#status').value='';$('#tier').value='';load()};$('#vmine').onclick=function(){$('#status').value='mine';$('#tier').value='';load()};
+function segSync(){var s=$('#status').value,t=$('#tier').value;[['#vnew',!s&&!t],['#vmine',s==='mine'],['#ready',!s&&t==='A']].forEach(function(x){$(x[0]).setAttribute('aria-pressed',x[1]?'true':'false')})}
 `;
-const UI = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Job matches: verified claims only</title>
-<style>
-:root{--bg:#f7f7f4;--card:#fff;--ink:#1c1c1a;--mute:#6b6b66;--line:#e2e2dc;--a:#1a7f4b;--b:#a06a00;--bad:#b3261e;--acc:#1f4fd8}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,Segoe UI,sans-serif}
-header{padding:18px 20px;border-bottom:1px solid var(--line);background:#fff;position:sticky;top:0;z-index:2}
-h1{margin:0 0 4px;font-size:19px}.sub{color:var(--mute);font-size:13px}
-.bar{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;align-items:center}
-select,input,button{font:inherit;padding:6px 10px;border:1px solid var(--line);border-radius:6px;background:#fff}
-button{cursor:pointer}button.p{background:var(--acc);color:#fff;border-color:var(--acc)}button:disabled{opacity:.5;cursor:default}
-main{max-width:900px;margin:0 auto;padding:16px}
-.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin:0 0 12px}
-.row{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}.t{font-weight:600;font-size:16px}
-.badge{font-size:12px;font-weight:700;padding:2px 8px;border-radius:99px;color:#fff}.A{background:var(--a)}.B{background:var(--b)}.C{background:#6b6b66}
-.mute{color:var(--mute);font-size:13px}.flag{color:var(--bad);font-size:13px;margin-top:4px}
-.st{font-size:12px;border:1px solid var(--line);border-radius:99px;padding:1px 8px}.st.approved{border-color:var(--a);color:var(--a)}.st.rejected{border-color:var(--bad);color:var(--bad)}
-pre{white-space:pre-wrap;background:#fbfbf8;border:1px solid var(--line);border-radius:8px;padding:10px;font:13px/1.45 ui-monospace,Menlo,Consolas,monospace}
-.acts{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}a{color:var(--acc)}
-details{background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px 14px;margin:0 0 12px}.acts.big button{min-height:44px;padding:8px 16px;font-weight:600}.acts.col{flex-direction:column;align-items:stretch}.acts.col button{text-align:left;font-weight:400}.more{display:none}.more.on{display:flex}.badge.new{background:var(--acc)}.rq{border:1px solid var(--line);border-radius:10px;padding:12px;margin-top:10px;background:#fbfcff}.rq .t{margin:4px 0}.cue{font-style:italic}.rmsg{margin-top:6px}@media(max-width:640px){header{position:static}}summary{cursor:pointer;font-weight:600}.q{padding:4px 0;border-top:1px solid var(--line)}.q label{margin-left:10px;white-space:nowrap}h4{margin:10px 0 4px}textarea{font:inherit;border:1px solid var(--line);border-radius:6px;padding:8px;margin-top:8px}.note{background:#fff8e1;border:1px solid #f0d98a;border-radius:8px;padding:8px 12px;font-size:13px;margin-bottom:12px}
-</style></head><body>
-<header><h1>Job matches: verified claims only</h1><div class="sub" id="meta">loading…</div>
-<div class="bar"><select id="tier"><option value="">All tiers</option><option value="A">A</option><option value="B">B</option><option value="C">C: stretch</option></select>
-<button id="vnew" class="p">New jobs</button><button id="vmine">My applications</button><button id="recallbtn">Questions about you</button><select id="status"><option value="">New jobs only</option><option value="mine">My applications</option><option value="all">Everything, including turned down</option><option value="pending_owner_approval">Pending</option><option>approved</option><option>rejected</option><option>applied</option><option>replied</option><option>interview</option><option>offer</option><option>no_reply</option><option>expired</option></select>
-<input id="q" placeholder="Search title, company, place" size="26"><button id="ready">Ready to apply</button><button id="run" class="p">Run now</button><a href="/cv"><b>My CV</b></a> <a href="/prep"><b>Apply and prepare</b></a> <a href="/api" class="mute">API</a> <a href="/api/ledger" class="mute">Claim ledger</a> <a href="/api/ops" class="mute">Operations</a> <span id="who" class="mute"></span><button id="signin" onclick="signIn()">Sign in</button><button id="signout" style="display:none" onclick="api(\'/api/auth/logout\',{method:\'POST\'}).then(who)">Sign out</button></div></header>
-<main><div id="recallpanel" class="card" style="display:none"></div><div class="note">Every sentence in a resume or note is copied from the claim ledger and re-checked line by line; a failed check blocks the draft. Nothing is sent: approve only marks your decision, then you apply from the posting link.</div><details id="fillsetup"><summary>One-click apply: set up once</summary><p>1. Drag this button to your bookmarks bar: <a id="bm" href="#" class="p" style="padding:6px 10px;border-radius:6px;background:var(--acc);color:#fff;text-decoration:none">Fill application</a></p><p class="mute">2. On any match press <b>Apply</b>: your tailored resume downloads, the form kit is copied and the application opens. 3. On the application page click the <b>Fill application</b> bookmark: it fills your details, adds the cover note and attaches the resume. 4. Answer the questions only you can answer, check the page, press Submit. Works on Greenhouse, Lever, Ashby, Workable and Recruitee; other sites open with the resume and note ready to paste. Nothing is submitted for you: employer systems reject unattended submissions, and an unreviewed application costs more than it saves.</p></details><details id="check" open><summary>Check a job I found</summary><textarea id="jin" rows="4" placeholder="Paste a job link, or paste the whole posting text" style="width:100%"></textarea><div class="bar"><input id="jtitle" placeholder="Title (optional)"><input id="jco" placeholder="Employer (optional)"><button class="p" id="jgo">How good a match am I?</button></div><div id="jres"></div></details>
-<details id="prefs"><summary>Search preferences: yes or no questions</summary><div id="survey" class="mute">loading</div><div class="bar"><button class="p" id="psave">Save and re-run the search</button><span id="prefmsg" class="mute"></span></div></details><div id="follow"></div><div id="list"></div></main>
+// DESIGN-SYSTEM-1:BEGIN (sourced from _shared/design-system.js; applied by _shared/inline-design-system.mjs; do not edit inside a worker)
+// ---- DESIGN-SYSTEM-1 (owner directive 2026-11-09). One design system for every page a person opens on q08.org, qnfo.org or qwav.org.
+//
+// WHAT. Design tokens (colour, type, spacing, radius, tap size) for a light and a dark theme, the CSS built from them, and the component
+// classes every fleet page uses: top bar, page, card, button (primary, secondary, quiet), segmented control, Yes / No / Not sure choices,
+// stat tiles, notes, badges, fields, disclosure, tables that scroll instead of crushing, empty states. Plus dsContrast(), so the contrast of
+// every text and control colour pair is proven by '_shared/design-system.test.mjs' (WCAG 2.2 AA), and dsLint(), the check that fails a
+// page with text under 13 px, a field under 16 px (iOS zooms) or a button under the 44 px tap size.
+//
+// WHY. Owner, 2026-11-09: "bad UI makes me sad ... the job site and even the markets ... are great examples of bad design ... implement
+// design standards ... Don't give me shitty design anywhere." Before this file each worker carried its own inline palette (jobs: 13 px
+// muted text and 12 px badges; markets: an unstyled 15 px system page with 8 px buttons and tables that broke words letter by letter on a
+// phone). The standard below is written once here and inlined into each page's worker.
+//
+// THE STANDARD (what every page follows; the test enforces the parts a machine can check).
+//  1. One primary action per screen. Exactly one .btn-primary is visible in a view; everything else is secondary or quiet.
+//  2. Hierarchy before decoration. A page title, one sentence of status, then the content. Status lines are stat tiles, not run-on text.
+//  3. Tap, do not type. Choices are buttons (Yes / No / Not sure, segmented views), never free text or tiny radio buttons. 44 px minimum.
+//  4. Progressive disclosure. Secondary tools, links and explanations sit behind a "More" disclosure, not in the top bar.
+//  5. Calm. Neutral surfaces, one accent colour, colour carries meaning only for good / warning / bad, generous spacing (8 px scale).
+//  6. Readable. 16 px body, 14 px minimum for secondary text, line length under 75 characters for prose, tabular numbers in figures.
+//  7. Accessible. WCAG 2.2 AA contrast in both themes, visible focus ring, labels on every field, reduced motion respected.
+//  8. Every state designed. Loading, empty and error states say what happens next in one sentence.
+//
+// HOW TO ADOPT. 1) 'node _shared/inline-design-system.mjs <worker> --anchor "<line prefix>"' once (later runs replace the block in place,
+// '--check' reports a stale copy). 2) Put '<style>${DS_CSS}</style>' (or dsHead(title)) in the page head and give <body> class="ds".
+// 3) Build with the classes below; page-specific CSS uses the var(--ds-*) tokens, never raw hex. 4) Add the worker to ADOPTERS in
+// '_shared/design-system.test.mjs', which renders the page and runs dsLint on it.
+//
+// RULES FOR EDITING. ES5 style (var and function), no import or export, every name starts with DS_ or ds, no '*' followed by '/' inside a
+// comment, no backtick anywhere (the block is inlined into workers that hold their pages in template literals). Version every change in DS_VERSION.
+var DS_VERSION = "1.0.0";
+
+var DS_TOKENS = {
+  light: {
+    bg: "#f5f6f8", surface: "#ffffff", surface2: "#eef1f5", ink: "#15181e", ink2: "#4b5363", line: "#d5dae1", lineStrong: "#7b8494",
+    accent: "#1d4ed8", accentHover: "#1e40af", onAccent: "#ffffff", accentSoft: "#e3eaff", accentSoftInk: "#1e3a8a",
+    good: "#166534", goodSoft: "#dcfce7", warn: "#854d0e", warnSoft: "#fef3c7", bad: "#b42318", badSoft: "#fee4e2", focus: "#2563eb"
+  },
+  dark: {
+    bg: "#0e1116", surface: "#161a21", surface2: "#1d222b", ink: "#e8ebf0", ink2: "#a4adbb", line: "#2b313c", lineStrong: "#6b7385",
+    accent: "#8cb4ff", accentHover: "#a9c6ff", onAccent: "#0a1530", accentSoft: "#1b2a4a", accentSoftInk: "#c7d8ff",
+    good: "#6ee7a0", goodSoft: "#12301f", warn: "#f6c453", warnSoft: "#33270d", bad: "#ff9a8f", badSoft: "#3a1715", focus: "#8cb4ff"
+  },
+  font: "system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif",
+  mono: "ui-monospace,SFMono-Regular,Menlo,Consolas,monospace",
+  size: { small: 14, body: 16, lead: 18, h3: 17, h2: 20, h1: 26, stat: 26 },
+  space: [0, 4, 8, 12, 16, 24, 32, 48],
+  radius: { s: 8, m: 12, l: 16, pill: 999 },
+  tap: 44,
+  maxWidth: 960
+};
+
+// The pairs whose contrast the test proves in both themes: [foreground token, background token, minimum ratio].
+var DS_CONTRAST_PAIRS = [
+  ["ink", "bg", 4.5], ["ink", "surface", 4.5], ["ink", "surface2", 4.5], ["ink2", "bg", 4.5], ["ink2", "surface", 4.5], ["ink2", "surface2", 4.5],
+  ["accent", "surface", 4.5], ["accent", "bg", 4.5], ["onAccent", "accent", 4.5], ["onAccent", "accentHover", 4.5], ["accentSoftInk", "accentSoft", 4.5],
+  ["good", "surface", 4.5], ["good", "goodSoft", 4.5], ["warn", "surface", 4.5], ["warn", "warnSoft", 4.5], ["bad", "surface", 4.5], ["bad", "badSoft", 4.5],
+  ["ink", "warnSoft", 4.5], ["ink", "goodSoft", 4.5], ["ink", "badSoft", 4.5], ["ink", "accentSoft", 4.5],
+  ["lineStrong", "surface", 3], ["focus", "surface", 3], ["focus", "bg", 3]
+];
+
+function dsLum(hex) {
+  var h = String(hex).replace("#", "");
+  if (h.length === 3) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
+  var c = [0, 2, 4].map(function (i) { var v = parseInt(h.slice(i, i + 2), 16) / 255; return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); });
+  return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+}
+function dsContrast(a, b) { var x = dsLum(a), y = dsLum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); }
+
+function dsVars(t) {
+  var map = { bg: "bg", surface: "surface", surface2: "surface-2", ink: "ink", ink2: "ink-2", line: "line", lineStrong: "line-strong", accent: "accent",
+    accentHover: "accent-hover", onAccent: "on-accent", accentSoft: "accent-soft", accentSoftInk: "accent-soft-ink", good: "good", goodSoft: "good-soft",
+    warn: "warn", warnSoft: "warn-soft", bad: "bad", badSoft: "bad-soft", focus: "focus" };
+  return Object.keys(map).map(function (k) { return "--ds-" + map[k] + ":" + t[k]; }).join(";");
+}
+
+var DS_CSS = [
+  "/* DESIGN-SYSTEM-1 v" + DS_VERSION + " (_shared/design-system.js) */",
+  ":root{color-scheme:light dark;" + dsVars(DS_TOKENS.light) + ";--ds-font:" + DS_TOKENS.font + ";--ds-mono:" + DS_TOKENS.mono + ";--ds-tap:" + DS_TOKENS.tap + "px;--ds-r-s:8px;--ds-r-m:12px;--ds-r-l:16px;--ds-shadow:0 1px 2px rgba(16,24,40,.06),0 1px 3px rgba(16,24,40,.08)}",
+  "@media (prefers-color-scheme:dark){:root{" + dsVars(DS_TOKENS.dark) + ";--ds-shadow:none}}",
+  "*,*::before,*::after{box-sizing:border-box}",
+  "body.ds{margin:0;background:var(--ds-bg);color:var(--ds-ink);font:16px/1.55 var(--ds-font);-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}",
+  ".ds a{color:var(--ds-accent);text-underline-offset:2px}.ds a:hover{color:var(--ds-accent-hover)}",
+  ".ds h1,.ds h2,.ds h3{line-height:1.25;margin:0 0 8px;letter-spacing:-.01em}.ds h1{font-size:26px;font-weight:700}.ds h2{font-size:20px;font-weight:650;margin-top:32px}.ds h3{font-size:17px;font-weight:650}",
+  ".ds p{margin:0 0 12px}.ds small,.ds-muted{color:var(--ds-ink-2);font-size:14px}",
+  ".ds :focus-visible{outline:3px solid var(--ds-focus);outline-offset:2px;border-radius:6px}",
+  ".ds-skip{position:absolute;left:-9999px}.ds-skip:focus{left:16px;top:8px;z-index:20;background:var(--ds-surface);padding:8px 12px}",
+  ".ds-sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}",
+  // top bar and page
+  ".ds-top{position:sticky;top:0;z-index:10;background:var(--ds-surface);border-bottom:1px solid var(--ds-line)}",
+  ".ds-top-in{max-width:960px;margin:0 auto;padding:10px 16px;display:flex;align-items:center;gap:12px;min-height:60px}",
+  ".ds-brand{font-weight:700;font-size:17px;color:var(--ds-ink);text-decoration:none;margin-right:auto;display:flex;align-items:center;gap:8px}",
+  ".ds-brand small{font-weight:500}",
+  ".ds-main{max-width:960px;margin:0 auto;padding:20px 16px 64px}",
+  ".ds-head{margin:4px 0 20px}.ds-head p{color:var(--ds-ink-2);margin:4px 0 0}",
+  // buttons
+  ".ds .btn,.ds button.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;min-width:44px;padding:10px 16px;border-radius:var(--ds-r-m);border:1px solid var(--ds-line-strong);background:var(--ds-surface);color:var(--ds-ink);font:600 15px/1.2 var(--ds-font);cursor:pointer;text-decoration:none;transition:background .15s,border-color .15s}",
+  ".ds .btn:hover{background:var(--ds-surface-2)}.ds .btn:disabled,.ds .btn[aria-disabled=true]{opacity:.55;cursor:not-allowed}",
+  ".ds .btn.btn-primary{background:var(--ds-accent);border-color:var(--ds-accent);color:var(--ds-on-accent)}.ds .btn.btn-primary:hover{background:var(--ds-accent-hover);border-color:var(--ds-accent-hover);color:var(--ds-on-accent)}",
+  ".ds .btn.btn-quiet{background:transparent;border-color:transparent;color:var(--ds-accent)}.ds .btn.btn-quiet:hover{background:var(--ds-accent-soft)}",
+  ".ds .btn.btn-block{width:100%}.ds .btn.btn-lg{min-height:52px;font-size:16px;padding:12px 20px}",
+  ".ds-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:12px}",
+  // segmented control (views)
+  ".ds-seg{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:4px;padding:4px;background:var(--ds-surface-2);border-radius:var(--ds-r-m)}",
+  "@media (max-width:560px){.ds-seg{grid-auto-flow:row;grid-template-columns:1fr 1fr}}",
+  ".ds-seg button{min-height:44px;padding:8px 10px;border:0;border-radius:9px;background:transparent;color:var(--ds-ink-2);font:600 15px var(--ds-font);cursor:pointer;line-height:1.2}",
+  ".ds-seg button[aria-pressed=true],.ds-seg button[aria-selected=true]{background:var(--ds-surface);color:var(--ds-ink);box-shadow:var(--ds-shadow)}",
+  // Yes / No / Not sure
+  ".ds-choices{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px}",
+  ".ds-choices button{min-height:56px;border-radius:var(--ds-r-m);border:1px solid var(--ds-line-strong);background:var(--ds-surface);color:var(--ds-ink);font:600 16px var(--ds-font);cursor:pointer}",
+  ".ds-choices button:hover{border-color:var(--ds-accent);background:var(--ds-accent-soft)}",
+  ".ds-choices button[aria-pressed=true]{background:var(--ds-accent);border-color:var(--ds-accent);color:var(--ds-on-accent)}",
+  ".ds-options{display:grid;gap:8px;margin-top:12px}.ds-options button{text-align:left;min-height:56px;padding:12px 16px;border-radius:var(--ds-r-m);border:1px solid var(--ds-line-strong);background:var(--ds-surface);color:var(--ds-ink);font:16px/1.4 var(--ds-font);cursor:pointer}",
+  ".ds-options button:hover{border-color:var(--ds-accent);background:var(--ds-accent-soft)}.ds-options button b{display:block;font-weight:650}",
+  ".ds-q{font-size:18px;font-weight:650;line-height:1.35;margin:6px 0}.ds-step{font-size:14px;color:var(--ds-ink-2);font-weight:600;letter-spacing:.02em}",
+  ".ds-progress{height:6px;border-radius:99px;background:var(--ds-surface-2);overflow:hidden;margin:8px 0 4px}.ds-progress>i{display:block;height:100%;background:var(--ds-accent);border-radius:99px}",
+  // cards, notes, badges
+  ".ds-card{background:var(--ds-surface);border:1px solid var(--ds-line);border-radius:var(--ds-r-l);padding:16px;margin:0 0 12px;box-shadow:var(--ds-shadow)}",
+  ".ds-card-title{font-size:17px;font-weight:650;line-height:1.35;margin:0}",
+  ".ds-meta{color:var(--ds-ink-2);font-size:14px;margin-top:4px}",
+  ".ds-note{border-radius:var(--ds-r-m);padding:12px 14px;margin:0 0 12px;background:var(--ds-accent-soft);color:var(--ds-ink);font-size:15px}",
+  ".ds-note-warn{background:var(--ds-warn-soft)}.ds-note-good{background:var(--ds-good-soft)}.ds-note-bad{background:var(--ds-bad-soft)}",
+  ".ds-badge{display:inline-flex;align-items:center;gap:4px;font-size:13px;font-weight:700;line-height:1;padding:5px 9px;border-radius:99px;background:var(--ds-surface-2);color:var(--ds-ink);white-space:nowrap}",
+  ".ds-badge-accent{background:var(--ds-accent-soft);color:var(--ds-accent-soft-ink)}.ds-badge-good{background:var(--ds-good-soft);color:var(--ds-good)}.ds-badge-warn{background:var(--ds-warn-soft);color:var(--ds-warn)}.ds-badge-bad{background:var(--ds-bad-soft);color:var(--ds-bad)}",
+  ".ds-good{color:var(--ds-good)}.ds-warn{color:var(--ds-warn)}.ds-bad{color:var(--ds-bad)}",
+  // stats
+  ".ds-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin:0 0 16px}",
+  ".ds-stat{background:var(--ds-surface);border:1px solid var(--ds-line);border-radius:var(--ds-r-m);padding:12px 14px}",
+  ".ds-stat .k{font-size:14px;color:var(--ds-ink-2)}.ds-stat .v{font-size:24px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.2;margin-top:2px}",
+  // fields
+  ".ds input:not([type=radio]):not([type=checkbox]),.ds select,.ds textarea{font:16px/1.4 var(--ds-font);color:var(--ds-ink);background:var(--ds-surface);border:1px solid var(--ds-line-strong);border-radius:var(--ds-r-s);padding:10px 12px;min-height:44px;max-width:100%}",
+  ".ds textarea{width:100%}.ds label{font-size:15px}",
+  ".ds-field{display:grid;gap:4px;margin:0 0 12px}.ds-field>span{font-size:14px;font-weight:600;color:var(--ds-ink-2)}",
+  // disclosure
+  ".ds details.ds-more{background:var(--ds-surface);border:1px solid var(--ds-line);border-radius:var(--ds-r-l);margin:0 0 12px}",
+  ".ds details.ds-more>summary{list-style:none;cursor:pointer;min-height:52px;display:flex;align-items:center;justify-content:space-between;padding:12px 16px;font-weight:650}",
+  ".ds details.ds-more>summary::-webkit-details-marker{display:none}.ds details.ds-more>summary::after{content:'+';font-size:22px;color:var(--ds-ink-2);font-weight:400}",
+  ".ds details.ds-more[open]>summary::after{content:'\\2212'}.ds details.ds-more>.ds-more-body{padding:0 16px 16px}",
+  // tables: scroll, never crush
+  ".ds-table-wrap{overflow-x:auto;border:1px solid var(--ds-line);border-radius:var(--ds-r-m);background:var(--ds-surface)}",
+  ".ds-table{width:100%;border-collapse:collapse;font-size:15px}.ds-table th{font-size:13px;font-weight:650;color:var(--ds-ink-2);text-transform:uppercase;letter-spacing:.04em;text-align:left;background:var(--ds-surface-2)}",
+  ".ds-table th,.ds-table td{padding:10px 12px;border-bottom:1px solid var(--ds-line);vertical-align:top}.ds-table tr:last-child td{border-bottom:0}",
+  ".ds-table .num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}.ds-table td.title{min-width:200px}",
+  // lists of items as cards on phones
+  ".ds-rows{display:grid;gap:8px}.ds-row{display:flex;gap:12px;align-items:flex-start;justify-content:space-between;background:var(--ds-surface);border:1px solid var(--ds-line);border-radius:var(--ds-r-m);padding:12px 14px}",
+  ".ds-row .main{min-width:0;flex:1}.ds-row .side{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}",
+  // empty and loading
+  ".ds-empty{text-align:center;padding:32px 16px;color:var(--ds-ink-2);border:1px dashed var(--ds-line-strong);border-radius:var(--ds-r-l)}",
+  ".ds-empty b{display:block;color:var(--ds-ink);font-size:17px;margin-bottom:4px}",
+  ".ds pre{white-space:pre-wrap;background:var(--ds-surface-2);border-radius:var(--ds-r-s);padding:12px;font:14px/1.5 var(--ds-mono);overflow-x:auto}",
+  ".ds hr{border:0;border-top:1px solid var(--ds-line);margin:24px 0}",
+  "@media (max-width:640px){.ds-hide-sm{display:none!important}.ds h1{font-size:23px}.ds-top-in{padding:8px 12px}}",
+  "@media (prefers-reduced-motion:reduce){.ds *{transition:none!important;animation:none!important}}"
+].join("\n");
+
+function dsEsc(s) { return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); }
+
+// The head of a page: charset, viewport, title, description, theme colours and the design system CSS. extraCss uses var(--ds-*) only.
+function dsHead(title, description, extraCss) {
+  return "<meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1,viewport-fit=cover\"><title>" + dsEsc(title) + "</title>"
+    + (description ? "<meta name=\"description\" content=\"" + dsEsc(description) + "\">" : "")
+    + "<meta name=\"theme-color\" content=\"" + DS_TOKENS.light.surface + "\" media=\"(prefers-color-scheme: light)\"><meta name=\"theme-color\" content=\"" + DS_TOKENS.dark.surface + "\" media=\"(prefers-color-scheme: dark)\">"
+    + "<style>" + DS_CSS + (extraCss ? "\n" + extraCss : "") + "</style>";
+}
+
+// Machine-checkable parts of the standard, run on a rendered page. Returns a list of problems (empty when the page passes).
+function dsLint(html) {
+  var out = [], m, re;
+  if (String(html).indexOf("DESIGN-SYSTEM-1 v") < 0) out.push("page does not include DS_CSS");
+  if (!/<body[^>]*class="[^"]*\bds\b/.test(html)) out.push("body is missing class=\"ds\"");
+  if (!/name="?viewport"?/.test(html)) out.push("no viewport meta");
+  re = /font(?:-size)?\s*:\s*(?:[0-9]+\s+)?([0-9.]+)px/g;
+  while ((m = re.exec(html))) { if (+m[1] < 13) out.push("text under 13px: " + m[0]); }
+  re = /min-height\s*:\s*([0-9.]+)px/g;
+  var css = String(html).split("<style>").slice(1).map(function (s) { return s.split("</style>")[0]; }).join("\n");
+  re = /(button|\.btn)[^{}]*\{[^}]*min-height\s*:\s*([0-9.]+)px/g;
+  while ((m = re.exec(css))) { if (+m[2] < 40) out.push("button under the tap size: " + m[0].slice(0, 80)); }
+  if (/style="[^"]*#[0-9a-fA-F]{3,6}/.test(html)) out.push("inline style with a raw hex colour (use var(--ds-*))");
+  var prim = (html.match(/class="[^"]*\bbtn-primary\b/g) || []).length;
+  if (prim > 1) out.push("more than one primary button in the static page (" + prim + ")");
+  return out;
+}
+// DESIGN-SYSTEM-1:END
+// JOBS-DESIGN-1 (DESIGN-SYSTEM-1, owner 2026-11-09): the matches page on the shared design system. The list comes first; one row of views
+// (New jobs, My applications, Ready to apply, Questions about you); search; then the tools behind closed disclosures. The page CSS below maps
+// the classes the page script already emits (card, badge, acts, note, rq ...) onto the design tokens, so the script keeps working unchanged.
+const JOBS_PAGE_CSS = ".js-search{margin:12px 0 16px}.js-search input{width:100%}"
+ + ":where(.ds main button:not(.ds-seg button,.ds-choices button,.ds-options button)){display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:44px;padding:10px 16px;border-radius:12px;border:1px solid var(--ds-line-strong);background:var(--ds-surface);color:var(--ds-ink);font:600 15px/1.2 var(--ds-font);cursor:pointer}"
+ + ":where(.ds main button:not(.ds-seg button,.ds-choices button,.ds-options button)):hover{background:var(--ds-surface-2)}.ds main button:disabled{opacity:.55;cursor:not-allowed}"
+ + ".ds main button.p,.ds main button.btn-primary{background:var(--ds-accent);border-color:var(--ds-accent);color:var(--ds-on-accent)}.ds main button.p:hover{background:var(--ds-accent-hover)}"
+ + ".card{background:var(--ds-surface);border:1px solid var(--ds-line);border-radius:16px;padding:16px;margin:0 0 12px;box-shadow:var(--ds-shadow)}"
+ + ".row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.t{font-weight:650;font-size:17px;line-height:1.35}.card .row .t{flex-basis:100%;order:2;margin-top:6px}"
+ + ".badge{display:inline-flex;font-size:13px;font-weight:700;line-height:1;padding:5px 9px;border-radius:99px;background:var(--ds-surface-2);color:var(--ds-ink)}"
+ + ".badge.A{background:var(--ds-good-soft);color:var(--ds-good)}.badge.B{background:var(--ds-warn-soft);color:var(--ds-warn)}.badge.C{background:var(--ds-surface-2);color:var(--ds-ink-2)}.badge.new{background:var(--ds-accent-soft);color:var(--ds-accent-soft-ink)}"
+ + ".mute{color:var(--ds-ink-2);font-size:14px;margin-top:4px}.flag{color:var(--ds-bad);font-size:14px;margin-top:6px}.flag::before{content:'! ';font-weight:700}"
+ + ".st{font-size:13px;font-weight:600;border:1px solid var(--ds-line-strong);border-radius:99px;padding:2px 8px}.st.approved,.st.applied{border-color:var(--ds-good);color:var(--ds-good)}.st.rejected{border-color:var(--ds-bad);color:var(--ds-bad)}"
+ + ".acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.acts a{text-decoration:none}.acts.col{flex-direction:column;align-items:stretch}.more{display:none}.more.on{display:flex}"
+ + ".card .acts.big .ap{flex:1 1 100%}.card .acts.big>:not(.ap){flex:1 1 0}.card .acts.big>a>button{width:100%}.card .acts.big button{padding-left:10px;padding-right:10px}"
+ + ".note{background:var(--ds-accent-soft);color:var(--ds-ink);border-radius:12px;padding:12px 14px;font-size:15px;margin:0 0 12px}"
+ + ".rq{border:1px solid var(--ds-line);border-radius:16px;padding:16px;margin-top:12px;background:var(--ds-surface)}.rq .t{font-size:18px;margin:6px 0}.cue{font-style:normal}.rmsg{margin-top:8px}#recallpanel .rq{border:0;padding:0;margin-top:8px}"
+ + ".bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:12px}"
+ + ".q{padding:12px 0;border-top:1px solid var(--ds-line)}.q>span{display:block;font-weight:600;margin-bottom:8px}.q .ds-choices{margin-top:0}"
+ + "h4{font-size:15px;margin:16px 0 6px}pre{white-space:pre-wrap;background:var(--ds-surface-2);border-radius:8px;padding:12px;font:14px/1.5 var(--ds-mono)}"
+ + "ul{padding-left:20px;margin:6px 0}#signbox{margin-bottom:12px}#signbox input{width:10ch}"
+ + ".js-tools h2{margin-top:32px}.js-links{display:flex;flex-wrap:wrap;gap:4px 16px;margin-top:12px;font-size:15px}";
+const UI = `<!doctype html><html lang="en"><head>${dsHead("Job matches", "Job matches for an autonomous AI systems researcher, each resume line checked against the claim ledger.", JOBS_PAGE_CSS)}</head><body class="ds">
+<a class="ds-skip" href="#list">Skip to the job list</a>
+<header class="ds-top"><div class="ds-top-in"><a class="ds-brand" href="/">Jobs</a><a class="btn btn-quiet" href="/cv">My CV</a><span id="who" class="ds-muted ds-hide-sm"></span><button class="btn" id="signin" onclick="signIn()">Sign in</button><button class="btn btn-quiet" id="signout" style="display:none" onclick="api(\'/api/auth/logout\',{method:\'POST\'}).then(who)">Sign out</button></div></header>
+<main class="ds-main"><div class="ds-head"><h1>Your job matches</h1><p id="meta">Loading your matches…</p></div>
+<div class="ds-seg" role="group" aria-label="Which jobs to show"><button id="vnew" aria-pressed="true">New jobs</button><button id="vmine" aria-pressed="false">My applications</button><button id="ready" aria-pressed="false">Ready to apply</button><button id="recallbtn" aria-pressed="false">Questions about you</button></div>
+<div class="js-search"><label class="ds-sr" for="q">Search</label><input id="q" type="search" placeholder="Search title, company or place" autocomplete="off"></div>
+<div id="recallpanel" class="card" style="display:none"></div><div id="follow"></div><div id="list" aria-live="polite"></div>
+<section class="js-tools" aria-labelledby="tools-h"><h2 id="tools-h">Tools</h2>
+<details class="ds-more" id="check"><summary>Check a job I found</summary><div class="ds-more-body"><label class="ds-sr" for="jin">Job link or posting text</label><textarea id="jin" rows="4" placeholder="Paste a job link, or the whole posting text"></textarea><div class="bar"><input id="jtitle" placeholder="Title (optional)" aria-label="Title (optional)"><input id="jco" placeholder="Employer (optional)" aria-label="Employer (optional)"><button class="p" id="jgo">How good a match am I?</button></div><div id="jres"></div></div></details>
+<details class="ds-more" id="prefs"><summary>Search preferences: yes or no questions</summary><div class="ds-more-body"><div id="survey" class="mute">Loading…</div><div class="bar"><button id="psave">Save and re-run the search</button><span id="prefmsg" class="mute" role="status"></span></div></div></details>
+<details class="ds-more" id="fillsetup"><summary>One-click apply: set up once</summary><div class="ds-more-body"><p>1. Drag this button to your bookmarks bar: <a id="bm" href="#" class="btn btn-primary">Fill application</a></p><p class="mute">2. On any match press <b>Apply</b>: your tailored resume downloads, the form kit is copied and the application opens. 3. On the application page click the <b>Fill application</b> bookmark: it fills your details, adds the cover note and attaches the resume. 4. Answer the questions only you can answer, check the page, press Submit. Works on Greenhouse, Lever, Ashby, Workable and Recruitee; other sites open with the resume and note ready to paste. Nothing is submitted for you: employer systems reject unattended submissions, and an unreviewed application costs more than it saves.</p></div></details>
+<details class="ds-more"><summary>Filters and search runs</summary><div class="ds-more-body"><div class="bar"><label class="ds-field"><span>Tier</span><select id="tier"><option value="">All tiers</option><option value="A">A: strong fit</option><option value="B">B: good fit</option><option value="C">C: stretch</option></select></label><label class="ds-field"><span>Status</span><select id="status"><option value="">New jobs only</option><option value="mine">My applications</option><option value="all">Everything, including turned down</option><option value="pending_owner_approval">Pending</option><option>approved</option><option>rejected</option><option>applied</option><option>replied</option><option>interview</option><option>offer</option><option>no_reply</option><option>expired</option></select></label></div><div class="bar"><button id="run">Run the search now</button></div><p class="mute">Every sentence in a resume or note is copied from the claim ledger and re-checked line by line; a failed check blocks the draft. Nothing is sent for you.</p><div class="js-links"><a href="/prep">Apply and prepare</a><a href="/api/ledger">Claim ledger</a><a href="/api/ops">Operations</a><a href="/api">API</a></div></div></details>
+</section></main>
 <script>
 const $=s=>document.querySelector(s);const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 async function api(path,opt){const r=await fetch(path,opt);const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||r.status);return j}
 async function load(){
   const q=new URLSearchParams();for(const k of['tier','status','q']){const v=$('#'+k).value;if(v)q.set(k,v)}
   const [m,r,oc]=await Promise.all([api('/api/matches?'+q),api('/api/runs'),api('/api/outcomes')]);
-  const last=r.runs[0];$('#meta').textContent=last?('Last run '+last.started_at+' | '+last.fetched+' postings from '+last.feeds+' feeds | '+last.passed+' passed gates | '+last.blocked+' blocked by verifier'+(last.errors.length?' | feed errors: '+last.errors.length:'')):'No run yet. Press Run now.';$('#meta').textContent+=' | Applied '+oc.funnel.applied+', replies '+oc.funnel.replied+', interviews '+oc.funnel.interview+' | reply rate '+(oc.reply_rate_90d===null?'unknown ('+oc.reading+')':Math.round(oc.reply_rate_90d*100)+'%');
+  const last=r.runs[0];$('#meta').textContent=(m.matches.length+' shown')+(last?(' · '+last.passed+' of '+last.fetched+' postings passed the checks · last search '+String(last.started_at).slice(0,16)+(last.errors.length?' · '+last.errors.length+' feed errors':'')):' · no search run yet')+' · applied '+oc.funnel.applied+', replies '+oc.funnel.replied+', interviews '+oc.funnel.interview;segSync();
   $('#list').innerHTML=m.matches.map(cardHtml).join('')||emptyHtml();
 }
 async function show(id){const el=document.getElementById('c-'+id).querySelector('.art');if(el.innerHTML){el.innerHTML='';return}
@@ -2884,8 +3079,9 @@ async function decide(id,status){
   try{await call()}catch(e){if(/sign in/.test(e.message)){try{if(await signIn())await call();else return}catch(e2){alert(e2.message);return}}else{alert(e.message);return}}load()}
 $('#run').onclick=async()=>{$('#run').disabled=true;try{await authed(()=>api('/api/run',{method:'POST'}));$('#meta').textContent='Run started. Refreshing in 40 s…';setTimeout(()=>{load();$('#run').disabled=false},40000)}catch(e){alert(e.message);$('#run').disabled=false}};
 for(const k of['tier','status'])$('#'+k).onchange=load;$('#q').oninput=()=>{clearTimeout(window._t);window._t=setTimeout(load,300)};async function authed(fn){try{return await fn()}catch(e){if(/sign in/.test(e.message)){if(await signIn())return await fn()}throw e}}
-async function loadPrefs(){const d=await api('/api/prefs');const g={};d.survey.forEach(q=>{(g[q.group]=g[q.group]||[]).push(q)});$('#survey').innerHTML=Object.keys(g).map(k=>'<h4>'+esc(k)+'</h4>'+g[k].map(q=>'<div class="q"><span>'+esc(q.q)+'</span> '+[['true','Yes'],['false','No'],['null','Skip']].map(o=>'<label><input type="radio" name="q_'+q.id+'" value="'+o[0]+'"'+(String(q.answer)===o[0]?' checked':'')+'> '+o[1]+'</label>').join('')+'</div>').join('')).join('')}
-$('#psave').onclick=async()=>{const a={};document.querySelectorAll('#survey input:checked').forEach(i=>{a[i.name.slice(2)]=i.value==='true'?true:i.value==='false'?false:null});$('#prefmsg').textContent='Saving...';try{await authed(()=>api('/api/prefs',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({answers:a})}));$('#prefmsg').textContent='Saved. The search is re-running (about a minute); matches that no longer fit are hidden.';setTimeout(load,60000)}catch(e){$('#prefmsg').textContent=e.message}};
+async function loadPrefs(){const d=await api('/api/prefs');const g={};d.survey.forEach(q=>{(g[q.group]=g[q.group]||[]).push(q)});$('#survey').innerHTML=Object.keys(g).map(k=>'<h4>'+esc(k)+'</h4>'+g[k].map(q=>'<div class="q" data-pref="'+esc(q.id)+'"><span>'+esc(q.q)+'</span><div class="ds-choices" role="group" aria-label="'+esc(q.q)+'">'+[['true','Yes'],['false','No'],['null','Not sure']].map(o=>'<button type="button" data-v="'+o[0]+'" aria-pressed="'+(String(q.answer)===o[0]?'true':'false')+'">'+o[1]+'</button>').join('')+'</div></div>').join('')).join('')}
+$('#survey').addEventListener('click',function(e){var b=e.target.closest&&e.target.closest('[data-v]');if(!b)return;b.parentNode.querySelectorAll('[data-v]').forEach(function(x){x.setAttribute('aria-pressed',x===b?'true':'false')})});
+$('#psave').onclick=async()=>{const a={};document.querySelectorAll('#survey [data-pref]').forEach(q=>{var b=q.querySelector('[aria-pressed="true"]');if(b)a[q.dataset.pref]=b.dataset.v==='true'?true:b.dataset.v==='false'?false:null});$('#prefmsg').textContent='Saving...';try{await authed(()=>api('/api/prefs',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({answers:a})}));$('#prefmsg').textContent='Saved. The search is re-running (about a minute); matches that no longer fit are hidden.';setTimeout(load,60000)}catch(e){$('#prefmsg').textContent=e.message}};
 function reject(id){var el=document.getElementById('c-'+id).querySelector('.art');var R=[['field','Wrong field'],['level','Wrong level'],['location','Wrong place'],['company','Not this employer'],['applied','Already handled it'],['other','Other']];el.innerHTML='<div class="note">Why? The search learns from it. '+R.map(function(r){return '<button onclick="rejectWhy(\\''+esc(id)+'\\',\\''+r[0]+'\\')">'+r[1]+'</button>'}).join(' ')+'</div>'}
 async function rejectWhy(id,reason){const call=()=>api('/api/matches/'+encodeURIComponent(id)+'/status',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({status:'rejected',reason})});try{await authed(call)}catch(e){alert(e.message);return}load()}
 const VIA={rok:'RemoteOK',him:'Himalayas',hn:'Hacker News: Who is hiring',rm:'Remotive',jb:'Jobicy',mu:'The Muse',an:'Arbeitnow',gh:'company board',lv:'company board',ab:'company board',rc:'company board',ps:'public-sector board'};
