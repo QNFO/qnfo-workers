@@ -195,7 +195,10 @@ export function workflowPushPaths(root) {
       const artifactCall = /push_artifact\.sh/.test(line);
       const canaryCall = /canary_revert\.py/.test(line);
       // Only supported, explicit modes are exempt. Unknown helper routes remain blocking.
-      if ((artifactCall && !safeArtifact) || (canaryCall && !/--(?:selftest|pr-only)\b/.test(line))) {
+      // Require the mode as the first argument, not in a later comment or argument value.
+      const canaryCalls = line.match(/canary_revert\.py/g) || [];
+      const explicitCanaryMode = canaryCalls.length === 1 && /canary_revert\.py\s+--(?:selftest|pr-only)(?=\s|$)/.test(line);
+      if ((artifactCall && !safeArtifact) || (canaryCall && !explicitCanaryMode)) {
         out.push({ workflow: f, line: i + 1, snippet: line.trim() });
       }
     }

@@ -29,6 +29,12 @@ try {
   assert.equal(workflowPushPaths(root).length, 1, 'a canary without explicit PR routing is blocked');
   workflow('git push origin HEAD:main # --pr-only');
   assert.equal(workflowPushPaths(root).length, 1, 'an option-like comment never exempts a real push');
+  workflow('python scripts/canary_revert.py --targets targets.txt # --pr-only');
+  assert.equal(workflowPushPaths(root).length, 1, 'a comment cannot authorize PR-only mode');
+  workflow('python scripts/canary_revert.py --targets "--pr-only"');
+  assert.equal(workflowPushPaths(root).length, 1, 'an argument value cannot authorize PR-only mode');
+  workflow('python scripts/canary_revert.py --pr-only; python scripts/canary_revert.py --targets targets.txt');
+  assert.equal(workflowPushPaths(root).length, 1, 'one safe invocation cannot hide a second unsafe invocation');
 } finally {
   rmSync(root, { recursive: true, force: true });
 }
@@ -58,4 +64,4 @@ print('PR-only routing passed')
 `;
 const result = spawnSync(process.platform === 'win32' ? 'python' : 'python3', ['-c', python], { encoding: 'utf8' });
 assert.equal(result.status, 0, result.stderr || result.stdout);
-console.log('native-check-gate: 7 workflow cases and PR-only/legacy canary routing passed');
+console.log('native-check-gate: 10 workflow cases and PR-only/legacy canary routing passed');
