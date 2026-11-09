@@ -120,7 +120,53 @@ export const DDL = [
      status TEXT NOT NULL DEFAULT 'open',
      created_at TEXT NOT NULL
    )`,
-  `CREATE INDEX IF NOT EXISTS idx_travel_picks_stop ON travel_picks(stop_id, status)`
+  `CREATE INDEX IF NOT EXISTS idx_travel_picks_stop ON travel_picks(stop_id, status)`,
+  // TRAVEL-FEEDBACK-1 (agent_issues 1002268): one tap ledger for every travel card, and the per-tag taste table it feeds.
+  // signal is what the owner tapped (or did without tapping: open, pass); reason is the optional second tap on a skip, hate or something-else.
+  `CREATE TABLE IF NOT EXISTS travel_feedback (
+     id INTEGER PRIMARY KEY AUTOINCREMENT,
+     target_type TEXT NOT NULL CHECK (target_type IN ('pick','option','stop','pair')),
+     target_id TEXT NOT NULL,
+     signal TEXT NOT NULL CHECK (signal IN ('love','like','skip','hate','instead','save','book','open','pass')),
+     reason TEXT,
+     tags TEXT,
+     ts TEXT NOT NULL
+   )`,
+  `CREATE INDEX IF NOT EXISTS idx_travel_feedback_target ON travel_feedback(target_type, target_id, ts)`,
+  `CREATE TABLE IF NOT EXISTS travel_taste (
+     tag TEXT PRIMARY KEY,
+     weight REAL NOT NULL,
+     n INTEGER NOT NULL DEFAULT 0,
+     signal TEXT,
+     updated_at TEXT NOT NULL
+   )`,
+  // TRAVEL-TRIP-STATE-1 (agent_issues 1002269): dated events that change what a stop needs (crowds, closures, book-by dates).
+  // verified = 1 only after a primary source (an official calendar) was read; the checks panel says so when it is 0.
+  `CREATE TABLE IF NOT EXISTS travel_calendar (
+     id TEXT PRIMARY KEY,
+     day TEXT NOT NULL,
+     end_day TEXT,
+     place TEXT NOT NULL,
+     country TEXT,
+     name TEXT NOT NULL,
+     impact TEXT NOT NULL,
+     lead_days INTEGER NOT NULL DEFAULT 21,
+     source TEXT NOT NULL,
+     verified INTEGER NOT NULL DEFAULT 0,
+     updated_at TEXT NOT NULL
+   )`
+];
+
+// TRAVEL-TRIP-STATE-1: seeded once with ON CONFLICT DO NOTHING; a row the owner or a later migration edits wins. Dates come from the
+// 2026-10-12 research run (secondary sources, several of them disagreeing by a day), so verified stays 0 until an official calendar is read.
+export const CALENDAR_SEED = [
+  ["cal-tihar-2026", "2026-11-07", "2026-11-11", "Kathmandu,Bhaktapur,Patan,Pokhara", "NP", "Tihar (Laxmi Puja 8 Nov, Bhai Tika 11 Nov)", "government offices close 8 to 12 Nov and buses are packed around Bhai Tika", 14, "nepaleveryday.com Tihar 2026 dates (secondary)"],
+  ["cal-devdeepawali-2026", "2026-11-24", null, "Varanasi", "IN", "Dev Deepawali", "the biggest night of the year on the ghats; rooms with a ghat view and boats sell out and prices jump several-fold", 45, "en.wikipedia.org Dev_Deepavali_(Varanasi) (secondary)"],
+  ["cal-pushkar-2026", "2026-11-17", "2026-11-24", "Pushkar", "IN", "Pushkar Camel Fair", "camps sell out months ahead", 60, "incredibleindia.gov.in Pushkar Camel Fair (official tourism site)"],
+  ["cal-newyear-2027", "2026-12-25", "2027-01-01", "Goa,Panaji,Kochi,Alleppey,Varkala,Pondicherry", "IN", "Christmas and New Year peak season", "highest hotel rates of the year and minimum-stay rules", 60, "aggregator calendars (secondary)"],
+  ["cal-pongal-2027", "2027-01-14", "2027-01-15", "Madurai,Thanjavur,Pondicherry,Mamallapuram", "IN", "Pongal", "shops and offices close for three to four days and buses fill", 21, "calendardate.com Makar Sankranti 2027 (secondary)"],
+  ["cal-shivaratri-2027", "2027-03-06", null, "Kathmandu,Bhaktapur,Patan", "NP", "Maha Shivaratri at Pashupatinath", "hundreds of thousands of pilgrims; hotels near the temple fill up and roads near the airport clog", 30, "astrosage.com Indian calendar 2027 (secondary)"],
+  ["cal-holi-2027", "2027-03-22", null, "Kathmandu,Bhaktapur,Patan,Pokhara", "NP", "Holi (hills 22 Mar, Terai 23 Mar)", "coloured powder and crowds in the streets; plan moves around the morning", 7, "calendardate.com Holi 2027 (secondary; some lists say 23 Mar)"]
 ];
 
 // Seeded once with INSERT OR IGNORE; a row the owner edits always wins.
@@ -170,7 +216,8 @@ const TRAVEL_TABLES = DDL.map((s) => (/CREATE TABLE IF NOT EXISTS (\w+)/.exec(s)
 export async function ensureTravel(db, nowIso) {
   if (db && typeof db === "object" && ENSURED_DBS.has(db)) return;
   const ts = nowIso || new Date().toISOString();
-  const stmts = DDL.map((s) => db.prepare(s)).concat(Object.entries(DEFAULTS).map(([k, v]) => db.prepare("INSERT INTO travel_config (key, value, updated_at) VALUES (?, ?, ?) ON CONFLICT(key) DO NOTHING").bind(k, v, ts)));
+  const stmts = DDL.map((s) => db.prepare(s)).concat(Object.entries(DEFAULTS).map(([k, v]) => db.prepare("INSERT INTO travel_config (key, value, updated_at) VALUES (?, ?, ?) ON CONFLICT(key) DO NOTHING").bind(k, v, ts)))
+    .concat(CALENDAR_SEED.map((r) => db.prepare("INSERT INTO travel_calendar (id, day, end_day, place, country, name, impact, lead_days, source, verified, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?) ON CONFLICT(id) DO NOTHING").bind(...r, ts)));
   if (typeof db.batch === "function") await db.batch(stmts);
   else for (const s of stmts) await s.run();
   if (db && typeof db === "object") ENSURED_DBS.add(db);
@@ -868,11 +915,13 @@ const CHAT_CSS = ":root{--bg:#f7f6f3;--card:#fff;--ink:#1b1b1b;--muted:#5d5d5d;-
   "pre.draft{white-space:pre-wrap;font:inherit;background:var(--bg);border:1px solid var(--line);border-radius:.5rem;padding:.5rem;margin:.4rem 0}" +
   ".ed{display:flex;flex-wrap:wrap;gap:.4rem;margin:.4rem 0}.ed label{display:flex;flex-direction:column;font-size:.8rem;color:var(--muted)}.ed input{font:inherit;font-size:.92rem;padding:.3rem .4rem;border:1px solid var(--line);border-radius:.4rem;background:var(--card);color:var(--ink);max-width:11rem}" +
   ".pillar{display:flex;flex-wrap:wrap;gap:.4rem;align-items:center;margin:.45rem 0 0}.picks{flex-basis:100%;margin:.1rem 0 .2rem;padding-left:1.1rem}.picks li{margin:.3rem 0}button.small{font-size:.8rem;padding:.15rem .5rem;margin:.2rem 0 0}.pillar .pl{font-weight:600;font-size:.85rem;min-width:3.2rem}" +
-  "#imptext{width:100%;min-height:10rem;font:inherit;padding:.6rem;border-radius:.7rem;border:1px solid var(--line);background:var(--card);color:var(--ink)}";
+  "#imptext{width:100%;min-height:10rem;font:inherit;padding:.6rem;border-radius:.7rem;border:1px solid var(--line);background:var(--card);color:var(--ink)}" +
+  ".taps{display:flex;flex-wrap:wrap;gap:.3rem;align-items:center;margin:.3rem 0}.taps button{min-height:2.4rem;min-width:3.4rem}.chk{border-left:4px solid var(--line)}.chk.bad{border-left-color:var(--warn)}.chk.warn{border-left-color:#b45309}" +
+  ".st{font-size:.75rem;border:1px solid var(--line);border-radius:.4rem;padding:0 .35rem;margin-left:.4rem;font-weight:400}.st.booked{border-color:var(--accent);color:var(--accent)}.st.draft{border-color:var(--warn);color:var(--warn)}.wild{font-size:.8rem;color:var(--accent);font-weight:600}";
 
 const CHAT_BODY = "<header><h1>Travel planner</h1><span id=\"where\"></span><nav class=\"tabs\"><button type=\"button\" data-tab=\"chat\" aria-pressed=\"true\">Chat</button><button type=\"button\" data-tab=\"places\" aria-pressed=\"false\">Places</button><button type=\"button\" data-tab=\"moving\" aria-pressed=\"false\">Getting around</button><button type=\"button\" data-tab=\"imp\" aria-pressed=\"false\">Import</button></nav></header>" +
   "<main id=\"log\" aria-live=\"polite\"></main>" +
-  "<section class=\"tab\" id=\"places\" hidden><p class=\"muted\">Where to go, where to sleep, what to eat and what to do, stop by stop. Tap a question and the chat answers it.</p><div id=\"visa\"></div><div id=\"checkins\"></div><h2>Stops</h2><div id=\"stops\"></div><p><button type=\"button\" id=\"addstop\">Add a stop</button> <button type=\"button\" id=\"addvisa\">Add a visa</button></p></section>" +
+  "<section class=\"tab\" id=\"places\" hidden><p class=\"muted\">Where to go, where to sleep, what to eat and what to do, stop by stop. Tap a question and the chat answers it.</p><div id=\"banner\"></div><div id=\"checks\"></div><div id=\"pairs\"></div><div id=\"visa\"></div><div id=\"checkins\"></div><h2>Stops</h2><div id=\"stops\"></div><p><button type=\"button\" id=\"addstop\">Add a stop</button> <button type=\"button\" id=\"addvisa\">Add a visa</button></p></section>" +
   "<section class=\"tab\" id=\"moving\" hidden><p class=\"muted\">How to get from one stop to the next, then every day with its weather.</p><h2>Moves</h2><div id=\"moves\"></div><h2>Day by day</h2><p class=\"muted\">Weather: forecast for the next 16 days; after that, the same dates last year.</p><div id=\"days\"></div></section>" +
   "<section class=\"tab\" id=\"imp\" hidden><h2>Import a booking</h2><p class=\"muted\">Paste a confirmation email or any booking text. I pick out the stays and journeys and add them to your trips.</p><p id=\"fwd\" class=\"muted\"></p><textarea id=\"imptext\" aria-label=\"Booking text\"></textarea><p><button class=\"primary\" type=\"button\" id=\"impgo\">Import</button></p><div id=\"impout\"></div></section>" +
   "<footer><form id=\"f\"><textarea id=\"t\" rows=\"1\" placeholder=\"Where to, or react to an idea...\" aria-label=\"Message\"></textarea><button class=\"primary\" id=\"send\">Send</button></form>" +
@@ -996,16 +1045,88 @@ function editor(fields, values, onSave, onDelete) {
   f.appendChild(msg);
   return f;
 }
+const REASON_BUTTONS = [["too_touristy", "Too touristy"], ["too_far", "Too far"], ["too_pricey", "Too pricey"], ["not_my_vibe", "Not my vibe"], ["already_did", "Already did it"], ["bad_timing", "Bad timing"]];
+const STATE_TEXT = { done: "Done", booked: "Booked", partial: "Partly booked", draft: "Not booked" };
+const TAP_BUTTONS = [["Love", "love"], ["Like", "like"], ["Skip", "skip"], ["Hate", "hate"], ["Something else", "instead"]];
+function tapRow(type, id, done) {
+  const row = el("div", "taps");
+  const tap = async (signal, label) => {
+    row.querySelectorAll("button").forEach((b) => { b.disabled = true; });
+    let r = null;
+    try { r = await api("/travel/api/tap", { target_type: type, target_id: id, signal: signal }); } catch (e) { r = null; }
+    if (!r || !r.ok) { row.textContent = (r && r.error) || "Could not save that tap."; return; }
+    row.innerHTML = "";
+    row.appendChild(el("span", "muted", label + " saved."));
+    if (r.reasons && r.reasons.length) {
+      for (const x of REASON_BUTTONS) row.appendChild(btn(x[1], async () => {
+        row.querySelectorAll("button").forEach((b) => { b.disabled = true; });
+        await api("/travel/api/tap-reason", { feedback_id: r.feedback_id, reason: x[0] });
+        row.textContent = "Noted."; if (done) done(signal, r);
+      }, "small"));
+      row.appendChild(btn("No reason", () => { row.textContent = ""; if (done) done(signal, r); }, "small"));
+    } else if (done) done(signal, r);
+  };
+  TAP_BUTTONS.forEach((x) => row.appendChild(btn(x[0], () => tap(x[1], x[0]), "small")));
+  return row;
+}
+let lastShift = null;
+function renderBanner(t) {
+  const b = $("#banner"); b.innerHTML = "";
+  if (lastShift) {
+    const u = el("div", "card"); u.appendChild(el("div", "", "Plan moved by " + lastShift.d + " days."));
+    u.appendChild(btn("Undo", async () => { const z = lastShift; lastShift = null; await api("/travel/api/shift", { days: z.undo }); loadTrip(); }, "small"));
+    b.appendChild(u);
+  }
+  if (!t.banner) return;
+  const c = el("div", "card warn"); c.appendChild(el("strong", "", "Plan not booked"));
+  c.appendChild(el("div", "", t.banner.text));
+  const row = el("div", "row");
+  for (const d of t.banner.shifts) row.appendChild(btn("Move plan later by " + (d === 7 ? "1 week" : d === 14 ? "2 weeks" : "1 month"), async () => {
+    const r = await api("/travel/api/shift", { days: d });
+    if (r && r.ok) { lastShift = { d: d, undo: r.undo_days }; loadTrip(); }
+    else row.appendChild(el("span", "flag", (r && r.error) || "Could not move the plan."));
+  }, "small"));
+  c.appendChild(row); b.appendChild(c);
+}
+function renderChecks(t) {
+  const k = $("#checks"); k.innerHTML = "";
+  const ch = t.checks; if (!ch || !ch.list.length) return;
+  k.appendChild(el("h2", "", ch.open ? "Needs attention (" + ch.open + ")" : "All checks pass"));
+  for (const x of ch.list) {
+    if (x.severity === "ok") continue;
+    const c = el("div", "card chk " + x.severity); c.appendChild(el("div", "", x.text));
+    if (x.action) c.appendChild(el("div", "muted", x.action));
+    k.appendChild(c);
+  }
+  const okn = ch.list.filter((x) => x.severity === "ok").length;
+  if (okn) k.appendChild(el("p", "muted", okn + " other check" + (okn === 1 ? "" : "s") + " fine."));
+}
+function renderPairs(t) {
+  const k = $("#pairs"); k.innerHTML = "";
+  if (!t.pairs || !t.pairs.length) return;
+  k.appendChild(el("h2", "", "Teach it your taste in a few taps"));
+  for (const p of t.pairs) {
+    const c = el("div", "card"), row = el("div", "row");
+    for (const s of [["a", p.a], ["b", p.b]]) row.appendChild(btn(s[1].label, async () => {
+      row.querySelectorAll("button").forEach((b) => { b.disabled = true; });
+      await api("/travel/api/taste-pair", { pair: p.id, choice: s[0] }); loadTrip();
+    }));
+    c.appendChild(row); k.appendChild(c);
+  }
+}
 function pickRow(label, list, p, q) {
   const r = el("div", "pillar"); r.appendChild(el("span", "pl", label));
   if (list.length) {
     const ul = el("ul", "picks");
     for (const x of list) {
       const li = el("li");
-      const a = el("a", "", x.name); a.href = x.map; a.target = "_blank"; a.rel = "noopener noreferrer"; li.appendChild(a);
+      const a = el("a", "", x.name); a.href = x.map; a.target = "_blank"; a.rel = "noopener noreferrer";
+      a.onclick = () => { api("/travel/api/tap", { target_type: "pick", target_id: x.id, signal: "open" }).catch(function (e) { console.error("tap-open", e && e.message); }); };
+      li.appendChild(a);
       if (x.area) li.appendChild(el("span", "muted", " · " + x.area));
       if (x.why) li.appendChild(el("div", "muted", x.why));
-      const no = btn("Not for me", async () => { no.disabled = true; await api("/travel/api/pick-no", { id: x.id }); li.remove(); }); no.className = "small"; li.appendChild(no);
+      if (x.why_rank) li.appendChild(el("div", x.wildcard ? "wild" : "muted", x.why_rank));
+      li.appendChild(tapRow("pick", x.id, (signal) => { if (signal === "hate" || signal === "instead") li.remove(); if (signal === "instead") api("/travel/api/picks", { stop: p.id }).then(function (z) { if (z && z.ok) loadTrip(); }).catch(function (e) { console.error("tap-instead", e && e.message); }); }));
       ul.appendChild(li);
     }
     r.appendChild(ul);
@@ -1018,6 +1139,7 @@ function pickRow(label, list, p, q) {
 const STOP_FIELDS = [["city", "Place"], ["country", "Country (2 letters)"], ["start_date", "Arrive", "date"], ["end_date", "Leave", "date"], ["note", "Note"]];
 const VISA_FIELDS = [["person", "Who"], ["country", "Country (2 letters)"], ["entry_date", "Entry day", "date"], ["max_days", "Days allowed", "number"], ["year_cap", "Days per calendar year (optional)", "number"]];
 function renderTrip(t) {
+  renderBanner(t); renderChecks(t); renderPairs(t);
   const visa = $("#visa"); visa.innerHTML = "";
   if (t.visa.length) visa.appendChild(el("h2", "", "Visa days"));
   for (const v of t.visa) {
@@ -1047,7 +1169,8 @@ function renderTrip(t) {
   for (const p of t.places) {
     const s = t.stops.find((x) => x.id === p.id) || p;
     const c = el("div", "card");
-    c.appendChild(el("strong", "", p.city + (p.country_name ? ", " + p.country_name : "")));
+    const head = el("strong", "", p.city + (p.country_name ? ", " + p.country_name : ""));
+    head.appendChild(el("span", "st " + p.state, STATE_TEXT[p.state] || "")); c.appendChild(head);
     c.appendChild(el("div", "muted", fmtDay(p.start_date) + " to " + fmtDay(p.end_date) + " · " + p.nights + " night" + (p.nights === 1 ? "" : "s") + (p.weather ? " · " + p.weather.low + "° to " + p.weather.high + "°" + (p.weather.kind === "lastyear" ? " last year" : "") : "") + (p.note ? " · " + p.note : "")));
     if (p.fog) c.appendChild(el("div", "flag", "Fog season: plan moves for late morning."));
     const sl = el("div", "pillar"); sl.appendChild(el("span", "pl", "Sleep"));
@@ -1177,15 +1300,17 @@ const sessionCookie = (v, maxAge) => "trv=" + v + "; Path=/travel; Max-Age=" + m
 export async function handleTravel(request, env, deps = {}) {
   const u = new URL(request.url);
   const p = u.pathname;
-  if (p !== "/travel" && !p.startsWith("/travel/") && p !== "/api/travel" && p !== "/api/travel/run") return null;
+  if (p !== "/travel" && !p.startsWith("/travel/") && p !== "/api/travel" && p !== "/api/travel/run" && p !== "/api/travel/today") return null;
   const db = env.PERSONAL;
   if (!db) return jsonRes({ ok: false, error: "no PERSONAL binding" }, 503);
   await ensureTravelCheap(db);
   const nowMs = deps.now || Date.now();
   const nowIso = new Date(nowMs).toISOString();
 
-  if (p === "/api/travel" || p === "/api/travel/run") {
+  if (p === "/api/travel" || p === "/api/travel/run" || p === "/api/travel/today") {
     if (!bearerOk(request, env)) return jsonRes({ ok: false, error: "unauthorized" }, 401);
+    // TRAVEL-TRIP-STATE-1: the compact trip card the companion's Today screen reads.
+    if (p === "/api/travel/today") return jsonRes({ ok: true, card: tripToday(await planState(db, await cfg(db), nowMs, deps)) });
     if (p === "/api/travel/run") {
       if (request.method !== "POST") return jsonRes({ ok: false, error: "POST only" }, 405);
       const r = await travelTick(env, { ...deps, dry: u.searchParams.get("dry") === "1", force: u.searchParams.get("force") === "1" });
@@ -1296,6 +1421,11 @@ export async function handleTravel(request, env, deps = {}) {
     return jsonRes(await makePicks(db, deps, c, st, nowIso));
   }
   if (p === "/travel/api/pick-no") return jsonRes(await pickNo(db, String(body.id || ""), nowIso));
+  // TRAVEL-FEEDBACK-1 / TRAVEL-TRIP-STATE-1: one tap, its optional reason, the cold-start pairs, and moving the whole plan.
+  if (p === "/travel/api/tap") return jsonRes(await applyTap(db, body, nowIso));
+  if (p === "/travel/api/tap-reason") return jsonRes(await addReason(db, body.feedback_id, String(body.reason || ""), nowIso));
+  if (p === "/travel/api/taste-pair") return jsonRes(await applyPair(db, String(body.pair || ""), String(body.choice || ""), nowIso));
+  if (p === "/travel/api/shift") return jsonRes(await shiftPlan(db, body.days, localParts(nowMs, c.tz).day, nowIso));
   if (p === "/travel/api/checkin-sent") {
     const ev = await db.prepare("SELECT id FROM events WHERE id = ? AND category = 'lodging'").bind(String(body.id || "")).first();
     if (!ev) return jsonRes({ ok: false, error: "no such stay" }, 404);
@@ -1573,7 +1703,7 @@ async function checkinCards(db, c, today) {
 // covering its nights, or a stay search), what to eat and what to do (one tap asks the chat for 2-3 specific picks), and its
 // weather. Getting around: each move between stops with its booked journey, a transit search and travel-day fog notes,
 // then the day-by-day list.
-export function placeCards(stops, today, wx, lodging, c, picks) {
+export function placeCards(stops, today, wx, lodging, c, picks, taste) {
   return (stops || []).filter((s) => isoDay(s.start_date) && isoDay(s.end_date) && s.end_date > s.start_date && s.end_date >= today)
     .sort((a, b) => (a.start_date < b.start_date ? -1 : 1))
     .map((s) => {
@@ -1587,12 +1717,13 @@ export function placeCards(stops, today, wx, lodging, c, picks) {
       const span = s.start_date + " to " + s.end_date;
       return {
         id: s.id, city: s.city, country: s.country, country_name: countryName(s.country), start_date: s.start_date, end_date: s.end_date, nights, note: s.note || "",
+        state: stopState(s, today, covered.size), current: s.start_date <= today && today < s.end_date,
         sleep: { booked: stays.map((e) => e.title || e.city), nights_open: nights - covered.size,
           search: bookingLink({ city: s.city, country: countryName(s.country), checkin: s.start_date, nights, maxPerNight: c.max_per_night, currency: c.currency, adults: c.adults }) },
         weather: hi.length ? { high: Math.round(Math.max(...hi)), low: Math.round(Math.min(...lo)), kind: w.some((x) => x.kind === "forecast") ? "forecast" : "lastyear" } : null,
         fog: fogSeason(s.lat, s.lon, s.start_date) || fogSeason(s.lat, s.lon, addDays(s.end_date, -1)),
-        eat: pickList(picks, s, "eat"),
-        do: pickList(picks, s, "do"),
+        eat: ranked(pickList(picks, s, "eat"), taste),
+        do: ranked(pickList(picks, s, "do"), taste),
         ask: {
           sleep: "Where should we stay in " + where + " (" + span + ")? Two or three specific places that fit us, with the area for each.",
           eat: "What should we eat in " + where + " (" + span + ")? Two or three specific places or dishes, and why they fit us.",
@@ -1600,6 +1731,11 @@ export function placeCards(stops, today, wx, lodging, c, picks) {
         }
       };
     });
+}
+
+// TRAVEL-FEEDBACK-1: order one list of picks by the taste table; without a table the model's own order stands.
+function ranked(list, taste) {
+  return taste && taste.map ? rankPicks(list, taste.map, taste.fb, { formed: !!taste.formed }) : list;
 }
 
 export function moveCards(stops, today, travel) {
@@ -1625,12 +1761,27 @@ export async function planState(db, c, nowMs, deps) {
   const travel = await many(db, "SELECT title, city, start_date, end_date FROM events WHERE category = 'travel' AND start_date >= ?", addDays(today, -1));
   const wx = await weatherFor(db, stops, today, deps || {}, nowMs);
   const picks = await many(db, "SELECT id, stop_id, city, kind, rank, name, area, why FROM travel_picks WHERE status = 'open' ORDER BY rank");
+  const nowIso = new Date(nowMs).toISOString();
+  const tasteRows = await many(db, "SELECT tag, weight, n, signal, updated_at FROM travel_taste");
+  const taps = await db.prepare("SELECT COUNT(*) AS n FROM travel_feedback WHERE signal NOT IN ('open','pass')").first().then((r) => Number((r && r.n) || 0)).catch(() => 0);
+  const fb = await many(db, "SELECT target_id, signal FROM travel_feedback WHERE target_type = 'pick' AND signal IN ('love','like','save','book','skip') ORDER BY id LIMIT 800");
+  const summary = tasteSummary(tasteRows, taps, nowIso);
+  const taste = { map: tasteMap(tasteRows, nowIso), fb, formed: summary.formed };
+  const cal = await many(db, "SELECT id, day, end_day, place, country, name, impact, lead_days, verified FROM travel_calendar WHERE COALESCE(end_day, day) >= ? ORDER BY day", today);
+  const places = placeCards(stops, today, wx, lodging, c, picks, taste);
+  const moves = moveCards(stops, today, travel);
+  const visa = visaStatus(permits, (await many(db, "SELECT city, country, start_date, end_date FROM travel_stops")), today);
+  const answered = new Set((await many(db, "SELECT ref FROM travel_notices WHERE kind = 'taste-pair'")).map((r) => r.ref));
   return {
     today,
-    places: placeCards(stops, today, wx, lodging, c, picks),
-    moves: moveCards(stops, today, travel),
+    banner: tripBanner(places, moves, today),
+    checks: tripChecks({ places, visa, moves, cal, today }),
+    taste: summary,
+    pairs: summary.formed ? [] : TASTE_PAIRS.filter((p) => !answered.has(p.id)).map((p) => ({ id: p.id, a: { label: p.a.label }, b: { label: p.b.label } })),
+    places,
+    moves,
     stops: stops.map((s) => ({ ...s, country_name: countryName(s.country) })),
-    visa: visaStatus(permits, (await many(db, "SELECT city, country, start_date, end_date FROM travel_stops")), today),
+    visa,
     days: dayPlan(stops, today, wx, lodging),
     checkins: await checkinCards(db, c, today),
     forward_to: c.forward_to || ""
@@ -1776,7 +1927,7 @@ export const PICKS_SYSTEM = [
   "Prefer what locals use over the generic tourist circuit. Respect every diet, budget, mobility and logistics fact in the profile. Never repeat anything listed as rejected."
 ].join("\n");
 
-export function picksPrompt(stop, profileRows, rejected) {
+export function picksPrompt(stop, profileRows, rejected, hint) {
   const facts = (profileRows || []).map((r) => "- " + String(r.label || "") + ": " + String(r.statement || "")).join("\n").slice(0, PROFILE_CHARS);
   const where = stop.city + (stop.country ? ", " + countryName(stop.country) : "");
   const month = isoDay(stop.start_date) ? new Date(stop.start_date + "T12:00:00Z").toLocaleString("en-GB", { month: "long", timeZone: "UTC" }) : "";
@@ -1785,6 +1936,7 @@ export function picksPrompt(stop, profileRows, rejected) {
     { role: "user", content: [
       "Stop: " + where + ", " + stop.start_date + " to " + stop.end_date + (month ? " (" + month + ")" : "") + (stop.note ? ". Note: " + stop.note : "") + ".",
       "Profile:\n" + (facts || "- (no stored preferences yet)"),
+      ...(hint ? [hint] : []),
       "Rejected before (never suggest): " + ((rejected || []).slice(0, 30).join(", ") || "none")
     ].join("\n\n") }
   ];
@@ -1813,7 +1965,7 @@ export function mapLink(name, area, city, country) {
 function pickList(picks, stop, kind) {
   return (picks || []).filter((x) => x.stop_id === stop.id && x.kind === kind && norm(x.city) === norm(stop.city))
     .sort((a, b) => a.rank - b.rank)
-    .map((x) => ({ id: x.id, name: x.name, area: x.area || "", why: x.why || "", map: mapLink(x.name, x.area, stop.city, stop.country) }));
+    .map((x) => ({ id: x.id, kind, city: stop.city, name: x.name, area: x.area || "", why: x.why || "", map: mapLink(x.name, x.area, stop.city, stop.country) }));
 }
 
 // The next stop within 60 days that has no open picks for its current city.
@@ -1828,7 +1980,13 @@ export async function makePicks(db, deps, c, stop, nowIso) {
   try { profile = await many(db, "SELECT label, statement FROM profile WHERE facet IN ('travel','likes','dislikes','logistics') AND (domain IS NULL OR domain IN ('personal','straddle')) AND (status IS NULL OR status IN ('accepted','active')) ORDER BY CASE facet WHEN 'travel' THEN 0 ELSE 1 END, confidence DESC LIMIT 80"); }
   catch (e) { console.error(JSON.stringify({ evt: "travel-picks:profile-read", error: String(e && e.message || e).slice(0, 200) })); }
   const rejected = (await many(db, "SELECT p.name FROM travel_reactions r JOIN travel_picks p ON p.id = r.option_id WHERE r.reaction = 'no' AND r.kind IN ('eat','do') ORDER BY r.ts DESC LIMIT 30")).map((r) => r.name);
-  const messages = picksPrompt(stop, profile, rejected);
+  let hint = "";
+  try {
+    const tr = await many(db, "SELECT tag, weight, n, signal, updated_at FROM travel_taste");
+    const taps = await db.prepare("SELECT COUNT(*) AS n FROM travel_feedback WHERE signal NOT IN ('open','pass')").first();
+    hint = tasteHint(tasteSummary(tr, Number((taps && taps.n) || 0), nowIso));
+  } catch (e) { hint = ""; }
+  const messages = picksPrompt(stop, profile, rejected, hint);
   const models = [...new Set([...chatModels(c, deps.modelAllowed), ...MODELS])];
   let got = null, model = null, lastErr = "";
   for (const m of models) {
@@ -1859,4 +2017,335 @@ export async function pickNo(db, id, nowIso) {
   await db.prepare("UPDATE travel_picks SET status = 'no' WHERE id = ?").bind(id).run();
   await db.prepare("INSERT INTO travel_reactions (option_id, trip_key, reaction, city, kind, ts) VALUES (?, NULL, 'no', ?, ?, ?)").bind(id, x.city, x.kind, nowIso).run();
   return { ok: true, changed: true };
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// TRAVEL-FEEDBACK-1 (agent_issues 1002268, owner 2026-11-06: "I just want to tap ... up, down, yes, no, do something else, I hate it, I love it").
+// Every travel card takes one tap (love, like, skip, hate, something else). A skip, hate or something-else offers one optional second tap:
+// why. open and pass are recorded without a tap. Each tap moves the weight of the target's tags (kind, area, city and the vibe words
+// found in its text) with a 60-day half-life; the weights rank the picks, and the Why line names the tap that caused the order. Once
+// taste has formed, about one pick in five is a wildcard outside the taps so the list does not collapse onto what was already liked.
+// ---------------------------------------------------------------------------------------------------------------------
+export const SIGNALS = ["love", "like", "skip", "hate", "instead", "save", "book", "open", "pass"];
+export const NEGATIVE = new Set(["skip", "hate", "instead"]);
+export const SIGNAL_DELTA = { love: 2, like: 1, save: 0.5, book: 2, open: 0.1, skip: -0.4, pass: -0.2, hate: -2, instead: -1 };
+export const TARGET_ADJ = { love: 3, like: 1.5, save: 1, book: 3, skip: -3 };
+export const REASONS = ["too_touristy", "too_far", "too_pricey", "not_my_vibe", "already_did", "bad_timing"];
+export const REASON_LABELS = { too_touristy: "Too touristy", too_far: "Too far", too_pricey: "Too pricey", not_my_vibe: "Not my vibe", already_did: "Already did it", bad_timing: "Bad timing" };
+export const TASTE_HALF_LIFE_DAYS = 60;
+export const TASTE_CLAMP = 6;
+export const TASTE_FORMED_N = 3;   // explicit taps before the table is trusted and the cold-start pairs stop
+export const EXPLORE_SHARE = 3;    // of every 5 lists, 3 get one wildcard of 3 picks: one pick in five
+// Vibe words found in a pick's name, area and why. Lower-case ASCII; norm() strips accents before matching.
+export const VIBE_LEXICON = {
+  cozy: ["cozy", "cosy", "intimate", "candle", "snug"],
+  bistro: ["bistro", "wine bar", "brasserie", "tasting menu"],
+  live_music: ["jazz", "live music", "concert", "gig"],
+  market: ["market", "bazaar", "street food", "stall"],
+  heritage: ["temple", "fort", "palace", "heritage", "ruins", "monument", "stupa", "old town"],
+  nature: ["park", "wildlife", "safari", "lake", "garden", "river", "backwater", "beach", "forest"],
+  quiet: ["quiet", "peaceful", "calm", "hidden", "tucked away", "off the beaten"],
+  touristy: ["famous", "iconic", "must-see", "must see", "popular", "crowded", "tourist"],
+  pricey: ["expensive", "upscale", "fine dining", "luxury", "splurge"]
+};
+const slugTag = (s) => norm(s).replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 32);
+
+export function pickTags(x) {
+  const text = norm([x && x.name, x && x.area, x && x.why].filter(Boolean).join(" "));
+  const tags = new Set();
+  if (x && x.kind) tags.add("kind:" + slugTag(x.kind));
+  if (x && x.area) { const a = slugTag(x.area); if (a) tags.add("area:" + a); }
+  if (x && x.city) { const c = slugTag(x.city); if (c) tags.add("city:" + c); }
+  for (const [tag, words] of Object.entries(VIBE_LEXICON)) if (words.some((w) => text.includes(w))) tags.add(tag);
+  return [...tags];
+}
+
+// What a reason adds on top of the tap's own delta. already_did and bad_timing change the target, not the taste.
+export function reasonDeltas(reason, tags) {
+  const d = {};
+  if (reason === "too_touristy") d.touristy = -1.5;
+  else if (reason === "too_pricey") d.pricey = -1.5;
+  else if (reason === "too_far") { for (const t of tags || []) if (t.startsWith("area:")) d[t] = -1; }
+  else if (reason === "not_my_vibe") { for (const t of tags || []) if (Object.prototype.hasOwnProperty.call(VIBE_LEXICON, t) && t !== "touristy" && t !== "pricey") d[t] = -1; }
+  return d;
+}
+
+export function decayed(weight, fromIso, toIso) {
+  const days = Math.max(0, (Date.parse(toIso) - Date.parse(fromIso)) / 86400000);
+  return Number(weight) * Math.pow(0.5, days / TASTE_HALF_LIFE_DAYS);
+}
+
+export function tasteMap(rows, nowIso) {
+  const m = {};
+  for (const r of rows || []) m[r.tag] = { weight: nowIso && r.updated_at ? decayed(r.weight, r.updated_at, nowIso) : Number(r.weight), signal: r.signal || "", n: Number(r.n || 0) };
+  return m;
+}
+
+async function bumpTaste(db, deltas, signal, nowIso) {
+  for (const [tag, delta] of Object.entries(deltas)) {
+    const old = await db.prepare("SELECT weight, n, updated_at FROM travel_taste WHERE tag = ?").bind(tag).first();
+    const base = old ? decayed(old.weight, old.updated_at, nowIso) : 0;
+    const w = Math.max(-TASTE_CLAMP, Math.min(TASTE_CLAMP, base + delta));
+    await db.prepare("INSERT INTO travel_taste (tag, weight, n, signal, updated_at) VALUES (?, ?, 1, ?, ?) ON CONFLICT(tag) DO UPDATE SET weight = excluded.weight, n = travel_taste.n + 1, signal = excluded.signal, updated_at = excluded.updated_at")
+      .bind(tag, Math.round(w * 1000) / 1000, signal, nowIso).run();
+  }
+}
+
+async function loadTarget(db, type, id) {
+  if (type === "pick") {
+    if (!/^pk_[0-9a-f]{18}$/.test(id)) return null;
+    const x = await db.prepare("SELECT id, stop_id, city, kind, name, area, why, status FROM travel_picks WHERE id = ?").bind(id).first();
+    return x ? { type, id, row: x, tags: pickTags(x) } : null;
+  }
+  if (type === "option") {
+    if (!/^tr_[0-9a-f]{18}$/.test(id)) return null;
+    const x = await db.prepare("SELECT id, trip_key, city, kind, why, status FROM travel_options WHERE id = ?").bind(id).first();
+    return x ? { type, id, row: x, tags: pickTags({ kind: x.kind, city: x.city, name: x.city, why: x.why }) } : null;
+  }
+  if (type === "stop") {
+    if (!/^[A-Za-z0-9_-]{1,40}$/.test(id)) return null;
+    const x = await db.prepare("SELECT id, city, country FROM travel_stops WHERE id = ?").bind(id).first();
+    return x ? { type, id, row: x, tags: ["city:" + slugTag(x.city), x.country ? "country:" + String(x.country).toLowerCase() : ""].filter(Boolean) } : null;
+  }
+  return null;
+}
+
+// One tap on a pick, a stay option or a stop. Returns the ids the page needs for the optional reason tap.
+export async function applyTap(db, o, nowIso) {
+  const type = String((o && o.target_type) || ""), id = String((o && o.target_id) || ""), signal = String((o && o.signal) || "");
+  if (!SIGNALS.includes(signal)) return { ok: false, error: "unknown tap" };
+  const t = await loadTarget(db, type, id);
+  if (!t) return { ok: false, error: "no such " + (["pick", "option", "stop"].includes(type) ? type : "target") };
+  if (signal === "open" || signal === "pass") {
+    const since = new Date(Date.parse(nowIso) - 6 * 3600 * 1000).toISOString();
+    const recent = await db.prepare("SELECT id FROM travel_feedback WHERE target_type = ? AND target_id = ? AND signal = ? AND ts > ?").bind(type, id, signal, since).first();
+    if (recent) return { ok: true, changed: false };
+  }
+  await db.prepare("INSERT INTO travel_feedback (target_type, target_id, signal, reason, tags, ts) VALUES (?, ?, ?, NULL, ?, ?)").bind(type, id, signal, JSON.stringify(t.tags), nowIso).run();
+  const row = await db.prepare("SELECT id FROM travel_feedback WHERE target_type = ? AND target_id = ? AND ts = ? ORDER BY id DESC LIMIT 1").bind(type, id, nowIso).first();
+  const deltas = {};
+  for (const tag of t.tags) deltas[tag] = SIGNAL_DELTA[signal];
+  await bumpTaste(db, deltas, signal, nowIso);
+  if (type === "pick" && (signal === "hate" || signal === "instead")) await pickNo(db, id, nowIso);
+  if (type === "option") {
+    if (signal === "love" || signal === "like" || signal === "book") await applyReaction(db, { ...t.row, id }, "pick", nowIso);
+    else if (NEGATIVE.has(signal)) await applyReaction(db, { ...t.row, id }, "no", nowIso);
+  }
+  return { ok: true, changed: true, feedback_id: row ? row.id : null, replace: signal === "instead", reasons: NEGATIVE.has(signal) ? REASONS : [], tags: t.tags };
+}
+
+// The optional second tap: why a skip, hate or something-else. Counted once per tap.
+export async function addReason(db, feedbackId, reason, nowIso) {
+  if (!REASONS.includes(reason)) return { ok: false, error: "unknown reason" };
+  const fb = await db.prepare("SELECT id, target_type, target_id, signal, reason, tags FROM travel_feedback WHERE id = ?").bind(Number(feedbackId)).first();
+  if (!fb) return { ok: false, error: "no such tap" };
+  if (!NEGATIVE.has(fb.signal)) return { ok: false, error: "a reason goes with a skip, a hate or a something-else tap" };
+  if (fb.reason) return { ok: true, changed: false };
+  let tags = [];
+  try { tags = JSON.parse(fb.tags || "[]"); } catch (e) { tags = []; }
+  await db.prepare("UPDATE travel_feedback SET reason = ? WHERE id = ?").bind(reason, fb.id).run();
+  await bumpTaste(db, reasonDeltas(reason, tags), fb.signal, nowIso);
+  if (fb.target_type === "pick" && reason === "already_did") await pickNo(db, fb.target_id, nowIso);
+  return { ok: true, changed: true };
+}
+
+// Cold start: three this-or-that pairs, each answered once. The tags behind each side stay on the server.
+export const TASTE_PAIRS = [
+  { id: "p1", a: { label: "Candlelit bistros and wine bars", tags: ["cozy", "bistro"] }, b: { label: "Busy street food and markets", tags: ["market"] } },
+  { id: "p2", a: { label: "Temples, forts and old towns", tags: ["heritage"] }, b: { label: "Wildlife, lakes and beaches", tags: ["nature"] } },
+  { id: "p3", a: { label: "A live music evening", tags: ["live_music"] }, b: { label: "A quiet early night", tags: ["quiet"] } }
+];
+
+export async function applyPair(db, pairId, choice, nowIso) {
+  const p = TASTE_PAIRS.find((x) => x.id === pairId);
+  if (!p || (choice !== "a" && choice !== "b")) return { ok: false, error: "no such pair" };
+  const done = await db.prepare("SELECT 1 AS x FROM travel_notices WHERE kind = 'taste-pair' AND ref = ?").bind(p.id).first();
+  if (done) return { ok: true, changed: false };
+  const win = p[choice], lose = p[choice === "a" ? "b" : "a"];
+  const deltas = {};
+  for (const t of win.tags) deltas[t] = 1.5;
+  for (const t of lose.tags) deltas[t] = -0.5;
+  await bumpTaste(db, deltas, "like", nowIso);
+  await db.prepare("INSERT INTO travel_feedback (target_type, target_id, signal, reason, tags, ts) VALUES ('pair', ?, 'like', NULL, ?, ?)").bind(p.id + ":" + choice, JSON.stringify(win.tags), nowIso).run();
+  await db.prepare("INSERT OR IGNORE INTO travel_notices (kind, ref, sent_at) VALUES ('taste-pair', ?, ?)").bind(p.id, nowIso).run();
+  return { ok: true, changed: true };
+}
+
+const TAG_LABEL = { "kind:eat": "food", "kind:do": "activity" };
+export function tagLabel(tag) {
+  if (TAG_LABEL[tag]) return TAG_LABEL[tag];
+  if (tag.startsWith("area:")) return "the " + tag.slice(5).replace(/-/g, " ") + " area";
+  if (tag.startsWith("city:")) return tag.slice(5).replace(/-/g, " ");
+  return tag.replace(/_/g, " ");
+}
+const POSITIVE_VERB = new Set(["love", "like", "book", "save", "open"]);
+const VERB = { love: "loved", like: "liked", book: "booked", save: "saved", skip: "skipped", hate: "pushed away", instead: "swapped out", pass: "scrolled past", open: "opened" };
+
+// Order a list of picks by the taste table, name the tap behind the order, and (once taste has formed) add one wildcard in five picks.
+export function rankPicks(list, taste, fb, opts) {
+  const t = taste || {};
+  const last = {};
+  for (const f of fb || []) last[f.target_id] = f.signal;
+  const scored = (list || []).map((x, i) => {
+    const tags = pickTags(x);
+    let s = 0, best = null, pos = 0;
+    for (const tag of tags) {
+      const e = t[tag];
+      if (!e) continue;
+      s += e.weight;
+      if (e.weight >= 0.5) pos++;
+      if (tag.startsWith("city:") || tag.startsWith("area:")) continue;
+      if (Math.abs(e.weight) >= 0.5 && (!best || Math.abs(e.weight) > Math.abs(best.w))) best = { tag, w: e.weight, signal: e.signal };
+    }
+    s += TARGET_ADJ[last[x.id]] || 0;
+    return { x, i, score: Math.round(s * 100) / 100, best, pos };
+  });
+  scored.sort((a, b) => b.score - a.score || a.i - b.i);
+  let wildId = null;
+  if (opts && opts.formed && scored.length >= 3) {
+    const seed = [...scored.map((e) => e.x.id).sort().join("")].reduce((n, ch) => n + ch.charCodeAt(0), 0) % 5;
+    if (seed < EXPLORE_SHARE) {
+      let wi = -1;
+      for (let i = 1; i < scored.length; i++) if (scored[i].score > -1 && (wi < 0 || scored[i].pos < scored[wi].pos)) wi = i;
+      if (wi > 0) { const w = scored.splice(wi, 1)[0]; scored.splice(1, 0, w); wildId = w.x.id; }
+    }
+  }
+  return scored.map((e) => {
+    const wild = e.x.id === wildId;
+    let why = "";
+    if (wild) why = "Wildcard: outside what you usually tap, so the list does not narrow.";
+    else if (e.best && e.best.w > 0) why = "You " + (POSITIVE_VERB.has(e.best.signal) ? VERB[e.best.signal] : "liked") + " " + tagLabel(e.best.tag) + " picks.";
+    else if (e.best) why = "Lower because you " + (NEGATIVE.has(e.best.signal) ? VERB[e.best.signal] : "skipped") + " " + tagLabel(e.best.tag) + " picks.";
+    return { ...e.x, score: e.score, why_rank: why, wildcard: wild };
+  });
+}
+
+export function tasteSummary(rows, taps, nowIso) {
+  const m = tasteMap(rows, nowIso);
+  const list = Object.entries(m).filter(([tag]) => !tag.startsWith("city:") && !tag.startsWith("area:")).map(([tag, e]) => ({ tag, label: tagLabel(tag), weight: Math.round(e.weight * 100) / 100 }));
+  return {
+    taps: Number(taps || 0), formed: Number(taps || 0) >= TASTE_FORMED_N,
+    likes: list.filter((e) => e.weight >= 0.5).sort((a, b) => b.weight - a.weight).slice(0, 5),
+    dislikes: list.filter((e) => e.weight <= -0.5).sort((a, b) => a.weight - b.weight).slice(0, 5)
+  };
+}
+
+// A plain sentence for the picks prompt, built from the table, so a fresh batch starts from what the taps said.
+export function tasteHint(summary) {
+  if (!summary || !summary.formed) return "";
+  const l = (summary.likes || []).map((e) => e.label).join(", "), d = (summary.dislikes || []).map((e) => e.label).join(", ");
+  return "Taps so far (stronger than the profile where they disagree): likes " + (l || "nothing clear yet") + "; dislikes " + (d || "nothing clear yet") + ".";
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// TRAVEL-TRIP-STATE-1 (agent_issues 1002269, owner 2026-11-09: the scattered trip planning collapses into the companion).
+// A stop is draft, partial, booked or done, read from the lodging rows that cover its nights. The checks panel turns the stops,
+// the visa clocks, the weather, the dated events and the moves into a short list with the next three actions, and a banner says
+// when a plan that is about to start (or has started) has nothing booked, with one tap to move the whole plan.
+// ---------------------------------------------------------------------------------------------------------------------
+export function stopState(s, today, coveredNights) {
+  const nights = daysBetween(s.start_date, s.end_date);
+  if (s.end_date <= today) return "done";
+  if (nights > 0 && coveredNights >= nights) return "booked";
+  if (coveredNights > 0) return "partial";
+  return "draft";
+}
+export const STATE_LABEL = { done: "Done", booked: "Booked", partial: "Partly booked", draft: "Not booked" };
+
+export function tripBanner(places, moves, today) {
+  const active = (places || []).filter((p) => p.state !== "done");
+  if (!active.length) return null;
+  const anyStay = active.some((p) => p.state === "booked" || p.state === "partial");
+  const anyMove = (moves || []).some((m) => m.booked && m.booked.length);
+  const first = active[0];
+  const toStart = daysBetween(today, first.start_date);
+  if (anyStay || anyMove || toStart > 14) return null;
+  return {
+    kind: "unbooked", days_to_start: toStart, shifts: [7, 14, 30],
+    text: (toStart <= 0 ? "The plan started on " : "The plan starts on ") + first.start_date + " (" + first.city + "), but no stay or journey is booked. Add the bookings, or move the whole plan later."
+  };
+}
+
+export const WX_AVOID = { hot: 38, cold: 3 };
+export const WX_CAUTION = { hot: 34, cold: 8 };
+export function weatherVerdict(w, fog) {
+  if (!w || w.high == null || w.low == null) return null;
+  if (w.high >= WX_AVOID.hot || w.low <= WX_AVOID.cold) return "avoid";
+  if (w.high >= WX_CAUTION.hot || w.low <= WX_CAUTION.cold || fog) return "caution";
+  return "go";
+}
+
+function placeMatches(list, city) {
+  const c = norm(city), first = c.split(/[ (]/)[0];
+  return String(list || "").split(",").map(norm).filter(Boolean).some((t) => c.includes(t) || (first && t.includes(first)));
+}
+
+export function tripChecks({ places, visa, moves, cal, today }) {
+  const list = [];
+  for (const p of places || []) {
+    if (p.state === "done") continue;
+    const until = daysBetween(today, p.start_date);
+    if ((p.state === "draft" || p.state === "partial") && until <= 30) {
+      list.push({ kind: "booking", severity: until <= 3 ? "bad" : "warn", stop_id: p.id, day: p.start_date,
+        text: p.city + " (" + p.start_date + "): " + (p.state === "draft" ? "no stay booked" : p.sleep.nights_open + " night" + (p.sleep.nights_open === 1 ? "" : "s") + " still open") + ".",
+        action: "Book a stay in " + p.city + (until <= 0 ? " now." : " before " + p.start_date + ".") });
+    }
+    const v = weatherVerdict(p.weather, p.fog);
+    if (v === "avoid" || v === "caution") {
+      list.push({ kind: "weather", severity: v === "avoid" ? "bad" : "warn", stop_id: p.id, day: p.start_date,
+        text: p.city + ": " + p.weather.low + "° to " + p.weather.high + "°" + (p.weather.kind === "lastyear" ? " last year" : " forecast") + (p.fog ? ", fog season" : "") + ".",
+        action: v === "avoid" ? "Move these dates or skip " + p.city + "." : "Plan indoor time and late-morning moves." });
+    }
+    for (const f of cal || []) {
+      const end = f.end_day || f.day;
+      if (end < p.start_date || f.day > addDays(p.end_date, -1) || !placeMatches(f.place, p.city)) continue;
+      const bookBy = addDays(f.day, -Number(f.lead_days || 0));
+      const booked = p.state === "booked", late = !booked && bookBy <= today;
+      list.push({ kind: "festival", severity: booked ? "ok" : late ? "bad" : "warn", stop_id: p.id, day: f.day, book_by: bookBy, name: f.name, verified: !!f.verified,
+        text: f.name + " (" + f.day + (f.end_day ? " to " + f.end_day : "") + ") falls in your " + p.city + " stop: " + f.impact + "." + (booked ? " Your stay is booked." : "") + (f.verified ? "" : " Date from a secondary source; confirm it closer to the day."),
+        action: booked ? "" : late ? "Book the stay in " + p.city + " now." : "Book the stay in " + p.city + " by " + bookBy + "." });
+    }
+  }
+  for (const v of visa || []) {
+    const sev = v.status === "over" ? "bad" : v.status === "ok" ? "ok" : "warn";
+    list.push({ kind: "visa", severity: sev, day: v.entry_date, text: v.text, action: sev === "ok" ? "" : "Change the dates or the visa length." });
+  }
+  for (const m of moves || []) {
+    if (m.fog) list.push({ kind: "fog", severity: "warn", day: m.day, text: m.from + " to " + m.to + " on " + m.day + ": fog season where you leave from.", action: "Leave after late morning." });
+  }
+  const rank = { bad: 0, warn: 1, ok: 2 };
+  list.sort((a, b) => rank[a.severity] - rank[b.severity] || String(a.day || "").localeCompare(String(b.day || "")));
+  const open = list.filter((x) => x.severity !== "ok");
+  return { list, open: open.length, next: open.slice(0, 3).map((x) => ({ kind: x.kind, day: x.day || null, text: x.text, action: x.action })) };
+}
+
+// Move every stop that has not ended, and the visa entry days that sit inside the moved range, by n days. Reversible with -n.
+export async function shiftPlan(db, days, today, nowIso) {
+  const n = Number(days);
+  if (!Number.isInteger(n) || n === 0 || n < -60 || n > 180) return { ok: false, error: "days must be a whole number from -60 to 180, not 0" };
+  const mod = (n > 0 ? "+" : "-") + Math.abs(n) + " days";
+  const min = await db.prepare("SELECT MIN(start_date) AS d FROM travel_stops WHERE trip = 'next' AND end_date >= ?").bind(today).first();
+  if (!min || !min.d) return { ok: false, error: "no stops to move" };
+  const st = await db.prepare("UPDATE travel_stops SET start_date = date(start_date, ?), end_date = date(end_date, ?), updated_at = ? WHERE trip = 'next' AND end_date >= ?").bind(mod, mod, nowIso, today).run();
+  const pm = await db.prepare("UPDATE travel_permits SET entry_date = date(entry_date, ?), updated_at = ? WHERE entry_date >= ?").bind(mod, nowIso, min.d).run();
+  await db.prepare("INSERT OR IGNORE INTO travel_notices (kind, ref, sent_at) VALUES ('plan-shift', ?, ?)").bind(nowIso + ":" + n, nowIso).run();
+  return { ok: true, days: n, undo_days: -n, stops: (st.meta && st.meta.changes) || 0, permits: (pm.meta && pm.meta.changes) || 0 };
+}
+
+// The compact card the companion's Today screen shows: where the traveller is (or the countdown), tonight's pick, the next move, the next actions.
+export function tripToday(plan) {
+  const t = plan.today, places = plan.places || [];
+  const cur = places.find((p) => p.start_date <= t && t < p.end_date) || null;
+  const next = places.find((p) => p.start_date > t) || null;
+  const mv = (plan.moves || []).find((m) => m.day >= t) || null;
+  const stop = cur || next;
+  return {
+    mode: cur ? "away" : next ? "countdown" : "none",
+    days_to_start: !cur && next ? daysBetween(t, next.start_date) : 0,
+    stop: stop ? { city: stop.city, country_name: stop.country_name, start_date: stop.start_date, end_date: stop.end_date, state: stop.state, nights_open: stop.sleep.nights_open, weather: stop.weather } : null,
+    tonight: cur && cur.eat && cur.eat[0] ? { name: cur.eat[0].name, area: cur.eat[0].area, map: cur.eat[0].map, why: cur.eat[0].why_rank || "" } : null,
+    move: mv ? { day: mv.day, from: mv.from, to: mv.to, booked: mv.booked } : null,
+    banner: plan.banner || null,
+    next_actions: plan.checks ? plan.checks.next : []
+  };
 }
