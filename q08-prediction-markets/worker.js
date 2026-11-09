@@ -1,6 +1,6 @@
 // q08-prediction-markets: the one paper-trading prediction-market worker (PM-CONSOLIDATE-1).
 // Paper money only. No wallet, no exchange key, no order ever leaves this worker.
-var VERSION = "1.0.0";
+var VERSION = "1.1.0";
 const CFG = { START: 10000, POS_PCT: 0.10, EXPO_PCT: 0.30, STOP: 0.15, TAKE: 0.30, SLIP: 0.01, MIN_MOVE: 0.05, MIN_VOL: 5000, MAX_OPEN: 8 };
 
 // ---------- pure engine (tested in engine.test.mjs) ----------
@@ -24,13 +24,14 @@ export const priceOf = (side, yes) => (side === "yes" ? yes : 1 - yes);
 export function equity(acct, positions, px) {
   return acct.cash + positions.reduce((s, p) => s + p.qty * priceOf(p.side, px[p.slug] ?? p.entry), 0);
 }
+const isFade = (m, cfg) => m.vol24 >= cfg.MIN_VOL && Math.abs(m.move) >= 0.15 && ((m.yes >= 0.8 && m.yes < 0.9) || (m.yes > 0.1 && m.yes <= 0.2)) && Math.sign(m.move) === (m.yes > 0.5 ? 1 : -1);
 export function entries(markets, positions, acct, cfg = CFG) {
   const open = new Set(positions.map((p) => p.slug));
   const px = Object.fromEntries(markets.map((m) => [m.slug, m.yes]));
   const eq = equity(acct, positions, px);
   let exposure = positions.reduce((s, p) => s + p.qty * p.entry, 0), cash = acct.cash, n = positions.length;
   const out = [];
-  const cands = markets.filter((m) => !m.closed && !open.has(m.slug) && m.yes > 0.1 && m.yes < 0.9 && Math.abs(m.move) >= cfg.MIN_MOVE && m.vol24 >= cfg.MIN_VOL)
+  const cands = markets.filter((m) => !m.closed && !isFade(m, cfg) && !open.has(m.slug) && m.yes > 0.1 && m.yes < 0.9 && Math.abs(m.move) >= cfg.MIN_MOVE && m.vol24 >= cfg.MIN_VOL)
     .sort((a, b) => Math.abs(b.move) - Math.abs(a.move));
   for (const m of cands) {
     if (n >= cfg.MAX_OPEN) break;
@@ -39,6 +40,17 @@ export function entries(markets, positions, acct, cfg = CFG) {
     const side = m.move > 0 ? "yes" : "no";
     const fill = Math.min(0.99, priceOf(side, m.yes) * (1 + cfg.SLIP));
     out.push({ slug: m.slug, title: m.title, side, usd, entry: fill, qty: usd / fill, strategy: "momentum" });
+    cash -= usd; exposure += usd; n++;
+  }
+  // fade: small contrarian bet against a one-day spike into the 0.8-0.9 / 0.1-0.2 band (mean reversion)
+  const fade = markets.filter((m) => !m.closed && !open.has(m.slug) && isFade(m, cfg));
+  for (const m of fade) {
+    if (n >= cfg.MAX_OPEN) break;
+    const usd = Math.min(eq * cfg.POS_PCT / 2, cash);
+    if (usd < 1 || exposure + usd > eq * cfg.EXPO_PCT) break;
+    const side = m.yes > 0.5 ? "no" : "yes";
+    const fill = Math.min(0.99, priceOf(side, m.yes) * (1 + cfg.SLIP));
+    out.push({ slug: m.slug, title: m.title, side, usd, entry: fill, qty: usd / fill, strategy: "fade" });
     cash -= usd; exposure += usd; n++;
   }
   return out;
@@ -58,6 +70,14 @@ export function exits(positions, markets, cfg = CFG) {
     if (reason) out.push({ id: p.id, exit: reason === "resolved" ? Math.round(cur) : cur * (1 - cfg.SLIP), reason });
   }
   return out;
+}
+
+export function stats(curve, closed) {
+  let peak = -Infinity, mdd = 0;
+  for (const c of curve) { peak = Math.max(peak, c.equity); mdd = Math.max(mdd, peak ? (peak - c.equity) / peak : 0); }
+  const by = {};
+  for (const t of closed) { const b = (by[t.strategy] ||= { trades: 0, wins: 0, pnl: 0 }); b.trades++; b.wins += t.pnl > 0 ? 1 : 0; b.pnl += t.pnl; }
+  return { max_drawdown_pct: mdd * 100, by_strategy: by };
 }
 
 // ---------- storage ----------
@@ -142,16 +162,17 @@ async function state(env) {
   const eq = equity(acct, pos, px);
   return { paper: true, start: acct.start_cash, cash: acct.cash, equity: eq, return_pct: (eq / acct.start_cash - 1) * 100,
     open: pos.map((p) => ({ ...p, mark: priceOf(p.side, px[p.slug] ?? p.entry), unrealized: p.qty * (priceOf(p.side, px[p.slug] ?? p.entry) - p.entry) })),
-    closed: history, realized: realized.s, trades_closed: realized.n, win_rate: realized.n ? realized.w / realized.n : null, curve, markets: mk.slice(0, 30) };
+    closed: history, stats: stats(curve, (await db.prepare("SELECT strategy,pnl FROM pt_position WHERE closed_at IS NOT NULL").all()).results), realized: realized.s, trades_closed: realized.n, win_rate: realized.n ? realized.w / realized.n : null, curve, markets: mk.slice(0, 30) };
 }
 
 const json = (o, s = 200) => new Response(JSON.stringify(o), { status: s, headers: { "content-type": "application/json", "access-control-allow-origin": "*" } });
 const PAGE = `<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>Q08 Markets (paper)</title>
 <style>:root{color-scheme:light dark}body{font:15px system-ui;max-width:860px;margin:0 auto;padding:16px}h1{font-size:20px}table{width:100%;border-collapse:collapse}td,th{padding:6px;border-bottom:1px solid #8884;text-align:left}.n{text-align:right}button{padding:8px 12px;font:inherit}.b{background:#fc03;padding:8px;border-radius:6px}</style>
 <h1>Q08 Markets <small>paper trading</small></h1><div class=b>Simulated money only. No real orders.</div><p id=s>Loading...</p>
-<button id=t>Run tick now</button><h2>Open positions</h2><table id=o></table><h2>Closed</h2><table id=c></table><h2>Markets</h2><table id=m></table>
+<button id=t>Run tick now</button><p id=x></p><h2>Open positions</h2><table id=o></table><h2>Closed</h2><table id=c></table><h2>Markets</h2><table id=m></table>
 <script>const f=n=>(+n).toFixed(2);async function L(){const d=await (await fetch('/api/state')).json();
 s.textContent='Equity $'+f(d.equity)+' ('+f(d.return_pct)+'%) | cash $'+f(d.cash)+' | closed '+d.trades_closed+' | win rate '+(d.win_rate==null?'n/a':f(d.win_rate*100)+'%');
+x.textContent='Max drawdown '+f(d.stats.max_drawdown_pct)+'% | '+Object.entries(d.stats.by_strategy).map(([k,v])=>k+': '+v.trades+' trades, P&L $'+f(v.pnl)).join(' | ');
 const r=(a,k)=>'<tr>'+k.map(x=>'<td>'+x+'</td>').join('')+'</tr>';
 o.innerHTML='<tr><th>Market<th>Side<th class=n>Entry<th class=n>Mark<th class=n>P&L</tr>'+d.open.map(p=>r(0,[p.title,p.side,f(p.entry),f(p.mark),f(p.unrealized)])).join('');
 c.innerHTML='<tr><th>Market<th>Side<th>Reason<th class=n>P&L</tr>'+d.closed.map(p=>r(0,[p.title,p.side,p.reason,f(p.pnl)])).join('');
@@ -162,7 +183,7 @@ export default {
   async fetch(req, env) {
     const u = new URL(req.url), p = u.pathname;
     try {
-      if (p === "/health") return json({ ok: true, worker: "q08-prediction-markets", version: VERSION, paper_trading: true, features: ["paper-trading", "momentum"] });
+      if (p === "/health") return json({ ok: true, worker: "q08-prediction-markets", version: VERSION, paper_trading: true, features: ["paper-trading", "momentum", "fade", "stats"] });
       if (p === "/api/state") return json(await state(env));
       if (p === "/api/markets") return json((await state(env)).markets);
       if (p === "/api/tick" && req.method === "POST") return json(await tick(env));

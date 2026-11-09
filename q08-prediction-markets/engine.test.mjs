@@ -1,5 +1,5 @@
 import test from "node:test"; import assert from "node:assert/strict";
-import { parseMarket, entries, exits, equity, priceOf, syntheticMarkets } from "./worker.js";
+import { stats, parseMarket, entries, exits, equity, priceOf, syntheticMarkets } from "./worker.js";
 const A = { cash: 10000 };
 test("parseMarket reads gamma outcomePrices string", () => {
   assert.equal(parseMarket({ slug: "a", question: "Q", outcomePrices: '["0.4","0.6"]' }).yes, 0.4);
@@ -30,4 +30,12 @@ test("equity marks NO positions at 1-yes", () => {
 });
 test("synthetic feed is deterministic per 5-minute bucket", () => {
   assert.deepEqual(syntheticMarkets(1e12), syntheticMarkets(1e12 + 1000));
+});
+test("fade: contrarian half-size bet after a spike into the band", () => {
+  const o = entries([{ slug: "f", title: "F", yes: 0.85, vol24: 9e4, move: 0.16, closed: 0 }], [], A);
+  assert.equal(o.length, 1); assert.equal(o[0].strategy, "fade"); assert.equal(o[0].side, "no"); assert.ok(Math.abs(o[0].usd - 500) < 1e-6);
+});
+test("stats: max drawdown and per-strategy pnl", () => {
+  const s = stats([{ equity: 100 }, { equity: 120 }, { equity: 90 }, { equity: 130 }], [{ strategy: "a", pnl: 5 }, { strategy: "a", pnl: -2 }]);
+  assert.equal(s.max_drawdown_pct, 25); assert.deepEqual(s.by_strategy.a, { trades: 2, wins: 1, pnl: 3 });
 });
