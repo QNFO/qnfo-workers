@@ -22,14 +22,14 @@ function __aiAttrEnv(env, worker, aiKey, dbKey) {
         finally {
           try {
             var u = res && typeof res === "object" && res.usage || {};
-            var chars = 0; try { chars = JSON.stringify(input && (input.messages || input.prompt || input.text) || input || "").length; } catch (e1) {}
+            var chars = 0; try { chars = JSON.stringify(input && (input.messages || input.prompt || input.text) || input || "").length; } catch (e1) { console.error(JSON.stringify({evt:"ai_attr_chars_failed",error:String(e1)})); }
             var inTok = Number(u.prompt_tokens || u.input_tokens || 0) || Math.round(chars / 4);
             var outTok = Number(u.completion_tokens || u.output_tokens || 0);
             var r = __AI_ATTR_RATES[String(model)] || [0, 0];
             var neurons = (inTok * r[0] + outTok * r[1]) / 1e6;
             await db.prepare("INSERT INTO ai_call_counters (day, worker, purpose, model, calls, errors, in_chars, ms, in_tok, out_tok, neurons) VALUES (?1,?2,'binding',?3,1,?4,?5,?6,?7,?8,?9) ON CONFLICT(day, worker, purpose, model) DO UPDATE SET calls=calls+1, errors=errors+excluded.errors, in_chars=in_chars+excluded.in_chars, ms=ms+excluded.ms, in_tok=in_tok+excluded.in_tok, out_tok=out_tok+excluded.out_tok, neurons=neurons+excluded.neurons")
               .bind(new Date().toISOString().slice(0, 10), worker, String(model).slice(0, 120), ok ? 0 : 1, chars, Date.now() - t0, inTok, outTok, neurons).run();
-          } catch (e2) {}
+          } catch (e2) { console.error(JSON.stringify({evt:"ai_attr_counter_failed",error:String(e2)})); }
         }
       };
     } });
@@ -2273,14 +2273,14 @@ function __aiAttrEnv(env, worker, aiKey, dbKey) {
         finally {
           try {
             var u = res && typeof res === "object" && res.usage || {};
-            var chars = 0; try { chars = JSON.stringify(input && (input.messages || input.prompt || input.text) || input || "").length; } catch (e1) {}
+            var chars = 0; try { chars = JSON.stringify(input && (input.messages || input.prompt || input.text) || input || "").length; } catch (e1) { console.error(JSON.stringify({evt:"ai_attr_chars_failed",error:String(e1)})); }
             var inTok = Number(u.prompt_tokens || u.input_tokens || 0) || Math.round(chars / 4);
             var outTok = Number(u.completion_tokens || u.output_tokens || 0);
             var r = __AI_ATTR_RATES[String(model)] || [0, 0];
             var neurons = (inTok * r[0] + outTok * r[1]) / 1e6;
             await db.prepare("INSERT INTO ai_call_counters (day, worker, purpose, model, calls, errors, in_chars, ms, in_tok, out_tok, neurons) VALUES (?1,?2,'binding',?3,1,?4,?5,?6,?7,?8,?9) ON CONFLICT(day, worker, purpose, model) DO UPDATE SET calls=calls+1, errors=errors+excluded.errors, in_chars=in_chars+excluded.in_chars, ms=ms+excluded.ms, in_tok=in_tok+excluded.in_tok, out_tok=out_tok+excluded.out_tok, neurons=neurons+excluded.neurons")
               .bind(new Date().toISOString().slice(0, 10), worker, String(model).slice(0, 120), ok ? 0 : 1, chars, Date.now() - t0, inTok, outTok, neurons).run();
-          } catch (e2) {}
+          } catch (e2) { console.error(JSON.stringify({evt:"ai_attr_counter_failed",error:String(e2)})); }
         }
       };
     } });
