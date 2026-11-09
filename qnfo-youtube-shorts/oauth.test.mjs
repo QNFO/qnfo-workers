@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 import worker from "./worker.js";
 
 const env = { YT_RUN_TOKEN: "test-run-token", YT_CLIENT_ID: "test-client", YT_CLIENT_SECRET: "test-client-secret" };
-const scopes = ["youtube.upload", "youtube.readonly", "yt-analytics.readonly"].map(s => "https://www.googleapis.com/auth/" + s);
+const scopes = ["youtube.upload", "youtube.readonly", "yt-analytics.readonly", "youtube.force-ssl"].map(s => "https://www.googleapis.com/auth/" + s);
 function request(path, body = {}, token = env.YT_RUN_TOKEN, method = "POST") {
   return new Request("https://shorts.example" + path, {
     method, headers: { "x-run-token": token, "content-type": "application/json" },
