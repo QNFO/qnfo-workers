@@ -11,7 +11,7 @@ var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target,
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
 // 1.77.2 ERRATA-CHAIN-DISPATCH-1 (pillar research): wake the folded errata consumer and retry its legacy parked receipts.
 // VERSION-LINE-SPLIT-1 (agent_issues 100220): the release notes sit one per line below this statement, newest first, so a VERSION bump is a one-line patch; add a new note as the first line under it.
-var VERSION = "1.98.1";
+var VERSION = "1.99.0";
 // 1.89.0 NOW-NORTH-1 and HOME-MORE-1 (pillar core; minor): the Now screen opens with four numbers tied to the owner goals (readers, fleet cost, owner load, reliability) and drops the count of metrics off target (95 of 297; nothing can be done with it); a quiet footer on the home links the full dashboard, changelog, data index and managers.
 // 1.89.0 (cont.) MONEY-FIX-1 (pillar cost; patch): the Money card subtracted the subscription figure from a pace that never included it (fleet scope of v_cost_forecast), so it showed the fleet at 701 instead of 1151 a month; it now shows the fleet line, the subscriptions line and both together.
 // 1.85.0 (cont.) NOW-REVIEW-1: independent review fixes: Snooze and Not needed hide the card; a tap removes the card at once and reloads fresh, and the hand-back claims the card before filing (no duplicate tickets); strangers get no card keys or raw error text; only the signed-in owner (not the loop token) can run commands or hand work back; bound cards are read first; an unrefreshed metric reads n/a, not 0; one refresh in flight at a time and a failed refresh retries in 10 s; the Code poll says when the executor does not answer.
@@ -645,14 +645,46 @@ async function uxAudit(env) {
     return { error: String(e && e.message || e) };
   }
 }
+// LAKE-SPINE-2.2 (1.82.1): ops_config lake_spine = dual keeps the D1 insert of each probe row and also sends the row (with its D1 id) to
+// qnfo-infra /lake/ingest through the service binding. A failure is counted in lakeStats and never thrown. Rows with an id at or below
+// ops_config lake_spine_handover_id are left to the qnfo-infra tail, so the hand-over has neither a gap nor a duplicate. Default off.
+async function lakeSpineDual(env) {
+  try {
+    const rows = await d1all(env.AUDIT, "SELECT key, value FROM ops_config WHERE key IN ('lake_spine','lake_spine_handover_id')") || [];
+    const cfg = {};
+    for (const r of rows) cfg[r.key] = String(r.value == null ? "" : r.value).trim().toLowerCase();
+    const handover = Number(cfg.lake_spine_handover_id);
+    return { dual: cfg.lake_spine === "dual" && !!env.SVC_QNFO_INFRA, handover: Number.isFinite(handover) ? handover : 0 };
+  } catch (e) {
+    console.error(JSON.stringify({ worker: "qnfo-fleet-dashboard", where: "lakeSpineDual", error: String(e && e.message || e) }));
+    return { dual: false, handover: 0 };
+  }
+}
+async function lakeSpineSend(env, row, stats) {
+  try {
+    const r = await env.SVC_QNFO_INFRA.fetch("https://internal/lake/ingest?table=fleet_probe_log", { method: "POST", headers: { "Content-Type": "application/json", "User-Agent": PROBE_UA }, body: JSON.stringify([row]), signal: AbortSignal.timeout(8e3) });
+    if (r.ok) stats.sent += 1;
+    else stats.failed += 1;
+    await r.text();
+  } catch (e) {
+    stats.failed += 1;
+    console.error(JSON.stringify({ worker: "qnfo-fleet-dashboard", where: "lakeSpineSend", error: String(e && e.message || e) }));
+  }
+}
 async function healthProbes(env, liveNames) {
   const items = await probeTargets(env);
+  const lake = await lakeSpineDual(env);
+  const lakeStats = { sent: 0, failed: 0 };
   const settled = await Promise.allSettled(items.map(async function(hp) {
     const t0 = Date.now();
     const kind = hp.kind || (hp.binding ? "worker" : "domain");
     const logRow = /* @__PURE__ */ __name222(async function(out) {
       try {
-        await env.AUDIT.prepare("INSERT INTO fleet_probe_log (ts, source, name, url, transport, ok, status, ms, body) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)").bind((/* @__PURE__ */ new Date()).toISOString(), "qnfo-fleet-dashboard", hp.name, hp.url || "", out.transport, out.ok ? 1 : 0, out.status, out.ms, String(out.body || "").slice(0, 200)).run();
+        const ts = (/* @__PURE__ */ new Date()).toISOString();
+        const body = String(out.body || "").slice(0, 200);
+        const ins = await env.AUDIT.prepare("INSERT INTO fleet_probe_log (ts, source, name, url, transport, ok, status, ms, body) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)").bind(ts, "qnfo-fleet-dashboard", hp.name, hp.url || "", out.transport, out.ok ? 1 : 0, out.status, out.ms, body).run();
+        const rowId = ins && ins.meta ? Number(ins.meta.last_row_id) : 0;
+        if (lake.dual && rowId > lake.handover) await lakeSpineSend(env, { id: rowId, ts, source: "qnfo-fleet-dashboard", name: hp.name, url: hp.url || "", transport: out.transport, ok: out.ok ? 1 : 0, status: out.status, ms: out.ms, body }, lakeStats);
       } catch (logErr) {
       }
     }, "logRow");
@@ -708,6 +740,7 @@ async function healthProbes(env, liveNames) {
     }
   }));
   const reg = { generated_at: (/* @__PURE__ */ new Date()).toISOString(), workers: {} };
+  if (lake.dual) reg.lake = { sent: lakeStats.sent, failed: lakeStats.failed };
   for (const s of settled) {
     if (s.status !== "fulfilled") continue;
     reg.workers[s.value.name] = { ok: s.value.ok, status: s.value.status, ms: s.value.ms, kind: s.value.kind };
@@ -2549,7 +2582,7 @@ var AREA_REGISTRY = [
   { id: "reach", name: "Reach and growth", short: "Reach", what: "who reads it: pageviews, referrers, search, outreach, subscribers, attention", sources: ["v_metric_trigger_state", "metric_history", "outreach_queue"],
     rx: /subscri|pageview|referr|social|outreach|work_with_me|inbound_contact|attention|impression|engage|reply_rate|distribution|buffer/, star: { key: "pageviews_30d", label: "Pageviews, 30d", unit: "", good: "up" },
     flows: ["outreach"], widgets: ["progress", "controls"], controls: ["social_paused"],
-    pages: [{ key: "analytics", label: "Google Analytics 4", href: "/analytics", feed: "/api/ga4/overview" }],
+    pages: [{ key: "analytics", label: "Google Analytics 4", href: "/analytics", feed: "/api/ga4/overview" }, { key: "search", label: "Search Console", href: "/search", feed: "/api/gsc/overview" }],
     queue: { sources: ["inbox"], rx: /subscriber|social|bluesky|linkedin|mastodon|outreach|audience|inbox|pageview|referrer|buffer|newsletter|substack/i } },
   { id: "autonomy", name: "Autonomy loop", short: "Autonomy", what: "how the fleet works on itself: issues, the code loop, remedies, dispatches, the owner queue", sources: ["v_metric_trigger_state", "metric_history", "agent_issues", "code_tasks", "human_actions"],
     rx: /issue|code_|remedy|fix_|mttr|driver|watchmaker|contracts|session_|owner_dispatch|human_wait|backlog/, star: { key: "open_agent_issues", label: "Open issues", unit: "", good: "down" },
@@ -2716,6 +2749,7 @@ var API_INDEX = [
   { path: "/api/changelog", area: "platform", source: "live", lag_s: 60, method: "GET", auth: "open (personal releases for a holder)", schema_version: "changelog/v2", cache: "public 15s, ETag", freshness: "deployment_history, enriched every 15 min", what: "What the fleet shipped for itself, newest first. One page of 20 by default (?limit=1..200, ?offset=, ?limit=all for the 267-release history it used to send whole). Send If-None-Match or ?since=<revision>." },
   { path: "/api/ga4", area: "reach", source: "live", lag_s: 60, method: "GET", auth: "open", schema_version: "ga4/v1", cache: "public 15s, ETag", freshness: "one ga4-ingest ledger row a day", what: "GA4 ingest runs and whether the service-account key is present." },
   { path: "/api/ga4/overview", area: "reach", source: "live", lag_s: 300, method: "GET", auth: "open", schema_version: "ga4-overview/v1", cache: "public 120s, stale 300s, in-isolate 5 min", freshness: "read from the GA4 Data API when the page opens; 28 complete UTC days and a 30-minute realtime count", what: "Google Analytics 4: 28-day totals with the previous window, the daily series, top pages, channels, countries, devices, hosts and realtime." },
+  { path: "/api/gsc/overview", area: "reach", source: "live", lag_s: 300, method: "GET", auth: "open", schema_version: "gsc-overview/v1", cache: "public 120s, stale 300s, in-isolate 5 min", freshness: "read from the Search Console API when the page opens; 28 days ending three days ago, and the 28 before them", what: "Search Console: 28-day clicks, impressions, click-through rate and position with the previous window, the daily series, top queries, pages, countries, devices, search appearance, sitemaps and the access level." },
   { path: "/api/cost", area: "cost", source: "live", lag_s: 60, method: "GET", auth: "open", schema_version: "fleet-cost/v1", cache: "public 15s, ETag", freshness: "v_cost_run_rate, cost_daily, ai_call_counters and fleet_budget read at request time", what: "Spend: the 30-day run-rate by source, 14 days of daily spend, Workers AI calls, errors and neurons by model and by worker over 7 days, and every spend budget with its headroom." },
   { path: "/api/q08-review", area: "research", source: "live", lag_s: 60, method: "GET", auth: "open", schema_version: "q08-review-status/v1", cache: "public 15s, ETag", freshness: "the one-shot 2026-10-31 review state", what: "q08's human-read review: decision, rule and last attempt." },
   { path: "/api/area/<id>", method: "GET", auth: "open", area: "platform", source: "live", lag_s: 15, schema_version: "fleet-area-feed/v1", cache: "public 15s, ETag", freshness: "v_metric_trigger_state, metric_history, code_tasks, research_queue, outreach_queue, agent_issues read at request time (15 s at most in isolate memory)", what: "One functional area as its own feed: its star metric and trend, its breaches ranked, its named constraint, its pipelines, and the reads that belong to it with each one's declared lag (?full=1 adds the whole lever text and every breach row). Send If-None-Match or ?since=<revision>." },
@@ -4171,6 +4205,16 @@ if (path === "/health") {
       return rtRead(request, url, gv, { schema: "ga4-overview/v1", cache: "public, max-age=120, stale-while-revalidate=300" });
     }
     return new Response(ga4Html(gv, !!(owner.authed || owner.loop)), { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "public, max-age=60" } });
+  }
+  // GOOGLE-HUB-1 (1.99.0): the Search Console read and its page, open and read-only (see gscOverviewData).
+  if ((path === "/search" || path === "/search/" || path === "/api/gsc/overview") && request.method === "GET") {
+    let sv = null;
+    try { sv = await gscOverviewData(env); } catch (e) { console.error(JSON.stringify({ worker: NAME, where: "gscOverview", error: reachErr(e) })); }
+    if (path === "/api/gsc/overview") {
+      if (!sv) return json({ ok: false, error: "Search Console overview unavailable" }, 503);
+      return rtRead(request, url, sv, { schema: "gsc-overview/v1", cache: "public, max-age=120, stale-while-revalidate=300" });
+    }
+    return new Response(gscHtml(sv, !!(owner.authed || owner.loop)), { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "public, max-age=60" } });
   }
   if (path === "/api/ga4") {
     if (request.method === "POST") {
@@ -6406,6 +6450,24 @@ function ga4Rows(day, report, entityType, metricNames, quality) {
   }
   return rows;
 }
+// GA4-CAMPAIGN-1 (READER-YIELD-1.4, agent_issues 1001722): pure. The rows of a runReport with dimensions sessionCampaignName and sessionSource and metrics
+// sessions and engagedSessions: source ga4, channel = the session source, entity_type campaign, entity_id = the campaign lower-cased to 64 characters (the UTM ledger key).
+// A row with an empty or (not set) campaign is skipped. No existing row shape changes.
+function ga4CampaignRows(day, report, quality) {
+  const rows = [];
+  const names = ["sessions", "engagedSessions"];
+  for (const row of (report && report.rows) || []) {
+    const dv = row.dimensionValues || [];
+    const camp = String((dv[0] && dv[0].value) || "").trim().toLowerCase();
+    const src = String((dv[1] && dv[1].value) || "").trim().toLowerCase();
+    if (!camp || camp === "(not set)" || camp === "(direct)" || camp === "(organic)") continue;
+    (row.metricValues || []).forEach(function(mv, i) {
+      const v = Number(mv && mv.value);
+      if (names[i] && Number.isFinite(v)) rows.push(reachRow(day, "ga4", src || "(none)", "campaign", camp.slice(0, 64), names[i], v, quality || "human"));
+    });
+  }
+  return rows;
+}
 // GA4-PROPERTY-MISMATCH-1 (agent_issues 2935): the web data stream of a property carries the measurement id the site tag sends
 // (properties/<id>/dataStreams[].webStreamData.measurementId); accountSummaries lists the properties the service account can read.
 // Returns { id, scanned }: the first property whose stream carries measurementId, else id null.
@@ -6504,6 +6566,11 @@ async function ga4Ingest(env, opts) {
       const rep = await ga4Safe([], "ingest " + rd.type, token, property, { dateRanges: range, dimensions: [{ name: rd.dim }], metrics: rd.metrics.map(function(n) { return { name: n }; }), limit: 20, orderBys: [{ metric: { metricName: rd.metrics[0] }, desc: true }] });
       if (rep) rows = rows.concat(ga4Rows(day, rep, rd.type, rd.metrics, rowQuality));
     }
+    // GA4-CAMPAIGN-1: engaged sessions by campaign (the paper slug in utm_campaign) and source, and by country, so an engaged session is attributable to the paper, post and origin.
+    const campRep = await ga4Safe([], "ingest campaign", token, property, { dateRanges: range, dimensions: [{ name: "sessionCampaignName" }, { name: "sessionSource" }], metrics: [{ name: "sessions" }, { name: "engagedSessions" }], limit: 1000 });
+    if (campRep) rows = rows.concat(ga4CampaignRows(day, campRep, rowQuality));
+    const ctryRep = await ga4Safe([], "ingest country_engaged", token, property, { dateRanges: range, dimensions: [{ name: "country" }], metrics: [{ name: "sessions" }, { name: "engagedSessions" }, { name: "activeUsers" }], limit: 250, orderBys: [{ metric: { metricName: "sessions" }, desc: true }] });
+    if (ctryRep) rows = rows.concat(ga4Rows(day, ctryRep, "country_engaged", ["sessions", "engagedSessions", "activeUsers"], rowQuality));
     for (let i = 0; i < rows.length; i += 12) {
       const chunk = rows.slice(i, i + 12);
       const binds = [];
@@ -6846,6 +6913,133 @@ function ga4Html(v, holder) {
     + (v.coverage ? '<p class="kp-src">Covered: ' + esc(v.coverage.covered.join(", ")) + '. Not covered: ' + esc(v.coverage.not_covered.join(", ")) + '.</p>' : "")
     + (v.errors.length ? '<p class="meta">Reports that failed in this read: ' + esc(v.errors.map(function(e) { return e.panel + " (" + e.error + ")"; }).join(", ")) + '. Those panels are shown as not measured.</p>' : '<p class="meta">Every report in this read succeeded.</p>') + '</section>'
     + '<p class="fl-foot">Computed ' + esc(String(v.as_of).slice(0, 19).replace("T", " ")) + ' UTC by qnfo-fleet-dashboard ' + esc(v.version) + '; cached for ' + (GA4_OVERVIEW_TTL_MS / 1000) + ' s. GA4 data through ' + esc(v.range.end) + '.</p></main>' + FLEET_SHELL_JS + '</body></html>';
+}
+
+// ==== GOOGLE-HUB-1 (1.99.0): Search Console overview, open and read-only ====
+// gscIngest only writes reach_signals; this is the reader. GET /search and GET /api/gsc/overview call searchAnalytics.query live for 28 complete days
+// (ending today minus the 3-day Search Console lag) and the 28 before them, plus sitemaps.list and the sites.list permission level. A panel that fails is
+// null with its reason in `errors`, never zero. Cached 5 minutes in the isolate.
+var GSC_OVERVIEW_DAYS = 28;
+var GSC_OVERVIEW_TTL_MS = 3e5;
+var gscOverviewCache = null;
+async function gscGet(token, url) {
+  const r = await fetch(url, { headers: { Authorization: "Bearer " + token }, signal: AbortSignal.timeout(20000) });
+  const j = await r.json().catch(function() { return {}; });
+  if (!r.ok) throw new Error(String(url).split("/").slice(-1)[0].split("?")[0] + " " + r.status + " " + String(j.error && j.error.status || "").slice(0, 40));
+  return j;
+}
+async function gscSafe(errors, panel, fn) {
+  try { return await fn(); }
+  catch (e) { errors.push({ panel: panel, error: reachErr(e) }); return null; }
+}
+// Pure: a searchAnalytics answer as plain rows { key, clicks, impressions, ctr, position }; a missing answer is null, an answer with no rows is [].
+function gscPlain(report) {
+  if (!report) return null;
+  return (report.rows || []).map(function(r) {
+    return { key: (r.keys && r.keys[0]) || "(all)", clicks: Number(r.clicks) || 0, impressions: Number(r.impressions) || 0, ctr: Number(r.ctr) || 0, position: Number(r.position) || 0 };
+  });
+}
+async function gscOverviewData(env, opts) {
+  const now = (opts && opts.nowMs) || Date.now();
+  if (gscOverviewCache && now - gscOverviewCache.at < GSC_OVERVIEW_TTL_MS) return gscOverviewCache.v;
+  const errors = [];
+  const key = ga4ParseKey(env.GA4_SA_KEY);
+  if (!key) throw new Error(env.GA4_SA_KEY ? "GA4_SA_KEY is not a service-account JSON key" : "GA4_SA_KEY is not set");
+  const token = await ga4AccessToken(key, now, GSC_SCOPE);
+  let site = GSC_DEFAULT_SITE;
+  try { const c = await d1all(env.AUDIT, "SELECT value FROM ops_config WHERE key = 'gsc_site_url'"); if (c.length && String(c[0].value).trim()) site = String(c[0].value).trim(); } catch (e) { errors.push({ panel: "site", error: reachErr(e) }); }
+  const DAY = 864e5;
+  const iso = function(ms) { return new Date(ms).toISOString().slice(0, 10); };
+  const end = iso(now - GSC_LAG_DAYS * DAY);
+  const start = iso(now - (GSC_LAG_DAYS + GSC_OVERVIEW_DAYS - 1) * DAY);
+  const prevEnd = iso(now - (GSC_LAG_DAYS + GSC_OVERVIEW_DAYS) * DAY);
+  const prevStart = iso(now - (GSC_LAG_DAYS + 2 * GSC_OVERVIEW_DAYS - 1) * DAY);
+  const q = function(range, dims, limit) {
+    const body = { startDate: range[0], endDate: range[1], rowLimit: limit || 25 };
+    if (dims.length) body.dimensions = dims;
+    return function() { return gscQuery(token, site, body); };
+  };
+  const cur = [start, end], prev = [prevStart, prevEnd];
+  const base = "https://www.googleapis.com/webmasters/v3/sites/" + encodeURIComponent(site);
+  const r = await Promise.all([
+    gscSafe(errors, "totals", q(cur, [], 1)),
+    gscSafe(errors, "previous totals", q(prev, [], 1)),
+    gscSafe(errors, "daily series", q(cur, ["date"], 60)),
+    gscSafe(errors, "top queries", q(cur, ["query"], 25)),
+    gscSafe(errors, "top pages", q(cur, ["page"], 25)),
+    gscSafe(errors, "countries", q(cur, ["country"], 15)),
+    gscSafe(errors, "devices", q(cur, ["device"], 5)),
+    gscSafe(errors, "search appearance", q(cur, ["searchAppearance"], 10)),
+    gscSafe(errors, "sitemaps", function() { return gscGet(token, base + "/sitemaps"); }),
+    gscSafe(errors, "permission", function() { return gscGet(token, "https://www.googleapis.com/webmasters/v3/sites"); })
+  ]);
+  const tot = gscPlain(r[0]), ptot = gscPlain(r[1]);
+  const totals = tot ? (tot[0] || { clicks: 0, impressions: 0, ctr: 0, position: 0 }) : null;
+  const prevTotals = ptot ? (ptot[0] || { clicks: 0, impressions: 0, ctr: 0, position: 0 }) : null;
+  const deltas = {};
+  for (const k of ["clicks", "impressions", "ctr", "position"]) deltas[k] = totals && prevTotals && prevTotals[k] ? (totals[k] - prevTotals[k]) / prevTotals[k] : null;
+  // Search Console omits a day with no data, so the series covers the whole window with null for a missing day: null is "not measured", never zero.
+  const seen = {};
+  for (const x of gscPlain(r[2]) || []) seen[x.key] = x;
+  const daily = r[2] ? [] : null;
+  if (daily) for (let i = 0; i < GSC_OVERVIEW_DAYS; i++) { const d = iso(now - (GSC_LAG_DAYS + GSC_OVERVIEW_DAYS - 1 - i) * DAY); const s = seen[d]; daily.push({ day: d, clicks: s ? s.clicks : null, impressions: s ? s.impressions : null }); }
+  const perm = (r[9] && r[9].siteEntry || []).find(function(s) { return s.siteUrl === site; });
+  const sitemaps = r[8] ? (r[8].sitemap || []).map(function(s) { return { path: s.path, last_submitted: s.lastSubmitted || null, last_downloaded: s.lastDownloaded || null, errors: Number(s.errors) || 0, warnings: Number(s.warnings) || 0, pending: !!s.isPending }; }) : null;
+  const v = {
+    schema_version: "gsc-overview/v1", ok: true, as_of: new Date(now).toISOString(), version: VERSION, site: site,
+    range: { start: start, end: end, days: GSC_OVERVIEW_DAYS, previous_start: prevStart, previous_end: prevEnd, lag_days: GSC_LAG_DAYS },
+    permission: r[9] ? (perm ? perm.permissionLevel : "site not in the sites list") : null,
+    totals: totals, previous_totals: prevTotals, deltas: deltas, daily: daily,
+    queries: gscPlain(r[3]), pages: gscPlain(r[4]), countries: gscPlain(r[5]), devices: gscPlain(r[6]), appearance: gscPlain(r[7]), sitemaps: sitemaps,
+    errors: errors,
+    notes: ["Search Console data runs about " + GSC_LAG_DAYS + " days behind, so the window ends " + end + ".", "Queries Google withholds for privacy are not in the query rows, so the query rows add up to less than the total.", "A panel shown as not measured failed to read; it is never a zero."]
+  };
+  gscOverviewCache = { at: now, v: v };
+  return v;
+}
+function gscHtml(v, holder) {
+  const head = fleetHead("Search Console");
+  const css = '<style>' + KPI_CSS + '.ga-d{display:block;font-size:11px;opacity:.75;margin-top:2px}.ga-up{color:#0a7a3d}.ga-down{color:#b3261e}</style>';
+  if (!v) {
+    return head + css + fleetTop("search", false, holder) + '<main class="wrap fl kp"><h1>Search Console</h1>'
+      + '<p class="kp-lede">The Search Console read failed, so this page shows no number. The reason is in the worker logs and in the ledger at <a href="/api/ga4">/api/ga4</a>; a failed read is never shown as a zero.</p>'
+      + '<p><a href="/api/gsc/overview">The read as JSON</a> &middot; <a href="/analytics">Google Analytics 4</a></p></main>' + FLEET_SHELL_JS + '</body></html>';
+  }
+  const T = v.totals, D = v.deltas || {};
+  const delta = function(k, inverse) {
+    const d = D[k];
+    if (d === null || d === undefined) return "";
+    const good = inverse ? d < 0 : d > 0;
+    return '<span class="ga-d ' + (good ? "ga-up" : "ga-down") + '">' + (d > 0 ? "+" : "") + (Math.round(d * 1000) / 10) + '% vs the previous ' + v.range.days + ' days</span>';
+  };
+  const tiles = [
+    kpiTile("Clicks", T ? kpiV(T.clicks) : kpiU("the totals read failed"), delta("clicks")),
+    kpiTile("Impressions", T ? kpiV(T.impressions) : kpiU("the totals read failed"), delta("impressions")),
+    kpiTile("Click-through rate", T ? esc((Math.round(T.ctr * 1000) / 10) + "%") : kpiU("the totals read failed"), delta("ctr")),
+    kpiTile("Average position", T ? esc(String(Math.round(T.position * 10) / 10)) : kpiU("the totals read failed"), delta("position", true))
+  ].join("");
+  const rows = function(list, label) {
+    if (list === null) return '<p>' + kpiU("this read failed") + '</p>';
+    if (!list.length) return '<p class="meta">Search Console returned no ' + esc(label) + ' rows for this window.</p>';
+    return kpiTable([[label], ["Clicks", 1], ["Impressions", 1], ["CTR", 1], ["Position", 1]], list.map(function(x) {
+      return '<tr><td>' + esc(x.key) + '</td><td class="n">' + esc(kpiFmt(x.clicks)) + '</td><td class="n">' + esc(kpiFmt(x.impressions)) + '</td><td class="n">' + esc((Math.round(x.ctr * 1000) / 10) + "%") + '</td><td class="n">' + esc(String(Math.round(x.position * 10) / 10)) + '</td></tr>';
+    }));
+  };
+  const card = function(title, dim, list, label) { return '<div class="kp-card"><h3>' + esc(title) + '</h3>' + kpiSrc("Search Console searchAnalytics " + dim + ", " + v.range.days + " complete days", v.as_of, v.range.end) + rows(list, label) + '</div>'; };
+  const trend = '<div class="kp-card"><h3>Daily series</h3>' + kpiSrc("Search Console date, " + v.range.days + " days", v.as_of, v.range.end)
+    + (v.daily ? kpiDualBars(v.daily, "clicks", "impressions", "clicks", "impressions") + '<details><summary>Table</summary>' + kpiTable([["Day"], ["Clicks", 1], ["Impressions", 1]], v.daily.map(function(d) { return '<tr><td>' + esc(d.day) + '</td><td class="n">' + kpiV(d.clicks) + '</td><td class="n">' + kpiV(d.impressions) + '</td></tr>'; })) + '</details>' : '<p>' + kpiU("the daily series read failed") + '</p>') + '</div>';
+  const maps = '<div class="kp-card"><h3>Sitemaps</h3>' + kpiSrc("Search Console sitemaps.list", v.as_of)
+    + (v.sitemaps === null ? '<p>' + kpiU("the sitemaps read failed") + '</p>' : v.sitemaps.length ? kpiTable([["Sitemap"], ["Last downloaded"], ["Errors", 1], ["Warnings", 1]], v.sitemaps.map(function(s) { return '<tr><td>' + esc(s.path) + '</td><td>' + esc(String(s.last_downloaded || "never").slice(0, 10)) + '</td><td class="n">' + esc(String(s.errors)) + '</td><td class="n">' + esc(String(s.warnings)) + '</td></tr>'; })) : '<p class="meta">No sitemap is submitted for this property.</p>') + '</div>';
+  return head + css + fleetTop("search", false, holder) + '<main class="wrap fl kp"><h1>Search Console</h1>'
+    + '<p class="kp-lede">How people find the QNFO sites through Google Search, read live from the Search Console API when you open this page: clicks, impressions, click-through rate, average position, the queries and pages that earn them, and where and on what device. The property is <b>' + esc(v.site) + '</b> (access: ' + (v.permission ? esc(v.permission) : kpiU("the sites list read failed")) + ').</p>'
+    + '<nav class="kp-jump" aria-label="Sections"><a href="#summary">Summary</a><a href="#queries">Queries</a><a href="#pages">Pages</a><a href="#audience">Audience</a><a href="/api/gsc/overview">The same data as JSON</a><a href="/analytics">Google Analytics 4</a></nav>'
+    + '<section class="kp-sec" id="summary"><h2>Summary</h2><div class="kp-tiles">' + tiles + '</div>' + kpiSrc("Search Console searchAnalytics, property " + v.site + ", " + v.range.days + " days", v.as_of, v.range.end) + trend + '</section>'
+    + '<section class="kp-sec" id="queries"><h2>Queries</h2>' + card("Top queries", "query", v.queries, "Query") + '</section>'
+    + '<section class="kp-sec" id="pages"><h2>Pages</h2>' + card("Top pages", "page", v.pages, "Page") + maps + '</section>'
+    + '<section class="kp-sec" id="audience"><h2>Audience</h2><div class="kp-two">' + card("Countries", "country", v.countries, "Country") + card("Devices", "device", v.devices, "Device") + '</div>' + card("Search appearance", "searchAppearance", v.appearance, "Appearance") + '</section>'
+    + '<section class="kp-sec" id="notes"><h2>What this page does and does not see</h2>' + kpiNotes(v.notes)
+    + (v.errors.length ? '<p class="meta">Reads that failed: ' + esc(v.errors.map(function(e) { return e.panel + " (" + e.error + ")"; }).join(", ")) + '. Those panels are shown as not measured.</p>' : '<p class="meta">Every read succeeded.</p>') + '</section>'
+    + '<p class="fl-foot">Computed ' + esc(String(v.as_of).slice(0, 19).replace("T", " ")) + ' UTC by qnfo-fleet-dashboard ' + esc(v.version) + '; cached for ' + (GSC_OVERVIEW_TTL_MS / 1000) + ' s.</p></main>' + FLEET_SHELL_JS + '</body></html>';
 }
 
 async function reachIngestTick(env, opts) {
@@ -17720,8 +17914,8 @@ async function psrReview(env, day) {
   }
   const needs = [];
   if (sc.cost != null && sc.cost > PSR_COST_CEILING) {
-    needs.push({ key: "portfolio-cost", action: "Spend decision: " + PSR_COST_METRIC + " = " + sc.cost + " USD/30d above the A9 ceiling (" + PSR_COST_CEILING + "). Raise the ceiling (owner policy) or cut paid calls.", due: null, why: "cost kill-band" });
-    await env.AUDIT.prepare("INSERT OR IGNORE INTO human_actions (slug, title, why, default_in_effect, action, url, sev, due, source) VALUES (?1, ?2, ?3, ?4, ?5, '/owner', 'urgent', ?6, 'portfolio-strategic')").bind("portfolio-cost-" + day, "Portfolio: AI spend above the A9 ceiling", PSR_COST_METRIC + " = " + sc.cost + " USD/30d, ceiling " + PSR_COST_CEILING, "Nothing changes automatically: the loop never raises a cap (CORE-PROMPT-1 rule 8).", "Decide: raise the ceiling, or cut paid calls. The review loop stays model-silent while any ai_spend cap is breached.", day).run();
+    needs.push({ key: "portfolio-cost", action: "Spend decision: " + PSR_COST_METRIC + " = " + sc.cost + " USD/30d above the A9 ceiling (" + PSR_COST_CEILING + "). The spend governor cuts paid calls; the ceiling is not raised by an agent.", due: null, why: "cost kill-band" });
+    // PORTFOLIO-COST-CARD-1: the owner card portfolio-cost-<day> is no longer filed; the spend governor acts on the lever.
   }
   // MANAGEMENT-PERSONAS-2 (1.66.0): a program RED for 3 reviews no longer files an owner card; the hourly portfolio manager
   // makes it the constraint and its program manager acts on its focus issues (fleet.qnfo.org/managers).

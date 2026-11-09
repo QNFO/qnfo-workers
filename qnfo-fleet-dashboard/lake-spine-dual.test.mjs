@@ -1,0 +1,30 @@
+// LAKE-SPINE-2.2 (agent_issues 1002068): healthProbes sends each probe row to qnfo-infra /lake/ingest only when ops_config lake_spine = dual.
+// Run: node --no-warnings qnfo-fleet-dashboard/lake-spine-dual.test.mjs
+import fs from "node:fs"; import assert from "node:assert";
+const src = fs.readFileSync(new URL("./worker.js", import.meta.url), "utf8");
+const m = src.match(/async function lakeSpineDual[\s\S]*?\n\}\n(?=async function healthProbes)/);
+assert(m, "lake spine block");
+const mk = (cfgRows) => new Function("d1all", "__name", "PROBE_UA", m[0] + "; return { lakeSpineDual, lakeSpineSend };")(async () => cfgRows, () => {}, "ua");
+const rows = (lake, ho) => [{ key: "lake_spine", value: lake }].concat(ho == null ? [] : [{ key: "lake_spine_handover_id", value: String(ho) }]);
+const svc = { fetch: async () => ({ ok: true, text: async () => "" }) };
+let r = await mk(rows("dual", 100)).lakeSpineDual({ AUDIT: {}, SVC_QNFO_INFRA: svc });
+assert.deepEqual(r, { dual: true, handover: 100 });
+r = await mk(rows("off")).lakeSpineDual({ AUDIT: {}, SVC_QNFO_INFRA: svc });
+assert.equal(r.dual, false, "default off");
+r = await mk([]).lakeSpineDual({ AUDIT: {}, SVC_QNFO_INFRA: svc });
+assert.equal(r.dual, false, "no row means off");
+r = await mk(rows("dual")).lakeSpineDual({ AUDIT: {}, SVC_QNFO_INFRA: null });
+assert.equal(r.dual, false, "no binding means off");
+const stats = { sent: 0, failed: 0 };
+let seen = null;
+const lib = mk([]);
+await lib.lakeSpineSend({ SVC_QNFO_INFRA: { fetch: async (u, o) => { seen = { u, o }; return { ok: true, text: async () => "" }; } } }, { id: 7 }, stats);
+assert.equal(stats.sent, 1);
+assert(/\/lake\/ingest\?table=fleet_probe_log$/.test(seen.u));
+assert.equal(JSON.parse(seen.o.body)[0].id, 7);
+await lib.lakeSpineSend({ SVC_QNFO_INFRA: { fetch: async () => { throw new Error("down"); } } }, { id: 8 }, stats);
+await lib.lakeSpineSend({ SVC_QNFO_INFRA: { fetch: async () => ({ ok: false, text: async () => "" }) } }, { id: 9 }, stats);
+assert.equal(stats.failed, 2, "a failure is counted, never thrown");
+assert(/LAKE-SPINE-2\.2/.test(src), "marker present");
+assert(/SVC_QNFO_INFRA/.test(fs.readFileSync(new URL("./wrangler.toml", import.meta.url), "utf8")), "binding declared");
+console.log("ok");
