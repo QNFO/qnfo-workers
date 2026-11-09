@@ -125,6 +125,10 @@ because each one was broken at least once; the linked issue holds the evidence.
   live claims; a refused action is fixed honestly or reported, never reworded past the same check (reading r). IC-ACTOR-001:
   reports name the fleet as the actor of every next step; an owner-only step is an IDENTITY-BOUND card, not prose (reading s).
 
+## Job matching reads the posting, never the title (JOBSEARCH-CONTENT-FIRST-1, owner directive 2026-11-09)
+- Owner, verbatim: "title keywords are a terrible way to represent my experience. Don't ever do that again. I have a much broader experience than can be represented in a title ... you need to go in several different directions to find what my experience is."
+- In `qnfo-jobsearch` a title never excludes a field, never gates a posting and never caps a score; it adds a small bonus when it names a lane. Only a seniority word (intern, junior, entry, trainee) is a hard filter, and a residence restriction. The posting text is read first through independent lenses: distinctive terms shared with the owner's own record, evidence clusters in the text, meaning (Workers AI embeddings, `semanticLens`), the model re-rank, and search queries drawn from the record's own work. A new matching rule works on the text or it is not added. `qnfo-jobsearch/explore.test.mjs` fails a change that makes a title word exclude a posting whose text carries the record.
+
 ## Autonomy-first protocol (AUTONOMY-FIRST-1)
 - Owner directive 2026-10-08: "Implement autonomy-first protocol system/fleet-wide and in all Claude operations." It
   binds every session and every loop, and is charter decision rule 11 (docs/AUTONOMY-DECISION-POLICY.md has the detail).
