@@ -158,7 +158,7 @@ ok(!L("fleet.qnfo.org/owner") && !L("(other)") && !DT.links.some((x) => /workers
 ok(L('bad host/"x') && L('bad host/"x').url === null, "links: an entity that is not a host and path is listed without a link, never as markup", DT.links);
 const DT0 = K.kpiShapeDirectTraffic ? K.kpiShapeDirectTraffic({ top_papers_rum: { err: "no such table: reach_signals" }, top_pages_rum: { rows: [] } }, NOW) : null;
 ok(DT0 === null || (DT0.papers === null && Array.isArray(DT0.links) && DT0.links.length === 0 && /top papers: no such table/.test(DT0.notes[2])), "an unreadable read is null with its reason in the notes; an empty read is a measured empty list", DT0);
-ok(/^\d+\.\d+\.\d+/.test(v.version) && Number(src.match(/var VERSION = "(\d+)\.(\d+)/).slice(1).join(".")) >= 1.3, "VERSION is at least 1.30");
+ok(/^\d+\.\d+\.\d+/.test(v.version) && (function(m){return +m[1]>1||(+m[1]===1&&+m[2]>=30)})(src.match(/var VERSION = "(\d+)\.(\d+)/)), "VERSION is at least 1.30");
 ok(I.open_total === 5 && I.by_priority.map((p) => p.priority + p.n).join() === "critical1,high2,medium1,low1", "open total and priority order critical, high, medium, low");
 ok(I.by_category[0].category === "reliability" && I.by_category[0].n === 2 && I.by_category.some((c) => c.category === "(none)" && c.n === 1), "categories ranked, empty category named (none)");
 ok(I.median_age_h === 30 && I.oldest.id === Number(iOld) && I.oldest.age_h === 400 && I.over_24h === 3 && I.undated_open === 0, "median age 30 h, oldest 400 h, 3 over 24 h (a created_at in seconds is read as seconds)");

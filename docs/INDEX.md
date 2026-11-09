@@ -133,8 +133,6 @@ and [the machine-readable catalog](agent-catalog.json).
 - [PR velocity, 2026-11 (PR-VELOCITY-1)](PR-VELOCITY-2026-11.md) - `docs/PR-VELOCITY-2026-11.md`
 - [PROBE-WRITE-DEAD-1 — the remediation verifier cannot write evidence](PROBE-WRITE-DEAD-1.md) - `docs/PROBE-WRITE-DEAD-1.md`
 - [Prompted recall (PROMPTED-RECALL-1, owner directive 2026-11-09)](PROMPTED-RECALL.md) - `docs/PROMPTED-RECALL.md`
-- [Prompted recall (PROMPTED-RECALL-1, owner directive 2026-11-09)](PROMPTED-RECALL.md) - `docs/PROMPTED-RECALL.md`
-- [Prompted recall (PROMPTED-RECALL-1, owner directive 2026-11-09)](PROMPTED-RECALL.md) - `docs/PROMPTED-RECALL.md`
 - [Q08 publication recovery and preflight procedure](Q08-PUBLICATION-RECOVERY-2026-09-26.md) - `docs/Q08-PUBLICATION-RECOVERY-2026-09-26.md`
 - [Q08 root cause + remediation record (2026-09-27)](Q08-ROOT-CAUSE-2026-09-27.md) - `docs/Q08-ROOT-CAUSE-2026-09-27.md`
 - [Q08-ROUTE-1 — correction to this PR's evidence (2026-09-27)](Q08-ROUTE-1-CORRECTION-2026-09-27.md) - `docs/Q08-ROUTE-1-CORRECTION-2026-09-27.md`
