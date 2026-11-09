@@ -198,7 +198,7 @@ console.log("\n[worker.js parity]");
 {
   const w = fs.readFileSync(new URL("./worker.js", import.meta.url), "utf8");
   ok("worker.js carries COMPANION-CALENDAR-AWARE-1 (the issue's closing probe)", w.includes("COMPANION-CALENDAR-AWARE-1"));
-  ok("worker.js hands the companion the twin's calendar reader", w.includes("calendar: (env, from, to) => calList(env, from, to, 40)"));
+  ok("worker.js hands the companion the twin's calendar reader", (w.includes("calendar: (env, from, to) => calList(env, from, to, 40)") || w.includes("calendar: (env, from, to, limit) => calList(env, from, to, limit || 40)")));
 }
 console.log("\n" + pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);

@@ -3677,7 +3677,7 @@ async function today(env, deps) {
   let week = null;
   const wk = weekWindow({ day: st.day, hour: st.hour, dow: st.dow });
   if (st.cfg.wellbeing_prompts === true && wk && st.cfg.week_seen !== wk) { try { const w = await weekLookback(env, st.nowIso, wk); if (w.enough) week = { week: w.week, title: w.title, lines: w.lines }; } catch (e) { week = null; } }
-  const trip = await tripCard(db, st.day).catch(() => null);
+  const trip = await tripCard(db, st.day).catch((e) => { console.error(JSON.stringify({ where: "today-trip-card", error: String(e && e.message || e) })); return null; });
   const res = {
     day: st.day, greeting: greet, hour: Math.round(st.hour * 100) / 100, mood: st.mood, sleep, weather, week, travel: st.away, trip, events_today: st.events.length, light_day: st.events.length >= LIGHT_DAY_EVENTS, busy_now: st.events.some((e) => !e.allDay && e.startMs <= Date.parse(st.nowIso) && Date.parse(st.nowIso) < e.endMs),
     low_day: st.crisisLevel24h >= 2,
@@ -4738,10 +4738,18 @@ var CMP_DEPS = {
   version: VERSION,
   auth: (request, env) => auth(request, env),
   embed: (env, texts) => embed(env, texts),
-  vision: (env, content) => visionRun(env, content, 1200),
+  vision: (env, content, maxTokens) => visionRun(env, content, maxTokens || 1200),
   weather: (env) => weatherT(env),
   // COMPANION-CALENDAR-AWARE-1: the twin's calendar (Google and the twin store) for today's events; companion.js adds the events table.
-  calendar: (env, from, to) => calList(env, from, to, 40),
+  calendar: (env, from, to, limit) => calList(env, from, to, limit || 40),
+  calDelete: (env, id) => calDelete(env, { id, confirm: "yes" }),
+  calAdd: (env, args) => calAdd(env, args),
+  setLocation: (env, args) => setLocation(env, args),
+  lastLocation: (env) => getLastLocation(env),
+  liveWhatsOn: (env, o) => liveWhatsOn(env, o),
+  fetchPage: (env, u) => webFetch(u, 6e4, env),
+  excerpt: (t, d) => liveExcerpt(t, d),
+  liveSourceAdd: (env, a) => liveSourceAddT(env, a),
   recommendations: (env, from, to) => personalEventRecommendations(env, from, to),
   // Sorting and short texts use the brief models (cheap flash first), through the AI Gateway like every twin call.
   llm: async (env, system, user, maxTokens) => {
