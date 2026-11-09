@@ -173,7 +173,8 @@ test("decide shrinks toward the price by the blend weight and gives the side's w
   const m = { slug: "s", title: "t", yes: 0.5, ends_at: null };
   const d = decide(aggregate([E(0.7), E(0.72), E(0.74)]), m, 0.1, undefined, 0.5); assert.ok(Math.abs(d.pWin - 0.61) < 1e-9);
   const n = decide(aggregate([E(0.2), E(0.25), E(0.3)]), m, 0.1, undefined, 0.5); assert.equal(n.side, "no"); assert.ok(Math.abs(n.pWin - (1 - (0.5 * 0.25 + 0.25))) < 1e-9);
-  assert.ok(Math.abs(decide(aggregate([E(0.7), E(0.72), E(0.74)]), m).pWin - 0.72) < 1e-9); // default weight 1 = the model alone
+  assert.ok(Math.abs(decide(aggregate([E(0.7), E(0.72), E(0.74)]), m).pWin - 0.61) < 1e-9); // the default is the 50/50 blend evaluate() scores, so sizing and scoring agree
+  assert.ok(Math.abs(decide(aggregate([E(0.7), E(0.72), E(0.74)]), m, 0.1, { MAX_SPREAD: 0.25, blendW: 1 }).pWin - 0.72) < 1e-9);
 });
 test("signalEntries size by Kelly: a thin edge gets a small stake, a thin-enough edge none", () => {
   const px = { a: 0.5, b: 0.5, c: 0.5 };
