@@ -847,7 +847,11 @@ export async function phaseAnalytics(ctx) {
     orphans, orphan_share: n ? round(100 * orphans / n, 2) : 0, components: g.size.size, giant_component_share: nonNote ? round(100 * giantNon / nonNote, 2) : 0, giant_component_share_all: n ? round(100 * giant / n, 2) : 0, notes_total: isNote.filter(Boolean).length, notes_bridged: notesBridged,
     orphans_by_label: Object.fromEntries(Object.entries(orphansByLabel).sort((a, b) => b[1] - a[1]).slice(0, 12)),
     edge_density: n ? round(g.nEdges / n, 3) : 0, non_structural_density: n ? round(g.nSem / n, 3) : 0,
-    papers_active: papers.length, paper_unrelated_share: papers.length ? round(100 * unrelated / papers.length, 2) : 0,
+    papers_active: papers.length,
+    // PAPER-COUNT-DRIFT-1 (DOC-ITEMS-REMAINDER-2): active Paper nodes minus the papers D1 holds (published, distributed, external_preprint, kg-backfill);
+    // null when no phase loaded the papers this run. 1,226 Paper nodes against 616 papers was found by hand on 2026-07-20.
+    paper_count_drift: ctx.lp ? papers.length - ctx.lp.papers.filter((p) => ACTIVE_LP.has(p.status)).length : null,
+    paper_unrelated_share: papers.length ? round(100 * unrelated / papers.length, 2) : 0,
     dup_groups: groups.length, dup_groups_unresolved: unresolved, sim_category_agreement: ctx.agreement == null ? null : round(100 * ctx.agreement, 1),
     by_source: srcCount, by_relationship: Object.fromEntries(Object.entries(semByRel).sort((a, b) => b[1] - a[1]).slice(0, 25)),
     tombstones_total: null,

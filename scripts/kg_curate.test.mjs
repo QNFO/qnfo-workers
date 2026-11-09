@@ -179,6 +179,7 @@ assert.equal(cnt("SELECT COUNT(*) AS n FROM edges WHERE relationship_type = 'SAM
 assert.ok(G.one("SELECT canonical_id AS c FROM nodes WHERE id = 'proj-b'").c === "proj-a" || G.one("SELECT canonical_id AS c FROM nodes WHERE id = 'proj-a'").c === "proj-b");
 assert.equal(cnt("SELECT COUNT(*) AS n FROM nodes WHERE id IN ('proj-a', 'proj-b')"), 2, "both survive");
 // analytics and publish
+assert.ok(r1.health.paper_count_drift === null || Number.isInteger(r1.health.paper_count_drift), "paper_count_drift is an integer or null: " + r1.health.paper_count_drift);
 assert.ok(r1.health.orphan_share < 40 && r1.health.edge_density > 1, "health is computed: " + JSON.stringify({ o: r1.health.orphan_share, d: r1.health.edge_density }));
 assert.equal(G.one("SELECT COUNT(*) AS n FROM kg_health").n, 1);
 assert.ok(cnt("SELECT COUNT(*) AS n FROM kg_node_stats WHERE pagerank > 0") > 10);

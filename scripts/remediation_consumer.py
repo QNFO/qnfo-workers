@@ -1366,6 +1366,25 @@ def steady_state_cadence(cls, verdict, cadence_h, transport=None):
     return cadence_h
 
 
+def stamp_escalation(c, verdict, next_status):
+    """STAMP-ESCALATE-1 (DOC-ITEMS-REMAINDER-1): the status a stamp writes when the contract has used its attempts.
+
+    Returns (next_status, escalate_to). A failing read (verdict 'fail') on an active or holding contract whose attempts + 1 reach
+    max_attempts moves it to 'escalated' and names the owner in escalate_to. Standing detectors (fm-, belief-) and per-issue contracts
+    (issue-<id>, which must keep being probed so the issue can autoclose) are exempt by class filter, as is a verdict that already
+    asks for a status. REMEDIATION_STAMP_ESCALATE=off restores the old stamp.
+    """
+    cls = str(c.get("class") or "")
+    if os.environ.get("REMEDIATION_STAMP_ESCALATE", "on").lower() == "off":
+        return next_status, None
+    if verdict != "fail" or next_status is not None or is_standing_detector(cls) or cls.startswith("issue-"):
+        return next_status, None
+    max_att = max(1, int(c.get("max_attempts") or 3))
+    if int(c.get("attempts") or 0) + 1 < max_att:
+        return next_status, None
+    return "escalated", (c.get("escalate_to") or "code-loop")
+
+
 def consume_one(c, trusted):
     """Probe and stamp one contract with its own counters, so contracts can run in parallel (merge_out folds them)."""
     local = {"pass": 0, "fail": 0, "skipped": 0}
@@ -1416,6 +1435,7 @@ def consume_one(c, trusted):
         except Exception as e2:  # noqa: BLE001
             log("contract %s transient stamp failed: %s" % (cls, e2))
         return rec, local
+    next_status, escalate_to = stamp_escalation(c, rec.get("verdict"), next_status)
     if cadence is None:
         cadence = c.get("expected_cadence_h") or 1
     steady_backoff = False
@@ -1435,6 +1455,8 @@ def consume_one(c, trusted):
             "next_due_at = datetime('now', ?), status = CASE WHEN status IN ('active', 'holding') THEN COALESCE(?, status) ELSE status END WHERE class = ?",
             [rec["verdict"], next_due_offset(cadence, steady_backoff), next_status, cls],
         )
+        if escalate_to:
+            d1("UPDATE remediation_contracts SET escalate_to = ? WHERE class = ? AND status = 'escalated'", [escalate_to, cls])
     except Exception as e:  # noqa: BLE001
         log("contract %s stamp failed: %s" % (cls, e))
     return rec, local

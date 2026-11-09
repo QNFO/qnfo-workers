@@ -34,7 +34,7 @@ def check(cond, msg, extra=None):
 
 
 db = sqlite3.connect(":memory:")
-db.execute("CREATE TABLE remediation_contracts (class TEXT PRIMARY KEY, status TEXT, attempts INTEGER, last_attempt_at TEXT, last_verdict TEXT, next_due_at TEXT)")
+db.execute("CREATE TABLE remediation_contracts (class TEXT PRIMARY KEY, status TEXT, attempts INTEGER, last_attempt_at TEXT, last_verdict TEXT, next_due_at TEXT, escalate_to TEXT)")
 stamps = []
 
 
@@ -46,17 +46,20 @@ def fake_d1(sql, params=None):
         stamps.append(sql)
         db.execute(sql, params or [])
         return []
+    if s.startswith("UPDATE remediation_contracts SET escalate_to"):
+        db.execute(sql, params or [])
+        return []
     return []
 
 
-def run(status, passed=True, probe=None):
+def run(status, passed=True, probe=None, attempts=4, cls="c1"):
     """consume_one on a contract whose stored status is `status`; returns (status, attempts, verdict) after the stamp."""
     db.execute("DELETE FROM remediation_contracts")
-    db.execute("INSERT INTO remediation_contracts (class, status, attempts) VALUES ('c1', ?, 4)", (status,))
-    c = {"class": "c1", "verify_transport": rc.HTTPS_TRANSPORT, "expected_cadence_h": 1, "max_attempts": 3, "issue_id": None, "status": "active",
+    db.execute("INSERT INTO remediation_contracts (class, status, attempts) VALUES (?, ?, ?)", (cls, status, attempts))
+    c = {"class": cls, "attempts": attempts, "verify_transport": rc.HTTPS_TRANSPORT, "expected_cadence_h": 1, "max_attempts": 3, "issue_id": None, "status": "active",
          "verify_probe": probe or ("SELECT 'a' AS expected, 'a' AS observed" if passed else "SELECT 'a' AS expected, 'b' AS observed")}
     rc.consume_one(c, {rc.HTTPS_TRANSPORT})
-    return db.execute("SELECT status, attempts, last_verdict FROM remediation_contracts WHERE class = 'c1'").fetchone()
+    return db.execute("SELECT status, attempts, last_verdict FROM remediation_contracts WHERE class = ?", (cls,)).fetchone()
 
 
 def fake_https(c, rec, local, trusted):
@@ -81,7 +84,13 @@ try:
     check(run("parked")[0] == "parked", "a parked contract is not moved by a stale stamp")
     check(run("needs-machine-probe")[0] == "needs-machine-probe", "needs-machine-probe is left alone")
     check(run("holding")[0] == "holding", "a holding contract that passed again stays holding")
-    check(run("active", passed=False)[0] == "active", "a failing probe below the retry limit leaves an active contract active")
+    check(run("active", passed=False, attempts=0)[0] == "active", "a failing probe below the retry limit leaves an active contract active")
+    # STAMP-ESCALATE-1: attempts + 1 >= max_attempts on a failing read escalates, except standing detectors and issue contracts
+    check(run("active", passed=False)[0] == "escalated", "a failing probe at max_attempts escalates an active contract")
+    check(db.execute("SELECT escalate_to FROM remediation_contracts WHERE class = 'c1'").fetchone()[0] == "code-loop", "escalate_to is written")
+    check(run("active", passed=False, cls="fm-x")[0] == "active", "a standing detector is exempt from escalation")
+    check(run("active", passed=False, cls="issue-5")[0] == "active", "a per-issue contract is exempt from escalation")
+    check(run("active", passed=True)[0] == "holding", "a pass at max_attempts does not escalate")
     check(run("superseded", passed=False)[0] == "superseded", "a failing probe leaves a superseded contract superseded")
 finally:
     rc.d1, rc.consume_https = saved
