@@ -14,3 +14,12 @@ import audit
 audit.UNREACHABLE.clear()
 assert audit.gh_json(["repos/QNFO/this-repo-does-not-exist-8885/issues"]) == [] and audit.UNREACHABLE == ["repos/QNFO/this-repo-does-not-exist-8885/issues"]
 print("audit_test ok")
+
+
+def test_branch_findings():
+    import datetime
+    now = datetime.datetime(2026, 11, 9, tzinfo=datetime.timezone.utc)
+    bs = [{"name": "ccr-old", "date": "2026-10-20T00:00:00Z"}, {"name": "ccr-new", "date": "2026-11-08T00:00:00Z"},
+          {"name": "ccr-live", "date": "2026-10-01T00:00:00Z"}, {"name": "feature-x", "date": "2026-01-01T00:00:00Z"}]
+    f = audit.branch_findings(bs, {"ccr-live"}, now)
+    assert [x["key"] for x in f] == ["branch:ccr-old"], f
