@@ -270,7 +270,10 @@ ok(/^SELECT '0' AS expected, CAST\(/.test(dprobe) && !dprobe.includes(";") && /d
 const dread = (d) => d.prepare(dprobe).get();
 ok(dprobe !== "", "the detector contract exists, so its probe can be replayed on real rows");
 if (dprobe) {
-  // rows written by the real (fixed) worker, through the real abExecute
+  // rows written by the real (fixed) worker, through the real abExecute. The worker writes its CURRENT harness revision first (AB_HARNESS_REV, 3 since
+  // MODEL-AB-HARNESS-REV3-1); the stored issue-100277 contract pins revision 2, so the probe is read retargeted at the revision the worker now writes.
+  const WREV = Number(/const AB_HARNESS_REV = (\d+);/.exec(workerSrc)[1]);
+  const readAtWorkerRev = (d) => d.prepare(d.prepare("SELECT verify_probe p FROM remediation_contracts WHERE class = ?").get(CLASS).p.split('{"harness_rev":2,%').join('{"harness_rev":' + WREV + ',%')).get();
   const body2 = workerSrc.replace(/^export default /m, "var __default = ");
   const mod = new Function("console", "fetch", body2 + "\n;return { AB_FIXTURES, abExecute };")({ log() {}, error() {} }, async () => { throw new Error("unexpected fetch"); });
   const byPrompt = new Map();
@@ -292,9 +295,9 @@ if (dprobe) {
   // the reasoning model: empty with finish length at the fixture budget, an answer at the retry
   const r1 = await run(d, (fx, b) => (small(b) ? { text: "", finish: "length" } : { text: fx.baseline, finish: "stop" }));
   const row1 = d.prepare("SELECT * FROM model_ab_runs ORDER BY id DESC LIMIT 1").get();
-  ok(r1.verdict === "pass" && row1.detail.startsWith('{"harness_rev":2,') && JSON.parse(row1.detail).items.every((i) => i.retried === 2048), "the real worker retries and passes, and stores the rev-2 prefix", { v: r1.verdict, head: row1.detail.slice(0, 40) });
+  ok(r1.verdict === "pass" && row1.detail.startsWith('{"harness_rev":' + WREV + ',') && JSON.parse(row1.detail).items.every((i) => i.retried === 2048), "the real worker retries and passes, and stores its current-revision prefix", { v: r1.verdict, head: row1.detail.slice(0, 40) });
   ok(dread(d).observed === "0", "the detector reads 0 on a retried run", dread(d));
-  const issueRead = read(d);
+  const issueRead = readAtWorkerRev(d);
   ok(issueRead.observed === "pass" && issueRead.expected === "pass", "and the issue-100277 probe reads pass on the row the real worker wrote", issueRead);
   // a model that is length-empty at both budgets: a genuine regression, its losses say 'after retry'
   const r2 = await run(d, () => ({ text: "", finish: "length" }), { worker: "other-worker" });
@@ -314,7 +317,7 @@ if (dprobe) {
   ok(dread(d).observed === "2", "a row 121 minutes old is out of the window", dread(d));
   ins(d, { verdict: "regression", age: "-119 minutes", detail: '{"harness_rev":2,"items":[{"id":"gq-3","s":0,"js":[],"why":"empty post-change reply (finish length)"}]}' });
   ok(dread(d).observed === "3", "and a row 119 minutes old is inside it", dread(d));
-  ins(d, { verdict: "regression", detail: '{"harness_rev":3,"items":[{"id":"gq-3","s":0,"js":[],"why":"empty post-change reply (finish length)"}]}' });
+  ins(d, { verdict: "regression", detail: '{"harness_rev":2,"items":[{"id":"gq-3","s":0,"js":[],"why":"empty post-change reply (finish length)"}]}' });
   ok(dread(d).observed === "4", "a later harness revision is read too (the prefix is harness_rev, not the number 2)", dread(d));
   // the latch: model_ab_runs rows are history and are never edited, so the read has to clear by itself once the row is older than the window
   const l = world();

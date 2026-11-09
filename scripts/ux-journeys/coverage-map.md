@@ -12,7 +12,7 @@
 | ideas.qnfo.org | scripts/ux-journeys/apps/public.journeys.mjs | 15 |
 | ipatent.qnfo.org | scripts/ux-journeys/apps/ipatent.journeys.mjs | 1 |
 | ipatent.qnfo.org | scripts/ux-journeys/apps/public.journeys.mjs | 15 |
-| jobs.q08.org | scripts/ux-journeys/apps/jobs.journeys.mjs | 2 |
+| jobs.q08.org | scripts/ux-journeys/apps/jobs.journeys.mjs | 3 |
 | markets.q08.org | scripts/ux-journeys/apps/markets.journeys.mjs | 3 |
 | markets.q08.org | scripts/ux-journeys/apps/public.journeys.mjs | 15 |
 | me.q08.org | scripts/ux-journeys/apps/companion.journeys.mjs | 9 |

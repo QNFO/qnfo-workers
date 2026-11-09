@@ -251,6 +251,15 @@ def selftest():
     name, content, mime = json_modules[0]
     assert name == "data.json" and mime == "application/javascript+module"
     assert json.loads(content.removeprefix("export default ").rstrip(";\n")) == json.loads(json_files["m/data.json"])
+    # DIRECT-DEPLOY-WINDOWS-1: the fake reader is keyed with forward slashes, so collect_modules must hand it a posix path even when
+    # os.path.normpath yields backslashes (Windows); the case below fails on Windows if the read path is not normalised.
+    win_seen = []
+    def win_read(p):
+        win_seen.append(p)
+        assert "\\" not in p, "backslash path reached the reader: " + p
+        return "export const x = 1;"
+    collect_modules("m/sub/worker.js", 'import "../shared/a.js";', win_read)
+    assert win_seen == ["m/shared/a.js"], win_seen
     calls = []
     files = {"w/wrangler.toml": 'name = "w"', "w/worker.js": 'var VERSION = "1.2.3";\nexport default { fetch() {} };\n',
              "c/wrangler.toml": "[[containers]]\n", "c/worker.js": "x",

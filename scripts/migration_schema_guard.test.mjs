@@ -44,7 +44,7 @@ writeFileSync(failedPath, failedMigration);
 
 console.log('Test 1: Detect metric_registry using metric_key (production failure)');
 try {
-  execSync(`python scripts/migration_schema_guard.py`, { 
+  execSync(`python scripts/migration_schema_guard.py "${failedPath}"`, { 
     encoding: 'utf-8',
     stdio: 'pipe'
   });
@@ -87,7 +87,7 @@ writeFileSync(correctPath, correctMigration);
 
 console.log('\nTest 2: Accept metric_registry using metric (correct)');
 try {
-  execSync(`python scripts/migration_schema_guard.py`, {
+  execSync(`python scripts/migration_schema_guard.py "${correctPath}"`, {
     encoding: 'utf-8',
     stdio: 'pipe'
   });
@@ -124,7 +124,7 @@ writeFileSync(triggerWrongPath, triggerWrong);
 
 console.log('\nTest 3: Detect analytics_metric_triggers using metric (wrong)');
 try {
-  execSync(`python scripts/migration_schema_guard.py`, {
+  execSync(`python scripts/migration_schema_guard.py "${triggerWrongPath}"`, {
     encoding: 'utf-8',
     stdio: 'pipe'
   });
@@ -155,7 +155,7 @@ writeFileSync(viewWrongPath, viewWrong);
 
 console.log('\nTest 4: Detect VIEW using queued_at in research_queue (wrong)');
 try {
-  execSync(`python scripts/migration_schema_guard.py`, {
+  execSync(`python scripts/migration_schema_guard.py "${viewWrongPath}"`, {
     encoding: 'utf-8',
     stdio: 'pipe'
   });
@@ -186,7 +186,7 @@ writeFileSync(viewCorrectPath, viewCorrect);
 
 console.log('\nTest 5: Accept VIEW using created_at in research_queue (correct)');
 try {
-  execSync(`python scripts/migration_schema_guard.py`, {
+  execSync(`python scripts/migration_schema_guard.py "${viewCorrectPath}"`, {
     encoding: 'utf-8',
     stdio: 'pipe'
   });
@@ -212,7 +212,7 @@ writeFileSync(viewMetricWrongPath, viewMetricWrong);
 
 console.log('\nTest 6: Detect VIEW using metric_key in metric_registry (wrong)');
 try {
-  execSync(`python scripts/migration_schema_guard.py`, {
+  execSync(`python scripts/migration_schema_guard.py "${viewMetricWrongPath}"`, {
     encoding: 'utf-8',
     stdio: 'pipe'
   });

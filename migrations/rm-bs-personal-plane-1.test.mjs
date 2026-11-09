@@ -67,7 +67,7 @@ for (const i of issues) {
   ok(/^code-probe: \{.+\}$/m.test(i.description), "carries a code-probe line");
 }
 ok(/INSERT INTO agent_issues/.test(rd("personal-companion/worker.js")) && /"absent": "INSERT INTO agent_issues"/.test(issues[1].description), "PERS-3's absent-probe currently fails (the inserts exist) and will pass when they are gone");
-ok(!/memory_keyed/.test(rd("personal-api/worker.js")), "PERS-2's contains-probe currently fails (memory_keyed is not in the worker yet)");
+ok(/memory_keyed/.test(issues[0].description), "PERS-2's contains-probe names memory_keyed (the doer may have landed it since)");
 ok(count(w, "decision_log") === 1, "one decision_log row");
 
 const tables = ["personal_plane_workers", "personal_plane_audit_deps", "agent_issues", "decision_log"];

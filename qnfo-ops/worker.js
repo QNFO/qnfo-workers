@@ -552,7 +552,7 @@ __name222(gateAudit1CfWorkerDeploy, "gateAudit1CfWorkerDeploy");
 __name2222(gateAudit1CfWorkerDeploy, "gateAudit1CfWorkerDeploy");
 __name22222(gateAudit1CfWorkerDeploy, "gateAudit1CfWorkerDeploy");
 __name222222(gateAudit1CfWorkerDeploy, "gateAudit1CfWorkerDeploy");
-var VERSION = "2.69.7-codeagent";
+var VERSION = "2.71.0-codeagent";
 /* 2.62.20 OPS-ARG-ALIAS-1 (issues 5775, 5780, 6173, 6193, 6671, 6792, 6767, 6826, 6015, 6860, pillar autonomy; patch). Caller-input mistakes are no longer fleet failures: workspace_grep accepts query/regex/search for pattern, cf_worker_read/deploy/bindings accept name/script for worker, fleet_graph infers a missing op from its other arguments and accepts filter/q/name for query; a still-missing argument answers arg_error with a hint, and an arg_error or an exception thrown by the caller own run_code or run_code_net JavaScript (user_code_error) is logged as status rejected, so it files no TOOL-FAILURE or LOOP-BREAKER issue. errorDetailCapture writes worker_logs in batches of 25 and records a D1 overload as a deferral, not an error. qnfo-ops/tool-arg-alias.test.mjs. */
 /* 2.62.11 WORKER-LOAD-GATE-1 (issue #6518, pillar autonomy; patch): inline the OAuth broker in the deployable single-module worker. */
 /* 2.62.1 CONTAINER-WORKSPACE-TIMEOUT-1 (#3922, issue 1000117, pillar autonomy; patch): container_workspace_exec allows 120 seconds for cold-start initialization while preserving its 300-second ceiling. */
@@ -2016,6 +2016,7 @@ var OPS_SYSTEM_PROMPT = [
   "15. FLEET-CORE-1 (binding, owner directive 2026-10-02): (a) OWN THE FIX - filing an issue is not fixing it. For a defect, name the owning loop and do the work with tools; hand a single-file code change to the code loop by ending the agent_issues description with a line of its own `code-task: repo=qnfo-workers path=<dir>/worker.js`. Close an issue only with a live measurement in issue_triage.close_evidence, never as wontfix to shrink the backlog. (b) MEASURE - the scoreboard is metric_registry judged by v_metric_trigger_state (hit = 1 is a breach; metrics_in_breach target 0). Guard metrics (kind = 'guard') must not worsen: a target gained while a guard worsens is a regression. (c) LEARN-APPLY-VERIFY - one change at a time with a stated prediction; measure after; keep it only if the metric moved, otherwise revert and try a different lever. (d) DECIDE AND RECORD (RULE-8-RETIRED-1, owner directive 2026-10-06: core prompt rule 8 is deleted) - spend caps, guard metrics, verification probes and data deletion are the fleet's own decisions: take them when the evidence supports them and record the reason and the live measurement on the issue; back up and read back before a deletion because it costs nothing; follow rule 7 for any self-change (a probe you did not write, a revert path). Still never: mail an address that opted out, send outreach outside its consent gate and cadence caps, or move personal-plane data into the research plane or onto a public surface. (e) CLOSEOUT - when asked to close out, report objective, actions with evidence, deviations, failures and fixes, artifacts written, metric deltas, and every open item with its exact blocker.",
   "16. KERNEL-REPLY-1 (binding, docs/DOCTRINE-KERNEL.md recognitions, 2026-10-12): a reply ends with the result. Never end with a question to the user, a conditional offer ('would you like', 'if you want', 'shall I', 'let me know if', 'want me to'), or a menu of options for the user to pick from. When evidence reveals an actionable defect and an issue write is authorized, file the issue now; never offer to file it later or defer it to a future write-capable session. For every other optional next step, decide: take it when reversible and in scope and report it done, or state in one line why it is not taken. When the request is ambiguous, state the assumption in one line and answer under it. A question is allowed only when the action is irreversible and only the owner can decide it, and then it is one line that names the irreversible act.",
   "17. WRITE-CAPABILITY-1 (binding, 2026-11-06, owner: the command line and this endpoint were answering as if they could only read D1): the tool list you hold includes write and ship tools: ops_d1_write, r2_put, kv_put, workspace_write/workspace_edit/workspace_patch, github_file_write, github_create_branch, github_pr, ship_change, cf_worker_read/cf_worker_bindings/cf_worker_deploy, shell_exec/exec_python/exec_node, container_workspace_exec, composio_execute. Never answer that you have no write tools or can only read; call the tool. Every request that changes code, configuration or documents runs through ship_change (issue, branch, files, pull request in one call; or ops_d1_write for the issue row, then github_create_branch, github_file_write on that branch, github_pr tagged [issue #N]), so every run that changes code leaves an issue and a pull request, and the merge lane and canonical deploy take it from there. Read the file first (github_repo_read, or cf_worker_read for a deployed worker) and send its FULL new content. A tool refusal is reported with its exact text and the next path is taken; a gate (a refusal naming GATE-AUDIT-1, a missing owner session) is stated as that and never reworded around.",
+  "18. CODE-ONLY-OUTPUT-1 (binding, owner directive 2026-11-06): the answer to a request is deployed code: an issue, a pull request, a merge, a deploy and a live check. A reply is informative only and is never the action or the record. Do the work with tools in this turn instead of describing it, and file what you cannot finish as an issue with a code-task line and a closing probe.",
 ].join(String.fromCharCode(10));
 var OPS_TOOLS = [
   // CODEMODE-SURFACE-1 (issue #1000639): the code-mode search+execute pair is NOT part of this catalogue (see OPS_CODEMODE_TOOLS); the default tool list stays the tools below.
@@ -2735,12 +2736,45 @@ async function d1LiveColumns(db, sql, msg) {
   if (names.length === 1) return { available_columns: by[names[0]], available_columns_table: names[0], hint: "the column does not exist in " + names[0] + "; use a column from available_columns (read live from the table)" };
   return { available_columns_by_table: by, hint: "the column is in none of these tables as written; use the columns listed for each table in available_columns_by_table (read live)" };
 }
+// D1-RESULT-CAP-1 (agent_issues 1002018, 2026-11-09): D1 caps one query result at 50 MB (Cloudflare changelog 2026-10-30; REST import and export are exempt). These tables hold a fat
+// column (code_tasks.ctx about 250 MB, chatbox_conversations about 174 MB, papers.body_md); an unbounded SELECT of that column now fails with an opaque error. The guard refuses, before
+// running, a SELECT that reads a listed fat column (or * of its table) with no LIMIT or a LIMIT above D1_FAT_MAX_LIMIT, with an error that names the cap and the fix. It checks only the listed
+// columns and the absence of a bound, so a bounded read, an aggregate and length()/substr() of the column pass.
+var D1_FAT_COLUMNS = { code_tasks: ["ctx"], chatbox_conversations: ["*"], papers: ["body_md"] };
+var D1_FAT_MAX_LIMIT = 20;
+var D1_RESULT_TOO_LARGE_RE = /result (is )?too large|exceeds? (the )?(maximum|max|limit).{0,40}(50 ?MB|result)|50 ?MB/i;
+function d1FatColumnGuard(sql) {
+  var lo = String(sql || "").toLowerCase().replace(/\s+/g, " ");
+  if (!/^\s*(select|with)\b/.test(lo)) return { ok: true };
+  var stripped = lo.replace(/\b(length|substr|substring|json_extract)\s*\([^()]*\)/g, " ");
+  if (/\b(count|sum|avg|min|max|group_concat)\s*\(/.test(stripped) || /\bgroup by\b/.test(stripped)) return { ok: true };
+  var m = /\blimit\s+(\d+)\s*(offset\s+\d+)?\s*$/.exec(lo.replace(/;\s*$/, ""));
+  var limit = m ? Number(m[1]) : null;
+  if (limit !== null && limit <= D1_FAT_MAX_LIMIT) return { ok: true };
+  var tables = Object.keys(D1_FAT_COLUMNS);
+  for (var i = 0; i < tables.length; i++) {
+    var t = tables[i];
+    if (!new RegExp("\\b(from|join)\\s+" + t + "\\b").test(stripped)) continue;
+    var cols = D1_FAT_COLUMNS[t];
+    for (var c = 0; c < cols.length; c++) {
+      var hit = cols[c] === "*" ? /select\s+(distinct\s+)?(\w+\.)?\*|,\s*(\w+\.)?\*\s*(from|,)/.test(stripped) || new RegExp("\\b" + t + "\\.\\*").test(stripped) : new RegExp("\\b" + cols[c] + "\\b").test(stripped) || /select\s+(distinct\s+)?(\w+\.)?\*/.test(stripped);
+      if (hit) {
+        return { ok: false, code: "result_too_large", rejected: true, table: t, column: cols[c],
+          error: "D1-RESULT-CAP-1: D1 caps a query result at 50 MB and " + t + (cols[c] === "*" ? "" : "." + cols[c]) + " is a fat column; a SELECT of it needs an explicit LIMIT of at most " + D1_FAT_MAX_LIMIT +
+            " (got " + (limit === null ? "none" : limit) + "). Select the narrow columns (id, status, length(" + (cols[c] === "*" ? "..." : cols[c]) + ")), filter by id, or page with LIMIT/OFFSET." };
+      }
+    }
+  }
+  return { ok: true };
+}
 async function d1Query(env, args) {
   const raw = String(args && args.sql || "").trim();
   let sql = raw.replace(/;\s*$/, "");
   const _g = d1ReadOnlyGuard(sql);
   if (!_g.ok) return _g;
   sql = _g.sql;
+  const _fat = d1FatColumnGuard(sql);
+  if (!_fat.ok) return _fat;
   let sqlEff = sql;
   var _lo = sqlEff.toLowerCase();
   var _agg = _lo.indexOf("count(") >= 0 || _lo.indexOf("sum(") >= 0 || _lo.indexOf("avg(") >= 0 || _lo.indexOf("min(") >= 0 || _lo.indexOf("max(") >= 0 || _lo.indexOf("group_concat(") >= 0 || _lo.indexOf("group by") >= 0;
@@ -2771,6 +2805,7 @@ async function d1Query(env, args) {
     // logToolEvent logs the ops_ai_tool event 'rejected' and no TOOL-FAILURE is filed for it. ops_d1_query logged 463 error and 1 rejected events in 7 days (read 2026-10-26). A missing column or table stays an error
     // on purpose: the schema hint below answers it and the failure count is how schema guessing is seen.
     if (/syntax error|SQLITE_CONSTRAINT|datatype mismatch|unrecognized token|too many terms in compound SELECT|LIKE or GLOB pattern too complex|Wrong number of parameter bindings/i.test(msg)) out.rejected = true;
+    if (D1_RESULT_TOO_LARGE_RE.test(msg)) { out.code = "result_too_large"; out.hint = "D1-RESULT-CAP-1: D1 caps a query result at 50 MB; add a LIMIT, select narrower columns or page the read"; }
     // D1-SCHEMA-HINT-1 (issue #1162 OPS-D1-QUERY-SCHEMA-GUESSING): on "no such
     // column/table", return the ACTUAL columns from d1_schema_index so agents stop
     // guessing. 75/223 tool failures were ops_d1_query errors from guessed columns.
@@ -5478,20 +5513,47 @@ async function installDeclaredBindings(env, worker) {
     const hdrs = { "Accept": "application/vnd.github+json", "User-Agent": "qnfo-ops-binding-install" };
     if (env.GITHUB_TOKEN) hdrs["Authorization"] = "Bearer " + env.GITHUB_TOKEN;
     let toml = null;
+    /* BINDING-INSTALL-FETCH-1 (agent_issues 1002081): one failed contents read made the 04:16:53Z deploy of qnfo-ops install nothing and
+       still report OK (deployment_history 3339 "observability=none declared"). Read each directory up to 3 times (pauses 1 s and 2 s;
+       a 404 is final), fall back to raw.githubusercontent.com for the same path and ref, and when every read fails say so. */
+    const _sleep = env && typeof env.BINDING_FETCH_SLEEP === "function" ? env.BINDING_FETCH_SLEEP : function(ms) { return new Promise(function(r) { setTimeout(r, ms); }); };
+    let _lastStatus = null;
     for (const d of dirs) {
-      const tr = await fetch("https://api.github.com/repos/QNFO/qnfo-workers/contents/" + d + "/wrangler.toml?ref=main", { headers: hdrs });
-      if (!tr.ok) continue;
-      const tj = await tr.json().catch(function() {
-        return null;
-      });
-      const b64 = tj && tj.content ? String(tj.content).replace(/[^A-Za-z0-9+/=]/g, "") : "";
-      if (b64) {
-        toml = b64Utf8(b64);
-        break;
+      for (let attempt = 0; attempt < 3 && !toml; attempt++) {
+        if (attempt > 0) await _sleep(attempt * 1000);
+        try {
+          const tr = await fetch("https://api.github.com/repos/QNFO/qnfo-workers/contents/" + d + "/wrangler.toml?ref=main", { headers: hdrs });
+          if (!tr.ok) {
+            _lastStatus = tr.status;
+            if (tr.status === 404) break;
+            continue;
+          }
+          const tj = await tr.json().catch(function() {
+            return null;
+          });
+          const b64 = tj && tj.content ? String(tj.content).replace(/[^A-Za-z0-9+/=]/g, "") : "";
+          if (b64) toml = b64Utf8(b64);
+          else _lastStatus = "empty";
+        } catch (_ef) {
+          _lastStatus = "fetch-error";
+        }
       }
+      if (!toml && _lastStatus !== 404) {
+        try {
+          const rr = await fetch("https://raw.githubusercontent.com/QNFO/qnfo-workers/main/" + d + "/wrangler.toml", { headers: { "User-Agent": "qnfo-ops-binding-install" } });
+          if (rr.ok) {
+            const txt = await rr.text();
+            if (txt) toml = txt;
+          } else if (_lastStatus === null || _lastStatus === "empty") _lastStatus = rr.status;
+        } catch (_er) {
+          if (_lastStatus === null) _lastStatus = "fetch-error";
+        }
+      }
+      if (toml) break;
     }
     if (!toml) {
-      out.note = "no wrangler.toml in the repo for this worker";
+      out.skipped = true;
+      out.note = _lastStatus !== null && _lastStatus !== 404 ? "wrangler.toml unreadable (" + _lastStatus + ")" : "no wrangler.toml in the repo for this worker";
       return out;
     }
     /* COMPAT-FLAGS-DECLARED-APPLY-1 (2026-09-30): the section parser below ignores top-level keys, and the deploy
@@ -5744,6 +5806,7 @@ async function cfWorkerDeploy(env, args) {
   let bindingsInstalled = 0;
   let bindingPropsApplied = 0;
   let bindingInstallNote = null;
+  let bindingInstallSkipped = false;
   let _declFlags = [];
   let _declObs = null;
   let _declLimits = null;
@@ -5764,6 +5827,7 @@ async function cfWorkerDeploy(env, args) {
   {
     const _ins = await installDeclaredBindings(env, worker);
     bindingInstallNote = _ins.note || null;
+    if (_ins && _ins.skipped) bindingInstallSkipped = true;
     if (_ins && Array.isArray(_ins.compat_flags)) _declFlags = _ins.compat_flags.slice();
     if (_ins && _ins.observability) _declObs = _ins.observability;
     if (_ins && _ins.limits) _declLimits = _ins.limits;
@@ -6028,12 +6092,12 @@ async function cfWorkerDeploy(env, args) {
       j = await resp.json().catch(() => ({}));
     }
     if (!resp.ok) {
-      const _ledFail = await recordDeployLedger(env, { resource_name: worker, action: "deploy", version_id: versionNote || null, status: "failed", notes: "cf_worker_deploy FAILED http=" + resp.status + " worker=" + worker + " content_bytes=" + content.length + " expected_version=" + String(args && args.expected_version || "n/a") + " err=" + JSON.stringify(j).slice(0, 200) });
+      const _ledFail = await recordDeployLedger(env, { resource_name: worker, action: "deploy", version_id: versionNote || null, status: "failed", notes: "cf_worker_deploy FAILED http=" + resp.status + " worker=" + worker + " content_bytes=" + content.length + " expected_version=" + String(args && args.expected_version || "n/a") + (bindingInstallSkipped ? " binding_install=skipped" : "") + " err=" + JSON.stringify(j).slice(0, 200) });
       return { ok: false, error: "CF API " + resp.status + ": " + JSON.stringify(j).slice(0, 400), ledger: _ledFail };
     }
     const _compatNote = _compat.restore ? " compat-restore from=" + (_compat.from || "n/a") + " " + String(args && args.compat_restore_note || "").slice(0, 120) : _compat.applied ? " compat_date=" + _compat.from + "->" + _compat.to + " reviewed=" + _compat.reviewed + (_compat.pending_verify ? " pending_verify" : "") : " compat_date=" + _compatDate + (_compat.declared_date && _compat.live_date && _compat.declared_date > _compat.live_date ? " compat_not_advanced=" + String(_compat.reason || "").replace(/\s+/g, "_").slice(0, 160) : "");
     const _ledOk = await recordDeployLedger(env, { resource_name: worker, action: _compat.restore ? "compat-restore" : "deploy", version_id: versionNote || null, status: "success", notes: "cf_worker_deploy ok http=" + resp.status + " worker=" + worker + _compatNote + " bindings_preserved=" + bindingsOut.length + " observability=" + _obsNote.slice(0, 60) + (_declLimits ? " limits=" + _limitsNote.slice(0, 60) : "") + (_declPlacement ? " placement=" + _placementNote.slice(0, 60) : "") + (sendEmailRestrictApplied ? " send_email_restrict=applied:" + sendEmailRestrictApplied : _sendEmailNote ? " send_email_restrict=" + _sendEmailNote.slice(0, 60) : "") + (_droppedBindings.length ? " dropped_dangling_bindings=" + _droppedBindings.map(function (d) { return d.name + "->" + d.service; }).join(",") : "") + " etag=" + ((j && j.result && j.result.etag) ? j.result.etag : "n/a") + " content_bytes=" + content.length + " expected_version=" + String(args && args.expected_version || "n/a") + (bindingInstallNote && bindingInstallNote.indexOf("secrets_store_secrets") !== -1 ? " | " + bindingInstallNote.slice(bindingInstallNote.indexOf("secrets_store_secrets"), bindingInstallNote.indexOf("secrets_store_secrets") + 140) : "") });
-    return { ledger: _ledOk, ok: true, worker, deployed: true, http: resp.status, dropped_dangling_bindings: _droppedBindings, version: versionNote || "deployed", bindings_preserved: bindingsOut.length, bindings_installed: bindingsInstalled, binding_props_applied: bindingPropsApplied, observability_apply: _obsNote, observability: _obsOut, limits_apply: _limitsNote, limits: _limitsOut, placement_apply: _placementNote, placement: _placementOut, send_email_restrict_applied: sendEmailRestrictApplied, send_email_restrict_note: _sendEmailNote, compatibility_date: _compatDate, compat: _compat, binding_install_note: bindingInstallNote, warning: bindingsOut.length === 0 ? "BINDING-INSTALL-WHEN-EMPTY-1: deployed with ZERO bindings and none installable from wrangler.toml - this worker may be a silent no-op" : null, result: j && j.result ? { id: j.result.id, etag: j.result.etag } : null };
+    return { ledger: _ledOk, ok: true, worker, deployed: true, http: resp.status, dropped_dangling_bindings: _droppedBindings, version: versionNote || "deployed", bindings_preserved: bindingsOut.length, bindings_installed: bindingsInstalled, binding_props_applied: bindingPropsApplied, observability_apply: _obsNote, observability: _obsOut, limits_apply: _limitsNote, limits: _limitsOut, placement_apply: _placementNote, placement: _placementOut, send_email_restrict_applied: sendEmailRestrictApplied, send_email_restrict_note: _sendEmailNote, compatibility_date: _compatDate, compat: _compat, binding_install_note: bindingInstallNote, binding_install: bindingInstallSkipped ? "skipped" : "ok", warning: bindingsOut.length === 0 ? "BINDING-INSTALL-WHEN-EMPTY-1: deployed with ZERO bindings and none installable from wrangler.toml - this worker may be a silent no-op" : null, result: j && j.result ? { id: j.result.id, etag: j.result.etag } : null };
   } catch (e) {
     return { ok: false, error: "cf_worker_deploy failed: " + (e && e.message || String(e)).slice(0, 300) };
   }
@@ -7132,9 +7196,31 @@ function opsD1Health(now) {
   var b = __opsD1Breaker;
   now = Number(now) || Date.now();
   var on = b.until > now;
-  return { state: on ? "degraded" : "ok", d1: on ? "overloaded" : "ok", since: b.since, retry_after_s: on ? Math.max(1, Math.ceil((b.until - now) / 1000)) : 0, trips: b.trips, refused: b.refused, trip_errors: OPS_D1_TRIP_ERRORS, window_s: OPS_D1_WINDOW_MS / 1000, degraded_s: OPS_D1_DEGRADED_MS / 1000 };
+  return { state: on ? "degraded" : "ok", d1: on ? "overloaded" : "ok", since: b.since, retry_after_s: on ? Math.max(1, Math.ceil((b.until - now) / 1000)) : 0, trips: b.trips, refused: b.refused, shared: __opsD1SharedOn, trip_errors: OPS_D1_TRIP_ERRORS, window_s: OPS_D1_WINDOW_MS / 1000, degraded_s: OPS_D1_DEGRADED_MS / 1000 };
 }
 function opsD1Reset() { __opsD1Breaker = { errs: [], until: 0, since: null, trips: 0, refused: 0, last_error: "" }; }
+// OPS-DEGRADED-2: the open state is shared across isolates through OPS_CACHE_KV (key ops:d1-degraded, TTL 60 s). A trip publishes it; every isolate reads it at most once per 5 s. A KV error never refuses or fails a tool.
+var OPS_D1_SHARED_KEY = "ops:d1-degraded";
+var __opsD1SharedReadAt = 0;
+var __opsD1SharedOn = false;
+async function opsD1SharedSync(env, now) {
+  try {
+    if (!env || !env.OPS_CACHE_KV) return;
+    now = Number(now) || Date.now();
+    if (now - __opsD1SharedReadAt < 5000) return;
+    __opsD1SharedReadAt = now;
+    __opsD1SharedOn = true;
+    var v = await env.OPS_CACHE_KV.get(OPS_D1_SHARED_KEY, "json");
+    var u = v && Number(v.until);
+    if (u && u > now && u > __opsD1Breaker.until) { __opsD1Breaker.until = u; __opsD1Breaker.since = v.since || __opsD1Breaker.since; }
+  } catch (e) { console.error(JSON.stringify({ worker: "qnfo-ops", where: "ops-degraded-kv", error: String(e && e.message || e) })); }
+}
+async function opsD1SharedPublish(env) {
+  try {
+    if (!env || !env.OPS_CACHE_KV || __opsD1Breaker.until <= Date.now()) return;
+    await env.OPS_CACHE_KV.put(OPS_D1_SHARED_KEY, JSON.stringify({ until: __opsD1Breaker.until, since: __opsD1Breaker.since }), { expirationTtl: 60 });
+  } catch (e) { console.error(JSON.stringify({ worker: "qnfo-ops", where: "ops-degraded-kv", error: String(e && e.message || e) })); }
+}
 // ---- OPS-DEGRADED-1:END
 async function execTool(env, name, rawArgs, userText, resultCap) {
   let args = {};
@@ -7145,6 +7231,7 @@ async function execTool(env, name, rawArgs, userText, resultCap) {
   }
   args = opsUnwrapToolArgs(name, args); // OPS-TOOL-ERRSHAPE-1: {name:<tool>, arguments:{...}} envelope sent as the arguments
   // OPS-DEGRADED-1: while qnfo-audit is overloaded a tool that writes it is refused before it starts (nothing is written, not even the tool event).
+  await opsD1SharedSync(env, Date.now()); // OPS-DEGRADED-2
   const __dg = opsD1Gate(Date.now(), name, args);
   if (__dg) return { tool_call_id: null, name, ok: false, degraded: true, retry_after_s: __dg.retry_after_s, text: JSON.stringify(__dg.body) };
   const t0 = Date.now();
@@ -7236,7 +7323,7 @@ async function execTool(env, name, rawArgs, userText, resultCap) {
   }
   const ms = Date.now() - t0;
   // OPS-DEGRADED-1: a qnfo-audit overload in the result feeds the breaker (another database named by the tool does not).
-  try { if (res && res.ok === false && opsD1TargetsAudit(name, args)) opsD1Note(Date.now(), res.error || res.message); } catch (e) { console.error(JSON.stringify({ worker: "qnfo-ops", where: "ops-degraded-feed", error: String(e && e.message || e) })); }
+  try { if (res && res.ok === false && opsD1TargetsAudit(name, args)) { var __tr = opsD1Note(Date.now(), res.error || res.message); if (__tr) await opsD1SharedPublish(env); } } catch (e) { console.error(JSON.stringify({ worker: "qnfo-ops", where: "ops-degraded-feed", error: String(e && e.message || e) })); }
   const audit = composioAuditPayload(name, args, res);
   await logToolEvent(env, name, audit.args, audit.result, ms);
   /* OPS-TOOL-MAILBOX-LOGIN-LINKS-1: a mailbox read never hands a login link, one-time code or token to the model. */
@@ -9403,6 +9490,73 @@ function edcRow(ev, ingestedAt) {
   };
 }
 var EDC_BATCH = 25;
+// W2-J-OBS-2 (agent_issues 1002055): the platform's own event count per worker and hour, beside the rows copied.
+var EDC_FILTERS = [
+  { key: "$metadata.error", operation: "exists", type: "string" },
+  { key: "$workers.outcome", operation: "neq", type: "string", value: "ok" }
+];
+// Counts of error events per $metadata.service over [from, to) from the telemetry query's calculations view; null when the answer has no usable aggregate.
+async function edcCountEvents(env, from, to) {
+  var r = await fetch("https://api.cloudflare.com/client/v4/accounts/" + CF_ACCOUNT_ID + "/workers/observability/telemetry/query", {
+    method: "POST",
+    headers: { "Authorization": "Bearer " + env.CF_API_TOKEN, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      queryId: "error-detail-counts-1", view: "calculations", limit: 200, timeframe: { from: from, to: to },
+      parameters: { datasets: ["cloudflare-workers"], filterCombination: "or", filters: EDC_FILTERS,
+        calculations: [{ operator: "count", alias: "events" }], groupBys: [{ type: "string", value: "$metadata.service" }] }
+    })
+  });
+  var j = await r.json().catch(function() { return null; });
+  if (!r.ok || !j || j.success === false) return null;
+  var calcs = j.result && j.result.calculations;
+  if (!Array.isArray(calcs) || !calcs.length) return null;
+  var counts = {};
+  var aggs = calcs[0] && calcs[0].aggregates || [];
+  for (var i = 0; i < aggs.length; i++) {
+    var g = aggs[i] && aggs[i].groups && aggs[i].groups[0];
+    var svc = g && g.value != null ? String(g.value).slice(0, 120) : "";
+    var n = Number(aggs[i].count != null ? aggs[i].count : aggs[i].value);
+    if (svc && isFinite(n)) counts[svc] = (counts[svc] || 0) + n;
+  }
+  return counts;
+}
+// Upsert one row per worker and hour (the hour so far, so a rerun is idempotent).
+async function edcRecordCounts(env, to, stopSet) {
+  var res = { ranges: 0, workers: 0 };
+  var d = new Date(to), hourStart = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), d.getUTCHours());
+  var ranges = [[hourStart, to]];
+  if (d.getUTCMinutes() < 35) ranges.push([hourStart - 36e5, hourStart]);
+  for (var ri = 0; ri < ranges.length; ri++) {
+    var from = ranges[ri][0], end = ranges[ri][1];
+    var counts = await edcCountEvents(env, from, end);
+    if (!counts) { res.error = "counts query unusable"; continue; }
+    res.ranges++;
+    var hd = new Date(from), day = hd.toISOString().slice(0, 10), hr = hd.getUTCHours();
+    var copied = {};
+    var cr = await env.QNFO_AUDIT.prepare("SELECT script_name AS s, COUNT(*) AS n FROM worker_logs WHERE ts_ms >= ?1 AND ts_ms < ?2 AND event_type LIKE 'telemetry:%' GROUP BY script_name").bind(from, end).all();
+    for (var ci = 0; ci < (cr.results || []).length; ci++) copied[cr.results[ci].s] = Number(cr.results[ci].n);
+    var names = Object.keys(counts);
+    var stmts = names.map(function(nm) {
+      var off = stopSet && stopSet.has(nm);
+      return env.QNFO_AUDIT.prepare("INSERT OR REPLACE INTO telemetry_event_counts (day, hour, script, platform_events, copied_rows, copy_state, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)")
+        .bind(day, hr, nm, counts[nm], off ? null : (copied[nm] || 0), off ? "off" : "on", iso());
+    });
+    for (var b = 0; b < stmts.length; b += EDC_BATCH) await env.QNFO_AUDIT.batch(stmts.slice(b, b + EDC_BATCH));
+    res.workers = Math.max(res.workers, names.length);
+  }
+  return res;
+}
+// The workers whose copy is stopped: only while ops_config edc_copy_stop = 'on' (absent = off, the revert) and v_telemetry_copy_stop_candidates lists them. Fail-open: any error returns an empty set.
+async function edcStopSet(env) {
+  try {
+    var cfg = await env.QNFO_AUDIT.prepare("SELECT value FROM ops_config WHERE key = 'edc_copy_stop' LIMIT 1").first();
+    if (!cfg || String(cfg.value).toLowerCase() !== "on") return new Set();
+    var rs = await env.QNFO_AUDIT.prepare("SELECT script FROM v_telemetry_copy_stop_candidates").all();
+    return new Set((rs.results || []).map(function(r) { return r.script; }));
+  } catch (_e) {
+    return new Set();
+  }
+}
 async function errorDetailCapture(env, windowMs) {
   if (!env.CF_API_TOKEN || !env.QNFO_AUDIT) return { ran: false, reason: "CF_API_TOKEN or QNFO_AUDIT missing" };
   var to = Date.now(), from = to - (windowMs || EDC_WINDOW_MS);
@@ -9434,7 +9588,9 @@ async function errorDetailCapture(env, windowMs) {
   // EDC-BATCH-1: up to 200 single-row inserts in one tick overloaded D1 ("D1 DB is overloaded", 3 loop-breaker recurrences, #6860). Rows go in batches of 25 (one D1 round trip each); an overload stops the
   // remaining writes at once and is recorded as a deferral (status ok), because INSERT OR IGNORE on event_hash re-captures the same events on the next tick's overlapping window.
   var edcRows = [];
-  for (var i = 0; i < evs.length; i++) { var row = edcRow(evs[i], ingestedAt); if (row) edcRows.push(row); }
+  var edcStop = await edcStopSet(env);
+  for (var i = 0; i < evs.length; i++) { var row = edcRow(evs[i], ingestedAt); if (row && !edcStop.has(row.script)) edcRows.push(row); }
+  if (edcStop.size) out.copy_stopped = Array.from(edcStop).slice(0, 20);
   var edcSql = "INSERT OR IGNORE INTO worker_logs (event_hash, ts_ms, ingested_at, script_name, event_type, outcome, url, method, status, cpu_ms, wall_ms, logs_json, exceptions_json) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, NULL, ?12)";
   for (var b = 0; b < edcRows.length; b += EDC_BATCH) {
     var chunk = edcRows.slice(b, b + EDC_BATCH);
@@ -9450,6 +9606,9 @@ async function errorDetailCapture(env, windowMs) {
       out.write_error = wm;
     }
   }
+  try {
+    if (!out.error) out.counts = await edcRecordCounts(env, to, edcStop);
+  } catch (e) { out.counts = { error: String(e && e.message || e).slice(0, 120) }; }
   try {
     var st = out.error || out.write_error ? "error" : "ok";
     var txt = "error capture: http " + out.http + ", " + out.events + " error event(s) in " + Math.round((to - from) / 6e4) + " min, " + out.inserted + " new worker_logs row(s) across " + Object.keys(out.scripts).length + " worker(s)" + (out.error ? "; " + out.error : "") + (out.write_error ? "; write: " + out.write_error : "") + (out.write_deferred ? "; deferred " + out.deferred + " row(s) to the next tick: " + out.write_deferred : "");
@@ -9494,7 +9653,7 @@ function manifest() {
     version: VERSION,
     base_url: "https://ops.qnfo.org",
     purpose: "QNFO ops/infrastructure AI execution endpoint: queue-and-query cloud-native services (research_queue -> intent orchestrator -> autonomous backend batch execution), full-fleet health, multi-DB read-only query, Vectorize/R2/KV read, machine-readable service registry.",
-    capabilities: ["ops-ai-gateway", "ops-degraded-mode", "openai-compatible", "chat", "agent", "code", "tool-execution", "fleet-probes", "full-fleet-probes", "multi-db-query", "vectorize-search", "r2-access", "kv-access", "research-queue", "queue-query", "analytics", "self-registration", "service-registry", "capability-advertising-audit", "telemetry", "self-heal", "isolated-ops-logging", "pure-server-exec", "streamed-answers", "async-jobs", "run-to-completion", "self-chaining-jobs", "workspace-edit", "workspace-grep", "workspace-glob", "workspace-diff", "workspace-patch", "run-code-net", "exec-pipeline", "git-ops", "parallel-reads", "claude-code-parity", "full-stack-shell", "cloudflare-containers", "real-python-interpreter", "real-node-interpreter", "bash-execution", "pip-install", "npm-install", "git-clone", "firecracker-vm", "agents-sdk", "durable-agent-sessions", "websocket-hibernation", "agent-http-rpc", "tool-bridge", "agent-schedule", "session-autocontinue"],
+    capabilities: ["ops-ai-gateway", "ops-degraded-mode", "ops-degraded-shared", "openai-compatible", "chat", "agent", "code", "tool-execution", "fleet-probes", "full-fleet-probes", "multi-db-query", "vectorize-search", "r2-access", "kv-access", "research-queue", "queue-query", "analytics", "self-registration", "service-registry", "capability-advertising-audit", "telemetry", "self-heal", "isolated-ops-logging", "pure-server-exec", "streamed-answers", "async-jobs", "run-to-completion", "self-chaining-jobs", "workspace-edit", "workspace-grep", "workspace-glob", "workspace-diff", "workspace-patch", "run-code-net", "exec-pipeline", "git-ops", "parallel-reads", "claude-code-parity", "full-stack-shell", "cloudflare-containers", "real-python-interpreter", "real-node-interpreter", "bash-execution", "pip-install", "npm-install", "git-clone", "firecracker-vm", "agents-sdk", "durable-agent-sessions", "websocket-hibernation", "agent-http-rpc", "tool-bridge", "agent-schedule", "session-autocontinue"],
     routes: ROUTES,
     tools: OPS_TOOLS.map(function(t) {
       return { name: t.name, description: t.description, parameters: t.parameters };
@@ -10592,7 +10751,7 @@ async function opsDeploy(env, args) {
       // verifies it and answers POST /ops/compat-verify. Any other value (or none) is the in-account gate exactly as before.
       const _callerVerify = String(args && args.compat_verify || "") === "caller";
       const dep = await cfWorkerDeploy(env, { worker, content, version: toVer || srcVer || void 0, expected_version: fromVer || void 0, compat_gate: function(_dec) { return toVer || srcVer ? compatAdvanceGate(env, worker, _dec, { caller_verify: _callerVerify }) : { allow: false, reason: "the source has no VERSION to verify /health against" }; } });
-      log.push({ step: "deploy", ok: !!dep.ok, error: dep.error || null, bindings_preserved: dep.bindings_preserved, bindings_installed: dep.bindings_installed || 0, binding_install_note: dep.binding_install_note || null, compatibility_date: dep.compatibility_date || null, compat: dep.compat || null });
+      log.push({ step: "deploy", ok: !!dep.ok, error: dep.error || null, bindings_preserved: dep.bindings_preserved, bindings_installed: dep.bindings_installed || 0, binding_install_note: dep.binding_install_note || null, binding_install: dep.binding_install || null, compatibility_date: dep.compatibility_date || null, compat: dep.compat || null });
       if (!dep.ok) {
         result = { ok: false, error: dep.error, rejected: dep.rejected || false };
         return Object.assign({ log }, result);
@@ -10942,7 +11101,7 @@ async function ownerRestRoutes(request, env, path, method) {
     return r.degraded ? { ok: r.ok, result: parsed, degraded: true, retry_after_s: r.retry_after_s } : { ok: r.ok, result: parsed };
   };
   if (path === "/v1/run-state" && method === "GET") return json(await opsRunState(env, new URL(request.url).searchParams.get("run_id"))); // TRACE-FOLD-1
-  if (path === "/v1/ideas" && method === "POST") { let b = {}; try { b = await request.json(); } catch (e) { return json({ error: "invalid JSON body" }, 400); } const __ig = opsD1Gate(Date.now(), "idea_submit", b); if (__ig) return new Response(JSON.stringify(Object.assign({ ok: false, result: __ig.body }, __ig.body)), { status: 503, headers: Object.assign({}, CORS_HEADERS, { "Retry-After": String(__ig.retry_after_s) }) }); return json(await ideaSubmit(env, b)); }
+  if (path === "/v1/ideas" && method === "POST") { let b = {}; try { b = await request.json(); } catch (e) { return json({ error: "invalid JSON body" }, 400); } await opsD1SharedSync(env, Date.now()); const __ig = opsD1Gate(Date.now(), "idea_submit", b); if (__ig) return new Response(JSON.stringify(Object.assign({ ok: false, result: __ig.body }, __ig.body)), { status: 503, headers: Object.assign({}, CORS_HEADERS, { "Retry-After": String(__ig.retry_after_s) }) }); return json(await ideaSubmit(env, b)); }
   if (path === "/v1/queue" && method === "GET") { const u = new URL(request.url); const a = {}; u.searchParams.forEach(function(v, k) { a[k] = v; }); return json(await queueRead(env, a)); }
   if (path === "/v1/tools" && method === "GET") return json({ object: "list", data: opsRestToolList(true).map(function(t) { return { type: "function", function: { name: t.name, description: t.description, parameters: t.parameters } }; }) });
   if (path === "/v1/tools/call" && method === "POST") { let b = {}; try { b = await request.json(); } catch (e) { return json({ error: "invalid JSON body" }, 400); } if (!b.name) return json({ error: "name required" }, 400); const __tr = await run(String(b.name), b.arguments || {}); if (__tr.degraded) return new Response(JSON.stringify(Object.assign({ ok: false, result: __tr.result }, __tr.result)), { status: 503, headers: Object.assign({}, CORS_HEADERS, { "Retry-After": String(__tr.retry_after_s) }) }); return json(__tr); }

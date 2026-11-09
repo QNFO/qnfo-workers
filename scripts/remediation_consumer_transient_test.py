@@ -33,7 +33,7 @@ def check(cond, msg, extra=None):
 
 db = sqlite3.connect(":memory:")
 db.row_factory = sqlite3.Row
-db.execute("CREATE TABLE remediation_contracts (class TEXT PRIMARY KEY, status TEXT, attempts INTEGER, last_attempt_at TEXT, last_verdict TEXT, next_due_at TEXT)")
+db.execute("CREATE TABLE remediation_contracts (class TEXT PRIMARY KEY, status TEXT, attempts INTEGER, last_attempt_at TEXT, last_verdict TEXT, next_due_at TEXT, escalate_to TEXT)")
 db.execute("CREATE TABLE cloud_ops_events (id TEXT, ts TEXT, kind TEXT, text TEXT, job TEXT, status TEXT)")
 state = {"err": None}
 
@@ -54,7 +54,7 @@ def run(err, last_verdict, status="active", attempts=3):
     state["err"] = err
     db.execute("DELETE FROM remediation_contracts")
     db.execute("DELETE FROM cloud_ops_events")
-    db.execute("INSERT INTO remediation_contracts VALUES ('issue-9', ?, ?, NULL, ?, '2026-01-01 00:00:00')", [status, attempts, last_verdict])
+    db.execute("INSERT INTO remediation_contracts VALUES ('issue-9', ?, ?, NULL, ?, '2026-01-01 00:00:00', NULL)", [status, attempts, last_verdict])
     c = {"class": "issue-9", "issue_id": 9, "verify_probe": "SELECT 'a' AS expected, 'a' AS observed", "verify_transport": "d1-query", "expected_cadence_h": 1,
          "last_verdict": last_verdict, "attempts": attempts, "max_attempts": 3, "module": None, "budget_ms": None, "max_items": None}
     rec, local = rc.consume_one(c, {"d1-query"})

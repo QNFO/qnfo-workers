@@ -3,7 +3,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 var PROBER_CRON = "*/20 * * * *";
 
 // worker.js
-var VERSION = "1.9.6-codeagent";
+var VERSION = "1.9.9-codeagent";
 /* 1.6.6 MODEL-PROBE-FALLBACK-1 (2026-11-01, pillar cost): retain router 5xx as route failures while using direct confirmation for known model IDs before updating model health. */ /* 1.6.1 BUDGET-PROBE-REFRESH-1 (2026-10-19, pillar cost, agent_issues 2828 and 2829 closeout): the prober member skipped an ok row for 9 hours after its last probe (PROBE_OK_INTERVAL_MS), so the rows BUDGET-PROBE-1 exists for kept the verdict of the OLD ping-only probe after the 12:25Z deploy: glm-5.3-flash (last probed 12:00:37Z, 0.506 error share over 6,346 calls) and qwen3.8-27b (09:30:42Z, 0.763 over 118) were still ok, and eight other rows were probed only as their own 9 hours lapsed. An ok row whose last probe predates BUDGET_PROBE_SINCE_MS (the 1.6.0 deploy) is now due on the next tick, once; after that probe it carries a budget-shaped verdict and the 9-hour interval applies again. The sweep already probes every model on its full tick. Tests: budget-probe.test.mjs. */ /* 1.6.0 BUDGET-PROBE-1 (2026-10-19, pillar cost, agent_issues 2829 path A): ai_model_health stops reading ok for a model that answers a one-token ping and an empty reply to a real request (glm-5.3-flash 0.53 error share over 5,991 calls, qwen3.8-27b 0.77 over 105, both ok). Both writers of status ok, the sweep (probeBudgetCompletion) and the folded prober member 2.3.16 (applyBudgetProbe), keep the cheap ping and send text models one more request: a trivial sum, max_tokens 256, a DONE marker; empty content (finish_reason length) or no marker is a failed probe on the existing degraded then failing path, with no new status value. Models with a Workers AI id are probed through env.AI.run by both writers (probeBudgetDirect): the router's small-answer lane (reasoning_effort low or none at max_tokens <= 2048) would hide the empty reply; only deepseek-v4-flash and -thinking use the router. ai_calibration_config budget_probe = off reverts to the ping-only verdict without a deploy (control_registry ai-calibration-budget-probe-switch); fm-health-ok-but-empty detects ok rows with a 0.5 error share. */
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
@@ -22,14 +22,14 @@ function __aiAttrEnv(env, worker, aiKey, dbKey) {
         finally {
           try {
             var u = res && typeof res === "object" && res.usage || {};
-            var chars = 0; try { chars = JSON.stringify(input && (input.messages || input.prompt || input.text) || input || "").length; } catch (e1) {}
+            var chars = 0; try { chars = JSON.stringify(input && (input.messages || input.prompt || input.text) || input || "").length; } catch (e1) { console.error(JSON.stringify({evt:"ai_attr_chars_failed",error:String(e1)})); }
             var inTok = Number(u.prompt_tokens || u.input_tokens || 0) || Math.round(chars / 4);
             var outTok = Number(u.completion_tokens || u.output_tokens || 0);
             var r = __AI_ATTR_RATES[String(model)] || [0, 0];
             var neurons = (inTok * r[0] + outTok * r[1]) / 1e6;
             await db.prepare("INSERT INTO ai_call_counters (day, worker, purpose, model, calls, errors, in_chars, ms, in_tok, out_tok, neurons) VALUES (?1,?2,'binding',?3,1,?4,?5,?6,?7,?8,?9) ON CONFLICT(day, worker, purpose, model) DO UPDATE SET calls=calls+1, errors=errors+excluded.errors, in_chars=in_chars+excluded.in_chars, ms=ms+excluded.ms, in_tok=in_tok+excluded.in_tok, out_tok=out_tok+excluded.out_tok, neurons=neurons+excluded.neurons")
               .bind(new Date().toISOString().slice(0, 10), worker, String(model).slice(0, 120), ok ? 0 : 1, chars, Date.now() - t0, inTok, outTok, neurons).run();
-          } catch (e2) {}
+          } catch (e2) { console.error(JSON.stringify({evt:"ai_attr_counter_failed",error:String(e2)})); }
         }
       };
     } });
@@ -413,7 +413,7 @@ __name(budgetProbeOn, "budgetProbeOn");
 // One budget request straight to the Workers AI binding (messages, then prompt when the model refuses that shape). Shared by the
 // sweep and the prober member so a row both write is judged on one request shape.
 async function probeBudgetDirect(env, cfId) {
-  // BP26-G
+  // BP26-GW-CALIBRATION-1: health probes go through the AI Gateway (skipCache, so a probe is never answered from cache); a gateway-named error retries once on the plain binding.
   const GW_OPTS = {
     gateway: {
       id: "default",
@@ -1195,7 +1195,14 @@ var proberMod = (function() {
     for (let i = 0; i < bodies.length; i++) {
       try {
         const t0 = Date.now();
-        await env.AI.run(m.id, bodies[i]);
+        // BP26-GW-CALIBRATION-1: gateway + skipCache; retry once plain when the error names the gateway (never spend or a limit)
+        try {
+          await env.AI.run(m.id, bodies[i], { gateway: { id: "default", skipCache: true, metadata: { worker: "qnfo-ai-calibration", purpose: "health-ping" } } });
+        } catch (ge) {
+          const gm = String(ge && ge.message || ge);
+          if (/gateway/i.test(gm) && !/spend|limit/i.test(gm)) await env.AI.run(m.id, bodies[i]);
+          else throw ge;
+        }
         return { ok: true, ms: Date.now() - t0 };
       } catch (e) {
         lastErr = String(e && e.message || e).slice(0, 120);
@@ -2188,7 +2195,7 @@ var __fk_qnfoEvolve_default = __foldWrap(worker_default, {
 // qnfo-model-eval runs here as a member: its code below is the qnfo-model-eval bundle unchanged except its imports (aliased host imports),
 // its VERSION line and its export. Public: GET /model-eval/health. Every other route answers only a service binding
 // whose props name the member (props.member = "qnfo-model-eval", props.caller = qnfo-*). Its job runs on this worker's own tick.
-var QNFO_MODEL_EVAL_FOLD_VERSION = "1.8.4-folded";
+var QNFO_MODEL_EVAL_FOLD_VERSION = "1.9.0-folded";
 var qnfoModelEvalFoldMod = (function () {
 // qnfo-model-eval - continuous Cloudflare Workers AI model evaluation loop
 // CF-MODEL-EVAL-1: discover new Workers AI models, benchmark them against the
@@ -2249,6 +2256,42 @@ var qnfoModelEvalFoldMod = (function () {
 // gate of the pass, and only for a model whose promotion still stands (promotionStands, filePromoteTickets); decide() builds it and no longer files it. promote-ticket.test.mjs.
 // 1.8.4 HEALTH-LIVENESS-1 (#4188, pillar autonomy; patch): /health stays a liveness check when its optional AUDIT count read fails and reports AUDIT availability separately.
 var VERSION = QNFO_MODEL_EVAL_FOLD_VERSION; // member version (FOLD-KIT-1); was "1.8.4-codeagent" as its own worker; // 1.7.0 TYPED-INPUT-MODEL-1 (agent_issues 100250, pillar autonomy): a model whose input is a typed schema and not chat messages (the extraction model @cf/cloudflare/clairic, which takes {model, fields} and answers typed values; Workers AI refuses a chat call with "required properties at '/' are 'model,fields'", 5006) leaves the chat lane: modalityOf names clairic as 'extraction', and a chat run in which every probe fails with that schema error sets the catalog row to modality 'typed-input', status 'catalogued', with the reason in notes, and files no harness issue; the pick list no longer re-runs a ladder model whose modality is not chat or clef. Before this every sweep re-evaluated clairic and filed CF-MODEL-EVAL-1: harness cannot run. Tests: typed-input.test.mjs. // 1.6.1 HEALTH-CONTRACT-1 (agent_issues 2852, capability_contract_conformance, pillar autonomy): /health now declares capabilities[] and limitations[] (module constants CAPABILITIES and LIMITATIONS, the same lists /manifest returns), so the fleet snapshot counts this worker as conforming; before this /health carried only ok, version and the catalog count. No behaviour change. // 1.6.0 AB-HARNESS-1 (agent_issues 2828 MODEL-QUALITY-PARITY-1, pillar autonomy): a paired A/B quality harness. For one worker and task set it puts the pre-change answer (a recorded baseline reply, or the pre-change model live) and the post-change answer (the post-change model through qnfo-ai, pin_model true) in front of two judges from two other model families, at least one outside every family the worker uses, and writes the win rate against a stated threshold (0.40) to model_ab_runs. Triggers on the hourly tick: a changed model in scripts/model-policy.json, or a model a worker newly uses in ai_call_counters; classification lanes reuse clefCanary agreement. A regression files an issue. Routes GET /ab/runs, GET /ab/fixtures, POST /ab/run (x-eval-key). Switch: cf_model_eval_config ab_enabled = 0 (control_registry model-ab-switch). New QNFO_AI service binding (props caller qnfo-model-eval). Tests: ab-harness.test.mjs. // 1.5.0 CRON-GRID-1 (owner directive 2026-10-19, pillar autonomy): one hourly :20 trigger. The benchmark battery keeps its 6-hour cadence (slots 00:17, 06:17, 12:17, 18:17 run on the :20 fire) because it calls models while the Workers AI cap is breached; a failed run is retried hourly, at most 3 times, and now fails the run instead of being swallowed. Every fire is logged to cron_fire_log for CRON-WATCH-1. // 1.4.1 WORKERS-BP-LOGGING-1 (agent_issues 2342, RESOLVE-ALL-OPEN-1 2026-10-19): the scheduled() error-event write no longer swallows its own failure; it logs a structured console.error.
+// WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
+// binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
+// Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
+var __AI_ATTR_RATES = { "@cf/zai-org/glm-5.3": [127273, 400000], "@cf/zai-org/glm-5.3-flash": [13636, 45455], "@cf/nvidia/nemotron-3-120b-a12b": [45455, 136364], "@cf/moonshotai/kimi-k2.6": [86364, 363636], "@cf/moonshotai/kimi-k2.7-code": [86364, 363636], "@cf/openai/gpt-oss-120b": [31818, 68182], "@cf/openai/gpt-oss-20b": [18182, 27273], "@cf/deepseek-ai/deepseek-v4-pro-0813": [120000, 360000], "@cf/deepseek-ai/deepseek-v4-flash-0731": [40000, 120000], "@cf/meta/llama-3.3-70b-instruct-fp8-fast": [26668, 204805], "@cf/qwen/qwen3-30b-a3b-fp8": [4625, 30475], "@cf/qwen/qwen3.8-27b": [40909, 290909], "@cf/baai/bge-base-en-v1.5": [6058, 0], "@cf/baai/bge-small-en-v1.5": [1841, 0], "@cf/baai/bge-large-en-v1.5": [18582, 0] };
+function __aiAttrEnv(env, worker, aiKey, dbKey) {
+  try {
+    if (!env || env.__aiAttr) return env;
+    var ai = env[aiKey], db = env[dbKey];
+    if (!ai || typeof ai.run !== "function" || !db) return env;
+    var wrapped = new Proxy(ai, { get: function (t, p) {
+      if (p !== "run") { var v = Reflect.get(t, p); return typeof v === "function" ? v.bind(t) : v; }
+      return async function (model, input, opts) {
+        var t0 = Date.now(), ok = 1, res;
+        try { res = await t.run(model, input, opts); return res; } catch (e) { ok = 0; throw e; }
+        finally {
+          try {
+            var u = res && typeof res === "object" && res.usage || {};
+            var chars = 0; try { chars = JSON.stringify(input && (input.messages || input.prompt || input.text) || input || "").length; } catch (e1) { console.error(JSON.stringify({evt:"ai_attr_chars_failed",error:String(e1)})); }
+            var inTok = Number(u.prompt_tokens || u.input_tokens || 0) || Math.round(chars / 4);
+            var outTok = Number(u.completion_tokens || u.output_tokens || 0);
+            var r = __AI_ATTR_RATES[String(model)] || [0, 0];
+            var neurons = (inTok * r[0] + outTok * r[1]) / 1e6;
+            await db.prepare("INSERT INTO ai_call_counters (day, worker, purpose, model, calls, errors, in_chars, ms, in_tok, out_tok, neurons) VALUES (?1,?2,'binding',?3,1,?4,?5,?6,?7,?8,?9) ON CONFLICT(day, worker, purpose, model) DO UPDATE SET calls=calls+1, errors=errors+excluded.errors, in_chars=in_chars+excluded.in_chars, ms=ms+excluded.ms, in_tok=in_tok+excluded.in_tok, out_tok=out_tok+excluded.out_tok, neurons=neurons+excluded.neurons")
+              .bind(new Date().toISOString().slice(0, 10), worker, String(model).slice(0, 120), ok ? 0 : 1, chars, Date.now() - t0, inTok, outTok, neurons).run();
+          } catch (e2) { console.error(JSON.stringify({evt:"ai_attr_counter_failed",error:String(e2)})); }
+        }
+      };
+    } });
+    var copy = Object.assign({}, env);
+    copy[aiKey] = wrapped;
+    copy.__aiAttr = 1;
+    return copy;
+  } catch (e) {
+    return env;
+  }
+}
 const BATTERY_VERSION = "cfmb-2";
 const DOCS_INDEX = "https://developers.cloudflare.com/workers-ai/models/index.md";
 const docsModel = (slug) => `https://developers.cloudflare.com/workers-ai/models/${slug}/index.md`;
@@ -3276,7 +3319,8 @@ const AB_RETRY_MAX_TOKENS = 4096;
 // tick whether or not ai_call_counters still shows a model change (rev 1 scored a length-empty reply as a loss; rev 2 retries it).
 // A pass or an inconclusive row keeps its 7-day dedupe, except an inconclusive row that lost fixtures to an unavailable retry (see
 // abAlreadyRun), and no row is edited or deleted (they are history).
-const AB_HARNESS_REV = 2;
+// Rev 3 (MODEL-AB-HARNESS-REV3-1): a router 5xx is asked once more (AB-5XX-RETRY-1) and the reply of a fixture that scored below 0.5 is kept (AB-EVIDENCE-1).
+const AB_HARNESS_REV = 3;
 const AB_POLICY_URL = "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/scripts/model-policy.json";
 // Judges, in preference order. One model per family; the pair under test and (preferably) the worker's families are skipped.
 const AB_JUDGE_POOL = [
@@ -3499,7 +3543,9 @@ async function abDirect(env, model, content, maxTokens, timeoutMs) {
   } finally { clearTimeout(timer); }
 }
 async function abCall(env, model, content, maxTokens) {
-  const r = await abChat(env, model, content, maxTokens, 90000);
+  let r = await abChat(env, model, content, maxTokens, 90000);
+  // AB-5XX-RETRY-1: a gateway 5xx is transient; ask the router once more before the direct path
+  if (!r.ok && /^http 5\d\d/.test(String(r.error || ""))) { await new Promise((res) => setTimeout(res, 1500)); r = await abChat(env, model, content, maxTokens, 90000); }
   if (r.ok && abSameModel(r.served, model)) return Object.assign(r, { via: "router" });
   const d = await abDirect(env, model, content, maxTokens, 90000);
   if (d.ok) return d;
@@ -3593,14 +3639,14 @@ async function abRunPair(env, c) {
   return Object.assign({}, s, {
     judges: pick.judges.map((j) => j.model), independent: pick.independent, pre_source: c.live_pre ? "live" : "baseline",
     skipped: items.filter((i) => i.score == null).map((i) => ({ id: i.id, why: i.why })),
-    items: items.filter((i) => i.score != null).map((i) => ({ id: i.id, s: i.score, js: i.judge_scores, via: i.via, why: i.why, retried: i.retried })),
+    items: items.filter((i) => i.score != null).map((i) => ({ id: i.id, s: i.score, js: i.judge_scores, via: i.via, why: i.why, retried: i.retried, post: i.score < 0.5 && i.post ? String(i.post).slice(0, 100) : undefined })),
     post_paths: items.reduce((a, i) => { if (i.via) a[i.via] = (a[i.via] || 0) + 1; return a; }, {}),
   });
 }
 
 async function abWorkerModels(env, worker) {
   try {
-    const r = await env.AUDIT.prepare("SELECT DISTINCT model FROM ai_call_counters WHERE worker=?1 AND day >= date('now','-15 day') AND model IS NOT NULL").bind(worker).all();
+    const r = await env.AUDIT.prepare("SELECT DISTINCT model FROM ai_call_counters WHERE worker=?1 AND day >= date('now','-15 day') AND model IS NOT NULL AND COALESCE(purpose,'') <> 'quality-floor-read'").bind(worker).all();
     return (r.results || []).map((x) => x.model);
   } catch (_) { return []; }
 }
@@ -3688,8 +3734,8 @@ async function abObservedCandidates(env, notes) {
   const minCalls = Math.max(5, Number(await cfg(env, "ab_min_calls", "20")) || 20);
   const defSet = await cfg(env, "ab_default_task_set", "grounded-qa");
   const r = await env.AUDIT.prepare(
-    `WITH recent AS (SELECT worker, model, SUM(calls) c FROM ai_call_counters WHERE day >= date('now','-1 day') AND model IS NOT NULL GROUP BY worker, model HAVING SUM(calls) >= ?1),
-          prior AS (SELECT worker, model, SUM(calls) c FROM ai_call_counters WHERE day < date('now','-1 day') AND day >= date('now','-15 day') AND model IS NOT NULL GROUP BY worker, model)
+    `WITH recent AS (SELECT worker, model, SUM(calls) c FROM ai_call_counters WHERE day >= date('now','-1 day') AND model IS NOT NULL AND COALESCE(purpose,'') <> 'quality-floor-read' GROUP BY worker, model HAVING SUM(calls) >= ?1),
+          prior AS (SELECT worker, model, SUM(calls) c FROM ai_call_counters WHERE day < date('now','-1 day') AND day >= date('now','-15 day') AND model IS NOT NULL AND COALESCE(purpose,'') <> 'quality-floor-read' GROUP BY worker, model)
      SELECT r.worker, r.model AS post_model, r.c AS recent_calls,
             (SELECT p2.model FROM prior p2 WHERE p2.worker = r.worker AND p2.model <> r.model AND p2.c >= ?1 ORDER BY p2.c DESC LIMIT 1) AS pre_model
        FROM recent r LEFT JOIN prior p ON p.worker = r.worker AND p.model = r.model
@@ -3832,8 +3878,28 @@ async function manifest(env) {
 }
 
 // FOLD-RETURN-ORDER-1: the guest default is held in a variable and returned after the last top-level statement of the guest, so the statements that follow its `export default` (var CRON_GRID_RETRIES, var CRON_GRID_CFG) run before the host calls scheduled.
+// BP26-GW-MODEL-EVAL-1 (agent_issues 1001884, pillar cost): the battery items, the ops-scale canary, the decision/clef probes and the A/B direct path call env.AI.run in six places with no gateway option,
+// so a battery run over the whole roster added direct Workers AI calls no table counted. __gwEnv returns a shallow env copy whose AI binding adds { gateway: { id: "default", skipCache: true,
+// metadata: { worker: "qnfo-model-eval", purpose: "battery" } } } to every run() that names no gateway of its own; __aiAttrEnv (WORKERS-AI-ATTRIBUTION-1) wraps the result and writes the ai_call_counters row.
+var __GW_OPTS = { gateway: { id: "default", skipCache: true, metadata: { worker: "qnfo-model-eval", purpose: "battery" } } };
+function __gwEnv(env) {
+  try {
+    if (!env || !env.AI || typeof env.AI.run !== "function" || env.__gwWrapped) return env;
+    var ai = env.AI;
+    var wrapped = new Proxy(ai, { get: function (t, p) {
+      if (p !== "run") { var v = Reflect.get(t, p); return typeof v === "function" ? v.bind(t) : v; }
+      return function (model, input, opts) {
+        return t.run(model, input, opts && opts.gateway ? opts : Object.assign({}, opts || {}, __GW_OPTS));
+      };
+    } });
+    return Object.assign({}, env, { AI: wrapped, __gwWrapped: true });
+  } catch (e) {
+    return env;
+  }
+}
 var __fk_qnfoModelEval_guestDefault = {
   async fetch(req, env) {
+    env = __aiAttrEnv(__gwEnv(env), "qnfo-model-eval", "AI", "AUDIT"); // BP26-GW-MODEL-EVAL-1: every env.AI.run below goes through gateway "default" and lands in ai_call_counters
     const url = new URL(req.url);
     const p = url.pathname.replace(/\/$/, "") || "/";
     try {

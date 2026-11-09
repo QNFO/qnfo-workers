@@ -23,8 +23,8 @@
         "/api/prep",
         "resume.pdf",
         "/api/funnel",
-        "/referral",
-        "/stage"
+        "/stage",
+        "/api/linkedin"
       ]
     },
     {
@@ -43,6 +43,19 @@
       "url": "https://qnfo-jobsearch.q08.workers.dev/api/referrals",
       "contains": [
         "\"items\""
+      ]
+    },
+    {
+      "url": "https://qnfo-jobsearch.q08.workers.dev/api/ledger",
+      "contains": [
+        "Autonomous AI systems researcher"
+      ]
+    },
+    {
+      "url": "https://qnfo-jobsearch.q08.workers.dev/api/recall",
+      "status": 401,
+      "contains": [
+        "sign in first"
       ]
     }
   ]

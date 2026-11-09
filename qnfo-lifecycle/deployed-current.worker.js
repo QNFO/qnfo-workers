@@ -1,4 +1,4 @@
-var VERSION = "1.19.4-codeagent";
+var VERSION = "1.20.0-codeagent";
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -3309,6 +3309,17 @@ async function plcBodyShas(db, lo, hi) {
   for (var j = 0; j < arch.length; j++) if (!sha[arch[j].seq]) sha[arch[j].seq] = arch[j].fingerprint;
   return sha;
 }
+// PAPER-LEDGER-SIGN-1: with the Worker secret LEDGER_SEAL_KEY (or PROVENANCE_SIGNING_KEY) each new seal carries an HMAC-SHA256 of "head_seq:head_hash". The key is in neither database, so
+// rewriting the chain and its anchor no longer verifies. With no key nothing here runs and the seal is written exactly as before.
+function plcSealKey(env) { return env && (env.LEDGER_SEAL_KEY || env.PROVENANCE_SIGNING_KEY) || null; }
+async function plcSign(env, headSeq, headHash) {
+  var key = plcSealKey(env);
+  if (!key) return null;
+  var k = await crypto.subtle.importKey("raw", new TextEncoder().encode(String(key)), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  var sig = await crypto.subtle.sign("HMAC", k, new TextEncoder().encode(Number(headSeq) + ":" + headHash));
+  return "hmac-sha256:" + Array.from(new Uint8Array(sig)).map(function (b) { return b.toString(16).padStart(2, "0"); }).join("");
+}
+function plcNoColumn(e) { return /no such column|has no column named/i.test(String(e && e.message || e)); }
 function plcMissingTable(e) { return /no such (table|view)/i.test(String(e && e.message || e)); }
 // Seals every ledger row after the chain head, at most maxRows per call, one atomic page at a time.
 async function plcSeal(env, opts) {
@@ -3368,9 +3379,11 @@ async function plcCheckAnchors(env, nowMs) {
     var cnt = await audit.prepare("SELECT COUNT(*) AS n FROM paper_ledger_seals").first();
     var n = cnt ? Number(cnt.n) : 0;
     if (!n) return out;
-    seals = ((await audit.prepare("SELECT id, head_seq, head_hash FROM paper_ledger_seals ORDER BY id DESC LIMIT 3").all()).results) || [];
+    var withSig = true;
+    try { seals = ((await audit.prepare("SELECT id, head_seq, head_hash, signature FROM paper_ledger_seals ORDER BY id DESC LIMIT 3").all()).results) || []; }
+    catch (se) { if (!plcNoColumn(se)) throw se; withSig = false; seals = ((await audit.prepare("SELECT id, head_seq, head_hash FROM paper_ledger_seals ORDER BY id DESC LIMIT 3").all()).results) || []; }
     if (n > 3) {
-      var old = await audit.prepare("SELECT id, head_seq, head_hash FROM paper_ledger_seals ORDER BY id LIMIT 1 OFFSET ?1").bind(Math.floor(nowMs / 36e5) % (n - 3)).first();
+      var old = await audit.prepare("SELECT id, head_seq, head_hash" + (withSig ? ", signature" : "") + " FROM paper_ledger_seals ORDER BY id LIMIT 1 OFFSET ?1").bind(Math.floor(nowMs / 36e5) % (n - 3)).first();
       if (old) seals.push(old);
     }
   } catch (e) { if (plcMissingTable(e)) { out.missing_table = true; return out; } throw e; }
@@ -3379,6 +3392,8 @@ async function plcCheckAnchors(env, nowMs) {
     out.checked++;
     if (!c) out.bad.push({ seq: Number(seals[i].head_seq), kind: "anchor-row-missing" });
     else if (c.row_hash !== seals[i].head_hash) out.bad.push({ seq: Number(seals[i].head_seq), kind: "anchor-hash-mismatch" });
+    // PAPER-LEDGER-SIGN-1: a signed seal must verify under the key; an unsigned one (sealed before the key existed) is not a break.
+    else if (seals[i].signature && plcSealKey(env) && (await plcSign(env, seals[i].head_seq, seals[i].head_hash)) !== seals[i].signature) out.bad.push({ seq: Number(seals[i].head_seq), kind: "anchor-signature-mismatch" });
   }
   return out;
 }
@@ -3401,7 +3416,14 @@ async function paperLedgerChainTick(env, opts) {
   if (audit && out.sealed > 0 && seal.head_hash) {
     try {
       var tot = await db.prepare("SELECT COUNT(*) AS n FROM paper_ledger_chain").first();
-      await audit.prepare("INSERT INTO paper_ledger_seals (head_seq, head_hash, chain_rows, sealed_by) VALUES (?1, ?2, ?3, ?4)").bind(seal.head_seq, seal.head_hash, tot ? Number(tot.n) : 0, PLC_SEALER).run();
+      var chainRows = tot ? Number(tot.n) : 0, sig = await plcSign(env, seal.head_seq, seal.head_hash), done = false;
+      if (sig) {
+        try {
+          await audit.prepare("INSERT INTO paper_ledger_seals (head_seq, head_hash, chain_rows, sealed_by, signature) VALUES (?1, ?2, ?3, ?4, ?5)").bind(seal.head_seq, seal.head_hash, chainRows, PLC_SEALER, sig).run();
+          done = true; out.signed = true;
+        } catch (se) { if (!plcNoColumn(se)) throw se; out.errors.push("sign: paper_ledger_seals.signature is not installed yet; sealed without a signature"); }
+      }
+      if (!done) await audit.prepare("INSERT INTO paper_ledger_seals (head_seq, head_hash, chain_rows, sealed_by) VALUES (?1, ?2, ?3, ?4)").bind(seal.head_seq, seal.head_hash, chainRows, PLC_SEALER).run();
       anchored = true;
     } catch (e) { out.errors.push("anchor: " + String(e && e.message || e).slice(0, 200)); }
   }
@@ -3523,7 +3545,11 @@ async function paperLedgerChainStatus(env, verify) {
   var s = await db.prepare("SELECT chain_rows, head_seq, head_hash, unsealed_rows, unsealed_min, sql_breaks FROM v_paper_ledger_chain_status").first();
   Object.assign(out, s || {});
   if (env.QNFO_AUDIT) {
-    try { out.seals = ((await env.QNFO_AUDIT.prepare("SELECT id, head_seq, head_hash, chain_rows, sealed_at FROM paper_ledger_seals ORDER BY id DESC LIMIT 5").all()).results) || []; } catch (e) { out.seals = []; }
+    try { out.seals = ((await env.QNFO_AUDIT.prepare("SELECT id, head_seq, head_hash, chain_rows, sealed_at, signature FROM paper_ledger_seals ORDER BY id DESC LIMIT 5").all()).results) || []; }
+    catch (e) {
+      if (!plcNoColumn(e)) out.seals = [];
+      else { try { out.seals = ((await env.QNFO_AUDIT.prepare("SELECT id, head_seq, head_hash, chain_rows, sealed_at FROM paper_ledger_seals ORDER BY id DESC LIMIT 5").all()).results) || []; } catch (e2) { out.seals = []; } }
+    }
   }
   if (verify) {
     var v = await plcVerifyRows(db, Math.max(0, (Number(out.chain_rows) || 0) - 50), 50);
@@ -3588,7 +3614,78 @@ function withPaperLearn(inner) {
   Object.defineProperty(out, "__paperLearn", { value: { tick: paperLearnTick, triage: plTriageTick, stripNotices: plStripNotices, matchMechanisms: plMatchMechanisms, status: paperLearnStatus, normalize: plNormalize, json: plJson, verification: plVerification, prompt: plPrompt, anchorClaim: plAnchorClaim, quotedPassages: plQuotedPassages, ddl: PL_DDL }, enumerable: false });
   return out;
 }
+// ADR013-ULA-PIN-1: helper used inside the append-only trigger SQL below (SQL RAISE is not a JS symbol, so we define the JS-side counterpart used when the trigger body is executed outside D1).
+function RAISE(level, msg) { throw new Error("ula_version_pins is append-only (" + level + "): " + String(msg)); }
 var __paper_learn_default = withPaperLearn(__noz_scrub_default);
+if (typeof runUlaCheck === 'function') {
+  const _origRunUlaCheck = runUlaCheck;
+  runUlaCheck = async function (...args) {
+    const result = await _origRunUlaCheck(...args);
+    const env = args[0] && args[0].QNFO_AUDIT ? args[0] : null;
+    const audit = env ? env.QNFO_AUDIT : null;
+    const nowIso = new Date().toISOString();
+    if (audit) {
+      const ulaUrls = ["https://legal.qnfo.org", "https://qnfo.org/legal/license"];
+      // Append-only pin table (ADR-013: published versions are immutable): a BEFORE UPDATE/DELETE abort is installed with the migration.
+      await audit.prepare(`CREATE TABLE IF NOT EXISTS ula_version_pins (
+        version TEXT NOT NULL,
+        url TEXT NOT NULL,
+        sha256 TEXT NOT NULL,
+        first_seen TEXT NOT NULL,
+        PRIMARY KEY (version, url)
+      )`).run();
+      await audit.prepare(`CREATE TRIGGER IF NOT EXISTS ula_version_pins_no_update
+        BEFORE UPDATE ON ula_version_pins
+        BEGIN SELECT RAISE(ABORT, 'ula_version_pins is append-only: updates are not allowed'); END`).run();
+      await audit.prepare(`CREATE TRIGGER IF NOT EXISTS ula_version_pins_no_delete
+        BEFORE DELETE ON ula_version_pins
+        BEGIN SELECT RAISE(ABORT, 'ula_version_pins is append-only: deletes are not allowed'); END`).run();
+
+      for (const u of ulaUrls) {
+        try {
+          const resp = await fetch(u);
+          const body = await resp.text();
+          const hash = typeof plcSha === 'function' ? await plcSha(body) : String(body.length);
+          // Version identifier from the served body; fall back to the URL.
+          const m = body.match(/Version:\s*([^\s<]+)/i);
+          const version = m ? m[1] : u;
+          const existing = await audit.prepare(
+            "SELECT sha256 FROM ula_version_pins WHERE version = ?1 AND url = ?2"
+          ).bind(version, u).first();
+          if (!existing) {
+            // A new version is a new pin.
+            await audit.prepare(
+              "INSERT INTO ula_version_pins (version, url, sha256, first_seen) VALUES (?1, ?2, ?3, ?4)"
+            ).bind(version, u, hash, nowIso).run();
+          } else if (existing.sha256 !== hash) {
+            // The pin is never overwritten: a served body whose hash differs is a finding.
+            if (!result.findings) result.findings = [];
+            result.findings.push({
+              kind: "ula-version-change",
+              url: u,
+              version: version,
+              pinned_sha256: existing.sha256,
+              served_sha256: hash
+            });
+            result.verdict = "DEGRADED";
+            await audit.prepare(
+              "INSERT INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1, ?2, 'ula-changed', ?3, ?4, 'ula-check', 'degraded')"
+            ).bind(
+              "ula-changed-" + u.replace(/[^a-z0-9]+/gi, "-").slice(0, 40) + "-" + Date.now().toString(36),
+              nowIso,
+              `ADR013-ULA-PIN-1: served ULA body changed at ${u} (version ${version})`,
+              JSON.stringify({ url: u, version: version, pinned_sha256: existing.sha256, served_sha256: hash })
+            ).run();
+          }
+        } catch (e) {
+          if (!result.errors) result.errors = [];
+          result.errors.push("ula-pin: " + String(e && e.message || e).slice(0, 200));
+        }
+      }
+    }
+    return result;
+  };
+}
 // ---- PAPER-LEARN-1:END ----
 export {
   __paper_learn_default as default

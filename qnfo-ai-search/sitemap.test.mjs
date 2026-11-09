@@ -11,20 +11,26 @@ try {
   writeFileSync(join(temp, "worker.mjs"), readFileSync(join(here, "worker.js"), "utf8"));
   const { default: worker } = await import(pathToFileURL(join(temp, "worker.mjs")).href);
 
-  for (const host of ["ask.qwav.tech", "ask.qwav.org"]) {
+  for (const host of ["ask.qwav.org"]) {
     const sitemap = await worker.fetch(new Request(`https://${host}/sitemap.xml`), {}, {});
     const xml = await sitemap.text();
     assert.equal(sitemap.status, 200, `${host} sitemap status`);
     assert.match(sitemap.headers.get("content-type"), /application\/xml/i);
-    assert.match(xml, /<loc>https:\/\/ask\.qwav\.tech\/<\/loc>/);
+    assert.match(xml, /<loc>https:\/\/ask.qwav.org\/<\/loc>/);
 
     const robots = await worker.fetch(new Request(`https://${host}/robots.txt`), {}, {});
     const text = await robots.text();
     assert.equal(robots.status, 200, `${host} robots status`);
     assert.match(text, /Disallow: \/api\/ask/);
     assert.match(text, /Disallow: \/api\/feedback/);
-    assert.match(text, /Sitemap: https:\/\/ask\.qwav\.tech\/sitemap\.xml/);
+    assert.match(text, /Sitemap: https:\/\/ask.qwav.org\/sitemap\.xml/);
   }
+  // ASK-CANONICAL-1: page routes of the .tech host redirect, /api stays.
+  const red = await worker.fetch(new Request("https://ask.qwav.tech/concepts?x=1"), {}, {});
+  assert.equal(red.status, 301);
+  assert.equal(red.headers.get("location"), "https://ask.qwav.org/concepts?x=1");
+  const api = await worker.fetch(new Request("https://ask.qwav.tech/api/ask", { method: "POST", body: "{}" }), {}, {});
+  assert.notEqual(api.status, 301);
 } finally {
   rmSync(temp, { recursive: true, force: true });
 }

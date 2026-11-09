@@ -19,7 +19,7 @@ if (!src.includes(IMPORT)) throw new Error("worker.js import line changed: updat
 const patched = src.replace(IMPORT, "var connect = function () { throw new Error('sockets are stubbed in this test'); };") +
   "\nexport { jobOutreach as __jobOutreach, jobOutreachLearner as __tick, learnerTopic as __topic, learnerRtype as __rtype, learnerAddr as __addr," +
   " learnerClassify as __classify, learnerPlan as __plan, learnerBeta as __beta, LEARNER_RNG as __RNG, sentAsYouDigest as __digest," +
-  " jobEmailTriage as __triage, OUTREACH_OPT_OUT as __OPT_OUT, CRON_COMPANIONS as __COMP, JOBS as __JOBS, LEARNER_METRICS as __METRICS, LEARNER_METRIC_ACTOR as __ACTOR };\n";
+  " jobEmailTriage as __triage, OUTREACH_OPT_OUT as __OPT_OUT, CRON_COMPANIONS as __COMP, JOBS as __JOBS, LEARNER_METRICS as __METRICS, LEARNER_METRIC_ACTOR as __ACTOR, pivotAllows as __pivotAllows, pivotAcademic as __pivotAcademic };\nexport function __setPivotScan(n) { PIVOT_SCAN_ROWS = n; }\n";
 const mod = await import("data:text/javascript;base64," + Buffer.from(patched).toString("base64"));
 
 let pass = 0, fail = 0;
@@ -62,7 +62,7 @@ function fresh(opts) {
     CREATE TABLE social_threads (slug TEXT, title TEXT, posted_at TEXT, post_uri TEXT, status TEXT);
     CREATE TABLE dissemination_tracker (channel TEXT, paper_slug TEXT, post_url TEXT, posted_at TEXT, action TEXT);
     CREATE TABLE email_reply_queue (id INTEGER PRIMARY KEY AUTOINCREMENT, sender TEXT, subject TEXT, sent_at TEXT);`);
-  if (opts.opsConfig !== false) audit.exec("CREATE TABLE ops_config (key TEXT PRIMARY KEY, value TEXT, note TEXT, updated_at TEXT)");
+  if (opts.opsConfig !== false) { audit.exec("CREATE TABLE ops_config (key TEXT PRIMARY KEY, value TEXT, note TEXT, updated_at TEXT)"); audit.exec("INSERT INTO ops_config (key, value) VALUES ('outreach_pivot_autonomy', 'off')"); } // OUTREACH-PIVOT-1 is default-on; the learner suites run with it off, the pivot section turns it on
   const outreach = new DatabaseSync(":memory:");
   outreach.exec(`CREATE TABLE pipeline_state (key TEXT PRIMARY KEY, value TEXT, updated_at TEXT);
     CREATE TABLE contacts (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT NOT NULL UNIQUE, name TEXT, suppress INTEGER DEFAULT 0, suppress_reason TEXT, contact_count INTEGER NOT NULL DEFAULT 0, status TEXT DEFAULT 'new');
@@ -374,6 +374,60 @@ ok(cls("Re: QNFO", "--_000_X\nContent-Type: text/plain\n\nQXBwcmVjaWF0ZSBSb3dhbi
 // 9. Wiring: a companion in the daily engagement slot, no new cron
 ok(mod.__COMP.engagement && mod.__COMP.engagement.includes("outreach-learner") && typeof mod.__JOBS["outreach-learner"] === "function", "outreach-learner runs as a companion of the daily engagement job");
 ok(!/"outreach-learner":\s*\{\s*times/.test(src), "no AMS_SCHEDULE entry (no new cron) for the learner");
+
+// 10. OUTREACH-PIVOT-1: cold email goes only to AI autonomous-systems authors; the rest is held, reversibly
+ok(["x@uni-a.edu","x@iphy.ac.cn","x@mail.nankai.edu.cn","x@tcd.ie","x@oeaw.ac.at","x@kit.edu"].every(mod.__pivotAcademic) && !["x@geeqchiqtech.com","x@gmail.com","x@acme-agents.com","x@fireworks.ai",""].some(mod.__pivotAcademic), "university and institute domains are academic; companies, webmail and empty are not");
+ok(mod.__pivotAllows("arxiv-radar widened: Oversight of Autonomous LLM Agents in Long-Horizon Operations") === true, "an autonomous-agent oversight paper is allowed");
+ok(mod.__pivotAllows("Scalable Oversight and Reward Hacking in Agentic Systems") === true && mod.__pivotAllows("Corrigibility in Self-Improving AI") === true, "alignment and self-improvement papers are allowed");
+ok(mod.__pivotAllows("arxiv-radar widened: Dissipative Quantum Battery from Many-Body Scars") === false && mod.__pivotAllows("Threshold Behavior of ZX Surface Codes") === false && mod.__pivotAllows("") === false, "quantum battery, surface-code and empty reasons are not");
+{
+  const t = fresh();
+  await ensureTables(t);
+  t.queue("q1@uni-a.edu", "arxiv-radar widened: Threshold Behavior of ZX Surface Codes", "pending", 300);
+  t.queue("q2@uni-b.edu", "arxiv-radar widened: Dissipative Quantum Battery", "needs-email", 200);
+  t.queue("a1@acme-agents.com", "arxiv-radar widened: Oversight of Autonomous LLM Agents", "pending", 100);
+  t.queue("a2@uni-d.edu", "arxiv-radar widened: Oversight of Autonomous LLM Agents", "pending", 90);
+  t.uncfg("outreach_pivot_autonomy");
+  const r = await mod.__jobOutreach(t.env);
+  ok(r.notes && r.notes.pivot && r.notes.pivot.on === true && r.notes.pivot.held === 3, "pivot absent = on: the two quantum rows and the academic autonomy row are held (" + JSON.stringify(r.notes && r.notes.pivot) + ")");
+  ok(t.qs("q1@uni-a.edu") === "held-pivot-quantum" && t.qs("q2@uni-b.edu") === "held-pivot-quantum", "held rows carry the pivot status");
+  ok(t.qs("a1@acme-agents.com") !== "held-pivot-quantum", "the autonomy row to a company address stays in the drain");
+  ok(t.qs("a2@uni-d.edu") === "held-pivot-quantum", "an autonomy row to a university address is held");
+  ok(/from=pending/.test(t.audit.prepare("SELECT error FROM outreach_queue WHERE email = 'q1@uni-a.edu'").get().error) && /from=needs-email/.test(t.audit.prepare("SELECT error FROM outreach_queue WHERE email = 'q2@uni-b.edu'").get().error), "the prior status is recorded");
+  t.cfg("outreach_pivot_autonomy", "off");
+  const r2 = await mod.__jobOutreach(t.env);
+  ok(r2.notes.pivot.on === false && r2.notes.pivot.released === 3, "switch off releases all held rows (" + JSON.stringify(r2.notes && r2.notes.pivot) + ")");
+  ok(!t.audit.prepare("SELECT 1 FROM outreach_queue WHERE status = 'held-pivot-quantum'").get(), "nothing stays held after release");
+}
+
+
+// 11. OUTREACH-PIVOT-1 (codex review of #9886): the guard runs on every row at send time, and the pitch follows the audience
+{
+  const t = fresh();
+  await ensureTables(t);
+  t.uncfg("outreach_pivot_autonomy");
+  mod.__setPivotScan(1);   // the maintenance scan sees one row; the send loop must still refuse the rest
+  t.queue("q1@acme-qc.com", "arxiv-radar widened: Threshold Behavior of ZX Surface Codes", "pending", 300);
+  t.queue("q2@acme-qc.com", "arxiv-radar widened: Dissipative Quantum Battery", "pending", 200);
+  t.queue("q3@acme-qc.com", "arxiv-radar widened: Magic State Distillation Thresholds", "pending", 100);
+  const r = await mod.__jobOutreach(t.env);
+  ok(t.sent.length === 0, "no quantum row is mailed when the scan cap leaves rows unscanned (sent " + t.sent.length + ")");
+  ok(["q1@acme-qc.com", "q2@acme-qc.com", "q3@acme-qc.com"].every((e) => t.qs(e) === "held-pivot-quantum"), "all three are held, the extra ones by the send-time guard: " + JSON.stringify(["q1@acme-qc.com", "q2@acme-qc.com", "q3@acme-qc.com"].map(t.qs)));
+  mod.__setPivotScan(400);
+  t.queue("a1@agents-lab.com", "arxiv-radar widened: Oversight of Autonomous LLM Agents in Long-Horizon Operations", "pending", 50);
+  await mod.__jobOutreach(t.env);
+  const m = t.sent.find((x) => x.to === "a1@agents-lab.com");
+  ok(m && /autonomous AI systems operate, fail and get audited/.test(m.subject) && !/quantum/i.test(m.subject + m.text), "an autonomy row to a company address gets the autonomy pitch, not the quantum one");
+  ok(m && /I am Rowan Brad Quni-Gudzinas, a systems researcher/.test(m.text) && /arXiv|your recent work/.test(m.text) && /stop|unsubscribe|opt/i.test(m.text), "it names the author work, says who is writing and carries the opt-out line");
+  ok(t.audit.prepare("SELECT template FROM outreach_learner_sends WHERE email = 'a1@agents-lab.com'").get().template === "autonomy-first-v1", "the template is recorded as autonomy-first-v1");
+  // switch off: the old pitch and the old audience come back
+  t.cfg("outreach_pivot_autonomy", "off");
+  t.queue("old@oldlab.com", "arxiv-radar widened: Threshold Behavior of ZX Surface Codes", "pending", 10);
+  const before = t.sent.length;
+  await mod.__jobOutreach(t.env);
+  const old = t.sent.slice(before).find((x) => x.to === "old@oldlab.com");
+  ok(old && /energy-efficiency benchmark for quantum computing/.test(old.subject), "with the switch off the JPCUB pitch is used again");
+}
 
 console.log(pass + " passed, " + fail + " failed");
 if (fail) process.exit(1);

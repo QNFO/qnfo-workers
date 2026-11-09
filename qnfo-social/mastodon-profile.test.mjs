@@ -44,7 +44,7 @@ ok(JSON.stringify(sent.fields_attributes) === JSON.stringify([orcid, { name: "We
 ok(n.calls.every((c) => c.auth === "Bearer tok-SECRET" && /^https:\/\/mstdn\.science\/api\/v1\/accounts\//.test(c.url)), "requests go to the account API with the bearer token");
 ok(!JSON.stringify(r).includes("tok-SECRET"), "the token never reaches the result");
 
-n = net({ fields: [orcid, { name: "Website", value: '<a href="https://qnfo.org" rel="me">https://qnfo.org</a>', verified_at: "2026-10-19T00:00:00Z" }] });
+n = net({ source: { note: mod.PROFILE_DESCRIPTION }, fields: [orcid, { name: "Website", value: '<a href="https://qnfo.org" rel="me">https://qnfo.org</a>', verified_at: "2026-10-19T00:00:00Z" }] });
 r = await mod.mastodonProfileSync(env, n.f);
 ok(r.changed === false && n.calls.length === 1 && r.verified === 1, "an already-correct profile (HTML-wrapped value) is left alone and its verified count read back", { r, calls: n.calls.length });
 
@@ -54,6 +54,16 @@ ok(/verify_credentials 401/.test(r.error || "") && n.calls.length === 1, "a refu
 n = net({ fields: [dead] }, { verify: 200, update: 422 });
 r = await mod.mastodonProfileSync(env, n.f);
 ok(/update_credentials 422/.test(r.error || "") && r.changed === false, "a refused update reports its status, never a success", r);
+
+// BRAND-AUTONOMY-1 (0.25.0): the bio is set to the approved text, the previous one is returned, and a correct bio is left alone.
+n = net({ source: { note: "Quantum computing founder" }, fields: [orcid, { name: "Website", value: "https://qnfo.org" }] });
+r = await mod.mastodonProfileSync(env, n.f);
+const nb = JSON.parse((n.calls[1] && n.calls[1].body) || "{}");
+ok(r.changed === true && r.note === "updated" && r.previous_note === "Quantum computing founder" && nb.note === mod.PROFILE_DESCRIPTION, "a stale bio is replaced and the old text returned", { r, nb });
+n = net({ note: "<p>" + mod.PROFILE_DESCRIPTION + "</p>", fields: [orcid, { name: "Website", value: "https://qnfo.org" }] });
+r = await mod.mastodonProfileSync(env, n.f);
+ok(r.changed === false && n.calls.length === 1, "an HTML-rendered bio equal to the approved text is left alone (no source.note)", r);
+ok(!/quantum/i.test(mod.PROFILE_DESCRIPTION) && /Autonomous AI systems researcher/.test(mod.PROFILE_DESCRIPTION) && mod.PROFILE_DESCRIPTION.length <= 500, "the bio is the brand line and fits Mastodon's 500 characters");
 
 console.log(pass + " passed, " + fail + " failed");
 if (fail) process.exit(1);

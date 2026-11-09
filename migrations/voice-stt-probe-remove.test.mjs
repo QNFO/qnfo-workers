@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
-const migrationSQL = readFileSync(new URL('./2026-11-07-voice-stt-probe-remove.sql', import.meta.url), 'utf8');
+const migrationSQL = readFileSync(new URL('./retired/2026-11-07-voice-stt-probe-remove.sql.txt', import.meta.url), 'utf8');
 
 describe('voice-stt-probe-remove migration', () => {
   it('supersedes the voice-stt probe', () => {

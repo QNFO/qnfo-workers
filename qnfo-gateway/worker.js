@@ -165,7 +165,7 @@ function formatPaper(source, record) {
 }
 // PAPER-FORMAT-2:END
 // 3.48.7 PAPER-REVISION-QUALITY-1 (2026-11-03, pillar reach): recover split revision titles and record abstracts at public rendering, and reject cached refusals from both summary surfaces.
-var VERSION="3.61.3-codeagent";
+var VERSION="3.63.3-codeagent";
 /* 3.54.2 SEO-404-PATHS-1 follow-up: the paper page script no longer requests /api/paper-context/undefined when the page data block is missing (first path recorded in seo_404_paths). */ /* 3.54.0 SEO-404-PATHS-1 and INDEXNOW-BACKOFF-1 (merged): see the two notes below. GET /api/seo/crawl also returns notFound, the top 50 crawler 404 paths of the window, so the dashboard UX auditor reads them from the open route. INDEXNOW-BACKOFF-1: an IndexNow endpoint that failed its last 6 logged runs is tried once per 3 hours and a 429 is not retried. */ /* SEO-404-PATHS-1 (2026-11-04, pillar reach): a crawler request that answers 404 records its path in living-paper seo_404_paths (day, host, path, n; 500 paths a day, 14 days kept). seo_crawl_log counted 1,875 crawler 404s on 2026-11-02 (qnfo.org, every bot, kind other) and kept no path to fix. */ // 3.52.0 QWAV-DEMOS-1 (2026-11-04, pillar reach; minor: the QWAV page lists the ten interactive demos that only the retired Pages site linked, with a Demos nav item, a hero action and a footer link; the page is now the whole of qwav.org through a qwav.org/* route, so unknown paths redirect home instead of answering 200). Revert: restore 3.51.0. // 3.51.0 earlier history follows: // 3.51.0 CROSS-LINK-1 (2026-11-04, pillar reach; minor: every QDS page gains a family bar linking QNFO, QWAV and q08, a Keep exploring module (newest and random papers from the open API, the three family sites, topic chips) and a family line in the footer; QDS 1.1.0; visible ask links use ask.qwav.org per DOMAIN-PLANE-1). Prediction: pages per session on qwav.org and qnfo.org rise and clicks between the three sites become non-zero. Revert: restore 3.50.0. // 3.50.0 earlier history follows: // 3.50.0 PAPER-CITATION-ALIASES-1 (#5577, pillar research; minor): expose the documented /papers/<slug>/cite.* routes alongside the existing API exports. /* main 3.53.1 */ // 3.53.1 PAPER-TTFB-1 (2026-11-04, pillar reach; patch): a paper page whose plain summary kept failing the readability gate ran two model generations inside every request (17 to 44 s to first byte for a-minimal-generative-grammar-of-coordination..., 1.2 s for its neighbours); the fill now runs after the response and once per PLAIN_RETRY_MS per paper per colo. Revert: restore 3.53.0. // 3.53.0 earlier history follows: // 3.53.0 CROSS-LINK-2 (2026-11-04, pillar reach; minor: papers.qnfo.org index and paper pages, rendered by lpDoc, gain the family bar and a Keep exploring strip linking QWAV, Ask, ideas and q08, so the pages a search lands on lead to the rest of the family). Revert: restore 3.52.0. // 3.52.0 earlier history follows: // 3.52.0 QWAV-DEMOS-1 (2026-11-04, pillar reach; minor: the QWAV page lists the ten interactive demos that only the retired Pages site linked, with a Demos nav item, a hero action and a footer link; the page is now the whole of qwav.org through a qwav.org/* route, so unknown paths redirect home instead of answering 200). Revert: restore 3.51.0. // 3.51.0 earlier history follows: // 3.51.0 CROSS-LINK-1 (2026-11-04, pillar reach; minor: every QDS page gains a family bar linking QNFO, QWAV and q08, a Keep exploring module (newest and random papers from the open API, the three family sites, topic chips) and a family line in the footer; QDS 1.1.0; visible ask links use ask.qwav.org per DOMAIN-PLANE-1). Prediction: pages per session on qwav.org and qnfo.org rise and clicks between the three sites become non-zero. Revert: restore 3.50.0. // 3.50.0 earlier history follows: // 3.50.0 PAPER-CITATION-ALIASES-1 (#5577, pillar research; minor): expose the documented /papers/<slug>/cite.* routes alongside the existing API exports.
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
@@ -2629,7 +2629,7 @@ function workHref(w) { return "https://papers.qnfo.org/papers/" + w.slug; }
 // opts (WORK-WITH-ME-1): person/page add properties to those nodes, nodes appends more @graph entries.
 function identityJsonLd(pageUrl, opts) {
   opts = opts || {};
-  const person = { "@type": "Person", "@id": "https://qnfo.org/#person", name: "Rowan Brad Quni-Gudzinas", alternateName: ["Brad Gudzinas", "Bradley Gudzinas", "Rowan Quni"], url: "https://qnfo.org/about", identifier: "https://orcid.org/" + OWNER_ORCID, sameAs: ["https://orcid.org/" + OWNER_ORCID], affiliation: { "@id": "https://qnfo.org/#org" }, jobTitle: "Research systems builder" };
+  const person = { "@type": "Person", "@id": "https://qnfo.org/#person", name: "Rowan Brad Quni-Gudzinas", alternateName: ["Brad Gudzinas", "Bradley Gudzinas", "Rowan Quni"], url: "https://qnfo.org/about", identifier: "https://orcid.org/" + OWNER_ORCID, sameAs: ["https://orcid.org/" + OWNER_ORCID], affiliation: { "@id": "https://qnfo.org/#org" }, jobTitle: "Systems researcher, autonomous AI systems", description: "Systems researcher studying autonomous AI systems. Began with transportation network modelling, moved through analytics and machine learning, now runs and studies an autonomous research system in the open.", knowsAbout: ["Autonomous AI systems", "Systems research", "Network modelling", "Transportation network models", "Machine learning", "AI agent reliability and oversight", "AI safety", "Epistemics of AI-assisted research"] };
   Object.assign(person, opts.person || {});
   const org = { "@type": "Organization", "@id": "https://qnfo.org/#org", name: "QNFO", url: "https://qnfo.org", description: "QNFO (independent research): the independent research imprint that publishes the work of Rowan Brad Quni-Gudzinas.", founder: { "@id": "https://qnfo.org/#person" } };
   const site = { "@type": "WebSite", "@id": "https://qnfo.org/#site", url: "https://qnfo.org", name: "QNFO", publisher: { "@id": "https://qnfo.org/#org" } };
@@ -2664,15 +2664,16 @@ function renderHubHTML(recentPapers, paperCount, nodesCount = 0) {
     { t: "Ask the corpus", d: "Questions answered from the papers, with citations and the knowledge graph around each answer.", h: "https://ask.qwav.org/" },
     { t: "Work with me", d: "Energy-per-correct-answer assessments, reviews of AI agent operations, talks, collaboration and roles.", h: "/work-with-me" },
     { t: "Ideas", d: "Research conversations as they develop, with the questions that start them.", h: "https://ideas.qnfo.org/" },
+    { t: "Live idea stream", d: "Research ideas as they arrive, before they become papers.", h: "https://ideas.qnfo.org/stream" },
     { t: "Archive", d: "The library by field, feeds and the tools for finding your way through it.", h: "https://archive.qnfo.org/" },
     { t: "iPatent", d: "A free, private-by-default assistant for drafting US provisional patent disclosures.", h: "https://ipatent.qnfo.org/" },
     { t: "License", d: "The QNFO Unified License Agreement: open science with commercial protections.", h: "https://legal.qnfo.org/" }
   ];
   const exploreHtml = '<section class="q-section" aria-labelledby="ex-h"><div class="q-wrap"><h2 class="q-h2" id="ex-h">Explore</h2><div class="q-grid q-grid-3" style="margin-top:8px">' + explore.map(function(c) {
     return '<a class="q-link-card" href="' + c.h + '"><h3>' + c.t + "</h3><p>" + c.d + "</p></a>";
-  }).join("") + "</div></div></section>";
+  }).join("") + '</div><p class="q-small" style="margin-top:16px">Tools: <a href="https://ask.qwav.org/concepts">Concepts</a> \u00b7 <a href="https://ask.qwav.org/consistency">Consistency</a> \u00b7 <a href="https://ask.qwav.org/paper">Living paper</a> \u00b7 <a href="https://ask.qwav.org/compute">Compute</a></p></div></section>';
   const hero = '<section class="q-hero"><div class="q-wrap q-hero-grid"><div><p class="q-eyebrow">Independent research by Rowan Brad Quni-Gudzinas</p><h1 class="q-display">What computation really costs, and what it delivers.</h1>' +
-    '<p class="q-lede">QNFO is the independent research imprint of Rowan Brad Quni-Gudzinas. The work asks what computation really costs and delivers: energy per correct answer (Joules-per-Solution), what an AI-assisted claim is worth (ignorance audits), and what an autonomous research system actually delivers. Corrections ship as new versions of the same paper.</p>' +
+    '<p class="q-lede">QNFO is the independent research imprint of Rowan Brad Quni-Gudzinas. The author is a systems researcher. The work asks how autonomous AI systems behave when nobody is steering: what an autonomous research system actually delivers and where it fails, what an AI-assisted claim is worth (ignorance audits), and what computation costs per correct answer (Joules-per-Solution). Corrections ship as new versions of the same paper.</p>' +
     '<div class="q-actions"><a class="q-btn" href="#selected-works">Start with the selected works</a><a class="q-btn q-btn-ghost" href="/work-with-me">Work with me</a></div>' +
     '<p class="q-meta" style="margin-top:18px">Rowan Brad Quni-Gudzinas \u00b7 <a href="https://orcid.org/' + OWNER_ORCID + '">ORCID ' + OWNER_ORCID + '</a> \u00b7 <a href="/about">About</a></p></div>' +
     '<form class="q-panel" action="https://ask.qwav.tech/" method="get" role="search" aria-label="Ask the research corpus"><label class="q-h3" for="hub-q" style="display:block">Ask the corpus</label><p class="q-meta" style="margin:0 0 12px">Answers come from the papers, with citations.</p><div class="q-field"><input id="hub-q" name="q" placeholder="What does JPCUB measure?" autocomplete="off"><button class="q-btn" type="submit">Ask</button></div></form></div></section>';
@@ -2871,7 +2872,7 @@ async function provStatement(paper, p, kid) {
   if (at && !/[zZ]|[+-]\d\d:?\d\d$/.test(at)) at += at.length <= 10 ? "T00:00:00Z" : "Z";
   return {
     profile: PROV_PROFILE, issuer: PROV_HOME, key_id: kid,
-    subject: { type: "paper", slug: paper.slug, version: String(paper.version_semver || paper.version || ""), url: url, content_sha256: await provSha256Hex(paper.body_md), content_basis: "body_md (UTF-8), the text served at " + url + ".md" },
+    subject: { type: "paper", slug: paper.slug, version: String(paper.version_semver || paper.version || ""), url: url, content_sha256: await provSha256Hex(paper.body_md), content_basis: "body_md (UTF-8): the text served at " + url + ".md after its YAML front matter and the blank line that follows it" },
     claims: { digital_source_type: PROV_IPTC_AI, generator: "QNFO research pipeline (AI language models)", provenance: p.provenance, human_review_recorded: p.provenance === "ai-assisted-human-reviewed", reviewed_by: p.reviewed_by },
     c2pa_shaped: { "c2pa.actions": { actions: [{ action: "c2pa.created", digitalSourceType: PROV_IPTC_AI, softwareAgent: { name: "QNFO research pipeline" } }] }, note: "C2PA-shaped assertion; this sidecar is signed with a QNFO Ed25519 key, not an X.509 certificate from the C2PA Trust List, so it is not a C2PA credential" },
     issued_at: at || null, timestamp_authority: "none (issued_at is the paper's revision time; no RFC 3161 token)"
@@ -2886,46 +2887,6 @@ async function provVerify(sidecar, pubJwk) {
     var pk = await crypto.subtle.importKey("jwk", { kty: "OKP", crv: "Ed25519", x: pubJwk.x }, { name: "Ed25519" }, false, ["verify"]);
     return await crypto.subtle.verify({ name: "Ed25519" }, pk, provUnb64u(sidecar.signature.value), new TextEncoder().encode(provCanon(sidecar.statement)));
   } catch (e) { return false; }
-}
-async function paperBodySha256(body) { return provSha256Hex(String(body == null ? "" : body)); }
-// PAPER-PIDS-HASH-1 (issue 1000646): serve a content hash and an immutable version URL per paper version.
-// GET /papers/<slug>/v/<version> -> the stored body of that version with X-Content-SHA256; 410 when the stored hash no longer matches the body.
-async function handlePaperVersionPid(request, env, slug, version) {
-  var H = { "Content-Type": "text/markdown; charset=utf-8", "Access-Control-Allow-Origin": "*", "Cache-Control": "public, max-age=31536000, immutable" };
-  var v = String(version || "").replace(/^v/i, "");
-  try {
-    var row = await env.LIVING_PAPER.prepare("SELECT version, version_semver, body_md FROM papers WHERE slug = ?").bind(slug).first();
-    var cur = String((row && (row.version_semver || row.version)) || "").replace(/^v/i, "");
-    if (row && cur === v) {
-      var h = await paperBodySha256(row.body_md);
-      return new Response(String(row.body_md || ""), { status: 200, headers: Object.assign({}, H, { "X-Content-SHA256": h }) });
-    }
-    var ch = await env.LIVING_PAPER.prepare("SELECT body_md, sha256 FROM paper_change_bodies WHERE slug = ? AND version = ?").bind(slug, v).first();
-    if (!ch) return new Response(JSON.stringify({ error: "no such paper version" }), { status: 404, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } });
-    var h2 = await paperBodySha256(ch.body_md);
-    if (ch.sha256 && String(ch.sha256).toLowerCase() !== h2) {
-      return new Response(JSON.stringify({ error: "stored content hash no longer matches this version; it was withdrawn", sha256: String(ch.sha256), actual: h2 }), { status: 410, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*", "Cache-Control": "no-store" } });
-    }
-    return new Response(String(ch.body_md || ""), { status: 200, headers: Object.assign({}, H, { "X-Content-SHA256": h2 }) });
-  } catch (e) {
-    return new Response(JSON.stringify({ error: "paper version lookup failed" }), { status: 500, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*", "Cache-Control": "no-store" } });
-  }
-}
-// the sha256 of a paper's current body, published into GET /api/papers/<slug>
-async function paperCurrentSha256(env, slug) {
-  try {
-    var row = await env.LIVING_PAPER.prepare("SELECT body_md, sha256 FROM papers WHERE slug = ?").bind(slug).first();
-    if (!row) return null;
-    var h = await paperBodySha256(row.body_md);
-    if (row.sha256 && String(row.sha256).toLowerCase() !== h) return { sha256: h, hash_status: "mismatch_with_stored_hash" };
-    return { sha256: h };
-  } catch (e) { return null; }
-}
-// route dispatcher for the immutable-version surface: returns a Response when the URL is one of the new routes, else null
-async function paperPidsRoutes(request, env, urlObj) {
-  var m = String((urlObj && urlObj.pathname) || "").match(/^\/papers\/([^\/]+)\/v\/([^\/]+)\/?$/);
-  if (!m) return null;
-  return handlePaperVersionPid(request, env, decodeURIComponent(m[1]), decodeURIComponent(m[2]));
 }
 async function provKeyDoc(env) {
   var k = await provKey(env);
@@ -3354,61 +3315,69 @@ __name(handleBlankPapers, "handleBlankPapers");
 // when that file exists within the limit. NOZ-DOI-1 (3.14.0): no outside record is consulted for a PDF.
 var SCHOLAR_PDF_MAX = 5 * 1024 * 1024;
 
-// Corrections feed handlers ---------------------------------------------------
-// Serve a COPE-typed corrections feed at /api/corrections (JSON) and
-// /corrections (HTML). The feed is built from the paper_change_ledger table,
-// selecting rows where the status was changed to "retracted". Each entry
-// contains the COPE type, the original paper URL, the reason, the retraction
-// timestamp and the paper title.
-//
-// The router in this worker automatically maps a request whose pathname is
-// "/corrections" or "/api/corrections" to a function named handleCorrections,
-// so exposing this function is sufficient for the endpoints to become live.
-async function handleCorrections(request, env) {
-  const accept = (request.headers.get("Accept") || "").toLowerCase();
-
-  // Fetch all retraction records. The exact column names are taken from the
-  // existing schema used elsewhere in the code base.
-  const rows = await env.LIVING_PAPER.prepare(
-    `SELECT slug, original_url, reason, retracted_at, title
-       FROM paper_change_ledger
-      WHERE status_after = 'retracted'
-      ORDER BY retracted_at DESC`
-  ).all();
-
-  const retractions = (rows && rows.results) || [];
-
-  // Normalise the data to the COPE-style shape expected by consumers.
-  const data = retractions.map(r => ({
-    type: "retraction",
-    slug: r.slug,
-    original_url: r.original_url,
-    reason: r.reason,
-    retracted_at: r.retracted_at,
-    title: r.title,
-  }));
-
-  // HTML response for browsers /human consumption.
-  if (accept.includes("text/html")) {
-    const html = `<html>
-<head><title>Corrections Feed</title></head>
-<body>
-<h1>Corrections</h1>
-<ul>` +
-      data.map(d => `<li><a href="${d.original_url}">${d.title}</a> - ${d.reason} (${new Date(d.retracted_at).toISOString()})</li>`).join("") +
-      `</ul>
-</body>
-</html>`;
-    return new Response(html, {
-      headers: {
-        "Content-Type": "text/html; charset=utf-8",
-        "Cache-Control": "public, max-age=300",
-      },
+// BP26-CORRECTIONS-PAPERS-1 (issue 8020): a COPE-typed corrections feed for papers.qnfo.org, JSON at /api/corrections and
+// HTML at /corrections. One row per retracted paper (the papers table, 28 rows), with the reason and time from its newest
+// ledger row whose status_after is 'retracted' (a lookup by slug, never a scan of the ledger).
+async function correctionRows(env) {
+  const list = await env.LIVING_PAPER.prepare("SELECT slug, title, status, updated_at FROM papers WHERE status = 'retracted' AND slug IS NOT NULL ORDER BY updated_at DESC LIMIT 200").all();
+  const rows = (list && list.results) || [];
+  const out = [];
+  for (const r of rows) {
+    let led = null;
+    try { led = await env.LIVING_PAPER.prepare("SELECT ts, reason FROM paper_change_ledger WHERE slug = ?1 AND status_after = 'retracted' ORDER BY seq DESC LIMIT 1").bind(r.slug).first(); } catch (e) { led = null; }
+    const reason = String((led && led.reason) || "").replace(/\s+/g, " ").trim().slice(0, 240);
+    out.push({
+      type: "retraction", cope_type: "retraction", slug: r.slug, title: displayTitle(r.title || r.slug),
+      original_url: "https://papers.qnfo.org/papers/" + encodeURIComponent(r.slug), notice_url: "https://papers.qnfo.org/papers/" + encodeURIComponent(r.slug),
+      reason: reason, retracted_at: (led && led.ts) || r.updated_at || null
     });
   }
-
-  // JSON response for API consumers.
-  return json({ ok: true, retractions: data });
+  return out;
+}
+async function handleCorrections(request, env, p) {
+  const rows = await correctionRows(env);
+  if (p === "/api/corrections") {
+    return new Response(JSON.stringify({ ok: true, worker: "qnfo-gateway", version: VERSION, count: rows.length, retractions: rows }), { headers: { "Content-Type": "application/json; charset=utf-8", "Access-Control-Allow-Origin": "*", "Cache-Control": "public, max-age=300" } });
+  }
+  const body = '<section class="q-section"><div class="q-wrap"><p class="q-eyebrow">Corrections</p><h1 class="q-display">Retractions and corrections</h1><p class="q-lede">' + rows.length + ' retracted papers. Each keeps its address and serves its notice. Machine-readable: <a href="/api/corrections">/api/corrections</a>.</p>' +
+    '<div class="q-table-wrap"><table class="q-table"><thead><tr><th>Paper</th><th>Type</th><th>Date</th><th>Reason</th></tr></thead><tbody>' +
+    rows.map(function (r) { return '<tr><td><a href="' + escAttr(r.original_url) + '">' + esc(r.title) + "</a></td><td>retraction</td><td>" + esc(String(r.retracted_at || "").slice(0, 10)) + "</td><td>" + esc(r.reason) + "</td></tr>"; }).join("") +
+    "</tbody></table></div></div></section>";
+  return new Response(qdsPage({ title: "Corrections and retractions \u2014 QNFO Papers", description: "COPE-typed retraction notices for QNFO papers, with reason and date.", canonical: "https://papers.qnfo.org/corrections", active: "" }, body), { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "public, max-age=300" } });
+}
+// ATLAS-GATEWAY-ROUTE-1 (issue 8095): the open atlas of AI-written science failures, streamed from R2 (QNFO_BUCKET,
+// atlas/ai-science-failures/), restricted to the four published names. No token (OPEN-ACCESS-1).
+var ATLAS_FILES = { "errata.jsonl": "application/x-ndjson; charset=utf-8", "papers-status.jsonl": "application/x-ndjson; charset=utf-8", "DATACARD.md": "text/markdown; charset=utf-8", "manifest.json": "application/json; charset=utf-8" };
+async function handleAtlas(request, env, p) {
+  if (!env.QNFO_BUCKET) return json({ error: "atlas unavailable" }, 503);
+  const cors = { "Access-Control-Allow-Origin": "*" };
+  const name = p.replace(/^\/data\/ai-science-failures\/?/, "");
+  if (name) {
+    if (!Object.prototype.hasOwnProperty.call(ATLAS_FILES, name)) return new Response("Not found\n", { status: 404, headers: { "Content-Type": "text/plain; charset=utf-8" } });
+    const obj = await env.QNFO_BUCKET.get("atlas/ai-science-failures/" + name);
+    if (!obj) return new Response("Not found\n", { status: 404, headers: { "Content-Type": "text/plain; charset=utf-8" } });
+    const h = new Headers(cors);
+    h.set("Content-Type", ATLAS_FILES[name]);
+    h.set("Cache-Control", "public, max-age=3600");
+    if (obj.httpEtag) h.set("ETag", obj.httpEtag);
+    return new Response(request.method === "HEAD" ? null : obj.body, { headers: h });
+  }
+  let manifest = null, card = "";
+  try { const m = await env.QNFO_BUCKET.get("atlas/ai-science-failures/manifest.json"); if (m) manifest = JSON.parse(await m.text()); } catch (e) { manifest = null; }
+  try { const c = await env.QNFO_BUCKET.get("atlas/ai-science-failures/DATACARD.md"); if (c) card = await c.text(); } catch (e) { card = ""; }
+  const base = "https://papers.qnfo.org/data/ai-science-failures/";
+  const fm = (manifest && manifest.files) || {};
+  const dist = Object.keys(ATLAS_FILES).map(function (n) {
+    const f = fm[n] || {};
+    const d = { "@type": "DataDownload", name: n, contentUrl: base + n, encodingFormat: ATLAS_FILES[n].split(";")[0] };
+    if (f.sha256) d.sha256 = f.sha256;
+    return d;
+  });
+  const ld = { "@context": "https://schema.org", "@type": "Dataset", name: "Atlas of AI-written science failures", description: "Errata found in AI-assisted papers and the audit status of each paper, published daily by QNFO.", url: "https://papers.qnfo.org/data/ai-science-failures", license: "https://qnfo.org/legal/license", isAccessibleForFree: true, creator: { "@type": "Organization", name: "QNFO", url: "https://qnfo.org" }, dateModified: (manifest && manifest.generated_at) || undefined, version: (manifest && manifest.version) || undefined, distribution: dist };
+  const links = Object.keys(ATLAS_FILES).map(function (n) { return '<li><a href="' + base + n + '">' + n + "</a></li>"; }).join("");
+  const body = '<section class="q-section"><div class="q-wrap"><p class="q-eyebrow">Open data</p><h1 class="q-display">Atlas of AI-written science failures</h1><p class="q-lede">Errata and audit status for QNFO papers, regenerated daily. Free to read, no token. Licence: QNFO-ULA 2.1.</p><ul class="q-list">' + links + '</ul><h2 class="q-h2">Data card</h2><pre style="white-space:pre-wrap">' + esc(card || "The data card is not available right now.") + "</pre></div></section>";
+  const page = qdsPage({ title: "Atlas of AI-written science failures \u2014 QNFO open data", description: "Open dataset of errata found in AI-assisted research papers, with per-paper audit status.", canonical: "https://papers.qnfo.org/data/ai-science-failures", active: "", jsonld: '<script type="application/ld+json">' + JSON.stringify(ld).replace(/</g, "\\u003c") + "</script>" }, body);
+  return new Response(request.method === "HEAD" ? null : page, { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "public, max-age=3600" } });
 }
 var PAPER_FRESH_MS = 5 * 60 * 1000; // 5 minutes fresh
 var PAPER_REVALIDATE_MS = 24 * 60 * 60 * 1000; // 24 hours stale-while-revalidate
@@ -3491,6 +3460,31 @@ function plainFillAfter(env, ctx, paper) {
   };
   if (ctx && typeof ctx.waitUntil === "function") ctx.waitUntil(run());
 }
+// KG-RELATED-PAPERS-1 (issue 8036, pillar reach, metric engaged_reader_sessions_7d).
+var KG_NEIGHBORS_URL = "https://qnfo-memory-mcp.q08.workers.dev/kg/neighbors";
+async function kgRelatedPapers(slug) {
+  const ctl = new AbortController();
+  const timer = setTimeout(function () { ctl.abort(); }, 1500);
+  try {
+    const r = await fetch(KG_NEIGHBORS_URL + "?id=" + encodeURIComponent("paper:" + slug) + "&depth=1", { signal: ctl.signal, headers: { "User-Agent": "qnfo-gateway/" + VERSION }, cf: { cacheTtl: 60, cacheEverything: true } });
+    if (!r.ok) return [];
+    const j = await r.json();
+    const center = "paper:" + slug;
+    const weight = {};
+    (j.edges || []).forEach(function (e) {
+      const other = e.s === center ? e.t : e.t === center ? e.s : null;
+      if (other) weight[other] = Math.max(weight[other] || 0, Number(e.w != null ? e.w : e.weight != null ? e.weight : 0) || 0);
+    });
+    return (j.nodes || []).filter(function (n) { return n && n.label === "Paper" && n.id !== center && /^paper:[a-z0-9][a-z0-9-]*$/.test(String(n.id)); })
+      .sort(function (a, b) { return (weight[b.id] || 0) - (weight[a.id] || 0); })
+      .slice(0, 5)
+      .map(function (n) { return { slug: String(n.id).slice(6), title: String(n.name || n.id.slice(6)) }; });
+  } catch (e) { return []; } finally { clearTimeout(timer); }
+}
+function kgRelatedHtml(rel) {
+  return '<section class="q-section" aria-labelledby="rel-h"><div class="q-wrap"><h2 class="q-h2" id="rel-h">Related papers</h2><ul class="q-list q-compact">' +
+    rel.map(function (r) { return '<li class="q-item"><a class="q-item-title" href="https://papers.qnfo.org/papers/' + escAttr(r.slug) + '">' + esc(displayTitle(r.title)) + "</a></li>"; }).join("") + "</ul></div></section>";
+}
 async function handlePaperDetail(request, env, path, ctx) {
   // PAPER-TAGS-1: /papers/tags is a catalogue, not a paper slug; the detail handler is the single place every
   // paper URL funnels through, so the reservation lives here and applies to every host that serves papers.
@@ -3529,6 +3523,20 @@ async function handlePaperDetail(request, env, path, ctx) {
     // (waitUntil) and at most once per PLAIN_RETRY_MS per paper per colo, the same wait a gated build gets in the hourly fill.
     if (!paper._plain && typeof plainFill === "function") plainFillAfter(env, ctx, paper);
     const accept = request.headers.get("Accept") || "";
+    // PAPERS-MD-NEGOTIATE-1 (issue 8097): an assistant that asks for Accept: text/markdown (and does not rank text/html
+    // first) gets the same body as the .md mirror; every HTML answer points at the mirror with Link rel=alternate.
+    const mdIdx = accept.indexOf("text/markdown");
+    const htmlIdx = accept.indexOf("text/html");
+    if (mdIdx >= 0 && (htmlIdx < 0 || mdIdx < htmlIdx)) {
+      const mdRes = await handlePaperMarkdown(env, slug, "papers.qnfo.org");
+      if (mdRes.status === 200) {
+        const mh = new Headers(mdRes.headers);
+        mh.set("Vary", "Accept");
+        const mdText = await mdRes.text();
+        mh.set("x-markdown-tokens", String(Math.ceil(mdText.length / 4)));
+        return new Response(mdText, { status: 200, headers: mh });
+      }
+    }
     if (accept.includes("text/html") || !accept.includes("application/json")) {
       if (!paper._pdf && paper.pdf_path && env.RELEASES) {
         try {
@@ -3537,8 +3545,14 @@ async function handlePaperDetail(request, env, path, ctx) {
         } catch (e) {
         }
       }
-      return new Response(renderPaperWithCitations(paper), {
-        headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "public, max-age=3600" }
+      let pageHtml = renderPaperWithCitations(paper);
+      // KG-RELATED-PAPERS-1 (issue 8036): up to five neighbours from the curated knowledge graph; no block when the call fails.
+      try {
+        const rel = await kgRelatedPapers(slug);
+        if (rel.length >= 2 && /<\/main>/.test(pageHtml)) pageHtml = pageHtml.replace(/<\/main>/, kgRelatedHtml(rel) + "</main>");
+      } catch (e) { console.error(JSON.stringify({ worker: "qnfo-gateway", where: "kgRelatedPapers", error: String(e && e.message || e).slice(0, 160) })); }
+      return new Response(pageHtml, {
+        headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "public, max-age=3600", "Vary": "Accept", "Link": '<https://papers.qnfo.org/papers/' + slug + '.md>; rel="alternate"; type="text/markdown"' }
       });
     }
     return json(Object.assign({}, paper, { body_md: retiredLines(fixMojibake(paper.body_md || "")), version: retiredTag(paper.version) }));
@@ -3664,14 +3678,14 @@ __name222(handleAbout, "handleAbout");
 __name2222(handleAbout, "handleAbout");
 function renderAboutHTML(stats) {
   const fmt = function(n) { return Number(n || 0).toLocaleString("en-US"); };
-  const body = '<section class="q-hero" style="padding-bottom:16px"><div class="q-wrap"><p class="q-eyebrow">About</p><h1 class="q-display" style="max-width:18ch">About QNFO</h1><p class="q-lede">QNFO is the independent research imprint of Rowan Brad Quni-Gudzinas: one researcher with an open, auditable, AI-assisted research pipeline. The work asks what computation really costs and delivers: energy per correct answer (Joules-per-Solution), what an AI-assisted claim is worth (ignorance audits), and what an autonomous research system actually delivers. The <a href="/#selected-works">selected works</a> are the place to start.</p></div></section>' +
+  const body = '<section class="q-hero" style="padding-bottom:16px"><div class="q-wrap"><p class="q-eyebrow">About</p><h1 class="q-display" style="max-width:18ch">About QNFO</h1><p class="q-lede">QNFO is the independent research imprint of Rowan Brad Quni-Gudzinas: one researcher with an open, auditable, AI-assisted research pipeline. The author is a systems researcher. The work asks how autonomous AI systems behave when nobody is steering: what an autonomous research system actually delivers and where it fails, what an AI-assisted claim is worth (ignorance audits), and what computation costs per correct answer (Joules-per-Solution). The <a href="/#selected-works">selected works</a> are the place to start.</p></div></section>' +
     '<div class="q-wrap"><article class="q-article"><div class="q-prose">' +
-    '<h2>What QNFO is</h2><p>Open research in three lines, in this order: energy-honest computing (the Joules-per-Solution metric), the epistemics of AI-assisted science, and autonomous research operations. The corpus is browsable on <a href="https://papers.qnfo.org/papers">papers.qnfo.org</a>, and <a href="https://ask.qwav.org/">Ask the corpus</a> answers questions from it with citations and the knowledge graph around each answer.</p><p class="q-meta">QNFO is not an acronym. The name is the name.</p>' +
+    '<h2>What QNFO is</h2><p>Open research in three lines, in this order: autonomous AI systems and their operation, the epistemics of AI-assisted science, and energy-honest computing (the Joules-per-Solution metric). The corpus is browsable on <a href="https://papers.qnfo.org/papers">papers.qnfo.org</a>, and <a href="https://ask.qwav.org/">Ask the corpus</a> answers questions from it with citations and the knowledge graph around each answer.</p><p class="q-meta">QNFO is not an acronym. The name is the name.</p>' +
     '<h2>The thesis</h2><p>Computational advantage is measured in joules per solution, not qubit counts or press releases. The <a href="https://github.com/rwnq8/joules-per-compute-benchmark">joules-per-compute benchmark</a> formalizes the questions the industry prefers to defer: the Landauer floor for cryogenic controllers, the Margolus\u2013Levitin bound as a scheduling constraint, and the energy floor of surface-code error correction at a thousand logical qubits.</p>' +
     '<h2>The record</h2><div class="q-table-wrap"><table class="q-table"><tbody><tr><td>Papers in the corpus</td><td class="q-num">' + fmt(stats.papers) + ' (counted live)</td></tr><tr><td>Knowledge graph</td><td class="q-num">' + fmt(stats.nodes) + " nodes, " + fmt(stats.edges) + ' edges (counted live)</td></tr><tr><td>Readership on paper pages</td><td class="q-num">about 400 requests a day (2026-09-03)</td></tr></tbody></table></div><p class="q-meta">The first two rows are queried on every request. Roughly nine in ten requests to the zone are scanner noise; the readership figure excludes it.</p>' +
     '<h2>How QNFO runs</h2><p>A cloud-scheduled pipeline keeps the corpus alive: an arXiv radar each morning, a research brief, an hourly errata watch that turns corrections into new versions of the same record, a citation watch, and a weekly visibility digest. Outreach is capped and opt-out. If the laptop is off, the pipeline does not notice.</p>' +
     '<h2>How QNFO holds itself</h2><p>Every quantitative claim is computationally verified before publication, with the verification artifacts deposited beside the paper. Traffic is never fabricated. Disconfirmation criteria are stated in advance. Corrections ship as new versions of the same record.</p>' +
-    '<h2>Who runs QNFO and how it is funded</h2><p>QNFO is the imprint under which Rowan Brad Quni-Gudzinas (<a href="https://orcid.org/' + OWNER_ORCID + '">ORCID ' + OWNER_ORCID + '</a>) publishes. It is one researcher with an AI-assisted pipeline, self-funded. Every paper is open access under the non-commercial QNFO-ULA licence.</p><p>Author record as already public on <a href="https://github.com/QNFO">github.com/QNFO</a>: led the AARP Livability Index (AARP Public Policy Institute); managed a $1.5M federal research portfolio at the U.S. DOT Federal Highway Administration; analytics and machine-learning work at Deloitte; product management at Epsilon and iManage. Contact: <a href="mailto:rowan.quni@qnfo.org">rowan.quni@qnfo.org</a>. For assessments, reviews of AI agent operations, talks, research collaboration or roles, see <a href="/work-with-me">Work with me</a>. Assessments and talks under Work with me are separate from the open research.</p>' +
+    '<h2>Who runs QNFO and how it is funded</h2><p>QNFO is the imprint under which Rowan Brad Quni-Gudzinas (<a href="https://orcid.org/' + OWNER_ORCID + '">ORCID ' + OWNER_ORCID + '</a>) publishes. It is one researcher with an AI-assisted pipeline, self-funded. Every paper is open access under the non-commercial QNFO-ULA licence.</p><p>Rowan is a systems researcher. He began by modelling transportation networks (Delaware Valley Regional Planning Commission, IBI Group), led technical components of the national tour-based travel model at the Federal Highway Administration, moved through analytics and machine learning, and now studies autonomous AI systems. The question has stayed the same: how complex systems behave when no one is steering, and whether their outputs can be trusted.</p><p>Author record as already public on <a href="https://github.com/QNFO">github.com/QNFO</a>: led the AARP Livability Index (AARP Public Policy Institute); managed a $1.5M federal research portfolio at the U.S. DOT Federal Highway Administration; analytics and machine-learning work at Deloitte; product management at Epsilon and iManage. Contact: <a href="mailto:rowan.quni@qnfo.org">rowan.quni@qnfo.org</a>. For assessments, reviews of AI agent operations, talks, research collaboration or roles, see <a href="/work-with-me">Work with me</a>. Assessments and talks under Work with me are separate from the open research.</p>' +
     '<h2>How to check the work</h2><p>The core claims are in these open-access papers on <a href="https://papers.qnfo.org/papers">papers.qnfo.org</a>: <a href="https://papers.qnfo.org/papers/joules-per-solution-metric">Joules-per-Solution Metric</a>, <a href="https://papers.qnfo.org/papers/universal-ignorance-audit">Universal Ignorance Audit</a>, <a href="https://papers.qnfo.org/papers/ai4metascience-ignorance-audit">Epistemic Legibility in AI-Assisted Science</a>, <a href="https://papers.qnfo.org/papers/quniverse-fleet-lessons">Operating the Quniverse Fleet</a>, and <a href="https://papers.qnfo.org/papers/falsifying-geometrically-inspired-quantum-error-correcting-codes-via-distinct-lo">Falsifying Geometrically Inspired Quantum Error-Correcting Codes via Distinct Logical-Error Scaling</a>. Each paper carries its own verification artifacts and links to OSF pre-registrations. Corrections ship as new versions of the same record under the errata policy.</p>' +
     '<h2>Changelog</h2><div class="q-table-wrap"><table class="q-table"><tbody><tr><td class="q-num">2026-10-19</td><td>Status, funding and author record clarified; QNFO described as an imprint, not a program, group or foundation; "How to check the work" section added.</td></tr><tr><td class="q-num">2026-10-02</td><td>One design system across every QNFO site, with reading type for the papers and light and dark themes.</td></tr><tr><td class="q-num">2026-09-03</td><td>This page, with record counts rendered live.</td></tr><tr><td class="q-num">2026-09-02</td><td>Outreach live, capped and opt-out. A weekly scorecard publishes real traffic changes.</td></tr><tr><td class="q-num">2026-08-29</td><td>Universal Ignorance Audit re-pointed to v0.4.</td></tr><tr><td class="q-num">2026-08-28</td><td>OSF pre-registrations placed; results attached as comments on frozen registrations.</td></tr><tr><td class="q-num">2026-08-10</td><td>Email deliverability hardened: SPF, DKIM and DMARC at reject on every sending domain.</td></tr></tbody></table></div>' +
     '<p class="q-small">Prepared with an AI-assisted research pipeline; the author is responsible for the content.</p></div>' +
@@ -4103,7 +4117,7 @@ async function handleSitemap(env, sitemapHost) {
     const ALL = isQwav
       ? [
         { loc: "https://qwav.org/", priority: "1.0" }
-      ].concat(QWAV_DEMOS.map((d) => ({ loc: "https://qwav.org/demos/" + d[0], priority: "0.8" })), (res.results || []).map((p) => ({ loc: "https://papers.qnfo.org/papers/" + encodeURIComponent(p.slug), lastmod: smLastmod(p), priority: "0.7" })))
+      ].concat(QWAV_DEMOS.map((d) => ({ loc: "https://qwav.org/demos/" + d[0], priority: "0.8" })), [{ loc: "https://qwav.org/certificates.json", priority: "0.5" }, { loc: "https://qwav.org/llms.txt", priority: "0.4" }])
       : isSite
       ? [
         { loc: "https://qnfo.org/", priority: "1.0" },
@@ -4129,7 +4143,9 @@ async function handleSitemap(env, sitemapHost) {
         // REDTEAM-SITEMAP-404-1 (3.30.4): /about is a qnfo.org route; listing it on the papers host shipped a 404 to
         // every crawler that trusts the sitemap - the exact soft-404 crawl waste this change exists to remove. Every
         // URL in this list is probed to answer 200 on THIS host before it is listed.
-        { loc: base + "/rss.xml", priority: "0.5" }
+        { loc: base + "/rss.xml", priority: "0.5" },
+        { loc: base + "/data/ai-science-failures", priority: "0.6" },
+        { loc: base + "/corrections", priority: "0.5" }
       ];
     const all = ALL.concat(isSite || isQwav ? [] : res.results.map((p) => ({
       loc: base + "/papers/" + encodeURIComponent(p.slug),
@@ -4217,6 +4233,8 @@ async function handleLlmsTxt(env) {
     // WEBMCP-FLEET-1 (2026-10-25): llms.txt is where an agent that is not a browser learns what this site can do. The
     // manifest is the authoritative list, so this line names a path the worker itself answers, not a promise.
     body += "\n## Browser tools (WebMCP)\n\nThis site publishes WebMCP tools (`document.modelContext`): the manifest is " + base + "/.webmcp/packs.json and the bridge is " + base + "/.webmcp/bridge.js. A browser agent registers them automatically; any other agent can read the manifest and call the same paths.\n";
+    // ATLAS-GATEWAY-ROUTE-1: the open dataset of AI-written science failures.
+    body += "\n## Open data\n\n- [Atlas of AI-written science failures](" + base + "/data/ai-science-failures): errata.jsonl, papers-status.jsonl, DATACARD.md and manifest.json, refreshed daily, no token needed.\n- [Corrections feed](" + base + "/api/corrections): retractions with reason and date.\n";
     body += res.results.map((p) => "- [" + displayTitle(p.title) + "](" + base + "/papers/" + encodeURIComponent(p.slug) + ")" +
       " - Markdown: " + base + "/papers/" + encodeURIComponent(p.slug) + ".md" +
       (lpDoi(p.doi) ? " - DOI: " + lpDoi(p.doi) : "") +
@@ -4571,6 +4589,17 @@ async function sha256Hex(text) {
 function paperVersionOf(row) {
   return String(row.version_semver || String(row.version || "").replace(/^v/i, "").replace(/-zeno\x64o[-\w]*/i, "")) || "";
 }
+async function pinPaperVersion(env, slug, version, sha) {
+  if (!env || !env.AUDIT) return "unknown";
+  try {
+    const ins = await env.AUDIT.prepare("INSERT OR IGNORE INTO paper_version_pins (slug, version, sha256) VALUES (?1, ?2, ?3)").bind(slug, version, sha).run();
+    if (ins && ins.meta && ins.meta.changes > 0) return "new";
+    const pin = await env.AUDIT.prepare("SELECT sha256 FROM paper_version_pins WHERE slug = ?1 AND version = ?2").bind(slug, version).first();
+    if (!pin || pin.sha256 === sha) return "pinned";
+    await env.AUDIT.prepare("INSERT INTO paper_version_drift (slug, version, pinned_sha256, served_sha256) VALUES (?1, ?2, ?3, ?4)").bind(slug, version, pin.sha256, sha).run();
+    return "drifted";
+  } catch (e) { console.error("pin-paper-version failed: " + String(e && e.message || e).slice(0, 160)); return "unknown"; }
+}
 async function handlePaperVersion(env, slug, version, head) {
   const row = await env.LIVING_PAPER.prepare("SELECT " + OPEN_COLS + ",body_md FROM papers WHERE " + OPEN_WHERE + " AND slug = ?").bind(slug).first();
   if (!row) return openJson({ error: "not found" }, 404);
@@ -4584,7 +4613,9 @@ async function handlePaperVersion(env, slug, version, head) {
   if (body == null || body === "") return openJson({ error: "no recoverable body for this version", slug, version: want }, 404);
   const text = retiredLines(String(body));
   const sha = await sha256Hex(text);
-  const headers = { "Content-Type": "text/markdown; charset=utf-8", "Access-Control-Allow-Origin": "*", "X-Content-SHA256": sha, "X-Paper-Version": want, "Link": '<https://papers.qnfo.org/papers/' + slug + '/v/' + want + '>; rel="canonical"', "Cache-Control": current ? "public, max-age=300" : "public, max-age=31536000, immutable" };
+  // PAPER-PIDS-PIN-2 (issue 9790): pin the first-served hash of this version; a later different hash is drift. Fail-soft: no AUDIT binding or any D1 error leaves the pin status unknown.
+  const pinStatus = await pinPaperVersion(env, slug, want, sha);
+  const headers = { "X-Content-Pin-Status": pinStatus, "Content-Type": "text/markdown; charset=utf-8", "Access-Control-Allow-Origin": "*", "X-Content-SHA256": sha, "X-Paper-Version": want, "Link": '<https://papers.qnfo.org/papers/' + slug + '/v/' + want + '>; rel="canonical"', "Cache-Control": current ? "public, max-age=300" : "public, max-age=31536000, immutable" };
   return new Response(head ? null : text, { status: 200, headers });
 }
 async function handleOpenData(request, env, p) {
@@ -4639,6 +4670,8 @@ var OPENAPI_DOC = {
   info: { title: "QNFO Papers open data API", version: "1.0.0", description: "Read-only, CORS-open metadata for the papers published at papers.qnfo.org. Metadata is CC0 1.0; each paper carries its own license_url. Also served: OAI-PMH 2.0 at /oai (oai_dc).", license: { name: "CC0-1.0", url: "https://creativecommons.org/publicdomain/zero/1.0/" }, contact: { name: "QNFO", url: "https://qnfo.org" } },
   servers: [{ url: "https://papers.qnfo.org" }],
   paths: {
+    "/data/ai-science-failures/{file}": { get: { summary: "Open dataset of AI-written science failures (ATLAS-GATEWAY-ROUTE-1): errata.jsonl, papers-status.jsonl, DATACARD.md, manifest.json", parameters: [{ name: "file", in: "path", required: true, schema: { type: "string", enum: ["errata.jsonl", "papers-status.jsonl", "DATACARD.md", "manifest.json"] } }], responses: { "200": { description: "The file" } } } },
+    "/api/corrections": { get: { summary: "COPE-typed retraction notices with reason and date", responses: { "200": { description: "JSON" } } } },
     "/api/quickread/{slug}": { get: { summary: "A paper in about a minute (the digest), or as it answers one question",
       description: "Overview, then answers, approach and considerations. Every item carries a quote copied from the paper and the section id it came from; a statement whose evidence is not found in the text is dropped and counted. coverage is answered, partial, related (the question's words do not appear in the paper, so the sections closest to it by meaning were read) or none (no model call is made). Answers are cached per (paper, question, paper revision) for up to 45 days.",
       parameters: [{ name: "slug", in: "path", required: true, schema: { type: "string" } }, { name: "q", in: "query", required: false, description: "Optional. Omitted, the endpoint returns the digest, with `article` (a plain-language rewrite of the whole paper: title, short version, sections, words used, links to Simple English Wikipedia; null until built) beside it: the abstract verbatim, the claim, the figures the paper reports, how it is done, what would falsify it, where the claim stops, and a map of where to read, each item a sentence of the paper with its section id. Given (up to 400 characters), it returns the question view: overview, answers, approach and considerations, plus coverage and the path that answered.", schema: { type: "string", maxLength: 400 } }, { name: "format", in: "query", description: "html returns the fragment the paper page paints.", schema: { type: "string", enum: ["json", "html"] } }, { name: "fresh", in: "query", description: "1 bypasses the cache and reads the paper again.", schema: { type: "string", enum: ["1"] } }],
@@ -5527,7 +5560,57 @@ async function handleArchive(env) {
 // QWAV page on the shared design system (QWAV accent), with the copy corrected to STRATEGY 2.1: QNFO is an independent
 // research imprint (never a "collective"), QWAV is a parked, pre-commercial label, and every number says whether it is
 // published or estimated. A zone route sends qwav.org/* and qwav.tech/* here.
-function renderQwavHTML(host) {
+// RM-BS-QUANTUM-COMMONS-1 slice 2 (issue 8098): /certificates.json serves docs/qwav-certificates.json; each demo carries a
+// badge that says verified only when a certificate with status "verified" exists for its page, and "not checked" otherwise.
+var QWAV_CERT_URL = "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/qwav-certificates.json";
+async function qwavCerts() {
+  try {
+    const r = await fetch(QWAV_CERT_URL, { headers: { "User-Agent": "qnfo-gateway/" + VERSION }, cf: { cacheTtl: 3600, cacheEverything: true } });
+    if (!r.ok) return null;
+    const j = await r.json();
+    return j && Array.isArray(j.certificates) ? j : null;
+  } catch (e) { return null; }
+}
+function qwavBadge(certs, pageUrl) {
+  if (!certs) return "";
+  const c = (certs.certificates || []).filter(function (x) { return x.page_url === pageUrl; })[0];
+  if (!c || c.status !== "verified") return '<p class="q-small" style="margin:-6px 0 14px">Not checked by an independent implementation. <a href="/certificates.json">Record</a></p>';
+  return '<p class="q-small" style="margin:-6px 0 14px">Verified: ' + Number(c.checks) + " checks, " + esc((c.independent_methods || []).join("; ")) + '. Does not certify any quantum state, hardware result or advantage claim. <a href="/certificates.json">Record</a></p>';
+}
+async function handleQwavCertificates() {
+  const r = await fetch(QWAV_CERT_URL, { headers: { "User-Agent": "qnfo-gateway/" + VERSION }, cf: { cacheTtl: 3600, cacheEverything: true } });
+  if (!r.ok) return new Response(JSON.stringify({ error: "certificate record unavailable" }), { status: 502, headers: { "Content-Type": "application/json; charset=utf-8", "Access-Control-Allow-Origin": "*" } });
+  return new Response(await r.text(), { headers: { "Content-Type": "application/json; charset=utf-8", "Access-Control-Allow-Origin": "*", "Cache-Control": "public, max-age=3600" } });
+}
+function qwavLlmsTxt() {
+  return "# QWAV\n\n> QWAV is a pre-commercial computing platform concept exploring p-adic ultrametric architectures, benchmarked in joules per solution (JPCUB). Published by QNFO. No production system exists.\n\n## Demos\n\n" +
+    QWAV_DEMOS.map(function (d) { return "- [" + d[1] + "](https://qwav.org/demos/" + d[0] + "): " + d[2]; }).join("\n") +
+    "\n\n## Research\n\n- [Papers](https://papers.qnfo.org/papers): full texts, with a Markdown mirror at /papers/<slug>.md\n- [Ask the corpus](https://ask.qwav.org/)\n- [Verification record](https://qwav.org/certificates.json)\n- [Feed](https://qwav.org/feed.xml)\n";
+}
+function qwavFeed() {
+  const items = QWAV_DEMOS.map(function (d) { return "<item><title>" + xmlEscape(d[1]) + "</title><link>https://qwav.org/demos/" + d[0] + "</link><guid>https://qwav.org/demos/" + d[0] + "</guid><description>" + xmlEscape(d[2]) + "</description></item>"; }).join("");
+  return '<?xml version="1.0" encoding="UTF-8"?>\n<rss version="2.0"><channel><title>QWAV demos</title><link>https://qwav.org/</link><description>Interactive demos of p-adic ultrametric computing from QNFO.</description>' + items + "</channel></rss>\n";
+}
+function qwavDemoPage(slug) {
+  const d = QWAV_DEMOS.filter(function (x) { return x[0] === slug; })[0];
+  if (!d) return null;
+  const body = '<section class="q-hero"><div class="q-wrap"><p class="q-eyebrow">QWAV demo</p><h1 class="q-display">' + esc(d[1]) + '</h1><p class="q-lede">' + esc(d[2]) + '</p><div class="q-actions"><a class="q-btn" href="' + escAttr(d[3]) + '" rel="noopener">Open the demo</a><a class="q-btn q-btn-ghost" href="/#demos">All demos</a></div></div></section>';
+  return new Response(qdsPage({ brand: "qwav", title: d[1] + " \u2014 QWAV demo", description: d[2], canonical: "https://qwav.org/demos/" + slug, active: "" }, body), { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "public, max-age=3600" } });
+}
+// QWAV-DISCOVERY-1 (#1002015): one list of the ten demos feeds the home page, /demos/<slug>, llms.txt, the feed and the sitemap.
+var QWAV_DEMOS = [
+  ["staircase-redundancy", "Staircase redundancy vs Archimedean codes", "Bruhat-Tits quantum error correction, side by side with the standard code families.", "https://qnfo.github.io/qwav-demo-bt-qec/"],
+  ["virtual-qubit-showdown", "Virtual qubit showdown", "An ultrametric tree against the surface code on the same noisy task.", "https://qnfo.github.io/ultrametric-game-of-life/"],
+  ["error-confinement", "Error confinement", "Watch Bruhat-Tits error suppression keep a fault from spreading.", "https://qnfo.github.io/qwav-demo-error-confinement/"],
+  ["tree-and-shadow", "The tree and its shadow", "An ultrametric phase diagram you can move through.", "https://qnfo.github.io/tree-and-shadow-viz/"],
+  ["ultrametric-convergence", "Ultrametric convergence", "Variance collapse under coarse-graining, step by step.", "https://qnfo.github.io/qwav-demo-ultrametric-convergence/"],
+  ["tree-distance-sandbox", "Tree distance sandbox", "Cophenetic, Euclidean and ultrametric distances on one tree.", "https://qnfo.github.io/qwav-demo-tree-distance/"],
+  ["hardware-pathway-visualizer", "Hardware pathway visualizer", "A 40-atom neutral-atom tree lattice, laid out to explore.", "https://qnfo.github.io/qwav-demo-hardware-visualizer/"],
+  ["qpna-classifier-playground", "Q-PNA classifier playground", "Glass-box classification: see why each label is chosen.", "https://qnfo.github.io/qwav-demo-qpna-classifier/"],
+  ["monna-map-perspective", "Monna map perspective", "A renderer for the Monna map, from the UMP.010 C5 paper.", "https://qnfo.github.io/qwav-demo-monna-map-perspective/"],
+  ["ultrametric-tree-universality", "Ultrametric tree universality", "A cross-domain explorer of the same tree structure.", "https://qnfo.github.io/ultrametric-tree-universality/"]
+];
+function renderQwavHTML(host, certs) {
   const canon = "https://qwav.org/"; // one canonical for both QWAV domains (the Pages site used qwav.org)
   const landscape = [
     ["IBM", "Superconducting transmon", "~15 mK", "Active (surface code)", "0.89 J per solution", "published (JPCUB P0)"],
@@ -5537,18 +5620,7 @@ function renderQwavHTML(host) {
     ["D-Wave", "Quantum annealing", "~15 mK", "None (annealing)", "~50 to 200 J per optimisation", "estimate (landscape v2.3)"],
     ["QWAV", "p-adic ultrametric (qudits)", "Room-temperature target", "Intrinsic (Ostrowski)", "< 10\u207b\u00b3 J per solution", "design target, not measured"]
   ];
-  const demos = [
-    ["Staircase redundancy vs Archimedean codes", "Bruhat-Tits quantum error correction, side by side with the standard code families.", "https://qnfo.github.io/qwav-demo-bt-qec/"],
-    ["Virtual qubit showdown", "An ultrametric tree against the surface code on the same noisy task.", "https://qnfo.github.io/ultrametric-game-of-life/"],
-    ["Error confinement", "Watch Bruhat-Tits error suppression keep a fault from spreading.", "https://qnfo.github.io/qwav-demo-error-confinement/"],
-    ["The tree and its shadow", "An ultrametric phase diagram you can move through.", "https://qnfo.github.io/tree-and-shadow-viz/"],
-    ["Ultrametric convergence", "Variance collapse under coarse-graining, step by step.", "https://qnfo.github.io/qwav-demo-ultrametric-convergence/"],
-    ["Tree distance sandbox", "Cophenetic, Euclidean and ultrametric distances on one tree.", "https://qnfo.github.io/qwav-demo-tree-distance/"],
-    ["Hardware pathway visualizer", "A 40-atom neutral-atom tree lattice, laid out to explore.", "https://qnfo.github.io/qwav-demo-hardware-visualizer/"],
-    ["Q-PNA classifier playground", "Glass-box classification: see why each label is chosen.", "https://qnfo.github.io/qwav-demo-qpna-classifier/"],
-    ["Monna map perspective", "A renderer for the Monna map, from the UMP.010 C5 paper.", "https://qnfo.github.io/qwav-demo-monna-map-perspective/"],
-    ["Ultrametric tree universality", "A cross-domain explorer of the same tree structure.", "https://qnfo.github.io/ultrametric-tree-universality/"]
-  ];
+  const demos = QWAV_DEMOS.map(function(d) { return [d[1], d[2], d[3]]; });
   const research = [
     { t: "JPCUB P0: the metric", d: "Definition, measurement protocol and anti-gaming provisions. Worked example: IBM Eagle at 0.89 J per solution.", slug: "joules-per-solution-metric" },
     { t: "The physics of computation", d: "Landauer, Margolus\u2013Levitin and Bremermann limits; joules per solution as the falsifiable criterion for physical computational advantage.", slug: "paper-physics-of-computation" },
@@ -5564,7 +5636,7 @@ function renderQwavHTML(host) {
   const body = '<section class="q-hero"><div class="q-wrap q-hero-grid"><div><p class="q-eyebrow">Pre-commercial computing platform</p><h1 class="q-display">Benchmarked in joules per solution, not qubit counts.</h1><p class="q-lede">QWAV explores p-adic ultrametric architectures as an alternative to the qubit-gate-circuit model. The approach draws on Ostrowski\'s theorem for intrinsic error protection and targets room-temperature operation. Every performance claim is benchmarked with JPCUB, an open, falsifiable measure of energy per correct answer.</p><div class="q-actions"><a class="q-btn q-btn-accent" href="https://papers.qnfo.org/papers/joules-per-solution-metric">Read the JPCUB protocol</a><a class="q-btn q-btn-ghost" href="#demos">Try the demos</a><a class="q-btn q-btn-ghost" href="https://papers.qnfo.org/papers/qwav-gtm-strategy">Strategy whitepaper</a></div></div>' +
     '<div class="q-note"><strong>Status.</strong> QWAV is pre-commercial: no production system exists, and no commercial product is offered. The architecture is published as open research. The JPCUB protocol is open, so anyone can measure any platform, including QWAV, with the same procedure.</div></div></section>' +
     '<section class="q-section" id="demos" aria-labelledby="d-h"><div class="q-wrap"><p class="q-eyebrow">Try it</p><h2 class="q-h1" id="d-h">Ten interactive demos</h2><p class="q-lede" style="font-size:1.125rem">Each demo runs in your browser and illustrates one idea from the papers. They are teaching tools, not hardware measurements.</p><div class="q-grid q-grid-2">' + demos.map(function(d) {
-      return '<a class="q-link-card" href="' + d[2] + '" rel="noopener"><h3>' + d[0] + '</h3><p>' + d[1] + '</p></a>';
+      return '<a class="q-link-card" href="' + d[2] + '" rel="noopener"><h3>' + d[0] + '</h3><p>' + d[1] + '</p></a>' + qwavBadge(certs, d[2]);
     }).join("") + '</div></div></section>' +
     '<section class="q-section" id="jpcub" aria-labelledby="j-h"><div class="q-wrap q-hero-grid" style="align-items:start"><div><p class="q-eyebrow">The benchmark</p><h2 class="q-h1" id="j-h">Energy per correct answer</h2><p class="q-lede" style="font-size:1.125rem">JPCUB measures total system energy per correct answer: memory, input and output, cooling and power conversion included, not only the processor. Do not trust anyone\'s numbers, ours included: measure any platform yourself in joules per correct answer.</p><a class="q-btn q-btn-ghost" href="https://papers.qnfo.org/papers/joules-per-solution-metric">JPCUB P0 protocol</a></div>' +
     '<div class="q-panel"><p class="q-meta" style="margin:0 0 6px">QWAV design target</p><p style="font:500 3rem/1 var(--q-serif);margin:0 0 10px">&lt; 10<sup>\u22123</sup> J</p><p class="q-meta" style="margin:0">per solution. A target, not a measurement. For scale, the only published P0 measurement so far is IBM Eagle at 0.89 J per solution for factoring.</p></div></div></section>' +
@@ -5578,7 +5650,7 @@ function renderQwavHTML(host) {
     '<section class="q-section" id="research" aria-labelledby="rs-h"><div class="q-wrap"><p class="q-eyebrow">Research</p><h2 class="q-h1" id="rs-h">Built on published research</h2><p class="q-lede" style="font-size:1.125rem">The work behind QWAV is by Rowan Brad Quni-Gudzinas and published by QNFO, an independent research imprint. Every paper is open and can be checked independently.</p><div class="q-grid q-grid-2">' + research.map(function(r) {
       return '<a class="q-link-card" href="https://papers.qnfo.org/papers/' + r.slug + '"><h3>' + r.t + "</h3><p>" + r.d + "</p></a>";
     }).join("") + '</div><div class="q-actions" style="margin-top:28px"><a class="q-btn" href="https://papers.qnfo.org/papers">Browse all papers</a><a class="q-btn q-btn-ghost" href="https://ask.qwav.org/">Ask the corpus</a></div></div></section>';
-  return new Response(qdsPage({ brand: "qwav", title: "QWAV \u2014 benchmarked in joules per solution | p-adic ultrametric computing", description: "QWAV is a pre-commercial computing platform concept exploring p-adic ultrametric architectures, benchmarked with JPCUB: energy per correct answer, not qubit counts.", canonical: canon, active: "" }, body), { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "public, max-age=3600" } });
+  return new Response(qdsPage({ brand: "qwav", title: "QWAV \u2014 benchmarked in joules per solution | p-adic ultrametric computing", description: "QWAV is a pre-commercial computing platform concept exploring p-adic ultrametric architectures, benchmarked with JPCUB: energy per correct answer, not qubit counts.", canonical: canon, active: "", jsonld: '<script type="application/ld+json">' + JSON.stringify({ "@context": "https://schema.org", "@graph": [{ "@type": "Organization", name: "QWAV", url: "https://qwav.org/", parentOrganization: { "@type": "Organization", name: "QNFO", url: "https://qnfo.org/" } }, { "@type": "WebSite", name: "QWAV", url: "https://qwav.org/" }] }).replace(/</g, "\u003c") + "</script>" }, body), { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "public, max-age=3600" } });
 }
 // NOT-FOUND-HTML-1 (2026-10-02, visitor audit): a mistyped paper link answered {"error":"Paper not found"} as raw JSON.
 // A browser now gets a QDS page with the closest papers by slug words, a search box and the ways back; API clients
@@ -5996,7 +6068,7 @@ function lpPaperHTML(paper) {
   }).join(", ");
   const toc = lpTocHTML(st.toc);
   const sugg = ["What is the main result, in plain terms?", "What would falsify this?", "Which assumptions does it rest on?", "How does it connect to other QNFO work?"];
-  const body = '<div class="rp" id="rp" aria-hidden="true"><span></span></div><main id="main" class="wrap pp"><nav class="crumbs" aria-label="Breadcrumb"><a href="/papers">Papers</a><span aria-hidden="true">/</span><a href="/papers?category=' + cat + '" title="' + escAttr(CATEGORY_AUDIENCE[cat] || "") + '">' + esc(CATEGORY_LABELS[cat] || CATEGORY_LABELS.synthesis) + '</a></nav><header class="ph"><h1>' + titleHTML(paper.title) + '</h1><p class="by">' + byline + '</p>' + provVisibleHtml(paper._prov || provOf(null)) + paperAuditHtml(paper) + '<div class="ph-meta"><span class="q-tag live" title="This paper is versioned: new versions keep the same address here"><i></i>Living paper \u00b7 v' + esc(ver) + (vCount > 1 ? " \u00b7 " + vCount + " versions" : "") + "</span>" + (dateStr ? '<span>Published <time datetime="' + escAttr(dateStr) + '">' + esc(lpDate(dateStr)) + "</time></span>" : "") + (revStr ? '<span>Revised <time datetime="' + escAttr(revStr) + '">' + esc(lpDate(revStr)) + "</time></span>" : "") + (secondaries.length ? '<span class="pc-meta">Filed under ' + secondaries.map(function(c) { return '<a href="/papers?category=' + c + '" style="color:var(--teal)">' + esc(CATEGORY_LABELS[c]) + "</a>"; }).join(", ") + "</span>" : "") + tagMeta + "<span>" + minutes + " min read \u00b7 " + words.toLocaleString("en-US") + " words</span>" + '</div><div class="ph-act no-print"><button class="q-btn teal" type="button" data-go="ask">' + lpIcon("ask") + 'Ask this paper</button><a class="q-btn" href="/papers/' + escAttr(paper.slug) + '/quickread" rel="nofollow" title="The paper in about a minute: its claim, its numbers, its method, what would falsify it, and where to read">' + lpIcon("qr") + 'Quick read</a><button class="q-btn" type="button" id="b-cite">' + lpIcon("cite") + "Cite</button>" + (paper._pdf ? '<a class="q-btn" href="' + escAttr(url) + '.pdf">' + lpIcon("pdf") + "PDF</a>" : "") + '<button class="q-btn" type="button" id="b-share">' + lpIcon("share") + "Share</button></div></header>" + '<p class="sub-top-cta no-print" style="margin:12px 0 0"><a href="#sub" data-cta="PAPER-CTA-TOP-1">Get new papers by email \u2014 one short weekly digest, unsubscribe any time.</a></p>' + '<div class="pp-grid"><aside class="toc no-print" aria-label="Contents">' + (toc ? '<details class="toc-d" open><summary>Contents</summary>' + toc + "</details>" : "") + '</aside><article class="prose rendered-md" id="doc">' + plainHtml + videoBlockHtml(paper._video, t) + st.html + '<p class="rr-foot no-print">Spotted a typo or a possible error? Select the passage and choose Report, or <button type="button" class="rr-link" id="b-report">report it here</button>.</p></article><aside class="rail no-print" id="rail" aria-label="Living paper"><div class="rail-in"><div class="tabs" role="tablist"><button role="tab" aria-selected="true" aria-controls="t-ask" id="tb-ask" data-tab="ask">Ask</button><button role="tab" aria-selected="false" aria-controls="t-ctx" id="tb-ctx" data-tab="ctx">Context</button><button role="tab" aria-selected="false" aria-controls="t-ver" id="tb-ver" data-tab="ver">Versions</button><button role="tab" aria-selected="false" aria-controls="t-rel" id="tb-rel" data-tab="rel">Related</button></div>' + '<section class="tp" id="t-ask" role="tabpanel" aria-labelledby="tb-ask"><form id="ask-f" autocomplete="off"><label class="sr" for="ask-q">Ask a question about this paper</label><textarea id="ask-q" rows="2" maxlength="1000" placeholder="Ask anything about this paper"></textarea><button class="q-btn pri" type="submit" id="ask-go">Ask</button></form><div class="sugg" id="ask-sugg">' + sugg.map(function(s) {
+  const body = '<div class="rp" id="rp" aria-hidden="true"><span></span></div><main id="main" class="wrap pp"><nav class="crumbs" aria-label="Breadcrumb"><a href="/papers">Papers</a><span aria-hidden="true">/</span><a href="/papers?category=' + cat + '" title="' + escAttr(CATEGORY_AUDIENCE[cat] || "") + '">' + esc(CATEGORY_LABELS[cat] || CATEGORY_LABELS.synthesis) + '</a></nav><header class="ph"><h1>' + titleHTML(paper.title) + '</h1><p class="by">' + byline + '</p>' + provVisibleHtml(paper._prov || provOf(null)) + paperAuditHtml(paper) + '<div class="ph-meta"><span class="q-tag live" title="This paper is versioned: new versions keep the same address here"><i></i>Living paper \u00b7 v' + esc(ver) + (vCount > 1 ? " \u00b7 " + vCount + " versions" : "") + "</span>" + (dateStr ? '<span>Published <time datetime="' + escAttr(dateStr) + '">' + esc(lpDate(dateStr)) + "</time></span>" : "") + (revStr ? '<span>Revised <time datetime="' + escAttr(revStr) + '">' + esc(lpDate(revStr)) + "</time></span>" : "") + (secondaries.length ? '<span class="pc-meta">Filed under ' + secondaries.map(function(c) { return '<a href="/papers?category=' + c + '" style="color:var(--teal)">' + esc(CATEGORY_LABELS[c]) + "</a>"; }).join(", ") + "</span>" : "") + tagMeta + "<span>" + minutes + " min read \u00b7 " + words.toLocaleString("en-US") + " words</span>" + '</div><div class="ph-act no-print"><button class="q-btn teal" type="button" data-go="ask">' + lpIcon("ask") + 'Ask this paper</button><a class="q-btn" href="/papers/' + escAttr(paper.slug) + '/quickread" rel="nofollow" title="The paper in about a minute: its claim, its numbers, its method, what would falsify it, and where to read">' + lpIcon("qr") + 'Quick read</a><a class="q-btn" href="https://ask.qwav.org/paper/' + escAttr(paper.slug) + '" rel="noopener">Read with live equations</a><a class="q-btn" href="https://ask.qwav.org/reproduce/' + escAttr(paper.slug) + '" rel="noopener">Reproduce its computations</a><button class="q-btn" type="button" id="b-cite">' + lpIcon("cite") + "Cite</button>" + (paper._pdf ? '<a class="q-btn" href="' + escAttr(url) + '.pdf">' + lpIcon("pdf") + "PDF</a>" : "") + '<button class="q-btn" type="button" id="b-share">' + lpIcon("share") + "Share</button></div></header>" + '<p class="sub-top-cta no-print" style="margin:12px 0 0"><a href="#sub" data-cta="PAPER-CTA-TOP-1">Get new papers by email \u2014 one short weekly digest, unsubscribe any time.</a></p>' + '<div class="pp-grid"><aside class="toc no-print" aria-label="Contents">' + (toc ? '<details class="toc-d" open><summary>Contents</summary>' + toc + "</details>" : "") + '</aside><article class="prose rendered-md" id="doc">' + plainHtml + videoBlockHtml(paper._video, t) + st.html + '<p class="rr-foot no-print">Spotted a typo or a possible error? Select the passage and choose Report, or <button type="button" class="rr-link" id="b-report">report it here</button>.</p></article><aside class="rail no-print" id="rail" aria-label="Living paper"><div class="rail-in"><div class="tabs" role="tablist"><button role="tab" aria-selected="true" aria-controls="t-ask" id="tb-ask" data-tab="ask">Ask</button><button role="tab" aria-selected="false" aria-controls="t-ctx" id="tb-ctx" data-tab="ctx">Context</button><button role="tab" aria-selected="false" aria-controls="t-ver" id="tb-ver" data-tab="ver">Versions</button><button role="tab" aria-selected="false" aria-controls="t-rel" id="tb-rel" data-tab="rel">Related</button></div>' + '<section class="tp" id="t-ask" role="tabpanel" aria-labelledby="tb-ask"><form id="ask-f" autocomplete="off"><label class="sr" for="ask-q">Ask a question about this paper</label><textarea id="ask-q" rows="2" maxlength="1000" placeholder="Ask anything about this paper"></textarea><button class="q-btn pri" type="submit" id="ask-go">Ask</button></form><div class="sugg" id="ask-sugg">' + sugg.map(function(s) {
     return '<button type="button" class="q-chip">' + esc(s) + "</button>";
   }).join("") + '</div><div id="ask-out" aria-live="polite"></div><p class="fine">Answers are written from this paper first and other QNFO papers second, with numbered citations. Select any passage in the text to ask about it.</p></section><section class="tp" id="t-ctx" role="tabpanel" aria-labelledby="tb-ctx" hidden><div class="ld"><span class="q-skel"></span><span class="q-skel" style="width:70%"></span></div></section><section class="tp" id="t-ver" role="tabpanel" aria-labelledby="tb-ver" hidden><div class="ld"><span class="q-skel"></span></div></section><section class="tp" id="t-rel" role="tabpanel" aria-labelledby="tb-rel" hidden><div class="ld"><span class="q-skel"></span><span class="q-skel" style="width:80%"></span></div></section></div></aside></div>' + lpSubscribe("papers") + '</main><button class="fab no-print" type="button" data-go="ask" aria-label="Ask this paper">' + lpIcon("ask") + '<span>Ask</span></button><div class="selpop no-print" id="selpop" role="toolbar" aria-label="Selection" hidden><button type="button" data-sel="ask">' + lpIcon("ask") + 'Ask about this</button><button type="button" data-sel="quote">' + lpIcon("cite") + 'Copy quote</button><button type="button" data-sel="report" title="Report a typo or a suspected error in this passage">' + lpIcon("flag") + 'Report</button></div><div class="refpop" id="refpop" role="tooltip" hidden></div><dialog id="cite-d" class="q-card"><form method="dialog"><h2>Cite this paper</h2><div class="cite-tabs" role="tablist"><button type="button" class="q-chip on" data-fmt="apa">APA</button><button type="button" class="q-chip" data-fmt="bibtex">BibTeX</button><button type="button" class="q-chip" data-fmt="plain">Plain</button></div><pre id="cite-t" tabindex="0"></pre><div class="cite-a"><button type="button" class="q-btn pri" id="cite-copy">Copy</button><button class="q-btn" value="close">Close</button></div></form></dialog>' + RR_DIALOG + '<script type="application/json" id="lp-data">' + JSON.stringify(data).replace(/</g, "\\u003c") + "<\/script>";
   return lpDoc({ head, body, math: true, nav: "papers", cls: "paper", js: LP_PAPER_JS });
@@ -8684,14 +8756,23 @@ var gateway_worker_default = {
       if (host.indexOf("www.") === 0) return new Response(null, { status: 301, headers: { Location: "https://" + host.slice(4) + p + u.search } });
       if (p === "/health") return health();
       if (p === "/robots.txt") return new Response("User-agent: *\nAllow: /\nSitemap: https://" + host + "/sitemap.xml\n", { headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "public, max-age=3600" } });
-      if (p === "/sitemap.xml") return new Response('<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>https://' + host + '/</loc><changefreq>weekly</changefreq></url></urlset>\n', { headers: { "Content-Type": "application/xml; charset=utf-8", "Cache-Control": "public, max-age=3600" } });
+      if (p === "/sitemap.xml") return host === "qwav.org" ? handleSitemap(env, host) : new Response('<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>https://' + host + '/</loc><changefreq>weekly</changefreq></url></urlset>\n', { headers: { "Content-Type": "application/xml; charset=utf-8", "Cache-Control": "public, max-age=3600" } });
+      if (host !== "archive.qnfo.org") {
+        if (p === "/llms.txt") return new Response(qwavLlmsTxt(), { headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "public, max-age=3600" } });
+        if (p === "/feed.xml" || p === "/rss.xml") return new Response(qwavFeed(), { headers: { "Content-Type": "application/rss+xml; charset=utf-8", "Cache-Control": "public, max-age=3600" } });
+        if (p === "/certificates.json") return handleQwavCertificates();
+        const dm = /^\/demos\/([a-z0-9-]+)\/?$/.exec(p);
+        if (dm) { const dp = qwavDemoPage(dm[1]); if (dp) return dp; }
+        if (p === "/demos" || p === "/demos/") return new Response(null, { status: 301, headers: { Location: "https://" + host + "/#demos" } });
+      }
       if (host === "archive.qnfo.org") {
         if (p === "/" || p === "/index.html") return handleArchive(env);
         return new Response(null, { status: 301, headers: { Location: "https://archive.qnfo.org/" } });
       }
       if (p === "/legal" || p.indexOf("/legal/") === 0 || p === "/license" || p === "/privacy") return new Response(null, { status: 301, headers: { Location: "https://legal.qnfo.org" + (p === "/privacy" ? "/privacy" : legalRedirectPath(p)) } });
-      if (p === "/" || p === "/index.html") return renderQwavHTML(host);
-      return new Response(null, { status: 301, headers: { Location: "https://" + host + "/" } });
+      if (p === "/" || p === "/index.html") return renderQwavHTML(host, await qwavCerts());
+      // QWAV-DISCOVERY-1: an unknown path is a 404, not the home page; the known paths are matched above.
+      return new Response("Not found\n", { status: 404, headers: { "Content-Type": "text/plain; charset=utf-8" } });
     }
     if (p === "/privacy" && (host === "legal.qnfo.org" || host === "qnfo.org" || host === "www.qnfo.org" || host === "papers.qnfo.org")) return renderPrivacyHTML();
     // LEGAL-URL-1 (3.11.0): https://qnfo.org/legal/license is the address the license names for itself (every SPDX header,
@@ -8710,6 +8791,8 @@ var gateway_worker_default = {
         if (od) return od;
       }
       if (p === "/api/paper-videos" && method === "GET") return paperVideosJson(env);
+      if ((p === "/api/corrections" || p === "/corrections") && method === "GET") return handleCorrections(request, env, p).catch(function (e) { return json({ error: "corrections unavailable" }, 503); });
+      if ((p === "/data/ai-science-failures" || p.indexOf("/data/ai-science-failures/") === 0) && (method === "GET" || method === "HEAD")) return handleAtlas(request, env, p).catch(function (e) { return json({ error: "atlas unavailable" }, 503); });
       if (p === "/api/ask" && method === "POST") return handleAskAI(request, env);
       if (p.indexOf("/api/quickread/") === 0 && method === "GET") return handleQuickReadJson(request, env, decodeURIComponent(p.slice(15)), u).catch(function (e) { console.error(JSON.stringify({ worker: "qnfo-gateway", where: "handleQuickReadJson", error: String(e && e.message || e).slice(0, 200) })); return json({ error: "quick read unavailable" }, 503); });
       if (p === "/.well-known/webfinger" || p.indexOf("/ap/") === 0) return handleActivityPub(request, env, p, u);
@@ -10194,9 +10277,8 @@ wmAttach(gateway_worker_default, "qnfo-gateway");
 // with the owner pitch -- AI systems that research, ask the right questions and maintain themselves -- before any
 // offer, so the page sells what the owner actually sells (owner words 2026-11-04) instead of leading with a metric.
 (function () {
-  var PITCH = '<p class="wwm-lead">I build AI systems that research, ask the right questions and maintain themselves. ' +
-    'They do the slow, tedious work of research, ask the right questions through the Universal Ignorance Audit, ' +
-    'and deploy and maintain themselves with autonomous code fixes.</p>';
+  var PITCH = '<p class="wwm-lead">I am a systems researcher studying autonomous AI systems: how they operate, where they fail and how their claims can be audited. ' +
+    'I run that research in the open at QNFO, with an autonomous research fleet, a public failure record and the Universal Ignorance Audit.</p>';
   var base = gateway_worker_default && gateway_worker_default.fetch;
   if (typeof base !== "function" || gateway_worker_default.__wwm14) return;
   gateway_worker_default.fetch = async function (request, env, ctx) {

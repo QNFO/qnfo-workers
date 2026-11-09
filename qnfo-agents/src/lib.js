@@ -49,6 +49,13 @@ export function stagedActionArgs(args) {
 
 // One cf_agent_approvals row per (run, action): the lifecycle awaiting -> approved|rejected -> executed|failed. next() refuses a step backwards.
 export const APPROVAL_STATES = ["awaiting", "approved", "rejected", "executed", "failed"];
+// APPROVAL-EXPIRY-1 (issue 9761): the card says "rejected after 24 h"; the sweep enforces it. Rows still awaiting past the cutoff are answered as rejected.
+export const APPROVAL_EXPIRY_MS = 24 * 3600 * 1000;
+export const APPROVAL_EXPIRY_NOTE = "default rejected after 24h";
+export function approvalExpired(row, now) {
+  return !!row && row.status === "awaiting" && Number(row.created_ms) > 0 && Number(now) - Number(row.created_ms) >= APPROVAL_EXPIRY_MS;
+}
+
 export function approvalNext(from, to) {
   const order = { awaiting: 0, approved: 1, rejected: 1, executed: 2, failed: 2 };
   if (!(from in order) || !(to in order)) return false;
@@ -212,6 +219,9 @@ export function claimedFiled(text) {
   const m = /issues?\s+filed\s*[:=-]?\s*\**\s*(\d+)/i.exec(String(text || ""));
   return m ? Number(m[1]) : null;
 }
+
+/** SWEEP-EMPTY-1 (issue 8329): a finished sweep whose steps returned no filed-issue id. */
+export function sweepEmpty(steps) { return filedIssueIds(steps).length === 0; }
 
 /** The mismatch to record for a finished sweep, or null when the claim holds (or none was made). */
 export function filedMismatch(text, steps) {
@@ -477,7 +487,8 @@ export const MAINTAIN_PERIOD_MS = 7 * 86400000;
 export function maintainDue(lastCreatedIso, nowMs) {
   if (!lastCreatedIso) return true;
   const t = Date.parse(String(lastCreatedIso).replace(" ", "T") + (/[zZ]|[+-]\d\d:?\d\d$/.test(String(lastCreatedIso)) ? "" : "Z"));
-  return !Number.isFinite(t) || nowMs - t >= MAINTAIN_PERIOD_MS;
+  // fail closed (issue 8330): an unreadable timestamp is not due, so a bad row cannot re-seed a sweep every tick
+  return Number.isFinite(t) && nowMs - t >= MAINTAIN_PERIOD_MS;
 }
 export const MAINTAIN_PROMPT = [
   "CMDLINE-MAINTAIN-1, the weekly sweep for program QNFO.OPS (front end and back end of the fleet command line). Work from evidence, file at most five issues, and report counts.",
@@ -516,4 +527,90 @@ export function approvalCardSpec(runId, action, callId, payloadJson) {
     default_in_effect: "rejected after 24 h",
     action: "Answer the pending approval in /cmd"
   };
+}
+
+// CF-AGENT-SETUP-1 (issue 8240, slice a): the Cloudflare Skills (github.com/cloudflare/skills) a turn's prompt calls for, picked by keyword; at most one per turn so the prompt stays small.
+const CF_SKILL_KEYWORDS = [
+  ["durable-objects", /durable object|\bdo\b class|alarm\(|storage\.sql|websocket hibernation/i],
+  ["agents-sdk", /agents sdk|agents@|\bagent class|callable\(|\bschedule\(|AIChatAgent/i],
+  ["wrangler", /wrangler|wrangler\.toml|wrangler\.jsonc|\bwrangler\.json/i],
+  ["web-perf", /core web vitals|lighthouse|\bLCP\b|\bCLS\b|page speed|web perf/i],
+  ["workers-best-practices", /workers? best practice|waitUntil|compatibility_date|nodejs_compat|worker\.js|cloudflare worker/i]
+];
+export function cfSkillFor(prompt) {
+  const t = String(prompt || "").slice(0, 4000);
+  for (const [name, re] of CF_SKILL_KEYWORDS) if (re.test(t)) return name;
+  return null;
+}
+export function cfSkillUrl(name) { return "https://raw.githubusercontent.com/cloudflare/skills/main/skills/" + name + "/SKILL.md"; }
+export function cfSkillNote(name, text, max) {
+  const body = String(text || "").trim();
+  if (!name || !body) return "";
+  const cap = max || 6000;
+  return "\n\nCloudflare skill (" + name + ", from github.com/cloudflare/skills; follow it for this Cloudflare work):\n" + (body.length > cap ? body.slice(0, cap) + "\n[skill text cut]" : body);
+}
+
+// CMDLINE-HOOKS-1 (issue 8255): user hooks evaluated outside the model. A hook row is { id, event: pre_tool | post_tool | session_end, matcher, action: block | notify, note }.
+// The matcher is "*" (every tool) or a comma list of tool names, each an exact name or a prefix ending in "*" (ops_github*).
+export function hookMatches(matcher, toolName) {
+  const m = String(matcher || "*").trim();
+  if (m === "*" || m === "") return true;
+  const name = String(toolName || "");
+  return m.split(",").slice(0, 20).some((p0) => {
+    const p = p0.trim().slice(0, 80);
+    if (!p) return false;
+    return p.endsWith("*") ? name.startsWith(p.slice(0, -1)) : name === p;
+  });
+}
+export function hooksFor(hooks, event, toolName) {
+  return (Array.isArray(hooks) ? hooks : []).filter((h) => h && h.event === event && hookMatches(h.matcher, toolName));
+}
+export function hookBlock(hooks, toolName) {
+  const h = hooksFor(hooks, "pre_tool", toolName).find((x) => x.action === "block");
+  return h ? { blocked: true, hook: h.id, error: "blocked by hook " + h.id + (h.note ? ": " + String(h.note).slice(0, 200) : "") } : { blocked: false };
+}
+
+// CODE-AGENT-UX-1.6 (issue 8245): a turn about fleet code or infrastructure gets the head of docs/SYSTEM-MAP.md (the whole system on one page) instead of the agent reading whole worker files.
+export function wantsSystemMap(prompt) {
+  return /\b(worker|binding|d1|route|cron|deploy|queue|vectorize|r2|durable object|blast radius|depends on|fleet graph)\b/i.test(String(prompt || "").slice(0, 4000));
+}
+export function systemMapUrl() { return "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/SYSTEM-MAP.md"; }
+export function systemMapNote(text, max) {
+  const body = String(text || "").trim();
+  if (!body) return "";
+  const cap = max || 3500;
+  return "\n\nFleet system map (docs/SYSTEM-MAP.md, head; read the file or ops_fleet_graph for more):\n" + (body.length > cap ? body.slice(0, cap) + "\n[map cut]" : body);
+}
+
+// SHARE-LINK-1 (issue 9833): a shared transcript is public, so anything shaped like a credential is replaced before it is written to R2.
+const SHARE_SECRET_PATTERNS = [
+  /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?(?:-----END [A-Z ]*PRIVATE KEY-----|$)/g,
+  /\b(?:ghp|gho|ghu|ghs|ghr|github_pat)_[A-Za-z0-9_]{20,}/g,
+  /\bsk-[A-Za-z0-9_-]{20,}/g,
+  /\bAKIA[0-9A-Z]{16}\b/g,
+  /\bxox[abprs]-[A-Za-z0-9-]{10,}/g,
+  /\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{5,}/g,
+  /\b(authorization|bearer)\b\s*[:=]?\s*[A-Za-z0-9._~+\/=-]{16,}/gi,
+  /\b((?:api[_-]?key|secret|token|password|passwd|x-loop-token)\b["']?\s*[:=]\s*["']?)[^\s"',;]{8,}/gi,
+  /\b[0-9a-f]{40,}\b/gi
+];
+export function redactSecrets(text) {
+  let t = String(text == null ? "" : text);
+  for (const re of SHARE_SECRET_PATTERNS) t = t.replace(re, function (m, g1) { return (typeof g1 === "string" && g1 ? g1 : "") + "[redacted]"; });
+  return t;
+}
+export function shareToken() {
+  const b = new Uint8Array(24);
+  crypto.getRandomValues(b);
+  return Array.from(b, function (x) { return x.toString(16).padStart(2, "0"); }).join("");
+}
+export function shareTokenOk(t) { return /^[0-9a-f]{48}$/.test(String(t || "")); }
+function escHtml(s) { return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); }
+// The shared page: read-only, no script, noindex (the route also sends the header).
+export function renderShareHtml(doc) {
+  const list = doc && Array.isArray(doc.turns) ? doc.turns : [];
+  const turns = list.map(function (t) {
+    return "<section><h2>Turn " + escHtml(t.turn) + "</h2><h3>Request</h3><pre>" + escHtml(t.prompt) + "</pre><h3>Answer</h3><pre>" + escHtml(t.answer) + "</pre></section>";
+  }).join("");
+  return "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><meta name=\"robots\" content=\"noindex,nofollow\"><title>Shared code session</title><style>body{font:16px/1.5 system-ui,sans-serif;max-width:52rem;margin:0 auto;padding:1rem}pre{white-space:pre-wrap;word-break:break-word;background:#f4f4f4;padding:.75rem;border-radius:6px;color:#111}h2{margin-top:2rem}</style></head><body><h1>Shared code session</h1><p>Read-only copy, " + list.length + " turn(s), shared " + escHtml(doc && doc.shared_at) + ". Credentials are removed.</p>" + turns + "</body></html>";
 }

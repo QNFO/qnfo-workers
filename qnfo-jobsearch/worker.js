@@ -9,7 +9,7 @@
 // JOBSEARCH-CV-1 (1.5.0): the CV is part of this worker (page /cv): a yes/no interview that builds the claim bank, review of unconfirmed claims, roles, achievements and publications edited in D1, a resume per job (summary, roles, selected work, education, skills) and a cover note, history and backup. The search is tied to that bank (evidence the owner can back up weighs more; what the CV lacks is shown as a gap), decided postings (rejected, applied, approved) never come back under another id, rejections carry a reason the search learns from, and a wider net: stretch matches outside the stated preferences, more boards and aggregators.
 // Routes: GET / (web UI) | GET /api | GET /api/matches | GET /api/matches/:id | GET /api/runs | GET /api/ledger | POST /api/run | POST /api/matches/:id/status | GET /health
 // Port of the jobsearch/ Python modules (tests: jobsearch/test_jobsearch.py, qnfo-jobsearch/worker.test.mjs).
-var VERSION = "1.12.5-codeagent";
+var VERSION = "1.18.0-codeagent";
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -298,9 +298,10 @@ const LEDGER = {
    "id": "H2",
    "cluster": [
     "ai_systems",
-    "research_integrity"
+    "research_integrity",
+    "autonomous_systems"
    ],
-   "text": "Research systems builder: founder of QNFO, an independent research imprint with an AI-assisted pipeline, a published audit method, and a public correction trail."
+   "text": "Autonomous AI systems researcher: founder of QNFO, an autonomous research system in production with a published failure record, after 20 years of systems work at the U.S. Federal Highway Administration and AARP."
   },
   {
    "id": "H3",
@@ -357,7 +358,8 @@ let ensured = false;
 async function ensure(env) {
   if (ensured) return;
   for (const q of DDL) await env.JOBS_DB.prepare(q).run();
-  try { await env.JOBS_DB.prepare("ALTER TABLE jobsearch_feedback ADD COLUMN reason TEXT").run(); } catch (e) { if (!/duplicate column/i.test(String((e && e.message) || e))) throw e; }   // why a posting was rejected: the search learns from it
+  try { await env.JOBS_DB.prepare("ALTER TABLE jobsearch_feedback ADD COLUMN reason TEXT").run(); } catch (e) { if (!/duplicate column/i.test(String((e && e.message) || e))) throw e; }
+  try { await env.JOBS_DB.prepare("ALTER TABLE jobsearch_matches ADD COLUMN gaps_json TEXT").run(); } catch (e) { if (!/duplicate column/i.test(String((e && e.message) || e))) throw e; }   // PROMPTED-RECALL-1: what the posting asks for that the CV cannot back   // why a posting was rejected: the search learns from it
   ensured = true; try { await generateWeeklyDossier(env); } catch (e) { logErr("dossier", e); }   // JOBSEARCH-DOSSIER-SOFT-1: a side job never takes a request down (the Monday query on a missing column returned 1101 on 2026-11-09)
 }
 // REACH-FOCUS-1.7: weekly dossier of five named people/organizations
@@ -394,7 +396,7 @@ async function setMeta(env, k, v) {
 // feed key -> id prefix of the postings it produced (a feed that failed this run never expires anything)
 function feedPrefix(feed) {
   const [kind, arg] = feed.split(":");
-  return { greenhouse: `gh:${arg}:`, lever: `lv:${arg}:`, ashby: `ab:${arg}:`, recruitee: `rc:${arg}:`, smartrecruiters: `sr:${arg}:`, remotive: "rm:", muse: "mu:", jobicy: "jb:", arbeitnow: "an:", remoteok: "rok:", himalayas: "him:", hn: "hn:", publicsector: `ps:${arg}:` }[kind];
+  return { greenhouse: `gh:${arg}:`, lever: `lv:${arg}:`, ashby: `ab:${arg}:`, recruitee: `rc:${arg}:`, smartrecruiters: `sr:${arg}:`, remotive: "rm:", muse: "mu:", jobicy: "jb:", arbeitnow: "an:", remoteok: "rok:", himalayas: "him:", hn: "hn:", publicsector: `ps:${arg}:`, workable: `wk:${arg}:` }[kind];
 }
 const dedupeKey = (j) => `${j.company}|${j.title}|${j.location}`.toLowerCase().replace(/\s+/g, " ").trim();
 
@@ -404,12 +406,13 @@ const dedupeKey = (j) => `${j.company}|${j.title}|${j.location}`.toLowerCase().r
 const BOARDS = {
   greenhouse: ["anthropic", "scaleai", "mongodb", "elastic", "gitlab", "databricks", "stripe", "adyen", "bird", "datadog", "cloudflare", "canonical", "grafanalabs", "mozilla", "wikimedia", "khanacademy",
     "codeforamerica", "givewell", "dataiku", "fivetran", "nesta", "gallup", "rti", "ideo", "waymo", "nuro", "lyft",
-    "givedirectly", "goodfire", "ionq", "psiquantum", "riverlane", "turing", "via", "catawiki", "labelbox"],
-  lever: ["palantir", "mendix", "brookings", "oliverwyman", "zoox", "apolloresearch", "metr", "rigetti"],   // JS-7 (2026-11-05): mistral left Lever (HTTP 404 on Lever, Ashby and Greenhouse, 0 postings on SmartRecruiters) and held fm-jobsearch-feed-down red at 3 failed runs
+    "givedirectly", "goodfire", "turing", "via", "catawiki", "labelbox"],   // JOBSEARCH-AUTONOMY-1: ionq, psiquantum and riverlane (quantum) dropped
+  lever: ["palantir", "mendix", "brookings", "oliverwyman", "zoox", "apolloresearch", "metr"],   // JS-7 (2026-11-05): mistral left Lever (HTTP 404 on Lever, Ashby and Greenhouse, 0 postings on SmartRecruiters) and held fm-jobsearch-feed-down red at 3 failed runs
   ashby: ["openai", "cohere", "notion", "elevenlabs", "mollie", "mapbox", "perplexity", "snowflake", "faculty", "wayve", "cerebras", "anyscale", "modal", "fireworks", "redwoodresearch", "pinecone", "runway", "miro"],
   recruitee: ["bunq", "msf", "solvinity", "sweco"],   // sweco: transport, urban and water planning consultancy (probed 2026-11-05: 179 offers, Netherlands among them)
   smartrecruiters: ["oecd"],                           // JOBSEARCH-SOURCES-1 (JS-7): OECD policy research and statistics roles (probed 2026-11-05: 22 postings)
-  remotive: ["data", "product", "all-others", "q=research", "q=policy", "q=scientist", "q=quantum", "q=program manager", "q=analyst"],
+  remotive: ["data", "product", "all-others", "q=research", "q=policy", "q=scientist", "q=autonomous", "q=ai safety", "q=program manager", "q=analyst",
+    "q=transportation", "q=forecasting", "q=simulation", "q=modelling", "q=evaluation", "q=systems", "q=agents", "q=geospatial", "q=ai governance", "q=ai policy", "q=decision science"],   // JOBSEARCH-DIRECTIONS-1: queries drawn from the record's own work (network models, travel forecasting, simulation, geospatial, evaluation), not from role titles
   muse: [],   // JOBSEARCH-MUSE-RETIRED-1 (issue 2562, 2026-11-09): all 8 Muse feeds answered HTTP 404 for 20 runs in a row, so /api/ops stayed degraded (503) and the traffic-health journey counted it as a 5xx; an empty list drops them from ACTIVE_FEEDS and the fetch loop (re-add the combinations when the endpoint answers again)
   jobicy: ["netherlands", "europe", "emea", "tag:research", "tag:data science", "tag:policy", "tag:machine learning"],
   remoteok: [true],
@@ -417,6 +420,16 @@ const BOARDS = {
   hn: [true],
   arbeitnow: true,
   publicsector: ["werkenvoornederland", "academictransfer", "euraxess"],
+};
+// JOBSEARCH-FIT-1 (2026-11-09): employers that post the owner's target roles (AI governance, evaluation and assurance, autonomous-systems research, mobility modelling)
+// and whose roles are often seen only on LinkedIn. These slugs could not be probed from the session (its egress proxy refuses the ATS hosts), so the worker probes
+// them itself: a candidate board that answers is ranked like any board and recorded in jobsearch_feeds; one that answers 404 or fails is skipped silently and never
+// counts as a feed outage. GET /api/ops lists which candidates answered ("candidates_live"); a live one moves into BOARDS by a later change.
+const CANDIDATE_BOARDS = {
+  greenhouse: ["deepmind", "appliedintuition", "aurorainnovation", "motional", "kodiak", "zipline", "credoai", "epochai", "partnershiponai", "isomorphiclabs", "here", "tomtom", "bosch", "arcadis", "thoughtworks", "humanloop", "anthropicpolicy"],
+  lever: ["holisticai", "arthur", "fiddlerai", "farai", "conjecture", "aisafety", "governanceai", "oxa", "einride", "volocopter", "lilium"],
+  ashby: ["patronus-ai", "haize-labs", "grayswan", "apollo-research", "lakera", "transluce", "epoch", "far-ai", "safe-ai", "aisi", "goodfire", "meter", "metr"],
+  workable: ["holistic-ai", "saidot", "trail-ml", "tno", "royal-haskoningdhv", "goudappel", "deltares", "rand-europe", "ada-lovelace-institute", "the-alan-turing-institute", "alan-turing-institute", "turing", "govai", "centre-for-the-governance-of-ai"],
 };
 const ACTIVE_FEEDS = new Set(Object.entries(BOARDS).flatMap(([kind, args]) =>
   kind === "arbeitnow" ? ["arbeitnow"] : args.map((arg) => `${kind}:${arg}`)
@@ -466,6 +479,11 @@ const FETCHERS = {
   async ashby(slug) {
     const d = await getJson(`https://api.ashbyhq.com/posting-api/job-board/${slug}`);
     return (d.jobs || []).filter((j) => j.isListed !== false).map((j) => ({ id: `ab:${slug}:${j.id}`, source: "ashby", company: slug, title: j.title || "", location: (j.location || "") + (j.isRemote ? " (Remote)" : ""), url: j.jobUrl || "", desc: j.descriptionPlain || stripHtml(j.descriptionHtml || "") }));
+  },
+  // JOBSEARCH-FIT-1: Workable public job widget (used by many EU research institutes and AI-governance start-ups); details=true carries the posting text
+  async workable(slug) {
+    const d = await getJson(`https://apply.workable.com/api/v1/widget/accounts/${encodeURIComponent(slug)}?details=true`);
+    return (Array.isArray(d.jobs) ? d.jobs : []).map((j) => ({ id: `wk:${slug}:${j.shortcode || j.id || j.title}`, source: "workable", company: d.name || slug, title: j.title || "", location: [j.city, j.state, j.country].filter(Boolean).join(", ") + (j.telecommuting ? " (Remote)" : ""), url: j.url || j.application_url || `https://apply.workable.com/${slug}/j/${j.shortcode || ""}`, desc: stripHtml((j.description || "") + " " + (j.requirements || "")) }));
   },
   async remotive(cat) {
     const d = await getJson(cat.startsWith("q=") ? `https://remotive.com/api/remote-jobs?search=${encodeURIComponent(cat.slice(2))}&limit=100` : `https://remotive.com/api/remote-jobs?category=${cat}`);
@@ -682,11 +700,13 @@ const SURVEY = [
   ["fam_contract", "Work", "Contracts and procurement oversight (you were a certified contracting officer representative)?", true],
   ["fam_social", "Work", "Housing, ageing, community and social policy?", true],
   ["fam_climate", "Work", "Sustainability, climate and energy-transition roles?", null],
-  ["fam_ai", "Work", "AI and machine-learning product, governance or safety roles?", true],
-  ["fam_quantum", "Work", "Quantum, deep-tech and research-integrity roles?", null],
+  ["fam_autonomy", "Work", "Autonomous and AI systems research: agentic systems, AI evaluation and assurance, AI oversight and socio-technical systems research?", true],   // JOBSEARCH-AUTONOMY-1 (owner direction 2026-11-09): the lead target
+  ["fam_ai", "Work", "AI and machine-learning product, governance, safety and research-integrity roles?", true],
+  ["fam_sysmodel", "Work", "Systems modelling, simulation and decision-science roles (network models, travel-demand models, digital twins, operations research)?", true],   // JOBSEARCH-FIT-1
+  ["fam_quantum", "Work", "Quantum computing roles?", false],   // JOBSEARCH-AUTONOMY-1: quantum is no longer a target (owner, 2026-11-09); a yes brings it back
   ["fam_edu", "Work", "Teaching, training and academic roles?", null],
   ["fam_science", "Work", "Research scientist, quantitative and applied-science roles (statistics, modelling, physics)?", true],
-  ["fam_tech", "Work", "Research-engineering roles (research engineer, ML engineer, data engineer) when the posting matches your record?", null],
+  ["fam_tech", "Work", "Hands-on coding roles (research engineer, ML or AI engineer, data engineer, member of technical staff)?", false],   // JOBSEARCH-FIT-1 (owner, 2026-11-09): a systems researcher, not a coder; these roles were the rejections
   ["lvl_manage", "Level", "Roles that manage people?", null],
   ["lvl_mid", "Level", "Roles below senior level (no senior, lead, head, principal or director in the title)?", null],
   ["type_contract", "Contract", "Contract, freelance or interim engagements?", true],
@@ -703,7 +723,7 @@ const FAMILIES = {
   fam_product: ["product manager", "product owner", "head of product", "group product", "product lead", "director of product", "principal product", "product management"],
   fam_program: ["program manager", "programme manager", "project manager", "portfolio manager", "pmo", "delivery manager", "head of programs", "head of programmes", "director of programs", "programme director", "program director", "program lead", "programme lead",
     "programmamanager", "programmaleider", "programmadirecteur", "portfoliomanager", "projectmanager", "projectleider"],
-  fam_research: ["research manager", "research director", "research program", "research programme", "head of research", "director of research", "research operations", "research lead", "grants manager", "research coordinator", "research partnerships", "research strategy", "senior researcher", "principal researcher", "research advisor", "research adviser", "research fellow", "evaluation manager", "monitoring and evaluation",
+  fam_research: ["research manager", "research director", "research program", "research programme", "head of research", "director of research", "research operations", "research lead", "grants manager", "research coordinator", "research partnerships", "research strategy", "senior researcher", "principal researcher", "research advisor", "research adviser", "research fellow", "evaluation manager", "monitoring and evaluation", "research program manager", "research programme manager", "research portfolio", "ai research manager", "head of ai research", "ai research lead", "research partnerships lead",
     "onderzoeker", "onderzoeksleider", "onderzoeksmanager", "onderzoeksadviseur", "hoofd onderzoek", "wetenschappelijk onderzoeker"],
   fam_consult: ["consultant", "engagement manager", "advisory", "associate partner", "management consult*", "strategy consult*"],
   fam_nonprofit: ["executive director", "managing director", "country director", "chief of staff", "director of operations", "foundation"],
@@ -711,8 +731,14 @@ const FAMILIES = {
   fam_contract: ["contracting officer", "contract manager", "contracts manager", "procurement manager", "vendor manager", "sourcing manager"],
   fam_social: ["housing", "social policy", "community development", "ageing", "aging", "livability", "affordable"],
   fam_climate: ["sustainability", "climate", "energy transition", "esg", "net zero", "decarbon"],
-  fam_ai: ["ai governance", "ai policy", "applied ai", "ai product", "ml product", "responsible ai", "ai safety", "trust and safety", "ai evaluation", "ai ethics", "ai strategy", "ai program", "ai programme"],
-  fam_quantum: ["quantum", "research integrity", "scientific integrity", "open science"],
+  fam_ai: ["ai governance", "ai policy", "applied ai", "ai product", "ml product", "responsible ai", "ai safety", "trust and safety", "ai evaluation", "ai ethics", "ai strategy", "ai program", "ai programme", "research integrity", "scientific integrity", "open science",
+    "ai risk", "model risk", "operational risk", "ai assurance", "ai audit", "algorithmic audit", "ai standards", "ai regulation", "ai act", "ai compliance", "ai policy researcher", "technology policy", "tech policy", "digital policy"],   // JOBSEARCH-FIT-1 (2026-11-09): AI governance, policy, risk and assurance titles
+  fam_autonomy: ["autonomous systems", "autonomous system", "autonomy", "agentic", "multi-agent", "ai systems", "systems research", "systems researcher", "ai research", "ai assurance", "ai evaluation", "model evaluation", "evaluations",
+    "ai oversight", "socio-technical", "sociotechnical", "complex systems", "ai safety", "alignment", "red team", "red teaming", "frontier risk", "safety research", "evals lead", "evaluation lead", "evaluation scientist"],
+  // JOBSEARCH-FIT-1: systems modelling and decision science, the owner's 20-year thread (network models, FHWA tour-based model, simulation) as a role family of its own
+  fam_sysmodel: ["simulation", "network model*", "network modelling", "network modeling", "systems model*", "systems analyst", "systems analysis", "decision science", "decision scientist", "decision analyst", "decision support", "operations research",
+    "transport model*", "transportation model*", "travel demand", "digital twin", "system dynamics", "modelling lead", "modeling lead", "agent-based", "verkeersmodel*", "modelleur"],
+  fam_quantum: ["quantum"],
   fam_edu: ["lecturer", "professor", "teaching fellow", "instructor", "trainer", "education manager", "learning manager", "curriculum"],
   fam_science: ["research scientist", "applied scientist", "quantitative researcher", "quantitative analyst", "physicist", "economist", "statistician", "computational scientist", "research associate", "postdoctoral", "principal investigator", "data scientist", "scientist"],
   fam_tech: ["research engineer", "machine learning engineer", "ml engineer", "ai engineer", "data engineer", "analytics engineer", "applied ai engineer", "software engineer, research", "research software engineer"],
@@ -729,6 +755,8 @@ const CLUSTER_KW = {
   ai_systems: ["llm", "large language model", "ai agent", "agentic", "generative ai", "applied ai", "machine learning", "ai evaluation", "evals", "rag "],
   research_integrity: ["research integrity", "reproducib*", "peer review", "scientific integrity", "open science", "provenance", "responsible ai", "ai governance", "ai safety", "audit", "trustworthy"],
   data_product: ["data product", "data platform", "analytics", "dashboard", "data strategy", "data governance"],
+  autonomous_systems: ["autonomous system*", "autonomy", "agentic", "multi-agent", "multi agent", "ai agent*", "agent-based", "ai safety", "alignment", "ai assurance", "oversight", "failure mode*", "socio-technical", "sociotechnical"],
+  systems_modeling: ["systems modeling", "systems modelling", "system dynamics", "complex systems", "network model*", "network analysis", "simulation model*", "decision support", "operations research", "systems thinking"],
   quantum_energy: ["quantum", "energy efficiency", "benchmark"],
   nonprofit: ["nonprofit", "non-profit", "civil society", "ngo", "foundation", "philanthrop*"],
   product: ["product manager", "product management", "roadmap", "product strategy", "stakeholder"],
@@ -752,7 +780,10 @@ const ABSOLUTE_EXCLUDE = ["intern", "junior", "entry", "graduate", "new grad", "
   "sales", "account executive", "account manager", "business development", "recruit", "talent", "payroll", "accountant", "accounting", "treasury", "fp&a", "tax ", "facilities", "warehouse", "driver", "nurse", "technician",
   "customer success", "customer support", "customer service", "support specialist", "financial", "webinar", "solutions", "devops", "site reliability", "designer", "finance", "people partner", "hr ", "receptionist", "assistant",
   "stagiair", "stageplaats", "afstudeer", "assistent", "administratief", "secretaresse", "verpleegkundige", "chauffeur", "jurist", "juridisch", "advocaat", "controller", "salaris", "monteur", "schoonmaak", "beveiliger", "handhaver", "toezichthouder", "rechercheur", "boa ", "verpleegkundig", "stage "];   // the Dutch forms of the same noise (JOBSEARCH-NL-PUBLIC-SECTOR-1)
-const TITLE_EXCLUDE_SOFT = ["scientist"];
+const TITLE_EXCLUDE_SOFT = [];   // JOBSEARCH-CONTENT-FIRST-1 (owner 2026-11-09): no title word excludes a field any more
+// seniority words in a title are a level, not a field, and stay a hard filter; every other ABSOLUTE_EXCLUDE word now only matters when the posting text shows nothing of the record
+const LEVEL_EXCLUDE = new Set(["intern", "junior", "entry", "graduate", "new grad", "apprentice", "trainee", "stagiair", "stageplaats", "afstudeer", "stage "]);
+const CONTENT_MIN = 6;   // distinctive terms a posting must share with the record when its title says nothing
 const ENGINEERING_WORDS = ["engineer", "architect"];   // excluded unless the title is a research-engineering title and the posting shows evidence of the owner record
 const LOC_BAD_REMOTE = ["us only", "united states only", "us-only", "usa only", "canada only", "uk only", "india only", "latam", "apac only"];
 const HOME = ["amsterdam", "netherlands", "nederland", "rotterdam", "utrecht", "eindhoven", "the hague", "den haag", "delft", "leiden", "groningen", "haarlem", "almere", "amersfoort",
@@ -761,8 +792,8 @@ const REGION_WIDE = ["europe", "emea", "european", "eu ", "eu-", "worldwide", "a
 const EUROPE_OTHER = ["germany", "berlin", "munich", "france", "paris", "london", "uk", "united kingdom", "ireland", "dublin", "spain", "madrid", "barcelona", "portugal", "lisbon", "italy", "belgium", "brussels", "denmark", "copenhagen", "sweden", "stockholm", "norway", "oslo", "finland", "helsinki", "austria", "vienna", "switzerland", "zurich", "poland", "warsaw", "czech", "prague", "luxembourg", "estonia", "latvia", "lithuania", "hungary", "romania", "greece", "croatia", "slovenia", "slovakia", "bulgaria", "malta", "cyprus"];
 const US_RE = /\b(us|usa|united states|san francisco|new york|seattle|washington|boston|austin|chicago|los angeles|palo alto|mountain view|menlo park|sf|nyc|dc)\b|, (ca|ny|wa|ma|tx|il|dc)\b/;
 const CORE = new Set(["federal", "policy_research", "transport_modeling", "research_mgmt", "urban_planning", "social_policy", "contracting"]);
-const FRONTIER = new Set(["ai_systems", "research_integrity"]);
-const DATA_SIDE = new Set(["data_product", "data_science", "survey_methods", "ai_systems", "gis"]);
+const FRONTIER = new Set(["ai_systems", "research_integrity", "autonomous_systems"]);
+const DATA_SIDE = new Set(["data_product", "data_science", "survey_methods", "ai_systems", "gis", "systems_modeling"]);
 const escRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const EUROPE_OTHER_RE = EUROPE_OTHER.map((k) => new RegExp("\\b" + escRe(k) + "\\b"));
 // Keywords match whole words; a trailing * allows an intentional stem to continue to the word end.
@@ -774,7 +805,7 @@ const tokens = (title) => [...new Set(String(title || "").toLowerCase().split(/[
 
 // ctx = what the owner told us. answers: {id: true|false|null}; learned: {boost:Set, block:Set} from likes and dislikes of real postings
 const COMPANY_SUFFIX = /(^|\s)(b\.?v\.?|n\.?v\.?|inc\.?|ltd\.?|llc|gmbh|plc|s\.?a\.?|co\.?)(?=$|\s)/g;
-const OPT_IN_FAMILIES = new Set(["fam_edu"]);
+const OPT_IN_FAMILIES = new Set(["fam_edu", "fam_tech"]);   // JOBSEARCH-FIT-1: coding roles need an explicit yes
 const coKey = (c) => String(c || "").toLowerCase().replace(COMPANY_SUFFIX, " ").replace(/[^a-z0-9]+/g, "");
 function makeCtx(answers, feedback, outcomeWeights = {}, owned = null) {
   const a = {};
@@ -784,7 +815,7 @@ function makeCtx(answers, feedback, outcomeWeights = {}, owned = null) {
   const co = {};
   // what a rejection teaches depends on why: "field" counts double for the title words, "level", "location" and "applied" teach nothing about the words, "company" blocks the employer at once
   for (const f of feedback || []) {
-    const teachesWords = !["level", "location", "applied"].includes(f.reason), w = f.reason === "field" ? 2 : 1;
+    const teachesWords = !["level", "location", "applied"].includes(f.reason), w = f.reason === "field" || f.reason === "coding" ? 2 : 1;
     if (teachesWords) for (const t of tokens(f.title)) { const m = f.verdict === "like" ? like : dis; m[t] = (m[t] || 0) + w; }
     const k = coKey(f.company);
     if (k) { const o = co[k] || (co[k] = { like: 0, dis: 0 }); if (f.verdict === "like") o.like++; else if (f.reason !== "applied") o.dis += f.reason === "company" ? 3 : 1; }
@@ -884,7 +915,80 @@ function locationGate(loc, descHead, ctx = DEFAULT_CTX) {
   }
   return a.loc_world ? ["check", `Elsewhere: you would move; authorized only in NL/US, visa needed (${loc})`] : ["fail", `outside NL, EU and US, not selected: ${loc}`];
 }
+// JOBSEARCH-LINKEDIN-1 (owner, 2026-11-09: "I don't even know what keywords I should be searching for on LinkedIn"). LinkedIn cannot be read by this worker
+// (User Agreement 8.2), so the search hands the owner the exact searches instead: LinkedIn's boolean job search, filtered to senior and director level and the last
+// week, in the places the owner chose; the same query on Google restricted to linkedin.com/jobs, and on Indeed. A posting found there is pasted into "Check a posting".
+const LINKEDIN_SEARCHES = [
+  { id: "ai_gov", label: "AI governance, policy and risk", why: "Your FHWA and AARP program leadership plus your AI audit method", q: '("AI governance" OR "AI policy" OR "responsible AI" OR "AI risk" OR "AI assurance") NOT (engineer OR developer)' },
+  { id: "ai_eval", label: "AI evaluation and assurance research", why: "Your published audit method for autonomous AI systems", q: '("AI evaluation" OR "model evaluation" OR "AI audit" OR "evaluations lead" OR "red teaming") AND (research OR lead OR manager) NOT (engineer OR developer)' },
+  { id: "autonomy", label: "Autonomous and agentic systems research", why: "QNFO: you run an autonomous research system in production", q: '("autonomous systems" OR "agentic" OR "multi-agent" OR "AI systems") AND (researcher OR "research lead" OR "research manager") NOT (engineer OR developer)' },
+  { id: "sysmodel", label: "Systems modelling and simulation", why: "Network models at DVRPC and IBI; the FHWA Tour-Based Model System", q: '("systems modelling" OR "systems modeling" OR "simulation" OR "network modelling" OR "network modeling" OR "digital twin") AND (lead OR senior OR principal) NOT (engineer OR developer)' },
+  { id: "mobility", label: "Transport and mobility AI", why: "20 years of transportation network modelling; co-directed the $10M NHTS", q: '(mobility OR transport OR transportation OR "travel demand") AND (AI OR modelling OR modeling OR analytics) AND (lead OR senior OR principal OR manager) NOT (engineer OR developer)' },
+  { id: "decision", label: "Decision science", why: "AARP Livability Index: decision support built from 50+ data sources", q: '("decision science" OR "decision scientist" OR "decision support" OR "operations research") NOT (engineer OR developer)' },
+  { id: "research_lead", label: "Research program and portfolio leadership", why: "You directed national research programs and contractor teams", q: '("research program manager" OR "research programme manager" OR "head of research" OR "research director" OR "research portfolio" OR "AI research manager")' },
+  { id: "ai_policy_nl", label: "AI policy in Dutch government (in Dutch)", why: "Dutch ministries and regulators post AI governance roles on LinkedIn", q: '("AI" OR "algoritme" OR "algoritmes") AND (beleidsadviseur OR "strategisch adviseur" OR toezicht OR governance)' },
+];
+function linkedinSearches(ctx = DEFAULT_CTX) {
+  const a = ctx.a, places = [];
+  if (a.loc_nl !== false) places.push({ key: "nl", label: "Netherlands", li: "location=Netherlands", indeed: "https://nl.indeed.com/jobs?l=Nederland&fromage=7&q=", google: "Netherlands" });
+  if (a.loc_remote !== false) places.push({ key: "remote", label: "Remote in Europe", li: "location=European%20Union&f_WT=2", indeed: "https://nl.indeed.com/jobs?l=Remote&fromage=7&q=", google: "remote Europe" });
+  if (a.loc_eu) places.push({ key: "eu", label: "Europe", li: "location=European%20Union", indeed: "https://de.indeed.com/jobs?fromage=7&q=", google: "Europe" });
+  if (a.loc_us) places.push({ key: "us", label: "United States", li: "location=United%20States", indeed: "https://www.indeed.com/jobs?fromage=7&q=", google: "United States" });
+  if (!places.length) places.push({ key: "nl", label: "Netherlands", li: "location=Netherlands", indeed: "https://nl.indeed.com/jobs?l=Nederland&fromage=7&q=", google: "Netherlands" });
+  const enc = encodeURIComponent;
+  const plain = (q) => q.replace(/\s+NOT\s+\([^)]*\)/g, "").replace(/\bAND\b/g, " ").replace(/\s+/g, " ").trim();
+  return {
+    how: "Each search opens LinkedIn filtered to mid-senior and director roles posted in the last week. On LinkedIn, switch on Job alert at the top of the results so new roles come to you. Paste any posting you like into Check a posting below: the search scores it against your record and remembers it.",
+    searches: LINKEDIN_SEARCHES.map((x) => ({
+      ...x,
+      links: places.map((pl) => ({
+        place: pl.label,
+        linkedin: `https://www.linkedin.com/jobs/search/?keywords=${enc(x.q)}&${pl.li}&f_E=4%2C5%2C6&f_TPR=r604800&sortBy=DD`,
+        google: `https://www.google.com/search?q=${enc("site:linkedin.com/jobs/view " + plain(x.q) + " " + pl.google)}&tbs=qdr:w`,
+        indeed: pl.indeed + enc(plain(x.q)),
+      })),
+    })),
+  };
+}
 // score the posting against the profile. mode "analyze" never drops a posting: it reports the fit and what the gates would say
+// JOBSEARCH-FIT-1 (owner, 2026-11-09: "I'm applying for jobs and get rejected because you're showing me shitty jobs"). The owner is a systems researcher who directs
+// and evaluates systems, not a coder. Audit of the live record that day: 5 of the 7 roles applied to or approved were hands-on coding or big-lab research-engineering roles
+// (Flexport Applied AI Engineer x2, Tavily Staff Applied AI Researcher, OpenAI Applied AI Engineer, Turing Staff Research Scientist), and 36 of 63 pending matches were
+// engineer, data-engineer or plain data-scientist titles, or outside the places the owner chose. A posting is read for how much hands-on code it asks for; a heavy load drops it.
+const CODING_SIGNALS = [
+  ["production code", /production[- ](?:grade |quality |ready )?code/], ["writing code", /(?:write|writing|ship|shipping) (?:clean |high[- ]quality |production )?code/], ["hands-on coding", /hands[- ]on (?:coding|programming|development)/],
+  ["software engineering experience", /software (?:engineering|development) (?:experience|background|skills)|experience (?:as|in) (?:a )?software (?:engineer|development)/],
+  ["strong programming", /(?:strong|excellent|expert|advanced) (?:programming|coding|software)/], ["programming language proficiency", /(?:proficien\w*|fluen\w*|expert\w*|expertise) (?:in|with) (?:python|java|c\+\+|go|golang|rust|scala|typescript|javascript)\b/],
+  ["deep-learning frameworks", /\b(?:pytorch|tensorflow|jax)\b/], ["GPU and CUDA", /\bcuda\b|\btriton\b|gpu kernels?/], ["infrastructure tooling", /\b(?:kubernetes|terraform|docker)\b/], ["CI/CD", /\bci\/cd\b/],
+  ["code review", /\bcode reviews?\b|pull requests?/], ["backend or full-stack", /\bback[- ]?end\b|\bfull[- ]stack\b|\bmicroservices?\b/], ["distributed systems", /distributed systems/],
+  ["years of coding", /\d+\+? years? (?:of )?(?:professional )?(?:software|programming|coding|engineering) experience/], ["coding interview", /coding (?:interview|challenge|exercise|assessment)|leetcode/],
+  ["model training at scale", /(?:train|training|fine[- ]tun\w*) (?:large )?(?:models|llms) at scale|pre[- ]?training/], ["codebase ownership", /\bcodebase\b|\brepositor(?:y|ies)\b/],
+];
+function codingLoad(desc) {
+  const low = String(desc || "").toLowerCase();
+  const hits = CODING_SIGNALS.filter(([, re]) => re.test(low)).map(([label]) => label);
+  return { n: hits.length, hits };
+}
+const RANK_RULES = "JOBSEARCH-FIT-1";   // part of prefs_hash: a new rule set retires pending matches the new rules no longer list, on the first run after deploy
+const CODING_DROP_AT = 4;   // four or more distinct hands-on-code asks: the role is a coding role whatever its title says
+/* JOBSEARCH-EXPLORE-1 (owner 2026-11-09: "My diverse experience doesn't fit neatly into keywords"). A posting whose title is in no role family used to be
+   dropped before its text was read. Now, when the title is at least research- or systems-flavoured (EXPLORE_TITLE_RX is a wide net, not a verdict), the posting text is
+   compared with the owner's own record (RECORD_TERMS: distinct words from the verified facts, skills, roles, summaries and publications, minus common business words).
+   Enough shared terms keep the posting as an "explore" match, labelled as such, capped below a title-in-lane match. */
+const EXPLORE_TITLE_RX = /\b(research\w*|scientist|analyst|modell?er|modell?ing|systems?|autonom\w*|agent\w*|safety|evaluat\w*|assurance|simulation|network\w*|operations research|architect\w*|strateg\w*|fellow|technical staff|principal|staff|lead|director|head of|advis[eo]r|consultant|engineer\w*|manager|specialist)\b/i;
+const EXPLORE_MIN_TERMS = 8;
+const RECORD_STOP = new Set("experience management business working through support ability development including skills knowledge responsibilities requirements opportunity".split(" ").concat("environment excellent strategy strategic organization organisation professional demonstrated communication stakeholders leadership collaborate collaboration candidate position company customers customer product products solutions services results across within providing provide ensure ensuring manage managing years project projects programs program practices process processes team teams related relevant preferred required degree role roles employees employee salary benefits equal employer".split(" ")));
+let RECORD_TERMS = new Set();
+function recordTerms(text) {
+  const out = new Set();
+  for (const w of String(text || "").toLowerCase().split(/[^a-z]+/)) if (w.length >= 7 && !RECORD_STOP.has(w)) out.add(w);
+  return out;
+}
+function exploreOverlap(desc, terms = RECORD_TERMS) {
+  const hit = new Set();
+  for (const w of String(desc || "").toLowerCase().split(/[^a-z]+/)) if (w.length >= 7 && terms.has(w)) hit.add(w);
+  return { n: hit.size, terms: [...hit].sort().slice(0, 6) };
+}
 function scoreJob(job, ctx = DEFAULT_CTX, mode = "rank") {
   const title = (job.title || "").toLowerCase(), desc = job.desc || "";
   const why = [], flags = [], drops = [];
@@ -894,40 +998,58 @@ function scoreJob(job, ctx = DEFAULT_CTX, mode = "rank") {
   const drop = (reason, soft) => { if (wide && soft) { stretch = true; pen += 25; flags.push("OUTSIDE YOUR PREFERENCES: " + reason); } else drops.push(reason); };
   const famOn = [...ctx.fam].filter((k) => has(title, FAMILIES[k]).length);
   const hits = ABSOLUTE_EXCLUDE.filter((x) => title.includes(x));
-  const hardHit = hits.some((x) => !ENGINEERING_WORDS.includes(x)), engHit = hits.length > 0 && !hardHit;
+  const levelHit = hits.some((x) => LEVEL_EXCLUDE.has(x)), fieldHit = hits.length > 0 && !levelHit;
   // most postings are dropped by their title alone; those return before the expensive reading of the posting text (the run scores about ten thousand postings)
-  const early = (reason) => ({ stretch: false, fit: 0, score: 0, tier: "C", clusters: [], unique: false, why: [], flags: [], drops: [reason], gate: "", locNote: "", families: [] });
+  let ov = { n: 0, terms: [] };
+  const early = (reason) => ({ stretch: false, fit: 0, score: 0, tier: "C", clusters: [], unique: false, why: [], flags: [], drops: [reason], gate: "", locNote: "", families: [], ovN: ov.n });
   let cl = null;
+  /* JOBSEARCH-CONTENT-FIRST-1 (owner 2026-11-09: "title keywords are a terrible way to represent my experience ... don't ever do that again"). The posting TEXT is read first and
+     is the evidence: the distinctive terms it shares with the owner's record (lens 1) and the evidence clusters in it (lens 2); the semantic lens (embeddings, run step) and the
+     model re-rank come after. A title never excludes a field or caps a score; it adds a small bonus when it happens to name a lane. Only a seniority word (intern, junior...) is a hard filter. */
   if (mode !== "analyze") {
-    if (hardHit || (engHit && !(wide && famOn.includes("fam_tech")))) return early("role family below target or not your lane");
-    if (engHit) { cl = clustersIn(desc, job.title); if (cl.size < 2) return early("role family below target or not your lane"); }
-  } else if (hits.length) drops.push("role family below target or not your lane");
+    if (levelHit) return early("below your level");
+    ov = exploreOverlap(desc, ctx.recordTerms || RECORD_TERMS);
+    if (fieldHit && ov.n < CONTENT_MIN) { cl = clustersIn(desc, "")   /* evidence comes from the posting text, never from the title */; if (cl.size < 2) return early("no sign of your record in the posting text"); }
+  } else if (levelHit) drops.push("below your level");
   const famOff = Object.keys(FAMILIES).filter((k) => !ctx.fam.has(k) && has(title, FAMILIES[k]).length);
   const medium = has(title, TITLE_MEDIUM);
-  const soft = TITLE_EXCLUDE_SOFT.some((x) => title.includes(x));
-  if (mode !== "analyze" && !famOn.length && !famOff.length && !medium.length && !soft) return early("title not in your role families");
+  const soft = false;
+  let explore = null;
+  if (mode === "analyze") ov = exploreOverlap(desc, ctx.recordTerms || RECORD_TERMS);
+  if (!famOn.length && !famOff.length && !medium.length) {
+    if (mode !== "analyze" && ov.n < CONTENT_MIN) return early("no sign of your record in the posting text");
+    if (ov.n >= CONTENT_MIN) explore = ov;
+  }
   if (soft && !famOn.length) drop("role family excluded by title");
   if (!famOn.length && famOff.length) drop("family switched off in your preferences: " + famOff[0].replace("fam_", ""), true);
-  if (!famOn.length && !medium.length) drop("title not in your role families");
-  if (!cl) cl = clustersIn(desc, job.title);
+  if (!famOn.length && !medium.length && !explore) drop("title not in your role families");
+  if (!cl) cl = clustersIn(desc, "")   /* evidence comes from the posting text, never from the title */;
   const [gate, locNote] = locationGate(job.location, desc.slice(0, 3000), ctx);
-  if (gate === "fail") drop(locNote, /not selected/.test(locNote));
+  if (gate === "fail") drop(locNote);   // JOBSEARCH-FIT-1: a place the owner said no to is never shown, not even as a stretch (US roles filled the list while loc_us was No)
   if (gate === "check" && locNote === "location missing" && mode !== "analyze") drop("no location in the posting; it cannot be placed against your preferences");
   else if (gate === "check") { flags.push("LOCATION: " + locNote); pen += /^(Elsewhere|Europe)/.test(locNote) ? 15 : 10; }
-  if (!famOn.length && cl.size < 2) drop("generic title and thin evidence in the posting");
+  // a title that names a lane still counts when the feed gives no text (some boards send none); once there is text, the text must show the record
+  if (cl.size + Math.floor(ov.n / 3) < 2 && (!famOn.length || desc.length >= 200)) drop("thin evidence of your record in the posting");   // evidence = clusters in the text + one per three shared record terms
   if (famOn.length && !cl.size) pen += 15;
-  const tScore = famOn.length ? 40 : (medium.length >= 2 || medium.includes("research")) ? 20 : 12;
+  const code = codingLoad(desc);
+  if (ctx.a.fam_tech !== true) {
+    if (code.n >= CODING_DROP_AT) drop("coding-heavy role: the posting asks for " + code.hits.slice(0, 3).join(", "));
+    else if (code.n >= 2) { pen += 6 * code.n; flags.push("CODING: the posting asks for some hands-on code (" + code.hits.join(", ") + ")"); }
+  }
+  const tScore = famOn.length ? 25 : (medium.length >= 2 || medium.includes("research")) ? 12 : 6;   // the title is a small bonus, never the gate
+  const cScore = ov.n >= 3 ? Math.min(30, 6 + 2 * ov.n) : 0;                                            // lens 1: distinctive terms shared with the record
   const eScore = Math.min(45, 9 * cl.size);
   const eOwned = ctx.owned ? Math.min(45, [...cl].reduce((sum, c) => sum + (ctx.owned.has(c) ? 9 : 4), 0)) : eScore;   // evidence the CV can back up counts in full, evidence it lacks counts less
   const uniqA = [...cl].some((c) => CORE.has(c)) && [...cl].some((c) => FRONTIER.has(c));
   const uniqB = [...cl].some((c) => CORE.has(c)) && [...cl].some((c) => DATA_SIDE.has(c));
-  if (famOn.length) why.push("title in your lane: " + famOn.slice(0, 2).map((k) => k.replace("fam_", "")).join(", ")); else why.push("generic title: " + medium.slice(0, 2).join(", "));
+  if (famOn.length) why.push("title in your lane: " + famOn.slice(0, 2).map((k) => k.replace("fam_", "")).join(", ")); else if (explore) why.push("matches your record beyond title keywords: " + explore.n + " shared terms (" + explore.terms.join(", ") + ")"); else why.push("generic title: " + medium.slice(0, 2).join(", "));
+  if (ov.n >= 3 && !explore) why.push("shares " + ov.n + " distinctive terms with your record (" + ov.terms.slice(0, 4).join(", ") + ")");
   why.push(cl.size ? "evidence in the posting: " + [...cl].sort().join(", ") : "no matching evidence in the posting text");
   const lacking = ctx.owned ? [...cl].filter((c) => !ctx.owned.has(c)) : [];
   if (lacking.length) why.push("not in your CV yet: " + lacking.sort().join(", "));
   if (uniqA) why.push("uncommon intersection: research-program or policy-research management + AI or research-integrity systems");
   else if (uniqB) why.push("uncommon intersection: public-policy or planning expertise + data and analytics");
-  let score = tScore + eOwned + (uniqA || uniqB ? 15 : 0);
+  let score = tScore + cScore + eOwned + (uniqA || uniqB ? 15 : 0);
   const outcomeDelta = Math.max(-12, Math.min(12, scoreFeatures(famOn, cl).reduce((sum, feature) => {
     const weight = Number(ctx.outcomeWeights && ctx.outcomeWeights[feature]);
     return sum + (Number.isFinite(weight) ? weight : 0);
@@ -954,39 +1076,42 @@ function scoreJob(job, ctx = DEFAULT_CTX, mode = "rank") {
   if (lang.length) flags.push("LANGUAGE: posting asks for " + [...new Set(lang)].sort().join(", ") + "; you list English only");
   const yrs = [...low.matchAll(/(\d{1,2})\+?\s*(?:or more )?years/g)].map((m) => +m[1]);
   if (yrs.length && Math.max(...yrs) > 22) flags.push(`YEARS: asks ${Math.max(...yrs)}+ years`);
-  if (!famOn.length) score = Math.min(score, 49);   // a generic title never outranks a title in your lane
+  // JOBSEARCH-CONTENT-FIRST-1: the old cap that kept a title outside the role families at 49 is gone; the posting text decides
   const fit = score;
   score -= pen;
-  const tier = stretch ? "C" : score >= 70 && cl.size ? "A" : score >= 35 ? "B" : "C";
-  return { stretch, fit, score, tier, clusters: [...cl].sort(), unique: uniqA || uniqB, why, flags, drops, gate, locNote, families: famOn };
+  const tier = stretch ? "C" : score >= 65 && cl.size ? "A" : score >= 35 ? "B" : "C";   // 70 before JOBSEARCH-CONTENT-FIRST-1; the title bonus fell by 15 and the content lens was added
+  return { stretch, fit, score, tier, clusters: [...cl].sort(), unique: uniqA || uniqB, why, flags, drops, gate, locNote, families: famOn, explore: !!explore, ovN: ov.n };
 }
 function evaluate(job, ctx = DEFAULT_CTX, wide = false) {
   const r = scoreJob(job, ctx, wide ? "wide" : "rank");
-  if (r.drops.length) return { status: "excluded", reason: r.drops[0] };
+  if (r.drops.length) return { status: "excluded", reason: r.drops[0], near: r.ovN || 0 };
   return { status: "ok", score: r.score, tier: r.tier, clusters: r.clusters, unique: r.unique, why: r.why, flags: r.flags, stretch: r.stretch };
 }
 // wide: tier C ("stretch": outside the stated preferences, or a thin fit) is kept when the score is at least 25, so the owner sees the whole range and decides
 function rank(jobs, ctx = DEFAULT_CTX, wide = false) {
-  const ok = [], excl = {};
+  const ok = [], excl = {}, near = [];
   for (const j of jobs) {
     const r = evaluate(j, ctx, wide);
     if (r.status === "ok" && (r.tier !== "C" || (wide && r.score >= 25))) ok.push({ ...j, match: r });
-    else { const k = (r.reason || "score below threshold").replace(/:.*/, ""); excl[k] = (excl[k] || 0) + 1; }
+    else {
+      const k = (r.reason || "score below threshold").replace(/:.*/, ""); excl[k] = (excl[k] || 0) + 1;
+      if (r.near >= 3 && r.near < CONTENT_MIN && near.length < 25) near.push(j);   // JOBSEARCH-SEMANTIC-1: a near miss on the words gets a second look by meaning
+    }
   }
   ok.sort((a, b) => b.match.score - a.match.score);
-  return [ok, excl];
+  return [ok, excl, near];
 }
 
 // ------------------------------------------------------------------ tailoring + verification (port of tailor.py)
 // ------------------------------------------------------------------ CV bank (JOBSEARCH-CV-1)
 // The claim ledger is the owner's CV bank: roles, achievements, publications, credentials. It lives in D1 (jobsearch_bank, edited on /cv),
 // BANK_SEED is only the first value. Every resume sentence is still copied from the bank and re-verified line by line.
-const BANK_SEED = {"version":2,"rev":0,"person":{"name":"Rowan Brad Quni-Gudzinas","also_published_as":"Brad Gudzinas","location":"Amsterdam, Netherlands","email":"rowan.quni@qnfo.org","sign_in_email":"rwnquni@outlook.com","links":{"site":"https://qnfo.org","papers":"https://papers.qnfo.org","linkedin":"https://www.linkedin.com/in/rowan-quni/","orcid":"https://orcid.org/0009-0002-4317-5604"},"career_start":2004},"summaries":[{"id":"S1","tags":[],"text":"Data and AI leader who builds the systems behind the research. 15 years running national research programs and data products at the U.S. Federal Highway Administration and AARP. Founder of QNFO, an independent research imprint with an AI-assisted pipeline, a published audit method, and a public correction trail. Open to research management, applied AI, and research-integrity roles."}],"roles":[{"id":"R01","title":"Founder","org":"QNFO (independent research)","location":"","start":"2024","end":"present","tags":["research_integrity","llm","quantum","software"]},{"id":"R02","title":"Executive Director and Founder","org":"Empowering Change (nonprofit)","location":"San Francisco, CA","start":"2023","end":"2024","tags":["nonprofit","leadership","llm"]},{"id":"R03","title":"Platform Data Product Manager","org":"iManage","location":"","start":"2022","end":"2023","tags":["product","data_eng"]},{"id":"R04","title":"Senior Product Manager","org":"Epsilon (Publicis Groupe)","location":"","start":"2021","end":"2022","tags":["product","data_eng"]},{"id":"R05","title":"Product Manager and Senior Methods Advisor","org":"AARP Public Policy Institute","location":"Washington, DC","start":"2016","end":"2021","tags":["product","policy","statistics"]},{"id":"R06","title":"Senior Data Scientist","org":"The Advisory Board Company","location":"","start":"2016","end":"2016","tags":["ml","statistics"]},{"id":"R07","title":"Senior Associate, Data Analytics","org":"Deloitte Consulting LLP","location":"Washington, DC","start":"2015","end":"2016","tags":["consulting","ml","policy"]},{"id":"R08","title":"Data Analyst and Research Manager","org":"U.S. Department of Transportation, Federal Highway Administration","location":"Washington, DC","start":"2011","end":"2015","tags":["research_mgmt","transport","statistics","contracting"]},{"id":"R09","title":"Consultant","org":"IBI Group","location":"","start":"2008","end":"2011","tags":["transport","consulting"]},{"id":"R10","title":"Systems Planner","org":"Delaware Valley Regional Planning Commission","location":"","start":"2005","end":"2008","tags":["transport","gis"]},{"id":"R11","title":"GIS Analyst","org":"Cross County Connection TMA","location":"","start":"2004","end":"2005","tags":["gis","transport"]}],"facts":[{"id":"F01","role":"R08","text":"Managed a $1.5M+ federal research portfolio as a certified Contracting Officer's Representative: technical oversight, budgets, milestones, and acceptance of contractor deliverables.","tags":["contracting","leadership","research_mgmt"],"source":"verified_cv","status":"verified","pitch":"At the Federal Highway Administration I managed a $1.5M+ federal research portfolio as a certified Contracting Officer's Representative."},{"id":"F02","role":"R08","text":"Led technical components of the national Tour-Based Model System for long-distance passenger travel forecasting.","tags":["contracting","data_eng","policy","product","statistics","transport"],"source":"verified_cv","status":"verified","pitch":"I led technical components of the national Tour-Based Model System for long-distance passenger travel forecasting."},{"id":"F03","role":"R05","text":"Led the AARP Livability Index: 50+ data sources across 7 domains, scoring U.S. neighborhoods nationwide, across multiple public releases.","tags":["data_eng","gis","policy","product","statistics","writing"],"source":"verified_cv","status":"verified","pitch":"At AARP I led the Livability Index: 50+ data sources across 7 domains, scoring U.S. neighborhoods nationwide."},{"id":"F04","role":"R05","text":"The Index and its method are cited in 20+ academic and policy studies.","tags":["policy","writing"],"source":"verified_cv","status":"verified","pitch":"The Livability Index and its method are cited in 20+ academic and policy studies."},{"id":"F05","role":"R05","text":"Co-authored the Livability Index 2018 report and AARP policy work on housing affordability, including the 2016 analysis of Low-Income Housing Tax Credits.","tags":["policy","writing"],"source":"verified_cv","status":"verified","pitch":"I co-authored the Livability Index 2018 report and AARP policy work on housing affordability."},{"id":"F06","role":"R01","text":"Built and run an autonomous research system on Cloudflare (44+ live workers) that drafts, referees, revises, versions, publishes, and corrects papers.","tags":["llm","research_integrity","research_mgmt","software"],"source":"verified_cv","status":"verified","pitch":"I built and run an autonomous research system on Cloudflare (44+ live workers) that drafts, referees, revises, versions, publishes, and corrects papers."},{"id":"F07","role":"R01","text":"Designed the audit method: The Universal Ignorance Audit and Epistemic Legibility in AI-Assisted Science.","tags":["llm","research_integrity","software"],"source":"verified_cv","status":"verified","pitch":"I designed a published audit method for AI-assisted research: The Universal Ignorance Audit and Epistemic Legibility in AI-Assisted Science."},{"id":"F08","role":"R01","text":"Proposed JPCUB, a whole-system energy benchmark for computing (joules per correct answer), with a measurement protocol, estimates for 17 quantum platforms, and an extension to LLM inference.","tags":["llm","numerics","quantum","software"],"source":"verified_cv","status":"verified","pitch":"I proposed JPCUB, a whole-system energy benchmark for computing (joules per correct answer), with estimates for 17 quantum platforms and an extension to LLM inference."},{"id":"F09","role":"R01","text":"Publish an open library of preprints with DOIs and a queryable knowledge graph.","tags":["research_integrity"],"source":"verified_cv","status":"verified","pitch":"I publish an open library of preprints with DOIs and a queryable knowledge graph."},{"id":"F10","role":"R02","text":"Built an LLM legal-navigation tool for self-represented litigants: document drafting, procedural guidance, and plain-language translation of legal terms.","tags":["llm","nonprofit","software"],"source":"verified_cv","status":"verified","pitch":"I built an LLM legal-navigation tool for self-represented litigants: document drafting, procedural guidance, and plain-language translation of legal terms."},{"id":"F11","role":"R02","text":"Took the nonprofit from incorporation to public launch.","tags":["leadership","nonprofit","research_mgmt"],"source":"verified_cv","status":"verified","pitch":"As Executive Director and Founder of Empowering Change I took the nonprofit from incorporation to public launch."},{"id":"F12","role":"R07","text":"Delivered analytics and machine-learning engagements for federal and public-sector clients.","tags":["consulting","contracting","ml","statistics"],"source":"verified_cv","status":"verified","pitch":"At Deloitte I delivered analytics and machine-learning engagements for federal and public-sector clients."},{"id":"F13","role":"R07","text":"Co-authored a 2016 Transportation Research Board paper on updating the National Household Travel Survey with American Community Survey data.","tags":["policy","statistics","transport","writing"],"source":"verified_cv","status":"verified","pitch":"I co-authored a 2016 Transportation Research Board paper on updating the National Household Travel Survey with American Community Survey data."},{"id":"F14","role":"R08","text":"Presented national long-distance travel data needs at the 2011 TRB National Household Travel Survey workshop.","tags":["policy","statistics","transport","writing"],"source":"verified_cv","status":"verified","pitch":"I presented national long-distance travel data needs at the 2011 TRB National Household Travel Survey workshop."}],"publications":[{"id":"P01","title":"The Joules-per-Solution Metric: Definition, Measurement Protocol, and Anti-Gaming Provisions","year":2026,"doi":"","tags":["quantum","numerics","research_integrity"]},{"id":"P02","title":"Error Correction Is a Landauer Machine: The Thermodynamic Floor of Quantum Error-Correction Overhead","year":2026,"doi":"","tags":["quantum","physics_theory"]},{"id":"P03","title":"The Universal Ignorance Audit","year":2026,"doi":"","tags":["research_integrity","llm"]},{"id":"P04","title":"Operating the Quniverse Fleet: Objectives, Successes, Failures, and Roadmap of an Autonomous Cloud Research System","year":2026,"doi":"","tags":["llm","software","research_integrity"]},{"id":"P05","title":"Epistemic Legibility in AI-Assisted Science","year":2026,"doi":"","tags":["research_integrity","llm"]},{"id":"P06","title":"AARP Livability Index 2018 report (co-author, as Brad Gudzinas)","year":2018,"doi":"","tags":["policy","statistics","gis"]},{"id":"P07","title":"Tour-Based National Model System, FHWA (as Brad Gudzinas)","year":2014,"doi":"","tags":["transport","statistics"]},{"id":"P08","title":"Updating the National Household Travel Survey with American Community Survey data (TRB, co-author)","year":2016,"doi":"","tags":["transport","statistics","policy"]}],"education":["M.S., City and Regional Studies, Rutgers University, Edward J. Bloustein School of Planning and Public Policy (2008)","B.A., Urban Studies and Community Planning, Rutgers University-Camden (2004)"],"certifications":["Project Management Professional (PMP), Project Management Institute (2016)","Contracting Officer's Representative (COR), Defense Acquisition University (2011)","American Institute of Certified Planners (AICP), American Planning Association (2009)"],"skills":[{"name":"Research program management","tags":["research_mgmt"]},{"name":"Federal contract oversight","tags":["contracting"]},{"name":"Product management","tags":["product"]},{"name":"Statistical modeling","tags":["statistics"]},{"name":"Travel-demand modeling","tags":["transport"]},{"name":"GIS","tags":["gis"]},{"name":"LLM agent systems","tags":["llm"]},{"name":"Cloudflare Workers, D1, R2, Vectorize","tags":["software","data_eng"]},{"name":"Python","tags":["software","numerics"]},{"name":"JavaScript","tags":["software"]},{"name":"SQL","tags":["data_eng"]},{"name":"Machine learning","tags":["ml"]},{"name":"Data science","tags":["ml","statistics"]}],"review":[{"id":"V1","role":"R08","tags":["transport","statistics","research_mgmt"],"text":"Co-directed the $10M U.S. DOT National Household Travel Survey.","why":"Appears in your Oct 1 identity-kit draft but was removed from your verified CV. Confirm only if true; edit the wording to what you actually did."},{"id":"V2","role":"R04","tags":["ml","product"],"text":"Led predictive analytics deployments at Epsilon (Publicis Groupe).","why":"From the same draft; not in the verified CV. Confirm only if true."},{"id":"V3","role":"","tags":["physics_theory","quantum"],"text":"Inventor on U.S. patent(s) in quantum computing: [add patent numbers and titles].","why":"Your GitHub profile mentions patents; none found in a patent search. A patent claim without numbers will be checked, so add the numbers or reject."}],"answers":{}};
+const BANK_SEED = {"version":2,"rev":0,"person":{"name":"Rowan Brad Quni-Gudzinas","also_published_as":"Brad Gudzinas","location":"Amsterdam, Netherlands","email":"rowan.quni@qnfo.org","sign_in_email":"rwnquni@outlook.com","links":{"site":"https://qnfo.org","papers":"https://papers.qnfo.org","linkedin":"https://www.linkedin.com/in/rowan-quni/","orcid":"https://orcid.org/0009-0002-4317-5604"},"career_start":2004},"summaries":[{"id":"S1","tags":[],"text":"Systems researcher studying autonomous AI systems: how they behave, fail and can be audited and governed. 20 years of systems work: transportation networks and GIS from 2004, technical components of the national Tour-Based Model System at the U.S. Federal Highway Administration, and the AARP Livability Index, a decision-support system built from 50+ data sources. Founder of QNFO, an autonomous research system in production with a published failure record. Open to autonomous and AI systems research, AI evaluation and assurance, and AI governance and oversight research."}],"roles":[{"id":"R01","title":"Founder","org":"QNFO (independent research)","location":"","start":"2024","end":"present","tags":["research_integrity","llm"]},{"id":"R02","title":"Executive Director and Founder","org":"Empowering Change (nonprofit)","location":"San Francisco, CA","start":"2023","end":"2024","tags":["nonprofit","leadership","llm"]},{"id":"R03","title":"Platform Data Product Manager","org":"iManage","location":"","start":"2022","end":"2023","tags":["product","data_eng"]},{"id":"R04","title":"Senior Product Manager","org":"Epsilon (Publicis Groupe)","location":"","start":"2021","end":"2022","tags":["product","data_eng"]},{"id":"R05","title":"Product Manager and Senior Methods Advisor","org":"AARP Public Policy Institute","location":"Washington, DC","start":"2016","end":"2021","tags":["product","policy","statistics"]},{"id":"R06","title":"Senior Data Scientist","org":"The Advisory Board Company","location":"","start":"2016","end":"2016","tags":["ml","statistics"]},{"id":"R07","title":"Senior Associate, Data Analytics","org":"Deloitte Consulting LLP","location":"Washington, DC","start":"2015","end":"2016","tags":["consulting","ml","policy"]},{"id":"R08","title":"Data Analyst and Research Manager","org":"U.S. Department of Transportation, Federal Highway Administration","location":"Washington, DC","start":"2011","end":"2015","tags":["research_mgmt","transport","statistics","contracting"]},{"id":"R09","title":"Consultant","org":"IBI Group","location":"","start":"2008","end":"2011","tags":["transport","consulting"]},{"id":"R10","title":"Systems Planner","org":"Delaware Valley Regional Planning Commission","location":"","start":"2005","end":"2008","tags":["transport","gis"]},{"id":"R11","title":"GIS Analyst","org":"Cross County Connection TMA","location":"","start":"2004","end":"2005","tags":["gis","transport"]}],"facts":[{"id":"F01","role":"R08","text":"Managed a $1.5M+ federal research portfolio as a certified Contracting Officer's Representative: technical oversight, budgets, milestones, and acceptance of contractor deliverables.","tags":["contracting","leadership","research_mgmt"],"source":"verified_cv","status":"verified","pitch":"At the Federal Highway Administration I managed a $1.5M+ federal research portfolio as a certified Contracting Officer's Representative."},{"id":"F02","role":"R08","text":"Led technical components of the national Tour-Based Model System for long-distance passenger travel forecasting.","tags":["contracting","data_eng","policy","product","statistics","transport"],"source":"verified_cv","status":"verified","pitch":"I led technical components of the national Tour-Based Model System for long-distance passenger travel forecasting."},{"id":"F03","role":"R05","text":"Led the AARP Livability Index: 50+ data sources across 7 domains, scoring U.S. neighborhoods nationwide, across multiple public releases.","tags":["data_eng","gis","policy","product","statistics","writing"],"source":"verified_cv","status":"verified","pitch":"At AARP I led the Livability Index: 50+ data sources across 7 domains, scoring U.S. neighborhoods nationwide."},{"id":"F04","role":"R05","text":"The Index and its method are cited in 20+ academic and policy studies.","tags":["policy","writing"],"source":"verified_cv","status":"verified","pitch":"The Livability Index and its method are cited in 20+ academic and policy studies."},{"id":"F05","role":"R05","text":"Co-authored the Livability Index 2018 report and AARP policy work on housing affordability, including the 2016 analysis of Low-Income Housing Tax Credits.","tags":["policy","writing"],"source":"verified_cv","status":"verified","pitch":"I co-authored the Livability Index 2018 report and AARP policy work on housing affordability."},{"id":"F06","role":"R01","text":"Built and run an autonomous research system on Cloudflare (44+ live workers) that drafts, referees, revises, versions, publishes, and corrects papers.","tags":["llm","research_integrity","research_mgmt","software"],"source":"verified_cv","status":"verified","pitch":"I built and run an autonomous research system on Cloudflare (44+ live workers) that drafts, referees, revises, versions, publishes, and corrects papers."},{"id":"F07","role":"R01","text":"Designed the audit method: The Universal Ignorance Audit and Epistemic Legibility in AI-Assisted Science.","tags":["llm","research_integrity","software"],"source":"verified_cv","status":"verified","pitch":"I designed a published audit method for AI-assisted research: The Universal Ignorance Audit and Epistemic Legibility in AI-Assisted Science."},{"id":"F08","role":"R01","text":"Proposed JPCUB, a whole-system energy benchmark for computing (joules per correct answer), with a measurement protocol, estimates for 17 quantum platforms, and an extension to LLM inference.","tags":["llm","numerics","quantum","software"],"source":"verified_cv","status":"verified","pitch":"I proposed JPCUB, a whole-system energy benchmark for computing (joules per correct answer), with estimates for 17 quantum platforms and an extension to LLM inference."},{"id":"F09","role":"R01","text":"Publish an open library of preprints with DOIs and a queryable knowledge graph.","tags":["research_integrity"],"source":"verified_cv","status":"verified","pitch":"I publish an open library of preprints with DOIs and a queryable knowledge graph."},{"id":"F10","role":"R02","text":"Built an LLM legal-navigation tool for self-represented litigants: document drafting, procedural guidance, and plain-language translation of legal terms.","tags":["llm","nonprofit","software"],"source":"verified_cv","status":"verified","pitch":"I built an LLM legal-navigation tool for self-represented litigants: document drafting, procedural guidance, and plain-language translation of legal terms."},{"id":"F11","role":"R02","text":"Took the nonprofit from incorporation to public launch.","tags":["leadership","nonprofit","research_mgmt"],"source":"verified_cv","status":"verified","pitch":"As Executive Director and Founder of Empowering Change I took the nonprofit from incorporation to public launch."},{"id":"F12","role":"R07","text":"Delivered analytics and machine-learning engagements for federal and public-sector clients.","tags":["consulting","contracting","ml","statistics"],"source":"verified_cv","status":"verified","pitch":"At Deloitte I delivered analytics and machine-learning engagements for federal and public-sector clients."},{"id":"F13","role":"R07","text":"Co-authored a 2016 Transportation Research Board paper on updating the National Household Travel Survey with American Community Survey data.","tags":["policy","statistics","transport","writing"],"source":"verified_cv","status":"verified","pitch":"I co-authored a 2016 Transportation Research Board paper on updating the National Household Travel Survey with American Community Survey data."},{"id":"F14","role":"R08","text":"Presented national long-distance travel data needs at the 2011 TRB National Household Travel Survey workshop.","tags":["policy","statistics","transport","writing"],"source":"verified_cv","status":"verified","pitch":"I presented national long-distance travel data needs at the 2011 TRB National Household Travel Survey workshop."}],"publications":[{"id":"P01","title":"The Joules-per-Solution Metric: Definition, Measurement Protocol, and Anti-Gaming Provisions","year":2026,"doi":"","tags":["quantum","numerics","research_integrity"]},{"id":"P02","title":"Error Correction Is a Landauer Machine: The Thermodynamic Floor of Quantum Error-Correction Overhead","year":2026,"doi":"","tags":["quantum","physics_theory"]},{"id":"P03","title":"The Universal Ignorance Audit","year":2026,"doi":"","tags":["research_integrity","llm"]},{"id":"P04","title":"Operating the Quniverse Fleet: Objectives, Successes, Failures, and Roadmap of an Autonomous Cloud Research System","year":2026,"doi":"","tags":["llm","software","research_integrity"]},{"id":"P05","title":"Epistemic Legibility in AI-Assisted Science","year":2026,"doi":"","tags":["research_integrity","llm"]},{"id":"P06","title":"AARP Livability Index 2018 report (co-author, as Brad Gudzinas)","year":2018,"doi":"","tags":["policy","statistics","gis"]},{"id":"P07","title":"Tour-Based National Model System, FHWA (as Brad Gudzinas)","year":2014,"doi":"","tags":["transport","statistics"]},{"id":"P08","title":"Updating the National Household Travel Survey with American Community Survey data (TRB, co-author)","year":2016,"doi":"","tags":["transport","statistics","policy"]}],"education":["M.S., City and Regional Studies, Rutgers University, Edward J. Bloustein School of Planning and Public Policy (2008)","B.A., Urban Studies and Community Planning, Rutgers University-Camden (2004)"],"certifications":["Project Management Professional (PMP), Project Management Institute (2016)","Contracting Officer's Representative (COR), Defense Acquisition University (2011)","American Institute of Certified Planners (AICP), American Planning Association (2009)"],"skills":[{"name":"Autonomous AI systems","tags":["llm","research_integrity"]},{"name":"Systems modeling","tags":["transport","statistics"]},{"name":"AI evaluation and oversight methods","tags":["research_integrity","llm"]},{"name":"Research program management","tags":["research_mgmt"]},{"name":"Federal contract oversight","tags":["contracting"]},{"name":"Product management","tags":["product"]},{"name":"Statistical modeling","tags":["statistics"]},{"name":"Travel-demand modeling","tags":["transport"]},{"name":"GIS","tags":["gis"]},{"name":"LLM agent systems","tags":["llm"]},{"name":"Cloudflare Workers, D1, R2, Vectorize","tags":["software","data_eng"]},{"name":"Machine learning","tags":["ml"]},{"name":"Data science","tags":["ml","statistics"]}],"review":[{"id":"V1","role":"R08","tags":["transport","statistics","research_mgmt"],"text":"Co-directed the $10M U.S. DOT National Household Travel Survey.","why":"Appears in your Oct 1 identity-kit draft but was removed from your verified CV. Confirm only if true; edit the wording to what you actually did."},{"id":"V2","role":"R04","tags":["ml","product"],"text":"Led predictive analytics deployments at Epsilon (Publicis Groupe).","why":"From the same draft; not in the verified CV. Confirm only if true."},{"id":"V3","role":"","tags":["physics_theory","quantum"],"text":"Inventor on U.S. patent(s) in quantum computing: [add patent numbers and titles].","why":"Your GitHub profile mentions patents; none found in a patent search. A patent claim without numbers will be checked, so add the numbers or reject."}],"answers":{}};
 const QUESTIONS = [{"id":"phys_qft","section":"Physics & theory","ask":"Have you done quantum field theory or particle-physics calculations (any level: research, thesis, independent work)?","tags":["physics_theory"]},{"id":"phys_renorm","section":"Physics & theory","ask":"Have you used renormalization, dimensional regularization, or effective field theory methods?","tags":["physics_theory","high_dim_stats"]},{"id":"phys_statmech","section":"Physics & theory","ask":"Have you worked with statistical mechanics, lattice methods, or path-integral techniques?","tags":["physics_theory","numerics"]},{"id":"phys_quantum_info","section":"Physics & theory","ask":"Have you worked on quantum computing, quantum information, or quantum algorithms?","tags":["quantum"]},{"id":"phys_benchmark","section":"Physics & theory","ask":"Have you designed benchmarks, measurement protocols, or resource estimates for computing hardware or algorithms?","tags":["quantum","numerics","research_integrity"]},{"id":"phys_papers","section":"Physics & theory","ask":"Have you authored or co-authored physics/theory papers or preprints?","tags":["physics_theory","writing"]},{"id":"stat_highdim","section":"Statistics & ML","ask":"Have you handled high-dimensional data (more variables than observations, regularized regression, lasso/ridge, dimensionality reduction)?","tags":["high_dim_stats","statistics","ml"]},{"id":"stat_bayes","section":"Statistics & ML","ask":"Have you built Bayesian or hierarchical models?","tags":["statistics"]},{"id":"stat_causal","section":"Statistics & ML","ask":"Have you done causal inference, program evaluation, or experiment/A-B test design?","tags":["statistics","policy"]},{"id":"stat_survey","section":"Statistics & ML","ask":"Have you designed, weighted, fused, or analyzed survey data?","tags":["statistics","transport","policy"]},{"id":"stat_forecast","section":"Statistics & ML","ask":"Have you built forecasting, simulation, or demand models?","tags":["statistics","transport","numerics"]},{"id":"ml_train","section":"Statistics & ML","ask":"Have you trained or deployed machine-learning models?","tags":["ml"]},{"id":"ml_index","section":"Statistics & ML","ask":"Have you built a composite index or scoring system from many data sources?","tags":["statistics","data_eng","policy"]},{"id":"num_sim","section":"Statistics & ML","ask":"Have you written numerical simulation, Monte Carlo, or optimization code?","tags":["numerics","software"]},{"id":"llm_build","section":"AI systems","ask":"Have you built LLM-based applications or agents?","tags":["llm","software"]},{"id":"llm_rag","section":"AI systems","ask":"Have you built retrieval (RAG), vector search, or knowledge-graph systems?","tags":["llm","data_eng"]},{"id":"llm_eval","section":"AI systems","ask":"Have you built evaluations, red-team tests, or quality/verification gates for AI output?","tags":["llm","research_integrity"]},{"id":"llm_safety","section":"AI systems","ask":"Have you worked on AI safety, governance, auditing, or responsible-AI methods?","tags":["research_integrity","llm","policy"]},{"id":"llm_autonomy","section":"AI systems","ask":"Have you designed autonomous multi-step pipelines (scheduled, self-monitoring, self-correcting)?","tags":["llm","software","research_integrity"]},{"id":"sw_python","section":"Software & data","ask":"Do you write production or research Python?","tags":["software"]},{"id":"sw_js","section":"Software & data","ask":"Do you write JavaScript/TypeScript?","tags":["software"]},{"id":"sw_cloud","section":"Software & data","ask":"Have you built and operated cloud/serverless systems (Cloudflare, AWS, etc.)?","tags":["software","data_eng"]},{"id":"sw_sql","section":"Software & data","ask":"Have you designed databases or data pipelines (SQL, ETL)?","tags":["data_eng"]},{"id":"sw_oss","section":"Software & data","ask":"Have you published open-source code or datasets?","tags":["software","research_integrity"]},{"id":"sw_gis","section":"Software & data","ask":"Have you done GIS or geospatial analysis?","tags":["gis","transport"]},{"id":"mgmt_portfolio","section":"Management & leadership","ask":"Have you managed a research/program portfolio or budget?","tags":["research_mgmt","contracting"]},{"id":"mgmt_contract","section":"Management & leadership","ask":"Have you overseen contractors, grants, or procurements?","tags":["contracting","research_mgmt"]},{"id":"mgmt_team","section":"Management & leadership","ask":"Have you directly managed or mentored people?","tags":["leadership"]},{"id":"mgmt_found","section":"Management & leadership","ask":"Have you founded or launched an organization, product, or program from zero?","tags":["leadership","nonprofit","product"]},{"id":"mgmt_product","section":"Management & leadership","ask":"Have you owned a product roadmap or shipped a data product to users?","tags":["product"]},{"id":"mgmt_stake","section":"Management & leadership","ask":"Have you briefed executives, legislators, or external stakeholders?","tags":["policy","leadership","writing"]},{"id":"mgmt_funding","section":"Management & leadership","ask":"Have you written grant proposals or raised funding?","tags":["research_mgmt","nonprofit","writing"]},{"id":"pol_housing","section":"Policy & planning","ask":"Have you done housing, aging, or social-policy analysis?","tags":["policy"]},{"id":"pol_transport","section":"Policy & planning","ask":"Have you done transportation, land-use, or urban-planning work?","tags":["transport","policy"]},{"id":"pol_climate","section":"Policy & planning","ask":"Have you worked on climate, energy, or sustainability topics?","tags":["policy","quantum"]},{"id":"pol_intl","section":"Policy & planning","ask":"Have you worked with international/EU/Dutch institutions or in a non-US context?","tags":["policy","consulting"]},{"id":"pub_peer","section":"Writing & teaching","ask":"Have you published peer-reviewed papers, reports, or conference talks?","tags":["writing","research_integrity"]},{"id":"pub_review","section":"Writing & teaching","ask":"Have you reviewed papers or run a peer-review/referee process?","tags":["research_integrity","writing"]},{"id":"pub_teach","section":"Writing & teaching","ask":"Have you taught, tutored, or trained people (courses, workshops)?","tags":["teaching"]},{"id":"pub_cited","section":"Writing & teaching","ask":"Has your work been cited, adopted, or used by others (cite counts, downloads, users)?","tags":["writing","policy"]},{"id":"cons_client","section":"Consulting","ask":"Have you delivered client-facing consulting engagements?","tags":["consulting"]},{"id":"cons_analytics","section":"Consulting","ask":"Have you delivered analytics or ML for government/regulated clients?","tags":["consulting","ml","policy"]},{"id":"misc_other","section":"Anything else","ask":"Is there something you've done that none of the above covers but you'd want an employer to know?","tags":[]}];
 // CV topic tag -> posting evidence clusters (CLUSTER_KW keys). The owner's tags drive what counts as evidence the owner can back up.
 const TAG_TO_CLUSTERS = {
-  statistics: ["survey_methods"], ml: ["data_science"], llm: ["ai_systems"], quantum: ["quantum_energy"], research_mgmt: ["research_mgmt"],
-  contracting: ["contracting", "federal"], product: ["product"], policy: ["policy_research", "social_policy"], transport: ["transport_modeling", "urban_planning"],
+  statistics: ["survey_methods"], ml: ["data_science"], llm: ["ai_systems", "autonomous_systems"], quantum: ["quantum_energy"], research_mgmt: ["research_mgmt"],
+  contracting: ["contracting", "federal"], product: ["product"], policy: ["policy_research", "social_policy"], transport: ["transport_modeling", "urban_planning", "systems_modeling"],
   gis: ["gis"], leadership: ["program_mgmt"], nonprofit: ["nonprofit"], research_integrity: ["research_integrity"], consulting: ["consulting"],
   data_eng: ["data_product"], software: ["software"], physics_theory: ["physics_theory"], high_dim_stats: ["high_dim_stats", "survey_methods"],
   numerics: ["numerics"], teaching: ["teaching"], writing: ["writing"],
@@ -1025,6 +1150,7 @@ function applyBank(b, rev) {
   for (const p of b.publications || []) clustersOf(p.tags).forEach((c) => owned.add(c));
   for (const s of b.skills || []) clustersOf(s.tags).forEach((c) => owned.add(c));
   OWNED = owned;
+  RECORD_TERMS = recordTerms(cvCorpus());   // JOBSEARCH-EXPLORE-1
 }
 const tag = (line, t) => `${line} <!--${t}-->`;
 const FORBIDDEN = ["kubernetes", "tensorflow", "pytorch", "java", "rust", "golang", "aws", "azure", "gcp", "spark", "docker", "react", "tableau", "power bi", "snowflake", "databricks", "scrum master", "six sigma", "cissp", "phd", "ph.d", "mba", "cfa", "security clearance", "fluent"];
@@ -1042,11 +1168,11 @@ function pickFacts(clusters, k) {
 }
 function headline(clusters) {
   const cl = new Set(clusters);
-  // Prefer a research/AI headline for quantum or AI system clusters
-  if ([...cl].some(c => c.includes("quantum")) || cl.has("ai_systems")) {   // JOBSEARCH-RESEARCH-HEADLINE-1: research headline for quantum/AI postings
+  // JOBSEARCH-AUTONOMY-1 (2026-11-09): AI and autonomous-systems postings get the research headline (H2). Before, they got H3, the data and product headline, and quantum postings did too.
+  if (cl.has("ai_systems") || cl.has("autonomous_systems")) {
     if (typeof jobsearch_meta === "object") jobsearch_meta.research_headline = "on";
     else globalThis.jobsearch_meta = { research_headline: "on" };
-    return HEADS.H3;
+    return HEADS.H2;
   }
   const a = ["research_mgmt"].filter((c) => cl.has(c)).length + ["federal", "policy_research", "transport_modeling"].filter((c) => cl.has(c)).length;
   const b = HEADS.H2.cluster.filter((c) => cl.has(c)).length;
@@ -1225,21 +1351,33 @@ async function collectAndRank(ctx, onlyGroups) {
       });
     }
   }
-  const kept = [], errors = [], excl = {}, feedResults = [];
+  // candidate boards (JOBSEARCH-FIT-1): fetched once each, never retried, and a failure is silent (see CANDIDATE_BOARDS)
+  const candidatesLive = [];
+  if (!onlyGroups || onlyGroups.includes("candidates")) {
+    for (const [kind, slugs] of Object.entries(CANDIDATE_BOARDS)) for (const a of slugs) {
+      const feed = `${kind}:${a}`;
+      if (ACTIVE_FEEDS.has(feed)) continue;
+      tasks.push(async () => { try { const jobs = await FETCHERS[kind](a); return jobs.length ? { feed, jobs, candidate: true } : { feed, candidate: true, quiet: true }; } catch (e) { return { feed, candidate: true, quiet: true }; } });
+    }
+  }
+  const kept = [], errors = [], excl = {}, feedResults = [], nearAll = [];
   let fetched = 0;
   // each feed is ranked as soon as it is parsed so only passing jobs stay in memory
   await pool(tasks.map((t) => async () => {
     const r = await t();
+    if (r.quiet) return;
+    if (r.candidate) candidatesLive.push(r.feed);
     if (r.err) { errors.push(r.err); feedResults.push({ feed: r.feed, ok: false, error: r.err }); return; }
     for (const jb of r.jobs) jb.company = DISPLAY[jb.company] || jb.company;
     fetched += r.jobs.length;
     feedResults.push({ feed: r.feed, ok: true, count: r.jobs.length });
-    const [ok, ex] = rank(r.jobs, ctx, true);
+    const [ok, ex, nr] = rank(r.jobs, ctx, true);
+    nearAll.push(...nr);
     for (const [k, v] of Object.entries(ex)) excl[k] = (excl[k] || 0) + v;
     kept.push(...ok);
   }), 6);
   kept.sort((a, b) => b.match.score - a.match.score);
-  return { kept, errors, excl, fetched, feeds: feedsList.length, feedResults };
+  return { kept, errors, excl, fetched, feeds: feedsList.length, feedResults, near: nearAll.slice(0, 150), candidatesLive };
 }
 // JOBSEARCH-LLM-RERANK-1: reorder-only re-rank of the top passing postings.
 // The model may only reorder and add one sentence of reason per posting; it never writes resume or note text
@@ -1263,6 +1401,67 @@ function rerankMessages(top) {
   return [{ role: "system", content: RERANK_SYSTEM }, { role: "user", content: JSON.stringify(items) }];
 }
 // {order: [0-based indexes], reasons: {index: text}} or null when the answer is not a full permutation of 1..n
+/* JOBSEARCH-SEMANTIC-1 (owner 2026-11-09: "go in several different directions to find what my experience is"). Lens 3: the meaning of the posting against the meaning of the owner's own
+   verified facts, roles and summaries (Workers AI embeddings), independent of any shared word. It boosts a kept posting that is close to the record, and rescues a near miss on the
+   words (3 to 5 shared terms) that is close in meaning. No AI binding or a failed call leaves the lexical ranking untouched. Thresholds are the first reading of bge-base cosine
+   scores and are tuned from the owner's verdicts (jobsearch_calib). */
+const EMBED_MODEL = "@cf/baai/bge-base-en-v1.5", SEM_BOOST = 0.58, SEM_RESCUE = 0.64, SEM_BATCH = 40;
+function cosine(a, b) {
+  let d = 0, x = 0, y = 0;
+  for (let i = 0; i < a.length; i++) { d += a[i] * b[i]; x += a[i] * a[i]; y += b[i] * b[i]; }
+  return x && y ? d / Math.sqrt(x * y) : 0;
+}
+function bestSim(vec, recVecs) {
+  let best = { sim: -1, i: -1 };
+  for (let i = 0; i < recVecs.length; i++) { const c = cosine(vec, recVecs[i]); if (c > best.sim) best = { sim: c, i }; }
+  return best;
+}
+function recordPassages() {
+  const p = LEDGER.facts.map((f) => f.text), b = BANK;
+  for (const r of b.roles || []) p.push(r.title + " at " + r.org);
+  for (const sm of b.summaries || []) p.push(sm.text);
+  for (const pub of b.publications || []) p.push(pub.title);
+  return p.map((t) => String(t || "").slice(0, 400)).filter((t) => t.length > 20).slice(0, 90);
+}
+async function embedTexts(env, texts) {
+  const out = [];
+  for (let i = 0; i < texts.length; i += SEM_BATCH) {
+    const r = await env.AI.run(EMBED_MODEL, { text: texts.slice(i, i + SEM_BATCH) });
+    if (!r || !Array.isArray(r.data) || r.data.length !== Math.min(SEM_BATCH, texts.length - i)) throw new Error("embedding answer has the wrong shape");
+    out.push(...r.data);
+  }
+  return out;
+}
+let REC_EMB = { rev: -1, passages: [], vecs: [] };
+const postingText = (j) => String(j.title || "") + ". " + String(j.company || "") + ". " + String(j.desc || "").slice(0, 700);
+async function semanticLens(env, kept, near, ctx) {
+  if (!env.AI || typeof env.AI.run !== "function") return kept;
+  try {
+    if (REC_EMB.rev !== BANK_REV || !REC_EMB.vecs.length) { const passages = recordPassages(); REC_EMB = { rev: BANK_REV, passages, vecs: await embedTexts(env, passages) }; }
+    const cand = kept.slice(0, 120).concat(near.slice(0, 80));
+    if (!cand.length) return kept;
+    const vecs = await embedTexts(env, cand.map(postingText));
+    let boosted = 0, rescued = 0;
+    cand.forEach((j, i) => {
+      const { sim, i: pi } = bestSim(vecs[i], REC_EMB.vecs);
+      const line = REC_EMB.passages[pi] || "";
+      if (j.match) {
+        if (sim >= SEM_BOOST) { j.match.score += Math.min(12, Math.round((sim - SEM_BOOST) * 60)); j.match.why.push("close in meaning to your record (" + sim.toFixed(2) + "): " + line.slice(0, 80)); boosted++; }
+        return;
+      }
+      if (sim < SEM_RESCUE) return;
+      const [gate, locNote] = locationGate(j.location, String(j.desc || "").slice(0, 3000), ctx);
+      if (gate === "fail") return;
+      const flags = gate === "check" ? ["LOCATION: " + locNote] : [];
+      j.match = { status: "ok", score: Math.min(64, 40 + Math.round((sim - SEM_RESCUE) * 120)), tier: "B", clusters: [], unique: false, stretch: false, flags,
+        why: ["close in meaning to your record, not in words (" + sim.toFixed(2) + "): " + line.slice(0, 80)] };
+      kept.push(j); rescued++;
+    });
+    kept.sort((a, b) => b.match.score - a.match.score);
+    console.log(JSON.stringify({ worker: "qnfo-jobsearch", event: "semantic-lens", embedded: cand.length, boosted, rescued }));
+  } catch (e) { logErr("semantic-lens", e); }
+  return kept;
+}
 function parseRerank(text, n) {
   const s = String(text || ""), a = s.indexOf("{"), b = s.lastIndexOf("}");
   if (a < 0 || b <= a) return null;
@@ -1397,7 +1596,7 @@ async function loadCtx(env) {
   return makeCtx(answers, fb, outcomeScoreWeights(outcomeRows), OWNED);
 }
 async function getMeta(env, k) { const r = await env.JOBS_DB.prepare("SELECT v FROM jobsearch_meta WHERE k=?").bind(k).first(); return r ? r.v : null; }
-const REASONS = ["field", "level", "location", "company", "applied", "other"];
+const REASONS = ["field", "coding", "level", "location", "company", "applied", "other"];   // JOBSEARCH-FIT-1: "coding" = too much hands-on code
 async function addFeedback(env, title, company, verdict, source, reason = null) {
   await env.JOBS_DB.prepare("INSERT INTO jobsearch_feedback (ts, title, company, verdict, source, reason) VALUES (?1,?2,?3,?4,?5,?6)").bind(new Date().toISOString(), String(title || "").slice(0, 200), String(company || "").slice(0, 120), verdict, source, REASONS.includes(reason) ? reason : null).run();
 }
@@ -1866,11 +2065,13 @@ async function run(env) {
   await env.JOBS_DB.prepare("UPDATE jobsearch_runs SET finished_at=?1, errors_json=?2 WHERE finished_at IS NULL AND started_at < ?3 AND id<>?4")
     .bind(started, JSON.stringify(["run did not finish: closed by the next run"]), iso(t0 - 15 * 60 * 1000), rid).run().catch((e) => logErr("self-heal", e));
   try {
+    await ensureAutonomyBrand(env).catch((e) => logErr("autonomy-brand", e));
     await ensureResearchPubs(env).catch((e) => logErr("research-pubs", e));   // before loadCtx so the context sees the merged bank
     const ctx = await loadCtx(env);
-    const prefsHash = await sha256hex(JSON.stringify([ctx.a, [...ctx.learned.boost].sort(), [...ctx.learned.block].sort(), [...OWNED].sort(), [...ctx.learned.coPen].sort(), [...ctx.learned.coDrop].sort()]));
+    const prefsHash = await sha256hex(JSON.stringify([RANK_RULES, ctx.a, [...ctx.learned.boost].sort(), [...ctx.learned.block].sort(), [...OWNED].sort(), [...ctx.learned.coPen].sort(), [...ctx.learned.coDrop].sort()]));
     const prefsChanged = (await getMeta(env, "prefs_hash")) !== prefsHash;
-    let { kept, errors, excl, fetched, feeds, feedResults } = await collectAndRank(ctx);
+    let { kept, errors, excl, fetched, feeds, feedResults, near, candidatesLive } = await collectAndRank(ctx);
+    await setMeta(env, "candidates_live", JSON.stringify((candidatesLive || []).sort())).catch((e) => logErr("candidates-live", e));
     // what the owner already decided (rejected, applied, approved, got a reply) never comes back, under any id, board or location; and a role already pending under another id is not listed twice
     const decided = await decidedKeys(env);
     const pendingRows = (await env.JOBS_DB.prepare("SELECT id, company, title FROM jobsearch_matches WHERE status='pending_owner_approval' AND last_seen >= ?").bind(iso(t0 - 72 * 3600 * 1000)).all()).results;
@@ -1884,6 +2085,7 @@ async function run(env) {
       return true;
     });
     if (suppressed) excl["already decided or already listed"] = suppressed;
+    kept = await semanticLens(env, kept, near || [], ctx);   // JOBSEARCH-SEMANTIC-1: lens 3, meaning instead of words
     kept = await llmRerank(env, kept);   // reorder-only AI pass over the top 25, before the per-company cap
     kept = await judgeTop(env, kept);
     const per = {}, seen = new Set(), picked = [], pickedStretch = [];
@@ -1902,10 +2104,10 @@ async function run(env) {
       const a = artifactsFor(j);
       if (!a.verified) blocked++;
       stmts.push(env.JOBS_DB.prepare(
-        `INSERT INTO jobsearch_matches (id, first_seen, last_seen, run_id, company, title, location, url, tier, score, why_json, flags_json, verified, blocked_reason, resume_md, note_md, status)
-         VALUES (?1,?2,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,'pending_owner_approval')
-         ON CONFLICT(id) DO UPDATE SET last_seen=?2, run_id=?3, tier=?8, score=?9, why_json=?10, flags_json=?11, verified=?12, blocked_reason=?13, resume_md=?14, note_md=?15, title=?5, location=?6, url=?7`
-      ).bind(j.id, now, rid, j.company, j.title, j.location, j.url, j.match.tier, j.match.score, JSON.stringify(j.match.why || []), JSON.stringify(j.match.flags || []), a.verified, a.blocked, a.resume, a.note));
+        `INSERT INTO jobsearch_matches (id, first_seen, last_seen, run_id, company, title, location, url, tier, score, why_json, flags_json, verified, blocked_reason, resume_md, note_md, status, gaps_json)
+         VALUES (?1,?2,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,'pending_owner_approval',?16)
+         ON CONFLICT(id) DO UPDATE SET last_seen=?2, run_id=?3, tier=?8, score=?9, why_json=?10, flags_json=?11, verified=?12, blocked_reason=?13, resume_md=?14, note_md=?15, title=?5, location=?6, url=?7, gaps_json=?16`
+      ).bind(j.id, now, rid, j.company, j.title, j.location, j.url, j.match.tier, j.match.score, JSON.stringify(j.match.why || []), JSON.stringify(j.match.flags || []), a.verified, a.blocked, a.resume, a.note, JSON.stringify(recallGaps(j))));
     }
     // feed health: success resets the streak, failure extends it (detector fm-jobsearch-feed-down reads 3 in a row)
     for (const f of feedResults) {
@@ -1990,6 +2192,33 @@ const RESEARCH_PUBS = [
   { id: "P10", title: "Dimensionless Physics", year: 2025, doi: "", url: "https://papers.qnfo.org/papers/dimensionless-physics", tags: ["physics_theory", "numerics"] },
   { id: "P11", title: "Proof-of-Concept for Auditable Attention using Ultrametric Tree Distances", year: 2026, doi: "", url: "https://papers.qnfo.org/papers/proof-of-concept-for-auditable-attention-using-ultrametric-tree-distances", tags: ["llm", "research_integrity", "physics_theory"] },
 ];
+// JOBSEARCH-AUTONOMY-1 (owner direction 2026-11-09): the live bank takes the new positioning once. The summary is replaced only while it is still the old seed text (an owner edit is kept),
+// programming languages leave the skills (the owner does not write software), three systems skills are added, and QNFO drops its quantum tag. Fact texts are not touched.
+const AUTONOMY_OLD_S1 = "Data and AI leader who builds the systems behind the research. 15 years running national research programs and data products at the U.S. Federal Highway Administration and AARP. Founder of QNFO, an independent research imprint with an AI-assisted pipeline, a published audit method, and a public correction trail. Open to research management, applied AI, and research-integrity roles.";
+const AUTONOMY_DROP_SKILLS = ["JavaScript", "Python", "SQL"];
+const AUTONOMY_OWNER_FACTS = [
+  ["R10", "Built and ran transportation network models.", ["transport", "statistics"]],
+  ["R09", "Built and ran transportation network models.", ["transport", "consulting"]],
+  ["R08", "Specified the national Tour-Based Model System and directed the contractor team that built it.", ["transport", "statistics", "research_mgmt", "contracting"]],
+];
+const AUTONOMY_CONFIRMED = [["V1", "Co-directed the $10M U.S. DOT National Household Travel Survey."], ["V2", "Managed data products built on predictive machine-learning models at Epsilon (Publicis Groupe)."]];
+async function ensureAutonomyBrand(env) {
+  if ((await getMeta(env, "autonomy_brand_v1")) === "done") return false;
+  const seedS1 = BANK_SEED.summaries[0].text, seedR01 = BANK_SEED.roles[0].tags, add = BANK_SEED.skills.slice(0, 3);
+  await mutateBank(env, (b) => {
+    for (const x of b.summaries || []) if (x.text === AUTONOMY_OLD_S1) x.text = seedS1;
+    b.skills = (b.skills || []).filter((k) => !AUTONOMY_DROP_SKILLS.includes(k.name));
+    for (const k of [...add].reverse()) if (!b.skills.some((x) => x.name.toLowerCase() === k.name.toLowerCase())) b.skills.unshift({ ...k, tags: [...k.tags] });
+    for (const r of b.roles || []) if (r.id === "R01" && (r.tags || []).includes("quantum")) r.tags = [...seedR01];
+    // the owner confirmed two review items on 2026-11-09 (Personal Brand project; recorded in rwnq8/resume docs/BRAND.md section 6). V3 (patents) stays in the queue.
+    for (const [id, text] of AUTONOMY_CONFIRMED) if ((b.review || []).some((x) => x.id === id)) cvReview(b, { id, action: "confirm", text });
+    for (const [role, text, tags] of AUTONOMY_OWNER_FACTS)
+      if ((b.roles || []).some((r) => r.id === role) && !(b.facts || []).some((f) => f.role === role && f.text === text)) b.facts.push({ id: nextFactId(b), role, text, tags: [...tags], source: "owner:2026-11-09", status: "verified" });
+    return b;
+  }, { keepVerified: true });
+  await setMeta(env, "autonomy_brand_v1", "done");
+  return true;
+}
 async function ensureResearchPubs(env) {
   if ((await getMeta(env, "research_pubs_v1")) === "done") return false;
   await mutateBank(env, (b) => {
@@ -2096,6 +2325,125 @@ async function cvState(env) {
     questions: QUESTIONS.map((q) => { const a = (b.answers || {})[q.id]; return { ...q, answer: a ? a.answer : null, facts: a ? a.facts.map((i) => byId[i]).filter(Boolean) : [] }; }),
   };
 }
+// ------------------------------------------------------------------ PROMPTED-RECALL-1 (owner directive 2026-11-09)
+// Owner: "If you want to know if I've done something, ask me. And if I say I have, put it in my resume. Don't make me type." Prompted recall runs before
+// every application: each requirement a posting names that the CV cannot back becomes a yes / no / not sure question with a concrete cue (the posting's
+// own sentence), then two taps (where, how involved). A yes becomes a verified fact in the owner's own words-by-choice: the exact sentence is shown on the
+// button before it is tapped, so nothing reaches a resume that the owner did not confirm. A no is never asked again; not sure comes back after 14 days.
+// Answers live in the CV bank (b.recall), so they are versioned with it (jobsearch_bank_history) and every later resume uses them.
+// The pattern every fleet surface reuses (question shape, storage, loop) is docs/PROMPTED-RECALL.md.
+const RECALL_UNSURE_DAYS = 14;
+const RECALL_SEED = [
+  { id: "network_model", what: "transportation network models (roads or transit as nodes and links, with traffic or riders assigned to them)", cue: "Think of regional travel models, scenario runs for a long-range plan, or the national Tour-Based Model.", roles: ["R10", "R09", "R08"], tags: ["transport", "numerics"] },
+  { id: "simulation", what: "simulating how a system behaves over time (traffic microsimulation, Monte Carlo runs or agent-based models)", cue: "Any run where you changed an input and watched how the whole system responded.", roles: ["R08", "R09", "R10"], tags: ["numerics", "statistics"] },
+  { id: "forecasting", what: "forecasts that drove a public investment or policy decision", cue: "Travel forecasts for a project, demand forecasts for a plan, projections in a policy report.", roles: ["R08", "R09", "R05"], tags: ["statistics", "transport", "policy"] },
+  { id: "optimization", what: "optimization or routing problems (shortest paths, scheduling or allocating limited resources)", cue: "Path building in a network model, choosing projects under a budget, scheduling work.", roles: ["R10", "R09", "R08"], tags: ["numerics"] },
+  { id: "decision_data", what: "data products leaders used to make decisions (indices, dashboards or scorecards)", cue: "The Livability Index, product metrics at Epsilon or iManage, agency performance measures.", roles: ["R05", "R04", "R03"], tags: ["product", "data_eng", "policy"] },
+  { id: "ml_models", what: "predictive or machine-learning models trained on real data", cue: "Risk or propensity scores, classification models, anything fitted and then used to predict.", roles: ["R06", "R07", "R04"], tags: ["ml", "statistics"] },
+  { id: "model_validation", what: "checking model quality against observed data (validation, error metrics or back-testing)", cue: "Comparing modeled traffic counts with real counts, holdout tests, calibration reports.", roles: ["R08", "R06", "R10"], tags: ["statistics", "research_integrity"] },
+  { id: "agent_fleet", what: "a fleet of autonomous AI agents that plan, act and check their own work with little human input", cue: "The QNFO agent fleet: loops that file issues, open pull requests and verify their own deploys.", roles: ["R01"], tags: ["llm", "research_integrity"] },
+  { id: "agent_guardrails", what: "guardrails for autonomous AI systems (approval gates, audit trails and automatic rollback when a change fails)", cue: "The interrupt gate, the claim ledger, deploy probes that revert a bad release.", roles: ["R01"], tags: ["llm", "research_integrity"] },
+  { id: "llm_evaluation", what: "evaluating large language model output (scoring answers, calibrating a model's judgment against a person's)", cue: "Model evals, judge-versus-owner calibration, checking generated text against a source.", roles: ["R01", "R02"], tags: ["llm", "research_integrity"] },
+  { id: "human_in_loop", what: "human-in-the-loop workflows where people approve or correct what an automated system proposes", cue: "Owner approval cards, review queues, a person signing off before anything is sent.", roles: ["R01", "R05", "R03"], tags: ["llm", "product"] },
+  { id: "feedback_loops", what: "systems with feedback loops, where measured results automatically change what the system does next", cue: "Metrics that re-rank work, self-tuning limits, a model re-run after new counts arrive.", roles: ["R01", "R08"], tags: ["llm", "numerics"] },
+  { id: "explain_models", what: "explaining technical models to non-technical decision makers (agency leaders, legislators or executives)", cue: "Briefings for FHWA leadership, AARP policy staff, client executives at Deloitte.", roles: ["R08", "R05", "R07"], tags: ["writing", "policy"] },
+];
+const RECALL_DEPTHS = [["led", "I led it", "Led work on "], ["hands", "I did it hands-on", "Hands-on work on "], ["team", "I was on the team", "Contributed to team work on "]];
+const RECALL_CASE = { "power bi": "Power BI", dbt: "dbt", "scikit-learn": "scikit-learn", pytorch: "PyTorch", tensorflow: "TensorFlow", javascript: "JavaScript", typescript: "TypeScript", github: "GitHub", postgresql: "PostgreSQL", mysql: "MySQL", arcgis: "ArcGIS", qgis: "QGIS" };
+const recallShow = (term, kind) => (kind !== "tool" ? term : RECALL_CASE[term] || (term.length <= 4 && !/\s/.test(term) ? term.toUpperCase() : term.replace(/\b[a-z]/g, (c) => c.toUpperCase())));
+function recallTermTags(term, kind) {
+  const cls = new Set();
+  for (const [cl, kws] of Object.entries(CLUSTER_KW)) if (kws.some((k) => k.replace(/\*$/, "").trim() === term)) cls.add(cl);
+  const tags = Object.keys(TAG_TO_CLUSTERS).filter((t) => TAG_TO_CLUSTERS[t].some((c) => cls.has(c)));
+  return tags.length ? tags : kind === "tool" ? ["data_eng"] : [];
+}
+function recallCue(text, term) {
+  const re = kwRe(term);
+  const s = String(text || "").split(/(?<=[.!?])\s+|\n+/).find((x) => re.test(x.toLowerCase()));
+  return s ? clean(s, 220) : "";
+}
+// what this posting asks for that the CV cannot back yet (stored per match at run time, re-checked against the CV at read time)
+function recallGaps(job, n = 6) {
+  const cv = cvCorpus(), out = [];
+  for (const t of postingTerms(job)) {
+    if (kwRe(t.term).test(cv)) continue;
+    const cue = recallCue(job.desc, t.term);
+    if (!cue) continue;   // a word only in the title is not a requirement to ask about
+    out.push({ term: t.term, kind: t.kind, cue });
+    if (out.length >= n) break;
+  }
+  return out;
+}
+function recallRoles(ids, tags) {
+  const roles = BANK.roles || [], want = new Set(tags || []);
+  const picked = (ids || []).map((id) => roles.find((r) => r.id === id)).filter(Boolean);
+  if (!picked.length) picked.push(...roles.map((r) => [(r.tags || []).filter((t) => want.has(t)).length, r]).sort((a, b) => b[0] - a[0] || byRecency(a[1], b[1])).slice(0, 3).map((x) => x[1]));
+  return picked.slice(0, 3).map((r) => ({ id: r.id, label: r.title + ", " + String(r.org).split(/[(,]/)[0].trim() }));
+}
+function recallQuestion(key, extra = {}) {
+  let what, ask, cue = extra.cue || "", tags, roles, kind = "topic";
+  const seed = key.startsWith("seed:") && RECALL_SEED.find((s) => "seed:" + s.id === key);
+  if (seed) { what = seed.what; ask = "Have you worked on " + seed.what + "?"; cue = seed.cue; tags = seed.tags; roles = recallRoles(seed.roles, seed.tags); }
+  else if (key.startsWith("term:")) {
+    const term = clean(key.slice(5), 80).toLowerCase();
+    if (!term || !vocabulary().has(term)) return null;
+    kind = vocabulary().get(term); what = recallShow(term, kind); tags = recallTermTags(term, kind); roles = recallRoles(null, tags);
+    ask = kind === "tool" ? "Have you ever used " + what + "?" : "Have you done work involving " + what + "?";
+  } else return null;
+  const drafts = Object.fromEntries(RECALL_DEPTHS.map(([d, , lead]) => [d, lead + what + "."]));
+  return { key, ask, cue, what, kind, tags, roles, depths: RECALL_DEPTHS.map(([id, label]) => ({ id, label, draft: drafts[id] })), drafts, ...(extra.count ? { count: extra.count, example: extra.example } : {}) };
+}
+function recallOpen(key) {
+  const a = (BANK.recall || {})[key];
+  if (!a) return true;
+  return a.answer === "unsure" && Date.now() - Date.parse(a.at || 0) > RECALL_UNSURE_DAYS * 86400000;
+}
+const parseGaps = (s) => { try { const g = JSON.parse(s || "[]"); return Array.isArray(g) ? g : []; } catch (e) { return []; } };
+function openGaps(gaps, cv) { return gaps.filter((g) => g && g.term && recallOpen("term:" + g.term) && !kwRe(g.term).test(cv)); }
+// GET /api/recall?match=<id>: the questions to answer before applying to this job. Without match: the queue across the open matches, most-asked first.
+async function recallQueue(env, matchId, limit = 12) {
+  await loadBank(env);
+  const cv = cvCorpus();
+  if (matchId) {
+    const row = await env.JOBS_DB.prepare("SELECT id, title, company, gaps_json FROM jobsearch_matches WHERE id=?").bind(matchId).first();
+    if (!row) throw Object.assign(new Error("unknown match"), { status: 404 });
+    const qs = openGaps(parseGaps(row.gaps_json), cv).map((g) => recallQuestion("term:" + g.term, { cue: g.cue ? "The posting says: “" + g.cue + "”" : "" })).filter(Boolean);
+    return { match: { id: row.id, title: row.title, company: row.company }, questions: qs.slice(0, limit) };
+  }
+  const rows = (await env.JOBS_DB.prepare("SELECT title, company, gaps_json FROM jobsearch_matches WHERE status='pending_owner_approval' ORDER BY tier ASC, score DESC LIMIT 200").all()).results;
+  const agg = new Map();
+  for (const r of rows) for (const g of openGaps(parseGaps(r.gaps_json), cv)) {
+    const a = agg.get(g.term) || { n: 0, example: r.title + " at " + r.company };
+    a.n++; agg.set(g.term, a);
+  }
+  const terms = [...agg.entries()].sort((a, b) => b[1].n - a[1].n).map(([t, a]) => recallQuestion("term:" + t, { count: a.n, example: a.example, cue: "Asked for by " + a.n + " of your open matches, for example " + a.example + "." })).filter(Boolean);
+  const seeds = RECALL_SEED.map((s) => "seed:" + s.id).filter(recallOpen).map((k) => recallQuestion(k));
+  const all = seeds.concat(terms);
+  return { questions: all.slice(0, limit), total: all.length };
+}
+// POST /api/recall/answer {key, answer: yes|no|unsure, role, depth}: a yes adds the exact sentence the owner tapped as a verified fact (and a skill for a tool)
+function recallAnswer(b, d) {
+  const prev = BANK; BANK = b;   // recallQuestion reads roles and vocabulary from the bank being edited
+  let q; try { q = recallQuestion(String(d.key || "")); } finally { BANK = prev; }
+  if (!q) throw bad400("unknown question");
+  if (!["yes", "no", "unsure"].includes(d.answer)) throw bad400("answer is yes, no or unsure");
+  b.recall = b.recall || {};
+  const old = b.recall[q.key];
+  if (old && old.fact) b.facts = b.facts.filter((f) => f.id !== old.fact);
+  if (old && old.skill) b.skills = (b.skills || []).filter((s) => s.name !== old.skill);
+  const rec = { answer: d.answer, at: new Date().toISOString() };
+  if (d.answer === "yes") {
+    const depth = q.drafts[d.depth] ? d.depth : "hands";
+    const role = roleOk(b, d.role);
+    const roleTags = role ? ((b.roles.find((r) => r.id === role) || {}).tags || []) : [];
+    const tags = tagsOk([...new Set([...q.tags, ...(q.tags.length ? [] : roleTags)])]);
+    const id = nextFactId(b);
+    b.facts.push({ id, role, text: q.drafts[depth], tags, source: "recall:" + q.key, status: "verified" });
+    Object.assign(rec, { role, depth, fact: id });
+    if (q.kind !== "topic" && !(b.skills || []).some((s) => s.name.toLowerCase() === q.what.toLowerCase())) { (b.skills = b.skills || []).push({ name: q.what, tags }); rec.skill = q.what; }
+  }
+  b.recall[q.key] = rec;
+}
 async function saveHistory(env, d) {
   await env.JOBS_DB.batch([
     env.JOBS_DB.prepare("INSERT INTO jobsearch_history (ts, title, company, url, fit, verdict, resume_md, note_md) VALUES (?1,?2,?3,?4,?5,?6,?7,?8)").bind(iso(Date.now()), d.title, d.company, d.url || "", d.fit, d.verdict, d.resume || null, d.note || null),
@@ -2105,6 +2453,18 @@ async function saveHistory(env, d) {
 
 // ------------------------------------------------------------------ http
 const J = (o, status = 200) => new Response(JSON.stringify(o), { status, headers: { "content-type": "application/json", "access-control-allow-origin": "*", "cache-control": "no-store" } });
+/* JOBSEARCH-DIVERSE-1 (owner 2026-11-09: "Don't just show me jobs from Anthropic or OpenAI"). The list is ordered by score, so the few employers that score
+   highest fill the top. Within the first `window` rows no employer appears more than `per` times; the rows pushed down keep their order right after the window.
+   Nothing is removed. */
+function diversifyRows(rows, per = 2, window = 20) {
+  const seen = new Map(), head = [], rest = [];
+  for (const r of rows) {
+    const k = coKey(r.company);
+    if (head.length < window && (seen.get(k) || 0) < per) { head.push(r); seen.set(k, (seen.get(k) || 0) + 1); }
+    else rest.push(r);
+  }
+  return [...head, ...rest];
+}
 const parseRow = (r) => (r ? { ...r, why: JSON.parse(r.why_json || "[]"), flags: JSON.parse(r.flags_json || "[]"), why_json: undefined, flags_json: undefined } : r);
 async function tokenOk(request, env) {
   const t = request.headers.get("x-loop-token") || "";
@@ -2233,7 +2593,8 @@ async function opsReport(env) {
   const counts = (await db.prepare("SELECT status, COUNT(*) AS n FROM jobsearch_matches GROUP BY status").all()).results;
   const blockedN = (await db.prepare("SELECT COUNT(*) AS n FROM jobsearch_matches WHERE verified=0 AND status='pending_owner_approval'").first()).n;
   const stalePending = (await db.prepare("SELECT COUNT(*) AS n FROM jobsearch_matches WHERE status='pending_owner_approval' AND last_seen < ?").bind(iso(now - 72 * 3600000)).first()).n;
-  const rerank = Object.fromEntries(((await db.prepare("SELECT k, v FROM jobsearch_meta WHERE k IN ('rerank_status','rerank_at','rerank_via')").all()).results || []).map((r) => [r.k, r.v]));   // JOBSEARCH-LLM-RERANK-1: what the last run's AI re-rank did
+  const rerank = Object.fromEntries(((await db.prepare("SELECT k, v FROM jobsearch_meta WHERE k IN ('rerank_status','rerank_at','rerank_via')").all()).results || []).map((r) => [r.k, r.v]));
+  let candidatesLive = []; try { candidatesLive = JSON.parse((await db.prepare("SELECT v FROM jobsearch_meta WHERE k='candidates_live'").first() || {}).v || "[]"); } catch (e) { logErr("candidates-live-read", e); }   // JOBSEARCH-LLM-RERANK-1: what the last run's AI re-rank did
   const ageMin = last ? Math.round((now - Date.parse(last.finished_at)) / 60000) : null;
   const ledgerAge = Math.floor((now - Date.parse(LEDGER_VERIFIED_ON)) / 86400000);
   const checks = [
@@ -2246,15 +2607,15 @@ async function opsReport(env) {
     { fm: "jobsearch-intake-collapse", ok: !(recent.length >= 3 && recent.every((r) => Number(r.fetched) < 1000 || Number(r.passed) === 0)), detail: recent.map((r) => `${r.fetched}/${r.passed}`).join(" ") + " (fetched/passed, last 3 runs)" },
     { fm: "jobsearch-auth-unavailable", ok: !!env.EMAIL || !!env.LOOP_TOKEN, detail: `email sign-in ${env.EMAIL ? "bound" : "missing"}, loop token ${env.LOOP_TOKEN ? "set" : "not set"}` },
   ];
-  return { worker: WORKER, version: VERSION, status: checks.every((c) => c.ok) ? "ok" : "degraded", checked_at: iso(now), last_run: last ? { id: last.id, finished_at: last.finished_at, fetched: last.fetched, passed: last.passed, stored: last.stored, blocked: last.blocked } : null, rerank: { status: rerank.rerank_status || "never", via: rerank.rerank_via || null, at: rerank.rerank_at || null, binding: !!(env.AI || env.QNFO_AI) }, feeds, matches_by_status: Object.fromEntries(counts.map((c) => [c.status, c.n])), checks };
+  return { worker: WORKER, version: VERSION, candidates_live: candidatesLive, candidates_probed: Object.values(CANDIDATE_BOARDS).flat().length, status: checks.every((c) => c.ok) ? "ok" : "degraded", checked_at: iso(now), last_run: last ? { id: last.id, finished_at: last.finished_at, fetched: last.fetched, passed: last.passed, stored: last.stored, blocked: last.blocked } : null, rerank: { status: rerank.rerank_status || "never", via: rerank.rerank_via || null, at: rerank.rerank_at || null, binding: !!(env.AI || env.QNFO_AI) }, feeds, matches_by_status: Object.fromEntries(counts.map((c) => [c.status, c.n])), checks };
 }
 const INDEX = {
   worker: WORKER, version: VERSION,
   routes: {
-    "GET /": "web UI", "GET /api/matches?tier=A|B&status=&q=&limit=": "ranked matches without artifacts", "GET /api/matches/:id": "one match with resume_md and note_md",
-    "GET /api/runs": "recent pipeline runs", "GET /api/funnel": "applications to replies, interviews and offers by board kind and score band", "GET /api/ledger": "the claim ledger every output sentence must come from", "GET /api/ops": "operational self-report: the fm-jobsearch-* checks, feed health, counts", "GET /api/prefs": "the yes/no search survey with your answers; POST {answers:{id:true|false|null}} saves and re-runs the search", "POST /api/analyze": "{input: link or pasted posting text, title?, company?} -> fit, strengths, gaps, whether it would appear in your search, verified draft", "POST /api/feedback": "{title, company, verdict: like|dislike} teaches the search", "GET /api/outcomes": "funnel (matches, approved, applied, replies, interviews, offers), reply rate of applications older than 21 days, by tier", "POST /api/auth/request": "e-mail a 6-digit sign-in code to the owner", "POST /api/auth/verify": "{code} -> owner session (cookie jobs_session, 12 h)", "GET /api/auth/me": "signed-in state", "POST /api/auth/logout": "revoke the session", "POST /api/run": "trigger a run (10-minute cooldown)",
+    "GET /": "web UI", "GET /api/matches?tier=A|B&status=&q=&limit=": "ranked matches without artifacts; default lists only undecided ones, status=mine lists your applications, status=all everything", "GET /api/matches/:id": "one match with resume_md and note_md",
+    "GET /api/linkedin": "what to search on LinkedIn: boolean searches for the owner's target roles with LinkedIn, Google and Indeed links (JOBSEARCH-LINKEDIN-1)", "GET /api/runs": "recent pipeline runs", "GET /api/funnel": "applications to replies, interviews and offers by board kind and score band", "GET /api/ledger": "the claim ledger every output sentence must come from", "GET /api/ops": "operational self-report: the fm-jobsearch-* checks, feed health, counts", "GET /api/prefs": "the yes/no search survey with your answers; POST {answers:{id:true|false|null}} saves and re-runs the search", "POST /api/analyze": "{input: link or pasted posting text, title?, company?} -> fit, strengths, gaps, whether it would appear in your search, verified draft", "POST /api/feedback": "{title, company, verdict: like|dislike} teaches the search", "GET /api/outcomes": "funnel (matches, approved, applied, replies, interviews, offers), reply rate of applications older than 21 days, by tier", "POST /api/auth/request": "e-mail a 6-digit sign-in code to the owner", "POST /api/auth/verify": "{code} -> owner session (cookie jobs_session, 12 h)", "GET /api/auth/me": "signed-in state", "POST /api/auth/logout": "revoke the session", "POST /api/run": "trigger a run (10-minute cooldown)",
     "GET /api/referrals": "the best open matches with a referral kit link each", "GET /api/matches/:id/referral": "people-search links and a verified-facts message to ask someone you know for a referral (owner session)", "POST /api/matches/:id/stage": "record an interview stage {stage: recruiter_screen|hiring_manager|technical|take_home|panel|final|reference_check, note} (owner session)",
-    "POST /api/matches/:id/status": "owner decision or outcome {status: approved|rejected|applied|replied|interview|offer|no_reply|pending_owner_approval}, logged as an event; needs an owner session or x-loop-token", "POST /api/answers": "draft free-response application answers {input, questions[]} from the verified record; pay, authorization and demographic questions come back owner_only", "POST /api/prep": "interview brief for a posting {input}: role summary, offer, gaps, STAR story picks, likely questions", "POST /api/prep/quiz": "feedback on one spoken answer {question, answer, role}", "POST /api/calibrate": "record your verdict {owner: qualified|stretch|not_qualified, title, company, rubric_fit, judge_fit}", "GET /api/calibration": "how often the rubric and the model reading agree with you", "GET /api/matches/:id/resume.pdf": "text PDF of the tailored resume (one column, selectable text)", "GET /health": "version", "GET /prep": "phone page: check fit with calibration, draft answers, interview brief and quiz", "GET /cv": "the CV page: interview, review, edit, resume per job, history", "GET /api/cv": "the CV bank, questions with answers, review queue (owner session)", "POST /api/cv/answer|fact|review|set|import": "edit the CV bank (owner session); GET /api/cv/export is the backup", "GET /api/cv/history": "resumes built for jobs",
+    "POST /api/matches/:id/status": "owner decision or outcome {status: approved|rejected|applied|replied|interview|offer|no_reply|pending_owner_approval}, logged as an event; needs an owner session or x-loop-token", "POST /api/answers": "draft free-response application answers {input, questions[]} from the verified record; pay, authorization and demographic questions come back owner_only", "POST /api/prep": "interview brief for a posting {input}: role summary, offer, gaps, STAR story picks, likely questions", "POST /api/prep/quiz": "feedback on one spoken answer {question, answer, role}", "POST /api/calibrate": "record your verdict {owner: qualified|stretch|not_qualified, title, company, rubric_fit, judge_fit}", "GET /api/calibration": "how often the rubric and the model reading agree with you", "GET /api/matches/:id/resume.pdf": "text PDF of the tailored resume (one column, selectable text)", "GET /health": "version", "GET /prep": "phone page: check fit with calibration, draft answers, interview brief and quiz", "GET /cv": "the CV page: interview, review, edit, resume per job, history", "GET /api/cv": "the CV bank, questions with answers, review queue (owner session)", "POST /api/cv/answer|fact|review|set|import": "edit the CV bank (owner session); GET /api/cv/export is the backup", "GET /api/cv/history": "resumes built for jobs", "GET /api/recall?match=": "prompted recall: yes/no/not sure questions about what a posting asks for and the CV cannot back yet (owner session); without match, the queue across open matches", "POST /api/recall/answer": "{key, answer: yes|no|unsure, role, depth: led|hands|team} -> a yes adds the shown sentence to the CV as a verified fact (owner session)",
   },
   policy: "nothing is sent; approval is a status change only",
 };
@@ -2275,6 +2636,7 @@ const handler = {
     if (p === "/api/ops" && m === "GET") { const rep = await opsReportCached(env, url.searchParams.get("fresh") === "1"); return J(rep, rep.status === "ok" ? 200 : 503); }
     if ((p === "/api/outcomes" || p === "/api/funnel") && m === "GET") return J(await outcomes(env));
     if (p === "/api/followups" && m === "GET") return J(await followups(env));
+    if (p === "/api/linkedin" && m === "GET") return J(linkedinSearches(await loadCtx(env)));   // JOBSEARCH-LINKEDIN-1
     if (p === "/api/prefs" && m === "GET") {
       const ctx = await loadCtx(env);
       const fb = (await env.JOBS_DB.prepare("SELECT verdict, title FROM jobsearch_feedback ORDER BY id DESC LIMIT 20").all()).results;
@@ -2323,6 +2685,25 @@ const handler = {
       } catch (e) { return J({ error: e.message }, e.status || 422); }
     }
     if (p === "/api/calibration" && m === "GET") { if (!(await ownerSession(request, env))) return J({ error: "sign in first: POST /api/auth/request, then POST /api/auth/verify" }, 401); await ensure(env); return J(await calibration(env)); }
+    if (p === "/api/recall" || p === "/api/recall/answer") {
+      // RECALL-CARD-1: the fleet dashboard card calls these through a service binding with the loop token, after its own owner-session check; a visitor gets 401
+      if (!(await ownerSession(request, env)) && !(await tokenOk(request, env))) return J({ error: "sign in first: POST /api/auth/request, then POST /api/auth/verify" }, 401);
+      try {
+        await ensure(env);
+        if (p === "/api/recall" && m === "GET") return J(await recallQueue(env, url.searchParams.get("match"), Math.min(40, +url.searchParams.get("limit") || 12)));
+        if (p === "/api/recall/answer" && m === "POST") {
+          let b; try { b = await request.json(); } catch (e) { return J({ error: "send a JSON body" }, 400); }
+          const bank = await mutateBank(env, (bk) => recallAnswer(bk, b));
+          const rec = (bank.recall || {})[b.key] || {};
+          const fact = rec.fact ? bank.facts.find((f) => f.id === rec.fact) : null;
+          // the search follows the answers: a yes adds evidence for that field, so matches there rank higher on the next run (at most one run in 10 minutes)
+          const last = await env.JOBS_DB.prepare("SELECT started_at FROM jobsearch_runs ORDER BY id DESC LIMIT 1").first();
+          if (rec.answer === "yes" && (!last || Date.now() - Date.parse(last.started_at) > 10 * 60 * 1000)) ctx.waitUntil(run(env).catch((e) => logErr("rerun-after-recall", e)));
+          return J({ ok: true, rev: BANK_REV, answer: rec.answer, added: fact ? fact.text : null, skill: rec.skill || null });
+        }
+      } catch (e) { return J({ error: e.message }, e.status || 500); }
+      return J({ error: "not found", see: "/api" }, 404);
+    }
     if (p === "/prep" && m === "GET") return new Response(PREP_UI, { headers: { "content-type": "text/html; charset=utf-8" } });
     if (p === "/cv" && m === "GET") return new Response(CV_UI, { headers: { "content-type": "text/html; charset=utf-8" } });
     if (p === "/api/cv" || p.startsWith("/api/cv/")) {
@@ -2364,15 +2745,21 @@ const handler = {
     }
     if (p === "/api/matches" && m === "GET") {
       const tier = url.searchParams.get("tier"), status = url.searchParams.get("status"), q = (url.searchParams.get("q") || "").toLowerCase();
-      const HIDDEN = ["rejected", "expired", "no_reply"];   // a rejected match stays gone unless asked for with status=all
+      // PROMPTED-RECALL-1 / JOBSEARCH-NEW-ONLY-1 (owner 2026-11-09: "if I've already applied to something, why are you still showing it to me?"): the default list is
+      // only what is still undecided; status=mine is the applications (approved, applied, replied, interview, offer); status=all is everything.
+      const MINE = ["approved", "applied", "replied", "interview", "offer"];
       const lim = Math.min(200, +url.searchParams.get("limit") || 100);
       // filter in SQL before the window: rejected and expired rows used to fill the 500-row window and push live matches out of it
       const where = [], args = [];
-      if (status && status !== "all") { where.push("status = ?"); args.push(status); } else if (!status) where.push("status NOT IN (" + HIDDEN.map((x) => "'" + x + "'").join(",") + ")");
+      if (status === "mine") where.push("status IN (" + MINE.map((x) => "'" + x + "'").join(",") + ")");
+      else if (status && status !== "all") { where.push("status = ?"); args.push(status); } else if (!status) where.push("status = 'pending_owner_approval'");
       if (tier) { where.push("tier = ?"); args.push(tier); }
-      const r = await env.JOBS_DB.prepare("SELECT id, first_seen, last_seen, company, title, location, url, tier, score, why_json, flags_json, verified, blocked_reason, status, decided_at FROM jobsearch_matches" + (where.length ? " WHERE " + where.join(" AND ") : "") + " ORDER BY tier ASC, score DESC, last_seen DESC LIMIT 500").bind(...args).all();   // A, then B, then the stretch matches, each by score
-      let rows = r.results.map(parseRow);
+      await ensure(env); await loadBank(env);
+      const r = await env.JOBS_DB.prepare("SELECT id, first_seen, last_seen, company, title, location, url, tier, score, why_json, flags_json, verified, blocked_reason, status, decided_at, gaps_json FROM jobsearch_matches" + (where.length ? " WHERE " + where.join(" AND ") : "") + " ORDER BY tier ASC, score DESC, last_seen DESC LIMIT 500").bind(...args).all();   // A, then B, then the stretch matches, each by score
+      const cv = cvCorpus();
+      let rows = r.results.map((x) => { const o = parseRow(x); o.recall_open = openGaps(parseGaps(x.gaps_json), cv).length; delete o.gaps_json; return o; });
       if (q) rows = rows.filter((x) => (x.title + " " + x.company + " " + x.location).toLowerCase().includes(q));
+      if (!q && url.searchParams.get("diverse") !== "0") rows = diversifyRows(rows);   // JOBSEARCH-DIVERSE-1
       return J({ count: rows.length, matches: rows.slice(0, lim) });
     }
     const ax = p.match(/^\/api\/matches\/(.+?)\/(resume\.docx|resume\.pdf|resume\.html|resume\.txt|resume\.md|note\.txt|kit)$/);
@@ -2442,7 +2829,7 @@ const handler = {
     return J({ error: "not found", see: "/api" }, 404);
   },
 };
-handler.__test = { loadCtx, referralKit, referralList, STAGES, judgeTop, buildResume, verify, headlineVerdict, outcomes, pdfOf, pdfClean, checkAnswer, jsonLoose, PROTECTED_Q, draftAnswers, prepBrief, quizFeedback, judgeJob, calibrate, calibration, followups, atsOf, keywordReport, docxOf, resumeHtml, plainOf, applyKit, matchKit, stripTags, postingTerms, evaluate, rank, buildResume, buildNote, verify, stripHtml, locationGate, has, LEDGER, dedupeKey, feedPrefix, makeCtx, scoreJob, scoreFeatures, featuresFromWhy, applicationSnapshot, parseApplicationSnapshot, outcomeScoreWeights, loadCtx, SURVEY, BOARDS, normKey, applyBank, BANK_SEED, QUESTIONS, TAG_TO_CLUSTERS, clustersOf, cvAnswer, cvFact, cvReview, cvSet, cvImport, mutateBank, loadBank, decidedKeys, FETCHERS, getBank: () => BANK, llmRerank, llmRerankRun, ensureResearchPubs, RESEARCH_PUBS, pubLine, parseRerank, reasonOk, rerankMessages, artifactsFor, titleCandidate, sitemapUrls, slugTitle, PUBLIC_SECTOR, opsReport };
+handler.__test = { linkedinSearches, LINKEDIN_SEARCHES, codingLoad, CANDIDATE_BOARDS, collectAndRank, cosine, bestSim, semanticLens, scoreJob, exploreOverlap, recordTerms, diversifyRows, recallGaps, recallQuestion, recallAnswer, recallQueue, RECALL_SEED, loadCtx, referralKit, referralList, STAGES, judgeTop, buildResume, verify, headlineVerdict, outcomes, pdfOf, pdfClean, checkAnswer, jsonLoose, PROTECTED_Q, draftAnswers, prepBrief, quizFeedback, judgeJob, calibrate, calibration, followups, atsOf, keywordReport, docxOf, resumeHtml, plainOf, applyKit, matchKit, stripTags, postingTerms, evaluate, rank, buildResume, buildNote, verify, stripHtml, locationGate, has, LEDGER, dedupeKey, feedPrefix, makeCtx, scoreJob, scoreFeatures, featuresFromWhy, applicationSnapshot, parseApplicationSnapshot, outcomeScoreWeights, loadCtx, SURVEY, BOARDS, normKey, applyBank, BANK_SEED, QUESTIONS, TAG_TO_CLUSTERS, clustersOf, cvAnswer, cvFact, cvReview, cvSet, cvImport, mutateBank, loadBank, decidedKeys, FETCHERS, getBank: () => BANK, llmRerank, llmRerankRun, ensureResearchPubs, ensureAutonomyBrand, RESEARCH_PUBS, FAMILIES, CLUSTER_KW, headline, pubLine, parseRerank, reasonOk, rerankMessages, artifactsFor, titleCandidate, sitemapUrls, slugTitle, PUBLIC_SECTOR, opsReport };
 export default handler;
 
 // ------------------------------------------------------------------ client script shared by both pages (JOBSEARCH-APPLY-1): kit handling and the Fill application bookmark
@@ -2482,43 +2869,292 @@ function bookmarkHref(){return 'javascript:'+encodeURIComponent('('+FILL.toStrin
 `;
 
 // ------------------------------------------------------------------ web UI (light theme, plain JS, talks only to the API above)
-const UI = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Job matches: verified claims only</title>
-<style>
-:root{--bg:#f7f7f4;--card:#fff;--ink:#1c1c1a;--mute:#6b6b66;--line:#e2e2dc;--a:#1a7f4b;--b:#a06a00;--bad:#b3261e;--acc:#1f4fd8}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,Segoe UI,sans-serif}
-header{padding:18px 20px;border-bottom:1px solid var(--line);background:#fff;position:sticky;top:0;z-index:2}
-h1{margin:0 0 4px;font-size:19px}.sub{color:var(--mute);font-size:13px}
-.bar{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;align-items:center}
-select,input,button{font:inherit;padding:6px 10px;border:1px solid var(--line);border-radius:6px;background:#fff}
-button{cursor:pointer}button.p{background:var(--acc);color:#fff;border-color:var(--acc)}button:disabled{opacity:.5;cursor:default}
-main{max-width:900px;margin:0 auto;padding:16px}
-.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin:0 0 12px}
-.row{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}.t{font-weight:600;font-size:16px}
-.badge{font-size:12px;font-weight:700;padding:2px 8px;border-radius:99px;color:#fff}.A{background:var(--a)}.B{background:var(--b)}.C{background:#6b6b66}
-.mute{color:var(--mute);font-size:13px}.flag{color:var(--bad);font-size:13px;margin-top:4px}
-.st{font-size:12px;border:1px solid var(--line);border-radius:99px;padding:1px 8px}.st.approved{border-color:var(--a);color:var(--a)}.st.rejected{border-color:var(--bad);color:var(--bad)}
-pre{white-space:pre-wrap;background:#fbfbf8;border:1px solid var(--line);border-radius:8px;padding:10px;font:13px/1.45 ui-monospace,Menlo,Consolas,monospace}
-.acts{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}a{color:var(--acc)}
-details{background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px 14px;margin:0 0 12px}summary{cursor:pointer;font-weight:600}.q{padding:4px 0;border-top:1px solid var(--line)}.q label{margin-left:10px;white-space:nowrap}h4{margin:10px 0 4px}textarea{font:inherit;border:1px solid var(--line);border-radius:6px;padding:8px;margin-top:8px}.note{background:#fff8e1;border:1px solid #f0d98a;border-radius:8px;padding:8px 12px;font-size:13px;margin-bottom:12px}
-</style></head><body>
-<header><h1>Job matches: verified claims only</h1><div class="sub" id="meta">loading…</div>
-<div class="bar"><select id="tier"><option value="">All tiers</option><option value="A">A</option><option value="B">B</option><option value="C">C: stretch</option></select>
-<select id="status"><option value="">Active (hides rejected)</option><option value="all">All, including rejected</option><option value="pending_owner_approval">Pending</option><option>approved</option><option>rejected</option><option>applied</option><option>replied</option><option>interview</option><option>offer</option><option>no_reply</option><option>expired</option></select>
-<input id="q" placeholder="Search title, company, place" size="26"><button id="ready">Ready to apply</button><button id="run" class="p">Run now</button><a href="/cv"><b>My CV</b></a> <a href="/prep"><b>Apply and prepare</b></a> <a href="/api" class="mute">API</a> <a href="/api/ledger" class="mute">Claim ledger</a> <a href="/api/ops" class="mute">Operations</a> <span id="who" class="mute"></span><button id="signin" onclick="signIn()">Sign in</button><button id="signout" style="display:none" onclick="api(\'/api/auth/logout\',{method:\'POST\'}).then(who)">Sign out</button></div></header>
-<main><div class="note">Every sentence in a resume or note is copied from the claim ledger and re-checked line by line; a failed check blocks the draft. Nothing is sent: approve only marks your decision, then you apply from the posting link.</div><details id="fillsetup"><summary>One-click apply: set up once</summary><p>1. Drag this button to your bookmarks bar: <a id="bm" href="#" class="p" style="padding:6px 10px;border-radius:6px;background:var(--acc);color:#fff;text-decoration:none">Fill application</a></p><p class="mute">2. On any match press <b>Apply</b>: your tailored resume downloads, the form kit is copied and the application opens. 3. On the application page click the <b>Fill application</b> bookmark: it fills your details, adds the cover note and attaches the resume. 4. Answer the questions only you can answer, check the page, press Submit. Works on Greenhouse, Lever, Ashby, Workable and Recruitee; other sites open with the resume and note ready to paste. Nothing is submitted for you: employer systems reject unattended submissions, and an unreviewed application costs more than it saves.</p></details><details id="check" open><summary>Check a job I found</summary><textarea id="jin" rows="4" placeholder="Paste a job link, or paste the whole posting text" style="width:100%"></textarea><div class="bar"><input id="jtitle" placeholder="Title (optional)"><input id="jco" placeholder="Employer (optional)"><button class="p" id="jgo">How good a match am I?</button></div><div id="jres"></div></details>
-<details id="prefs"><summary>Search preferences: yes or no questions</summary><div id="survey" class="mute">loading</div><div class="bar"><button class="p" id="psave">Save and re-run the search</button><span id="prefmsg" class="mute"></span></div></details><div id="follow"></div><div id="list"></div></main>
+const RECALL_UI_JS = String.raw`
+// PROMPTED-RECALL-1 front end: simple cards (Apply, Not for me, Open posting, More) and yes / no / not sure questions before every application.
+var LASTV=(function(){try{var v=localStorage.getItem('jobs_last_visit')||'';localStorage.setItem('jobs_last_visit',new Date().toISOString());return v}catch(e){return ''}})();
+var MINE_STEPS=[['replied','Got a reply'],['interview','Interview'],['offer','Offer'],['no_reply','No reply']];
+function cardHtml(x){
+ var id=esc(x.id),mine=['approved','applied','replied','interview','offer'].indexOf(x.status)>=0,nq=x.recall_open||0;
+ var h='<div class="card" id="c-'+id+'"><div class="row"><span class="badge '+x.tier+'">'+x.tier+' '+x.score+'</span>'+(LASTV&&x.first_seen>LASTV?'<span class="badge new">New</span>':'')+'<span class="t">'+esc(x.title)+'</span></div>'
+  +'<div class="mute">'+esc(x.company)+' | '+esc(x.location||'n/a')+(via(x.id)?' | via '+esc(via(x.id)):'')+(mine||x.status!=='pending_owner_approval'?' | <span class="st '+esc(x.status)+'">'+esc(x.status.replace(/_/g,' '))+'</span>':'')+'</div>'
+  +'<div class="mute">'+esc(x.why.join(' | '))+'</div>'+x.flags.map(function(f){return '<div class="flag">Check: '+esc(f)+'</div>'}).join('')
+  +(x.verified?'':'<div class="flag">Draft blocked by the checker: '+esc(x.blocked_reason)+'</div>');
+ h+='<div class="acts big">';
+ if(mine){h+=MINE_STEPS.map(function(o){return '<button data-do="decide" data-s="'+o[0]+'">'+o[1]+'</button>'}).join('')}
+ else{h+=(x.verified?'<button class="p ap" data-id="'+id+'" data-q="'+nq+'">'+(nq?'Apply ('+nq+' quick question'+(nq>1?'s':'')+' first)':'Apply')+'</button>':'')+'<button data-do="reject">Not for me</button>'}
+ h+='<a href="'+esc(x.url)+'" target="_blank" rel="noopener"><button>Open posting</button></a><button data-do="more">More</button></div>';
+ h+='<div class="acts more"><button data-do="show">Resume and note</button>'+(x.verified?'<a href="/api/matches/'+encodeURIComponent(x.id)+'/resume.pdf"><button>Resume .pdf</button></a><a href="/api/matches/'+encodeURIComponent(x.id)+'/resume.docx"><button>Resume .docx</button></a>':'')
+  +(mine?'':'<button data-do="decide" data-s="approved">Save for later</button><button data-do="decide" data-s="applied">I already applied</button>')
+  +'<button data-do="referral">Referral</button><select data-do="stage"><option value="">Interview stage</option>'+['recruiter_screen','hiring_manager','technical','take_home','panel','final','reference_check'].map(function(t){return '<option>'+t+'</option>'}).join('')+'</select></div><div class="art"></div></div>';
+ return h}
+function emptyHtml(){var s=$('#status').value;return '<div class="ds-empty">'+(s==='mine'?'<b>No applications yet</b>Jobs you apply to move here and leave the new list.':s?'<b>Nothing with this status</b>Pick another view above.':'<b>No new jobs right now</b>The search runs every hour. Jobs you applied to or turned down never come back.')+'</div>'}
+$('#list').addEventListener('click',function(e){var b=e.target.closest&&e.target.closest('[data-do]');if(!b||b.tagName==='SELECT')return;var card=b.closest('.card'),id=card.id.slice(2),d=b.dataset.do;
+ if(d==='more')card.querySelector('.more').classList.toggle('on');else if(d==='reject')reject(id);else if(d==='decide')decide(id,b.dataset.s);else if(d==='show')show(id);else if(d==='referral')referral(id)});
+$('#list').addEventListener('change',function(e){var s=e.target.closest&&e.target.closest('select[data-do="stage"]');if(s)stage(s.closest('.card').id.slice(2),s)});
+// one question at a time: Yes -> where -> how involved (each button shows the exact sentence it adds); No and Not sure move on
+function runRecall(box,qs,done){var i=0,added=[];
+ function post(q,body){return authed(function(){return api('/api/recall/answer',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(Object.assign({key:q.key},body))})})}
+ function next(){if(i>=qs.length){done(added);return}var q=qs[i];
+  box.innerHTML='<div class="rq"><div class="ds-step">Question '+(i+1)+' of '+qs.length+'</div><div class="ds-progress" aria-hidden="true"><i style="width:'+Math.round((i+1)/qs.length*100)+'%"></i></div><div class="ds-q">'+esc(q.ask)+'</div>'+(q.cue?'<div class="mute cue">'+esc(q.cue)+'</div>':'')
+   +'<div class="ds-choices" role="group" aria-label="Your answer"><button data-a="yes">Yes</button><button data-a="no">No</button><button data-a="unsure">Not sure</button></div><div class="rstep"></div><div class="rmsg mute" role="status"></div></div>';
+  var step=box.querySelector('.rstep'),msg=box.querySelector('.rmsg');
+  function save(body){msg.textContent='Saving...';post(q,body).then(function(r){if(r.added)added.push(r.added);msg.textContent=r.added?'Added to your CV: “'+r.added+'”':'Noted.';i++;setTimeout(next,r.added?1100:250)}).catch(function(err){msg.textContent=err.message})}
+  box.querySelector('[data-a="no"]').onclick=function(){save({answer:'no'})};
+  box.querySelector('[data-a="unsure"]').onclick=function(){save({answer:'unsure'})};
+  box.querySelector('[data-a="yes"]').onclick=function(){box.querySelectorAll('[data-a]').forEach(function(x){x.setAttribute('aria-pressed',x.dataset.a==='yes'?'true':'false')});
+   step.innerHTML='<h4>Where?</h4><div class="ds-options">'+q.roles.map(function(r){return '<button data-r="'+esc(r.id)+'">'+esc(r.label)+'</button>'}).join('')+'<button data-r="">Somewhere else</button></div>';
+   step.querySelectorAll('[data-r]').forEach(function(rb){rb.onclick=function(){var role=rb.dataset.r;
+    step.innerHTML='<h4>How involved were you?</h4><div class="ds-options">'+q.depths.map(function(d){return '<button data-d="'+d.id+'"><b>'+esc(d.label)+'</b><br><span class="mute">Adds: “'+esc(d.draft)+'”</span></button>'}).join('')+'</div>';
+    step.querySelectorAll('[data-d]').forEach(function(db){db.onclick=function(){save({answer:'yes',role:role,depth:db.dataset.d})}})}})}}
+ next()}
+// before every application: the questions for this job, then the kit is rebuilt with the new lines
+async function recallGate(card,id,el){var d;el.innerHTML='<div class="mute">Checking what this job asks for that your CV does not show yet...</div>';
+ try{d=await authed(function(){return api('/api/recall?match='+encodeURIComponent(id))})}catch(err){el.innerHTML='<div class="flag">'+esc(err.message)+'</div>';return false}
+ if(!d.questions.length){card.dataset.recalled='1';el.innerHTML='';return true}
+ el.innerHTML='<div class="note"><b>Before you apply:</b> this job asks for things your CV does not show yet. Tap an answer; a yes goes onto your CV and into this resume.</div><div class="rbox"></div>';
+ runRecall(el.querySelector('.rbox'),d.questions,function(added){card.dataset.recalled='1';delete KITS[id];delete KREADY[id];
+  var ap=card.querySelector('.ap');if(ap)ap.textContent='Apply';
+  el.innerHTML='<div class="note">'+(added.length?'<b>Added '+added.length+' line'+(added.length>1?'s':'')+' to your CV.</b> This resume now includes '+(added.length>1?'them':'it')+'.':'<b>Done.</b> Nothing new to add for this job.')+'</div><div class="acts big"><button class="p ap" data-id="'+esc(id)+'">Build my application</button></div>'});
+ return false}
+// "Questions about you": the queue across all open jobs, most-asked first, plus questions about the work that leads to autonomous systems research
+async function openRecall(){var p=$('#recallpanel');['#vnew','#vmine','#ready'].forEach(function(k){$(k).setAttribute('aria-pressed','false')});$('#recallbtn').setAttribute('aria-pressed','true');p.style.display='';p.innerHTML='<div class="mute">Loading questions...</div>';var d;
+ try{d=await authed(function(){return api('/api/recall?limit=15')})}catch(err){p.innerHTML='<div class="flag">'+esc(err.message)+'</div>';return}
+ if(!d.questions.length){p.innerHTML='<div class="note">No open questions. New ones appear when new jobs ask for something your CV does not show.</div>';return}
+ p.innerHTML='<div class="note"><b>Questions about you</b> ('+d.total+' open). Yes / no / not sure; nothing to type. A yes adds the line shown on the button to your CV.</div><div class="rbox"></div>';
+ runRecall(p.querySelector('.rbox'),d.questions,function(added){p.innerHTML='<div class="note"><b>Thanks.</b> '+added.length+' new line'+(added.length===1?'':'s')+' on your CV. <button id="rmore">More questions</button> <button id="rclose">Close</button></div>';$('#rmore').onclick=openRecall;$('#rclose').onclick=function(){p.style.display='none'};load()})}
+$('#recallbtn').onclick=openRecall;
+$('#vnew').onclick=function(){$('#status').value='';$('#tier').value='';load()};$('#vmine').onclick=function(){$('#status').value='mine';$('#tier').value='';load()};
+function segSync(){var s=$('#status').value,t=$('#tier').value;[['#vnew',!s&&!t],['#vmine',s==='mine'],['#ready',!s&&t==='A']].forEach(function(x){$(x[0]).setAttribute('aria-pressed',x[1]?'true':'false')})}
+`;
+// DESIGN-SYSTEM-1:BEGIN (sourced from _shared/design-system.js; applied by _shared/inline-design-system.mjs; do not edit inside a worker)
+// ---- DESIGN-SYSTEM-1 (owner directive 2026-11-09). One design system for every page a person opens on q08.org, qnfo.org or qwav.org.
+//
+// WHAT. Design tokens (colour, type, spacing, radius, tap size) for a light and a dark theme, the CSS built from them, and the component
+// classes every fleet page uses: top bar, page, card, button (primary, secondary, quiet), segmented control, Yes / No / Not sure choices,
+// stat tiles, notes, badges, fields, disclosure, tables that scroll instead of crushing, empty states. Plus dsContrast(), so the contrast of
+// every text and control colour pair is proven by '_shared/design-system.test.mjs' (WCAG 2.2 AA), and dsLint(), the check that fails a
+// page with text under 13 px, a field under 16 px (iOS zooms) or a button under the 44 px tap size.
+//
+// WHY. Owner, 2026-11-09: "bad UI makes me sad ... the job site and even the markets ... are great examples of bad design ... implement
+// design standards ... Don't give me shitty design anywhere." Before this file each worker carried its own inline palette (jobs: 13 px
+// muted text and 12 px badges; markets: an unstyled 15 px system page with 8 px buttons and tables that broke words letter by letter on a
+// phone). The standard below is written once here and inlined into each page's worker.
+//
+// THE STANDARD (what every page follows; the test enforces the parts a machine can check).
+//  1. One primary action per screen. Exactly one .btn-primary is visible in a view; everything else is secondary or quiet.
+//  2. Hierarchy before decoration. A page title, one sentence of status, then the content. Status lines are stat tiles, not run-on text.
+//  3. Tap, do not type. Choices are buttons (Yes / No / Not sure, segmented views), never free text or tiny radio buttons. 44 px minimum.
+//  4. Progressive disclosure. Secondary tools, links and explanations sit behind a "More" disclosure, not in the top bar.
+//  5. Calm. Neutral surfaces, one accent colour, colour carries meaning only for good / warning / bad, generous spacing (8 px scale).
+//  6. Readable. 16 px body, 14 px minimum for secondary text, line length under 75 characters for prose, tabular numbers in figures.
+//  7. Accessible. WCAG 2.2 AA contrast in both themes, visible focus ring, labels on every field, reduced motion respected.
+//  8. Every state designed. Loading, empty and error states say what happens next in one sentence.
+//
+// HOW TO ADOPT. 1) 'node _shared/inline-design-system.mjs <worker> --anchor "<line prefix>"' once (later runs replace the block in place,
+// '--check' reports a stale copy). 2) Put '<style>${DS_CSS}</style>' (or dsHead(title)) in the page head and give <body> class="ds".
+// 3) Build with the classes below; page-specific CSS uses the var(--ds-*) tokens, never raw hex. 4) Add the worker to ADOPTERS in
+// '_shared/design-system.test.mjs', which renders the page and runs dsLint on it.
+//
+// RULES FOR EDITING. ES5 style (var and function), no import or export, every name starts with DS_ or ds, no '*' followed by '/' inside a
+// comment, no backtick anywhere (the block is inlined into workers that hold their pages in template literals). Version every change in DS_VERSION.
+var DS_VERSION = "1.0.0";
+
+var DS_TOKENS = {
+  light: {
+    bg: "#f5f6f8", surface: "#ffffff", surface2: "#eef1f5", ink: "#15181e", ink2: "#4b5363", line: "#d5dae1", lineStrong: "#7b8494",
+    accent: "#1d4ed8", accentHover: "#1e40af", onAccent: "#ffffff", accentSoft: "#e3eaff", accentSoftInk: "#1e3a8a",
+    good: "#166534", goodSoft: "#dcfce7", warn: "#854d0e", warnSoft: "#fef3c7", bad: "#b42318", badSoft: "#fee4e2", focus: "#2563eb"
+  },
+  dark: {
+    bg: "#0e1116", surface: "#161a21", surface2: "#1d222b", ink: "#e8ebf0", ink2: "#a4adbb", line: "#2b313c", lineStrong: "#6b7385",
+    accent: "#8cb4ff", accentHover: "#a9c6ff", onAccent: "#0a1530", accentSoft: "#1b2a4a", accentSoftInk: "#c7d8ff",
+    good: "#6ee7a0", goodSoft: "#12301f", warn: "#f6c453", warnSoft: "#33270d", bad: "#ff9a8f", badSoft: "#3a1715", focus: "#8cb4ff"
+  },
+  font: "system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif",
+  mono: "ui-monospace,SFMono-Regular,Menlo,Consolas,monospace",
+  size: { small: 14, body: 16, lead: 18, h3: 17, h2: 20, h1: 26, stat: 26 },
+  space: [0, 4, 8, 12, 16, 24, 32, 48],
+  radius: { s: 8, m: 12, l: 16, pill: 999 },
+  tap: 44,
+  maxWidth: 960
+};
+
+// The pairs whose contrast the test proves in both themes: [foreground token, background token, minimum ratio].
+var DS_CONTRAST_PAIRS = [
+  ["ink", "bg", 4.5], ["ink", "surface", 4.5], ["ink", "surface2", 4.5], ["ink2", "bg", 4.5], ["ink2", "surface", 4.5], ["ink2", "surface2", 4.5],
+  ["accent", "surface", 4.5], ["accent", "bg", 4.5], ["onAccent", "accent", 4.5], ["onAccent", "accentHover", 4.5], ["accentSoftInk", "accentSoft", 4.5],
+  ["good", "surface", 4.5], ["good", "goodSoft", 4.5], ["warn", "surface", 4.5], ["warn", "warnSoft", 4.5], ["bad", "surface", 4.5], ["bad", "badSoft", 4.5],
+  ["ink", "warnSoft", 4.5], ["ink", "goodSoft", 4.5], ["ink", "badSoft", 4.5], ["ink", "accentSoft", 4.5],
+  ["lineStrong", "surface", 3], ["focus", "surface", 3], ["focus", "bg", 3]
+];
+
+function dsLum(hex) {
+  var h = String(hex).replace("#", "");
+  if (h.length === 3) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
+  var c = [0, 2, 4].map(function (i) { var v = parseInt(h.slice(i, i + 2), 16) / 255; return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); });
+  return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+}
+function dsContrast(a, b) { var x = dsLum(a), y = dsLum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); }
+
+function dsVars(t) {
+  var map = { bg: "bg", surface: "surface", surface2: "surface-2", ink: "ink", ink2: "ink-2", line: "line", lineStrong: "line-strong", accent: "accent",
+    accentHover: "accent-hover", onAccent: "on-accent", accentSoft: "accent-soft", accentSoftInk: "accent-soft-ink", good: "good", goodSoft: "good-soft",
+    warn: "warn", warnSoft: "warn-soft", bad: "bad", badSoft: "bad-soft", focus: "focus" };
+  return Object.keys(map).map(function (k) { return "--ds-" + map[k] + ":" + t[k]; }).join(";");
+}
+
+var DS_CSS = [
+  "/* DESIGN-SYSTEM-1 v" + DS_VERSION + " (_shared/design-system.js) */",
+  ":root{color-scheme:light dark;" + dsVars(DS_TOKENS.light) + ";--ds-font:" + DS_TOKENS.font + ";--ds-mono:" + DS_TOKENS.mono + ";--ds-tap:" + DS_TOKENS.tap + "px;--ds-r-s:8px;--ds-r-m:12px;--ds-r-l:16px;--ds-shadow:0 1px 2px rgba(16,24,40,.06),0 1px 3px rgba(16,24,40,.08)}",
+  "@media (prefers-color-scheme:dark){:root{" + dsVars(DS_TOKENS.dark) + ";--ds-shadow:none}}",
+  "*,*::before,*::after{box-sizing:border-box}",
+  "body.ds{margin:0;background:var(--ds-bg);color:var(--ds-ink);font:16px/1.55 var(--ds-font);-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}",
+  ".ds a{color:var(--ds-accent);text-underline-offset:2px}.ds a:hover{color:var(--ds-accent-hover)}",
+  ".ds h1,.ds h2,.ds h3{line-height:1.25;margin:0 0 8px;letter-spacing:-.01em}.ds h1{font-size:26px;font-weight:700}.ds h2{font-size:20px;font-weight:650;margin-top:32px}.ds h3{font-size:17px;font-weight:650}",
+  ".ds p{margin:0 0 12px}.ds small,.ds-muted{color:var(--ds-ink-2);font-size:14px}",
+  ".ds :focus-visible{outline:3px solid var(--ds-focus);outline-offset:2px;border-radius:6px}",
+  ".ds-skip{position:absolute;left:-9999px}.ds-skip:focus{left:16px;top:8px;z-index:20;background:var(--ds-surface);padding:8px 12px}",
+  ".ds-sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}",
+  // top bar and page
+  ".ds-top{position:sticky;top:0;z-index:10;background:var(--ds-surface);border-bottom:1px solid var(--ds-line)}",
+  ".ds-top-in{max-width:960px;margin:0 auto;padding:10px 16px;display:flex;align-items:center;gap:12px;min-height:60px}",
+  ".ds-brand{font-weight:700;font-size:17px;color:var(--ds-ink);text-decoration:none;margin-right:auto;display:flex;align-items:center;gap:8px}",
+  ".ds-brand small{font-weight:500}",
+  ".ds-main{max-width:960px;margin:0 auto;padding:20px 16px 64px}",
+  ".ds-head{margin:4px 0 20px}.ds-head p{color:var(--ds-ink-2);margin:4px 0 0}",
+  // buttons
+  ".ds .btn,.ds button.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;min-width:44px;padding:10px 16px;border-radius:var(--ds-r-m);border:1px solid var(--ds-line-strong);background:var(--ds-surface);color:var(--ds-ink);font:600 15px/1.2 var(--ds-font);cursor:pointer;text-decoration:none;transition:background .15s,border-color .15s}",
+  ".ds .btn:hover{background:var(--ds-surface-2)}.ds .btn:disabled,.ds .btn[aria-disabled=true]{opacity:.55;cursor:not-allowed}",
+  ".ds .btn.btn-primary{background:var(--ds-accent);border-color:var(--ds-accent);color:var(--ds-on-accent)}.ds .btn.btn-primary:hover{background:var(--ds-accent-hover);border-color:var(--ds-accent-hover);color:var(--ds-on-accent)}",
+  ".ds .btn.btn-quiet{background:transparent;border-color:transparent;color:var(--ds-accent)}.ds .btn.btn-quiet:hover{background:var(--ds-accent-soft)}",
+  ".ds .btn.btn-block{width:100%}.ds .btn.btn-lg{min-height:52px;font-size:16px;padding:12px 20px}",
+  ".ds-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:12px}",
+  // segmented control (views)
+  ".ds-seg{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:4px;padding:4px;background:var(--ds-surface-2);border-radius:var(--ds-r-m)}",
+  "@media (max-width:560px){.ds-seg{grid-auto-flow:row;grid-template-columns:1fr 1fr}}",
+  ".ds-seg button{min-height:44px;padding:8px 10px;border:0;border-radius:9px;background:transparent;color:var(--ds-ink-2);font:600 15px var(--ds-font);cursor:pointer;line-height:1.2}",
+  ".ds-seg button[aria-pressed=true],.ds-seg button[aria-selected=true]{background:var(--ds-surface);color:var(--ds-ink);box-shadow:var(--ds-shadow)}",
+  // Yes / No / Not sure
+  ".ds-choices{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px}",
+  ".ds-choices button{min-height:56px;border-radius:var(--ds-r-m);border:1px solid var(--ds-line-strong);background:var(--ds-surface);color:var(--ds-ink);font:600 16px var(--ds-font);cursor:pointer}",
+  ".ds-choices button:hover{border-color:var(--ds-accent);background:var(--ds-accent-soft)}",
+  ".ds-choices button[aria-pressed=true]{background:var(--ds-accent);border-color:var(--ds-accent);color:var(--ds-on-accent)}",
+  ".ds-options{display:grid;gap:8px;margin-top:12px}.ds-options button{text-align:left;min-height:56px;padding:12px 16px;border-radius:var(--ds-r-m);border:1px solid var(--ds-line-strong);background:var(--ds-surface);color:var(--ds-ink);font:16px/1.4 var(--ds-font);cursor:pointer}",
+  ".ds-options button:hover{border-color:var(--ds-accent);background:var(--ds-accent-soft)}.ds-options button b{display:block;font-weight:650}",
+  ".ds-q{font-size:18px;font-weight:650;line-height:1.35;margin:6px 0}.ds-step{font-size:14px;color:var(--ds-ink-2);font-weight:600;letter-spacing:.02em}",
+  ".ds-progress{height:6px;border-radius:99px;background:var(--ds-surface-2);overflow:hidden;margin:8px 0 4px}.ds-progress>i{display:block;height:100%;background:var(--ds-accent);border-radius:99px}",
+  // cards, notes, badges
+  ".ds-card{background:var(--ds-surface);border:1px solid var(--ds-line);border-radius:var(--ds-r-l);padding:16px;margin:0 0 12px;box-shadow:var(--ds-shadow)}",
+  ".ds-card-title{font-size:17px;font-weight:650;line-height:1.35;margin:0}",
+  ".ds-meta{color:var(--ds-ink-2);font-size:14px;margin-top:4px}",
+  ".ds-note{border-radius:var(--ds-r-m);padding:12px 14px;margin:0 0 12px;background:var(--ds-accent-soft);color:var(--ds-ink);font-size:15px}",
+  ".ds-note-warn{background:var(--ds-warn-soft)}.ds-note-good{background:var(--ds-good-soft)}.ds-note-bad{background:var(--ds-bad-soft)}",
+  ".ds-badge{display:inline-flex;align-items:center;gap:4px;font-size:13px;font-weight:700;line-height:1;padding:5px 9px;border-radius:99px;background:var(--ds-surface-2);color:var(--ds-ink);white-space:nowrap}",
+  ".ds-badge-accent{background:var(--ds-accent-soft);color:var(--ds-accent-soft-ink)}.ds-badge-good{background:var(--ds-good-soft);color:var(--ds-good)}.ds-badge-warn{background:var(--ds-warn-soft);color:var(--ds-warn)}.ds-badge-bad{background:var(--ds-bad-soft);color:var(--ds-bad)}",
+  ".ds-good{color:var(--ds-good)}.ds-warn{color:var(--ds-warn)}.ds-bad{color:var(--ds-bad)}",
+  // stats
+  ".ds-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin:0 0 16px}",
+  ".ds-stat{background:var(--ds-surface);border:1px solid var(--ds-line);border-radius:var(--ds-r-m);padding:12px 14px}",
+  ".ds-stat .k{font-size:14px;color:var(--ds-ink-2)}.ds-stat .v{font-size:24px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.2;margin-top:2px}",
+  // fields
+  ".ds input:not([type=radio]):not([type=checkbox]),.ds select,.ds textarea{font:16px/1.4 var(--ds-font);color:var(--ds-ink);background:var(--ds-surface);border:1px solid var(--ds-line-strong);border-radius:var(--ds-r-s);padding:10px 12px;min-height:44px;max-width:100%}",
+  ".ds textarea{width:100%}.ds label{font-size:15px}",
+  ".ds-field{display:grid;gap:4px;margin:0 0 12px}.ds-field>span{font-size:14px;font-weight:600;color:var(--ds-ink-2)}",
+  // disclosure
+  ".ds details.ds-more{background:var(--ds-surface);border:1px solid var(--ds-line);border-radius:var(--ds-r-l);margin:0 0 12px}",
+  ".ds details.ds-more>summary{list-style:none;cursor:pointer;min-height:52px;display:flex;align-items:center;justify-content:space-between;padding:12px 16px;font-weight:650}",
+  ".ds details.ds-more>summary::-webkit-details-marker{display:none}.ds details.ds-more>summary::after{content:'+';font-size:22px;color:var(--ds-ink-2);font-weight:400}",
+  ".ds details.ds-more[open]>summary::after{content:'\\2212'}.ds details.ds-more>.ds-more-body{padding:0 16px 16px}",
+  // tables: scroll, never crush
+  ".ds-table-wrap{overflow-x:auto;border:1px solid var(--ds-line);border-radius:var(--ds-r-m);background:var(--ds-surface)}",
+  ".ds-table{width:100%;border-collapse:collapse;font-size:15px}.ds-table th{font-size:13px;font-weight:650;color:var(--ds-ink-2);text-transform:uppercase;letter-spacing:.04em;text-align:left;background:var(--ds-surface-2)}",
+  ".ds-table th,.ds-table td{padding:10px 12px;border-bottom:1px solid var(--ds-line);vertical-align:top}.ds-table tr:last-child td{border-bottom:0}",
+  ".ds-table .num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}.ds-table td.title{min-width:200px}",
+  // lists of items as cards on phones
+  ".ds-rows{display:grid;gap:8px}.ds-row{display:flex;gap:12px;align-items:flex-start;justify-content:space-between;background:var(--ds-surface);border:1px solid var(--ds-line);border-radius:var(--ds-r-m);padding:12px 14px}",
+  ".ds-row .main{min-width:0;flex:1}.ds-row .side{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}",
+  // empty and loading
+  ".ds-empty{text-align:center;padding:32px 16px;color:var(--ds-ink-2);border:1px dashed var(--ds-line-strong);border-radius:var(--ds-r-l)}",
+  ".ds-empty b{display:block;color:var(--ds-ink);font-size:17px;margin-bottom:4px}",
+  ".ds pre{white-space:pre-wrap;background:var(--ds-surface-2);border-radius:var(--ds-r-s);padding:12px;font:14px/1.5 var(--ds-mono);overflow-x:auto}",
+  ".ds hr{border:0;border-top:1px solid var(--ds-line);margin:24px 0}",
+  "@media (max-width:640px){.ds-hide-sm{display:none!important}.ds h1{font-size:23px}.ds-top-in{padding:8px 12px}}",
+  "@media (prefers-reduced-motion:reduce){.ds *{transition:none!important;animation:none!important}}"
+].join("\n");
+
+function dsEsc(s) { return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); }
+
+// The head of a page: charset, viewport, title, description, theme colours and the design system CSS. extraCss uses var(--ds-*) only.
+function dsHead(title, description, extraCss) {
+  return "<meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1,viewport-fit=cover\"><title>" + dsEsc(title) + "</title>"
+    + (description ? "<meta name=\"description\" content=\"" + dsEsc(description) + "\">" : "")
+    + "<meta name=\"theme-color\" content=\"" + DS_TOKENS.light.surface + "\" media=\"(prefers-color-scheme: light)\"><meta name=\"theme-color\" content=\"" + DS_TOKENS.dark.surface + "\" media=\"(prefers-color-scheme: dark)\">"
+    + "<style>" + DS_CSS + (extraCss ? "\n" + extraCss : "") + "</style>";
+}
+
+// Machine-checkable parts of the standard, run on a rendered page. Returns a list of problems (empty when the page passes).
+function dsLint(html) {
+  var out = [], m, re;
+  if (String(html).indexOf("DESIGN-SYSTEM-1 v") < 0) out.push("page does not include DS_CSS");
+  if (!/<body[^>]*class="[^"]*\bds\b/.test(html)) out.push("body is missing class=\"ds\"");
+  if (!/name="?viewport"?/.test(html)) out.push("no viewport meta");
+  re = /font(?:-size)?\s*:\s*(?:[0-9]+\s+)?([0-9.]+)px/g;
+  while ((m = re.exec(html))) { if (+m[1] < 13) out.push("text under 13px: " + m[0]); }
+  re = /min-height\s*:\s*([0-9.]+)px/g;
+  var css = String(html).split("<style>").slice(1).map(function (s) { return s.split("</style>")[0]; }).join("\n");
+  re = /(button|\.btn)[^{}]*\{[^}]*min-height\s*:\s*([0-9.]+)px/g;
+  while ((m = re.exec(css))) { if (+m[2] < 40) out.push("button under the tap size: " + m[0].slice(0, 80)); }
+  if (/style="[^"]*#[0-9a-fA-F]{3,6}/.test(html)) out.push("inline style with a raw hex colour (use var(--ds-*))");
+  var prim = (html.match(/class="[^"]*\bbtn-primary\b/g) || []).length;
+  if (prim > 1) out.push("more than one primary button in the static page (" + prim + ")");
+  return out;
+}
+// DESIGN-SYSTEM-1:END
+// JOBS-DESIGN-1 (DESIGN-SYSTEM-1, owner 2026-11-09): the matches page on the shared design system. The list comes first; one row of views
+// (New jobs, My applications, Ready to apply, Questions about you); search; then the tools behind closed disclosures. The page CSS below maps
+// the classes the page script already emits (card, badge, acts, note, rq ...) onto the design tokens, so the script keeps working unchanged.
+const JOBS_PAGE_CSS = ".js-search{margin:12px 0 16px}.js-search input{width:100%}"
+ + ":where(.ds main button:not(.ds-seg button,.ds-choices button,.ds-options button)){display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:44px;padding:10px 16px;border-radius:12px;border:1px solid var(--ds-line-strong);background:var(--ds-surface);color:var(--ds-ink);font:600 15px/1.2 var(--ds-font);cursor:pointer}"
+ + ":where(.ds main button:not(.ds-seg button,.ds-choices button,.ds-options button)):hover{background:var(--ds-surface-2)}.ds main button:disabled{opacity:.55;cursor:not-allowed}"
+ + ".ds main button.p,.ds main button.btn-primary{background:var(--ds-accent);border-color:var(--ds-accent);color:var(--ds-on-accent)}.ds main button.p:hover{background:var(--ds-accent-hover)}"
+ + ".card{background:var(--ds-surface);border:1px solid var(--ds-line);border-radius:16px;padding:16px;margin:0 0 12px;box-shadow:var(--ds-shadow)}"
+ + ".row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.t{font-weight:650;font-size:17px;line-height:1.35}.card .row .t{flex-basis:100%;order:2;margin-top:6px}"
+ + ".badge{display:inline-flex;font-size:13px;font-weight:700;line-height:1;padding:5px 9px;border-radius:99px;background:var(--ds-surface-2);color:var(--ds-ink)}"
+ + ".badge.A{background:var(--ds-good-soft);color:var(--ds-good)}.badge.B{background:var(--ds-warn-soft);color:var(--ds-warn)}.badge.C{background:var(--ds-surface-2);color:var(--ds-ink-2)}.badge.new{background:var(--ds-accent-soft);color:var(--ds-accent-soft-ink)}"
+ + ".mute{color:var(--ds-ink-2);font-size:14px;margin-top:4px}.flag{color:var(--ds-bad);font-size:14px;margin-top:6px}.flag::before{content:'! ';font-weight:700}"
+ + ".st{font-size:13px;font-weight:600;border:1px solid var(--ds-line-strong);border-radius:99px;padding:2px 8px}.st.approved,.st.applied{border-color:var(--ds-good);color:var(--ds-good)}.st.rejected{border-color:var(--ds-bad);color:var(--ds-bad)}"
+ + ".acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.acts a{text-decoration:none}.acts.col{flex-direction:column;align-items:stretch}.more{display:none}.more.on{display:flex}"
+ + ".card .acts.big .ap{flex:1 1 100%}.card .acts.big>:not(.ap){flex:1 1 0}.card .acts.big>a>button{width:100%}.card .acts.big button{padding-left:10px;padding-right:10px}"
+ + ".note{background:var(--ds-accent-soft);color:var(--ds-ink);border-radius:12px;padding:12px 14px;font-size:15px;margin:0 0 12px}"
+ + ".rq{border:1px solid var(--ds-line);border-radius:16px;padding:16px;margin-top:12px;background:var(--ds-surface)}.rq .t{font-size:18px;margin:6px 0}.cue{font-style:normal}.rmsg{margin-top:8px}#recallpanel .rq{border:0;padding:0;margin-top:8px}"
+ + ".bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:12px}"
+ + ".q{padding:12px 0;border-top:1px solid var(--ds-line)}.q>span{display:block;font-weight:600;margin-bottom:8px}.q .ds-choices{margin-top:0}"
+ + "h4{font-size:15px;margin:16px 0 6px}pre{white-space:pre-wrap;background:var(--ds-surface-2);border-radius:8px;padding:12px;font:14px/1.5 var(--ds-mono)}"
+ + "ul{padding-left:20px;margin:6px 0}#signbox{margin-bottom:12px}#signbox input{width:10ch}"
+ + ".lis{border-top:1px solid var(--ds-line);padding:12px 0}.lis:first-of-type{border-top:0}"   // JOBSEARCH-LINKEDIN-1
+ + ".js-tools h2{margin-top:32px}.js-links{display:flex;flex-wrap:wrap;gap:4px 16px;margin-top:12px;font-size:15px}";
+const UI = `<!doctype html><html lang="en"><head>${dsHead("Job matches", "Job matches for an autonomous AI systems researcher, each resume line checked against the claim ledger.", JOBS_PAGE_CSS)}</head><body class="ds">
+<a class="ds-skip" href="#list">Skip to the job list</a>
+<header class="ds-top"><div class="ds-top-in"><a class="ds-brand" href="/">Jobs</a><a class="btn btn-quiet" href="/cv">My CV</a><span id="who" class="ds-muted ds-hide-sm"></span><button class="btn" id="signin" onclick="signIn()">Sign in</button><button class="btn btn-quiet" id="signout" style="display:none" onclick="api(\'/api/auth/logout\',{method:\'POST\'}).then(who)">Sign out</button></div></header>
+<main class="ds-main"><div class="ds-head"><h1>Your job matches</h1><p id="meta">Loading your matches…</p></div>
+<div class="ds-seg" role="group" aria-label="Which jobs to show"><button id="vnew" aria-pressed="true">New jobs</button><button id="vmine" aria-pressed="false">My applications</button><button id="ready" aria-pressed="false">Ready to apply</button><button id="recallbtn" aria-pressed="false">Questions about you</button></div>
+<div class="js-search"><label class="ds-sr" for="q">Search</label><input id="q" type="search" placeholder="Search title, company or place" autocomplete="off"></div>
+<div id="recallpanel" class="card" style="display:none"></div><div id="follow"></div><div id="list" aria-live="polite"></div>
+<section class="js-tools" aria-labelledby="tools-h"><h2 id="tools-h">Tools</h2>
+<details class="ds-more" id="lisearch"><summary>What to search on LinkedIn</summary><div class="ds-more-body"><div id="lilist" class="mute">Loading the searches…</div></div></details>
+<details class="ds-more" id="check"><summary>Check a job I found</summary><div class="ds-more-body"><label class="ds-sr" for="jin">Job link or posting text</label><textarea id="jin" rows="4" placeholder="Paste a job link, or the whole posting text"></textarea><div class="bar"><input id="jtitle" placeholder="Title (optional)" aria-label="Title (optional)"><input id="jco" placeholder="Employer (optional)" aria-label="Employer (optional)"><button class="p" id="jgo">How good a match am I?</button></div><div id="jres"></div></div></details>
+<details class="ds-more" id="prefs"><summary>Search preferences: yes or no questions</summary><div class="ds-more-body"><div id="survey" class="mute">Loading…</div><div class="bar"><button id="psave">Save and re-run the search</button><span id="prefmsg" class="mute" role="status"></span></div></div></details>
+<details class="ds-more" id="fillsetup"><summary>One-click apply: set up once</summary><div class="ds-more-body"><p>1. Drag this button to your bookmarks bar: <a id="bm" href="#" class="btn btn-primary">Fill application</a></p><p class="mute">2. On any match press <b>Apply</b>: your tailored resume downloads, the form kit is copied and the application opens. 3. On the application page click the <b>Fill application</b> bookmark: it fills your details, adds the cover note and attaches the resume. 4. Answer the questions only you can answer, check the page, press Submit. Works on Greenhouse, Lever, Ashby, Workable and Recruitee; other sites open with the resume and note ready to paste. Nothing is submitted for you: employer systems reject unattended submissions, and an unreviewed application costs more than it saves.</p></div></details>
+<details class="ds-more"><summary>Filters and search runs</summary><div class="ds-more-body"><div class="bar"><label class="ds-field"><span>Tier</span><select id="tier"><option value="">All tiers</option><option value="A">A: strong fit</option><option value="B">B: good fit</option><option value="C">C: stretch</option></select></label><label class="ds-field"><span>Status</span><select id="status"><option value="">New jobs only</option><option value="mine">My applications</option><option value="all">Everything, including turned down</option><option value="pending_owner_approval">Pending</option><option>approved</option><option>rejected</option><option>applied</option><option>replied</option><option>interview</option><option>offer</option><option>no_reply</option><option>expired</option></select></label></div><div class="bar"><button id="run">Run the search now</button></div><p class="mute">Every sentence in a resume or note is copied from the claim ledger and re-checked line by line; a failed check blocks the draft. Nothing is sent for you.</p><div class="js-links"><a href="/prep">Apply and prepare</a><a href="/api/ledger">Claim ledger</a><a href="/api/ops">Operations</a><a href="/api">API</a></div></div></details>
+</section></main>
 <script>
 const $=s=>document.querySelector(s);const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 async function api(path,opt){const r=await fetch(path,opt);const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||r.status);return j}
 async function load(){
   const q=new URLSearchParams();for(const k of['tier','status','q']){const v=$('#'+k).value;if(v)q.set(k,v)}
   const [m,r,oc]=await Promise.all([api('/api/matches?'+q),api('/api/runs'),api('/api/outcomes')]);
-  const last=r.runs[0];$('#meta').textContent=last?('Last run '+last.started_at+' | '+last.fetched+' postings from '+last.feeds+' feeds | '+last.passed+' passed gates | '+last.blocked+' blocked by verifier'+(last.errors.length?' | feed errors: '+last.errors.length:'')):'No run yet. Press Run now.';$('#meta').textContent+=' | Applied '+oc.funnel.applied+', replies '+oc.funnel.replied+', interviews '+oc.funnel.interview+' | reply rate '+(oc.reply_rate_90d===null?'unknown ('+oc.reading+')':Math.round(oc.reply_rate_90d*100)+'%');
-  $('#list').innerHTML=m.matches.map(x=>'<div class="card" id="c-'+esc(x.id)+'"><div class="row"><span class="badge '+x.tier+'">'+x.tier+' '+x.score+'</span><span class="t">'+esc(x.title)+'</span><span class="mute">'+esc(x.company)+' | '+esc(x.location||'n/a')+(via(x.id)?' | via '+esc(via(x.id)):'')+'</span><span class="st '+esc(x.status)+'">'+esc(x.status.replace(/_/g,' '))+'</span></div>'
-   +'<div class="mute">'+esc(x.why.join(' | '))+'</div>'+x.flags.map(f=>'<div class="flag">Check: '+esc(f)+'</div>').join('')
-   +(x.verified?'':'<div class="flag">Blocked by verifier: '+esc(x.blocked_reason)+'</div>')
-   +'<div class="acts">'+(x.verified?'<button class="p ap" data-id="'+esc(x.id)+'">Apply</button>':'')+'<a href="'+esc(x.url)+'" target="_blank" rel="noopener"><button>Open posting</button></a><button onclick="show(\\''+esc(x.id)+'\\')">Resume and note</button>'+(x.verified?'<a href="/api/matches/'+encodeURIComponent(x.id)+'/resume.pdf"><button>Resume .pdf</button></a>'+'<a href="/api/matches/'+encodeURIComponent(x.id)+'/resume.docx"><button>Resume .docx</button></a>':'')+''
-   +'<button onclick="decide(\\''+esc(x.id)+'\\',\\'approved\\')">Approve</button><button onclick="reject(\\''+esc(x.id)+'\\')">Reject</button><button onclick="decide(\\''+esc(x.id)+'\\',\\'applied\\')">Mark applied</button>'+[['replied','Got a reply'],['interview','Interview'],['offer','Offer']].map(o=>'<button onclick="decide(\\''+esc(x.id)+'\\',\\''+o[0]+'\\')">'+o[1]+'</button>').join('')+'<button onclick="referral(\\''+esc(x.id)+'\\')">Referral</button><select onchange="stage(\\''+esc(x.id)+'\\',this)"><option value="">Interview stage</option>'+['recruiter_screen','hiring_manager','technical','take_home','panel','final','reference_check'].map(function(t){return '<option>'+t+'</option>'}).join('')+'</select>'+'</div><div class="art"></div></div>').join('')||'<p class="mute">No matches yet.</p>';
+  const last=r.runs[0];$('#meta').textContent=(m.matches.length+' shown')+(last?(' · '+last.passed+' of '+last.fetched+' postings passed the checks · last search '+String(last.started_at).slice(0,16)+(last.errors.length?' · '+last.errors.length+' feed errors':'')):' · no search run yet')+' · applied '+oc.funnel.applied+', replies '+oc.funnel.replied+', interviews '+oc.funnel.interview;segSync();
+  $('#list').innerHTML=m.matches.map(cardHtml).join('')||emptyHtml();
 }
 async function show(id){const el=document.getElementById('c-'+id).querySelector('.art');if(el.innerHTML){el.innerHTML='';return}
   const d=await api('/api/matches/'+encodeURIComponent(id));if(!d.verified){el.innerHTML='<pre>Blocked: '+esc(d.blocked_reason)+'</pre>';return}
@@ -2539,12 +3175,15 @@ async function decide(id,status){
   try{await call()}catch(e){if(/sign in/.test(e.message)){try{if(await signIn())await call();else return}catch(e2){alert(e2.message);return}}else{alert(e.message);return}}load()}
 $('#run').onclick=async()=>{$('#run').disabled=true;try{await authed(()=>api('/api/run',{method:'POST'}));$('#meta').textContent='Run started. Refreshing in 40 s…';setTimeout(()=>{load();$('#run').disabled=false},40000)}catch(e){alert(e.message);$('#run').disabled=false}};
 for(const k of['tier','status'])$('#'+k).onchange=load;$('#q').oninput=()=>{clearTimeout(window._t);window._t=setTimeout(load,300)};async function authed(fn){try{return await fn()}catch(e){if(/sign in/.test(e.message)){if(await signIn())return await fn()}throw e}}
-async function loadPrefs(){const d=await api('/api/prefs');const g={};d.survey.forEach(q=>{(g[q.group]=g[q.group]||[]).push(q)});$('#survey').innerHTML=Object.keys(g).map(k=>'<h4>'+esc(k)+'</h4>'+g[k].map(q=>'<div class="q"><span>'+esc(q.q)+'</span> '+[['true','Yes'],['false','No'],['null','Skip']].map(o=>'<label><input type="radio" name="q_'+q.id+'" value="'+o[0]+'"'+(String(q.answer)===o[0]?' checked':'')+'> '+o[1]+'</label>').join('')+'</div>').join('')).join('')}
-$('#psave').onclick=async()=>{const a={};document.querySelectorAll('#survey input:checked').forEach(i=>{a[i.name.slice(2)]=i.value==='true'?true:i.value==='false'?false:null});$('#prefmsg').textContent='Saving...';try{await authed(()=>api('/api/prefs',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({answers:a})}));$('#prefmsg').textContent='Saved. The search is re-running (about a minute); matches that no longer fit are hidden.';setTimeout(load,60000)}catch(e){$('#prefmsg').textContent=e.message}};
-function reject(id){var el=document.getElementById('c-'+id).querySelector('.art');var R=[['field','Wrong field'],['level','Wrong level'],['location','Wrong place'],['company','Not this employer'],['applied','Already handled it'],['other','Other']];el.innerHTML='<div class="note">Why? The search learns from it. '+R.map(function(r){return '<button onclick="rejectWhy(\\''+esc(id)+'\\',\\''+r[0]+'\\')">'+r[1]+'</button>'}).join(' ')+'</div>'}
+async function loadPrefs(){const d=await api('/api/prefs');const g={};d.survey.forEach(q=>{(g[q.group]=g[q.group]||[]).push(q)});$('#survey').innerHTML=Object.keys(g).map(k=>'<h4>'+esc(k)+'</h4>'+g[k].map(q=>'<div class="q" data-pref="'+esc(q.id)+'"><span>'+esc(q.q)+'</span><div class="ds-choices" role="group" aria-label="'+esc(q.q)+'">'+[['true','Yes'],['false','No'],['null','Not sure']].map(o=>'<button type="button" data-v="'+o[0]+'" aria-pressed="'+(String(q.answer)===o[0]?'true':'false')+'">'+o[1]+'</button>').join('')+'</div></div>').join('')).join('')}
+$('#survey').addEventListener('click',function(e){var b=e.target.closest&&e.target.closest('[data-v]');if(!b)return;b.parentNode.querySelectorAll('[data-v]').forEach(function(x){x.setAttribute('aria-pressed',x===b?'true':'false')})});
+$('#psave').onclick=async()=>{const a={};document.querySelectorAll('#survey [data-pref]').forEach(q=>{var b=q.querySelector('[aria-pressed="true"]');if(b)a[q.dataset.pref]=b.dataset.v==='true'?true:b.dataset.v==='false'?false:null});$('#prefmsg').textContent='Saving...';try{await authed(()=>api('/api/prefs',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({answers:a})}));$('#prefmsg').textContent='Saved. The search is re-running (about a minute); matches that no longer fit are hidden.';setTimeout(load,60000)}catch(e){$('#prefmsg').textContent=e.message}};
+function reject(id){var el=document.getElementById('c-'+id).querySelector('.art');var R=[['coding','Too much coding'],['field','Wrong field'],['level','Wrong level'],['location','Wrong place'],['company','Not this employer'],['applied','Already handled it'],['other','Other']];el.innerHTML='<div class="note">Why? The search learns from it. '+R.map(function(r){return '<button onclick="rejectWhy(\\''+esc(id)+'\\',\\''+r[0]+'\\')">'+r[1]+'</button>'}).join(' ')+'</div>'}
 async function rejectWhy(id,reason){const call=()=>api('/api/matches/'+encodeURIComponent(id)+'/status',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({status:'rejected',reason})});try{await authed(call)}catch(e){alert(e.message);return}load()}
 const VIA={rok:'RemoteOK',him:'Himalayas',hn:'Hacker News: Who is hiring',rm:'Remotive',jb:'Jobicy',mu:'The Muse',an:'Arbeitnow',gh:'company board',lv:'company board',ab:'company board',rc:'company board',ps:'public-sector board'};
 function via(id){return VIA[String(id).split(':')[0]]||''}
+async function loadLi(){try{const d=await api('/api/linkedin');$('#lilist').innerHTML='<p class="mute">'+esc(d.how)+'</p>'+d.searches.map(function(x,i){return '<div class="lis"><div class="t">'+esc(x.label)+'</div><div class="mute">Why it fits: '+esc(x.why)+'</div><div class="acts big">'+x.links.map(function(l){return '<a class="btn" href="'+esc(l.linkedin)+'" target="_blank" rel="noopener">LinkedIn: '+esc(l.place)+'</a>'}).join('')+'</div><div class="acts">'+(x.links[0]?'<a href="'+esc(x.links[0].google)+'" target="_blank" rel="noopener">Same search on Google</a><a href="'+esc(x.links[0].indeed)+'" target="_blank" rel="noopener">On Indeed</a>':'')+'<button class="cpy" data-i="'+i+'">Copy search words</button></div></div>'}).join('');$('#lilist').querySelectorAll('.cpy').forEach(function(b){b.onclick=function(){var q=d.searches[+b.dataset.i].q;(navigator.clipboard?navigator.clipboard.writeText(q):Promise.reject()).then(function(){b.textContent='Copied'},function(){prompt('Copy this',q)})}})}catch(e){$('#lilist').textContent='Could not load the searches: '+e.message}}
+loadLi();
 function li(a){return a&&a.length?'<ul>'+a.map(x=>'<li>'+esc(x)+'</li>').join('')+'</ul>':'<p class="mute">none</p>'}
 $('#jgo').onclick=async()=>{const r=$('#jres');r.textContent='Reading the posting...';try{const d=await authed(()=>api('/api/analyze',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({input:$('#jin').value,title:$('#jtitle').value,company:$('#jco').value})}));window._last=d;
  r.innerHTML='<div class="card"><div class="t">'+esc(d.verdict)+' ('+d.fit_score+')  '+esc(d.title)+'</div><div class="mute">'+esc(d.company)+' | '+esc(d.location)+'</div><div>'+(d.would_appear_in_your_search?'Would appear in your search.':'Would NOT appear in your search: '+esc(d.why_not_in_search.join('; ')))+'</div><h4>Why</h4>'+li(d.why)+'<h4>Your record that fits</h4>'+li(d.strengths.map(x=>x.text))+'<h4>Gaps and checks</h4>'+li(d.gaps.concat(d.flags))+'<div class="acts"><button class="fb" data-v="like">More like this</button><button class="fb" data-v="dislike">Not for me</button></div><span id="fbmsg" class="mute"></span>'+kwHtml(d.keywords)+(d.apply?'<div class="acts"><button class="p" id="japply">Apply: download resume and copy kit</button></div>':'')+(d.draft.resume?'<details><summary>Verified resume and note for this job</summary><pre>'+esc(d.draft.resume)+'</pre><pre>'+esc(d.draft.note)+'</pre></details>':'<p class="flag">Draft blocked: '+esc(d.draft.blocked)+'</p>')+'</div>';
@@ -2557,11 +3196,13 @@ function kitPanel(el,id,k){
  el.innerHTML='<div class="note"><b>Application kit for '+esc(k.company)+'</b> ('+esc(k.ats)+(k.fresh?', rebuilt from the posting as it reads now':', draft from match time')+'). Press <b>Open application and copy kit</b>: the resume downloads, the kit is copied and the application opens. There click your <b>Fill application</b> bookmark, check everything and submit.</div>'
   +kwHtml(k.keywords)+'<h4>Left for you</h4>'+li(k.left_for_you)
   +'<div class="acts"><button class="p" data-act="open">Open application and copy kit</button><button data-act="copy">Copy kit again</button><button data-act="dl">Download resume .docx</button><a href="/api/matches/'+encodeURIComponent(id)+'/resume.html" target="_blank" rel="noopener"><button>Resume as PDF (print)</button></a><button data-act="done">I submitted it</button></div>'}
-$('#list').addEventListener('mouseover',function(e){var b=e.target.closest&&e.target.closest('.ap');if(b)warm(b.dataset.id)});
+$('#list').addEventListener('mouseover',function(e){var b=e.target.closest&&e.target.closest('.ap');if(b&&(b.dataset.q==='0'||b.closest('.card').dataset.recalled))warm(b.dataset.id)});
 $('#list').addEventListener('click',async function(e){
  var b=e.target.closest&&e.target.closest('.ap,[data-act]');if(!b)return;
  var card=b.closest('.card'),id=card.id.slice(2),el=card.querySelector('.art'),k=KREADY[id];
  if(b.classList.contains('ap')){
+  if(!card.dataset.recalled&&!(await recallGate(card,id,el)))return;
+  k=KREADY[id];
   if(k){fireKit(k);kitPanel(el,id,k);return}
   el.innerHTML='<div class="mute">Building the kit from the posting and your CV...</div>';
   try{k=await authed(function(){return warm(id)});kitPanel(el,id,k)}catch(err){el.innerHTML='<div class="flag">'+esc(err.message)+'</div>'}
@@ -2571,33 +3212,45 @@ $('#list').addEventListener('click',async function(e){
 $('#bm').setAttribute('href',bookmarkHref());$('#bm').onclick=function(e){e.preventDefault();alert('Drag this button to your bookmarks bar. Do not click it here.')};
 api('/api/followups').then(function(f){if(!f.count)return;window.FU=f.items;$('#follow').innerHTML='<div class="note"><b>'+f.count+' application(s) with no reply after 7 days.</b> '+f.items.map(function(x,i){return esc(x.title)+' at '+esc(x.company)+' ('+x.days_waiting+' days) <button data-fu="'+i+'">Copy follow-up</button>'}).join(' | ')+'</div>'}).catch(function(e){console.warn('followups: '+e.message)});
 $('#follow').addEventListener('click',function(e){var b=e.target.closest&&e.target.closest('[data-fu]');if(b)navigator.clipboard.writeText(window.FU[+b.dataset.fu].note)});
-$('#ready').onclick=function(){$('#tier').value='A';$('#status').value='pending_owner_approval';load()};
+$('#ready').onclick=function(){$('#tier').value='A';$('#status').value='';load()};
+${RECALL_UI_JS}
 load();who();loadPrefs();
 </script></body></html>`;
 
 // ------------------------------------------------------------------ CV page (JOBSEARCH-CV-1): interview, review, edit, resume per job, history. Plain JS, talks only to /api/cv* and /api/analyze.
 // JOBSEARCH-PREP-UI-1: three tabs on one phone page (check fit, answers, interview prep) over the 1.9.0 routes.
-const PREP_UI = String.raw`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Apply and prepare</title>
-<style>
-:root{--bg:#f6f8fb;--ink:#16202e;--mut:#4f5b6b;--line:#e3e8ef;--brand:#2457d6;--ok:#16794c;--warn:#8a4b00;--bad:#b3261e}
-*{box-sizing:border-box}body{margin:0;font:16px/1.5 system-ui,Segoe UI,sans-serif;color:var(--ink);background:var(--bg)}
-header{background:#fff;border-bottom:1px solid var(--line);padding:8px 14px;position:sticky;top:0;z-index:5}
-header h1{font-size:18px;margin:0 0 4px}header a{color:var(--brand);margin-right:14px;display:inline-block;padding:6px 0}
-nav{display:flex;gap:6px;flex-wrap:wrap}nav button{flex:1;min-width:96px;min-height:44px;border:1px solid var(--line);background:#fff;border-radius:10px;font:inherit;font-weight:600;color:var(--mut)}
-nav button.on{color:#fff;background:var(--brand);border-color:var(--brand)}
-main{padding:12px 14px 40px;max-width:720px;margin:0 auto}
-.card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin:10px 0}
-textarea{width:100%;min-height:96px;font:inherit;padding:10px;border:1px solid var(--line);border-radius:10px}
-button.b{min-height:44px;padding:0 16px;border:1px solid var(--line);background:#fff;border-radius:10px;font:inherit;font-weight:600;margin:4px 6px 4px 0}
-button.pri{background:var(--brand);color:#fff;border-color:var(--brand)}
-.mut{color:var(--mut)}.ok{color:var(--ok)}.warn{color:var(--warn)}.bad{color:var(--bad)}.hide{display:none}
-h2{font-size:17px;margin:0 0 6px}h3{font-size:15px;margin:10px 0 4px}ul{margin:4px 0 4px 18px;padding:0}
-input{font:inherit;padding:10px;border:1px solid var(--line);border-radius:10px;width:9em}
-.big{font-size:28px;font-weight:700}
-</style></head><body>
-<header><h1>Apply and prepare</h1><a href="/">Matches</a><a href="/cv">Your CV</a>
-<nav id="nav"><button data-t="check" class="on">Check fit</button><button data-t="answers">Answers</button><button data-t="prep">Interview prep</button></nav></header>
-<main>
+// JOBS-DESIGN-2 (DESIGN-SYSTEM-2, #9926): /cv and /prep on the shared design system. The CSS maps the classes the two page scripts already
+// emit (card, b, pri, link, row, fact, hint, gap, good, tag, bar, toast) onto the design tokens, so the scripts keep their element ids and logic.
+const JOBS_FORM_CSS = ".ds-seg{margin:0 0 16px}@media (max-width:560px){.ds-seg.ds-seg-row{grid-auto-flow:column;grid-template-columns:none}.ds-seg.ds-seg-scroll{grid-auto-flow:column;grid-template-columns:none;grid-auto-columns:max-content;overflow-x:auto;scrollbar-width:none}.ds-seg.ds-seg-scroll button{padding:8px 14px}}.ds-seg button.on{background:var(--ds-surface);color:var(--ds-ink);box-shadow:var(--ds-shadow)}"
+ + ".card{background:var(--ds-surface);border:1px solid var(--ds-line);border-radius:16px;padding:16px;margin:0 0 12px;box-shadow:var(--ds-shadow)}@media (min-width:720px){.card{padding:24px}}"
+ + ".card h2{margin:0 0 6px;font-size:20px}.card h3{margin:16px 0 6px;font-size:17px}.card>h2:first-child,.card>h3:first-child{margin-top:0}"
+ + ".ds button.b{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:44px;padding:10px 16px;margin:4px 8px 4px 0;border-radius:12px;border:1px solid var(--ds-line-strong);background:var(--ds-surface);color:var(--ds-ink);font:600 15px/1.2 var(--ds-font);cursor:pointer}"
+ + ".ds button.b:hover{background:var(--ds-surface-2)}.ds button.b.pri{background:var(--ds-accent);border-color:var(--ds-accent);color:var(--ds-on-accent)}.ds button.b.pri:hover{background:var(--ds-accent-hover)}"
+ + ".ds button.b.yes{background:var(--ds-good-soft);border-color:var(--ds-good);color:var(--ds-good)}.ds button.b.bad,.ds button.link.bad{color:var(--ds-bad)}"
+ + ".ds button.link{display:inline-flex;align-items:center;min-height:44px;background:none;border:0;color:var(--ds-accent);cursor:pointer;font:600 15px var(--ds-font);padding:10px 14px 10px 0}"
+ + ".mut{color:var(--ds-ink-2)}.ok{color:var(--ds-good)}.warn{color:var(--ds-warn)}.bad{color:var(--ds-bad)}.hide{display:none!important}"
+ + ".ds textarea{min-height:96px;resize:vertical}.row{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end}.row>div{flex:1;min-width:140px}"
+ + ".row input,.fact input:not([type=checkbox]),.fact select,.card select{width:100%}"
+ + ".ds label{display:block;font-weight:600;margin:12px 0 4px;font-size:14px;color:var(--ds-ink-2)}"
+ + ".bar{height:6px;background:var(--ds-surface-2);border-radius:99px;overflow:hidden;margin-bottom:16px}.bar i{display:block;height:100%;background:var(--ds-accent);border-radius:99px}"
+ + ".sec{color:var(--ds-ink-2);font-weight:600;font-size:14px;letter-spacing:.02em}.q{font-size:20px;font-weight:650;margin:8px 0 4px;line-height:1.35}"
+ + ".hint{background:var(--ds-accent-soft);border-radius:12px;padding:12px 14px;font-size:15px;color:var(--ds-ink);margin:12px 0}"
+ + ".fact{border:1px solid var(--ds-line);border-radius:12px;padding:12px 14px;margin:10px 0;background:var(--ds-surface)}"
+ + ".tag{display:inline-block;background:var(--ds-surface-2);border-radius:99px;padding:2px 10px;font-size:13px;margin:4px 4px 0 0;color:var(--ds-ink-2)}"
+ + ".gap{border-left:4px solid var(--ds-warn);background:var(--ds-warn-soft);padding:12px 14px;border-radius:0 12px 12px 0;margin:8px 0}"
+ + ".good{border-left:4px solid var(--ds-good);background:var(--ds-good-soft);padding:12px 14px;border-radius:0 12px 12px 0;margin:8px 0}"
+ + ".signbox{background:var(--ds-warn-soft);border:1px solid var(--ds-line);border-radius:12px;padding:16px;margin-bottom:16px}"
+ + ".toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--ds-ink);color:var(--ds-surface);padding:12px 20px;border-radius:12px;z-index:30;font-weight:600}"
+ + ".resume{background:var(--ds-surface);color:var(--ds-ink);border:1px solid var(--ds-line);padding:24px;border-radius:12px;font-family:Georgia,serif;font-size:16px;line-height:1.5;overflow-x:auto}@media (min-width:720px){.resume{padding:36px 44px}}"
+ + ".resume h1{font-size:25px;margin:0 0 2px}.resume h2{font-size:14px;text-transform:uppercase;letter-spacing:.08em;border-bottom:1px solid var(--ds-line-strong);padding-bottom:3px;margin:18px 0 8px}"
+ + ".resume ul{margin:4px 0 8px;padding-left:20px}.resume p{margin:3px 0}.note{white-space:pre-wrap;background:var(--ds-surface);border:1px solid var(--ds-line);border-radius:12px;padding:20px;font-family:Georgia,serif}"
+ + ".big{font-size:28px;font-weight:700;font-variant-numeric:tabular-nums}.card ul{margin:4px 0 8px 20px;padding:0}"
+ + "@media print{.ds-top,.ds-seg,.ds-head,.noprint{display:none!important}body.ds{background:#fff;color:#000}.ds-main{margin:0;max-width:none;padding:0}.resume{border:0;padding:0;background:#fff;color:#000}}";
+const PREP_UI = String.raw`<!doctype html><html lang="en"><head>${dsHead("Apply and prepare", "Check a job's fit, draft the application answers and prepare for the interview, from your own record.", JOBS_FORM_CSS)}</head><body class="ds">
+<a class="ds-skip" href="#main">Skip to content</a>
+<header class="ds-top"><div class="ds-top-in"><a class="ds-brand" href="/">Jobs</a><a class="btn btn-quiet" href="/">Matches</a><a class="btn btn-quiet" href="/cv">Your CV</a></div></header>
+<main class="ds-main" id="main"><div class="ds-head"><h1>Apply and prepare</h1><p>Paste one job, then check the fit, draft your answers or practise the interview.</p></div>
+<nav id="nav" class="ds-seg ds-seg-row" aria-label="What to do with this job"><button data-t="check" class="on">Check fit</button><button data-t="answers">Answers</button><button data-t="prep">Interview prep</button></nav>
 <div id="signbox" class="hide"></div>
 <div class="card"><h2>The job</h2><p class="mut">Paste the job link, or the posting text.</p><textarea id="job" placeholder="https://... or paste the posting"></textarea></div>
 <section id="t-check"><div class="card"><button class="b pri" id="go-check">Check fit</button><div id="out-check" class="mut">Nothing checked yet.</div></div></section>
@@ -2628,10 +3281,10 @@ $('#go-check').onclick=async function(){var o=$('#out-check');try{var v=job();bu
  if(j){h+='<h3>Why the model reads it this way</h3>'+list(j.reasons)+'<h3>Gaps</h3>'+list(j.gaps)}
  h+='<h3>Your strengths for this role</h3>'+list((d.strengths||[]).map(function(s){return s.text}));
  if(d.flags&&d.flags.length)h+='<h3>Check before applying</h3>'+list(d.flags);
- h+='<h3>Which is right?</h3><button class="b" data-v="qualified">I am qualified</button><button class="b" data-v="stretch">A stretch</button><button class="b" data-v="not_qualified">Not qualified</button><div id="cal" class="mut"></div>';
+ h+='<h3>Which is right?</h3><div class="ds-choices" role="group" aria-label="Your own read of the fit"><button data-v="qualified" aria-pressed="false">Qualified</button><button data-v="stretch" aria-pressed="false">A stretch</button><button data-v="not_qualified" aria-pressed="false">Not qualified</button></div><div id="cal" class="mut"></div>';
  if(d.apply&&d.apply.resume_pdf_b64)h+='<h3>Resume</h3><button class="b pri" id="dl-pdf">Download resume PDF</button>';
  o.className='';o.innerHTML=h;
- o.querySelectorAll('button[data-v]').forEach(function(b){b.onclick=async function(){try{await authed(function(){return api('/api/calibrate',{owner:b.dataset.v,title:d.title,company:d.company,rubric_fit:d.fit_score,judge_fit:j?j.fit:null})});$('#cal').textContent='Saved. Thank you: this is how the scoring learns.'}catch(e){$('#cal').textContent=e.message}}});
+ o.querySelectorAll('button[data-v]').forEach(function(b){b.onclick=async function(){o.querySelectorAll('button[data-v]').forEach(function(x){x.setAttribute('aria-pressed',x===b?'true':'false')});try{await authed(function(){return api('/api/calibrate',{owner:b.dataset.v,title:d.title,company:d.company,rubric_fit:d.fit_score,judge_fit:j?j.fit:null})});$('#cal').textContent='Saved. Thank you: this is how the scoring learns.'}catch(e){$('#cal').textContent=e.message}}});
  var dl=$('#dl-pdf');if(dl)dl.onclick=function(){var bin=atob(d.apply.resume_pdf_b64),u=new Uint8Array(bin.length);for(var i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);var a=document.createElement('a');a.href=URL.createObjectURL(new Blob([u],{type:'application/pdf'}));a.download=d.apply.resume_pdf_file||'resume.pdf';a.click()}
 }catch(e){fail(o,e)}};
 $('#go-answers').onclick=async function(){var o=$('#out-answers');try{var v=job(),qs=$('#qs').value.split('\n').map(function(x){return x.trim()}).filter(Boolean);if(!qs.length)throw new Error('Add at least one question.');busy(o,'Drafting from your record...');
@@ -2652,33 +3305,12 @@ $('#go-fb').onclick=async function(){var o=$('#out-fb');try{var a=$('#qans').val
  o.innerHTML='<div class="big">'+esc(f.score)+' / 5</div><h3>Worked</h3>'+list(f.strengths)+'<h3>Fix</h3>'+list(f.fixes)+(f.unsupported_claims.length?'<h3 class="warn">Not backed by your record</h3>'+list(f.unsupported_claims):'')+'<h3>Stronger version</h3><p>'+esc(f.stronger_outline)+'</p><h3>Likely follow-up</h3><p>'+esc(f.follow_up)+'</p>'
 }catch(e){fail(o,e)}};
 </script></body></html>`;
-const CV_UI = String.raw`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Your CV</title>
-<style>
-:root{--bg:#f6f8fb;--ink:#16202e;--mut:#5b6778;--line:#e3e8ef;--brand:#2457d6;--ok:#16794c;--warn:#a65b00;--bad:#b3261e}
-*{box-sizing:border-box}body{margin:0;font:16px/1.5 system-ui,Segoe UI,sans-serif;color:var(--ink);background:var(--bg)}
-header{background:#fff;border-bottom:1px solid var(--line);padding:0 20px;display:flex;align-items:center;gap:24px;position:sticky;top:0;z-index:5;flex-wrap:wrap}
-header h1{font-size:18px;margin:0;padding:14px 0}nav button{background:none;border:0;border-bottom:3px solid transparent;padding:18px 12px 15px;font:inherit;font-weight:600;color:var(--mut);cursor:pointer}
-nav button.on{color:var(--brand);border-color:var(--brand)}header a{color:var(--brand);margin-left:auto}
-main{max-width:880px;margin:24px auto;padding:0 16px}.card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:24px;margin-bottom:16px}
-h2{margin:0 0 6px;font-size:21px}h3{margin:18px 0 6px;font-size:16px}.mut{color:var(--mut)}.sec{color:var(--brand);font-weight:700;font-size:13px;text-transform:uppercase;letter-spacing:.06em}
-.q{font-size:21px;font-weight:600;margin:10px 0 20px;line-height:1.35}.row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}.row>div{flex:1;min-width:140px}
-button.b{font:inherit;font-weight:700;border-radius:10px;border:1px solid var(--line);background:#fff;padding:11px 22px;cursor:pointer;color:var(--ink)}button.b:hover{border-color:var(--brand)}
-button.yes{background:var(--ok);color:#fff;border-color:var(--ok)}button.pri{background:var(--brand);color:#fff;border-color:var(--brand)}button.bad{color:var(--bad)}
-button.link{background:none;border:0;color:var(--brand);cursor:pointer;font:inherit;padding:4px 8px 4px 0}
-textarea,input,select{width:100%;font:inherit;padding:10px;border:1px solid #c9d2df;border-radius:10px;background:#fff}textarea{min-height:84px;resize:vertical}
-label{display:block;font-weight:600;margin:12px 0 4px;font-size:14px}.bar{height:8px;background:var(--line);border-radius:8px;overflow:hidden;margin-bottom:18px}.bar i{display:block;height:100%;background:var(--brand)}
-.hint{background:#eef3ff;border-radius:10px;padding:12px 14px;font-size:14px;color:#2b3f6b;margin:10px 0}.fact{border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin:10px 0}
-.tag{display:inline-block;background:#eef1f6;border-radius:99px;padding:1px 9px;font-size:12px;margin:2px 3px 0 0;color:var(--mut)}
-.resume{background:#fff;border:1px solid var(--line);padding:36px 44px;border-radius:6px;font-family:Georgia,serif;font-size:15px;line-height:1.45}
-.resume h1{font-size:25px;margin:0 0 2px}.resume h2{font-size:14px;text-transform:uppercase;letter-spacing:.08em;border-bottom:1px solid #999;padding-bottom:3px;margin:18px 0 8px}
-.resume ul{margin:4px 0 8px;padding-left:20px}.resume p{margin:3px 0}.note{white-space:pre-wrap;background:#fff;border:1px solid var(--line);border-radius:6px;padding:20px;font-family:Georgia,serif}
-.gap{border-left:4px solid var(--warn);background:#fff8ee;padding:10px 14px;border-radius:0 10px 10px 0;margin:8px 0}.good{border-left:4px solid var(--ok);background:#effaf4;padding:10px 14px;border-radius:0 10px 10px 0;margin:8px 0}
-.hide{display:none}.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#16202e;color:#fff;padding:10px 18px;border-radius:10px;z-index:9}
-.signbox{background:#fff8e1;border:1px solid #f0d98a;border-radius:10px;padding:14px;margin-bottom:16px}
-@media print{header,.noprint{display:none!important}body{background:#fff}main{margin:0;max-width:none;padding:0}.resume{border:0;padding:0}}
-</style></head><body>
-<header><h1>Your CV</h1><nav id="nav"><button data-t="story" class="on">Interview</button><button data-t="review">Review</button><button data-t="cv">Your CV</button><button data-t="resume">Resume for a job</button><button data-t="hist">History</button></nav><a href="/">Job matches</a></header>
-<main><div id="signbox" class="hide"></div><section id="story"></section><section id="review" class="hide"></section><section id="cv" class="hide"></section><section id="resume" class="hide"></section><section id="hist" class="hide"></section></main>
+const CV_UI = String.raw`<!doctype html><html lang="en"><head>${dsHead("Your CV", "Your verified CV: answer short questions, review claims, edit your record and build a resume for one job.", JOBS_FORM_CSS)}</head><body class="ds">
+<a class="ds-skip" href="#main">Skip to content</a>
+<header class="ds-top noprint"><div class="ds-top-in"><a class="ds-brand" href="/">Jobs</a><a class="btn btn-quiet" href="/">Matches</a><a class="btn btn-quiet" href="/prep">Apply and prepare</a></div></header>
+<main class="ds-main" id="main"><div class="ds-head"><h1>Your CV</h1><p>Every resume is built only from what you confirm here.</p></div>
+<nav id="nav" class="ds-seg ds-seg-scroll" aria-label="CV sections"><button data-t="story" class="on">Questions</button><button data-t="review">Review</button><button data-t="cv">Edit CV</button><button data-t="resume">Resume for a job</button><button data-t="hist">History</button></nav>
+<div id="signbox" class="hide"></div><section id="story"></section><section id="review" class="hide"></section><section id="cv" class="hide"></section><section id="resume" class="hide"></section><section id="hist" class="hide"></section></main>
 <div id="toast" class="toast hide"></div>
 <script>
 var S=null,qi=0,draft=[{}],last=null,cur='story';
@@ -2706,7 +3338,7 @@ function rStory(){
  var q=qs[qi];
  if(q.answer=='y'&&q.facts.length&&draft._q!==q.id){draft=q.facts.map(function(f){return {text:f.text,role:f.role}});draft._q=q.id}
  $('#story').innerHTML='<div class="card"><div class="bar"><i style="width:'+(done/qs.length*100)+'%"></i></div><div class="sec">'+esc(q.section)+' · '+(qi+1)+' of '+qs.length+'</div><div class="q">'+esc(q.ask)+'</div>'
-  +'<div class="row"><button class="b yes" onclick="pick(\'y\')">Yes</button><button class="b" onclick="pick(\'n\')">No</button><button class="b" onclick="step(1)">Skip for now</button></div>'
+  +'<div class="ds-choices" role="group" aria-label="Your answer"><button aria-pressed="'+(q.answer=='y')+'" onclick="pick(\'y\')">Yes</button><button aria-pressed="'+(q.answer=='n')+'" onclick="pick(\'n\')">No</button><button aria-pressed="false" onclick="step(1)">Not sure</button></div>'
   +(q.answer?'<p class="mut">Your earlier answer: <b>'+(q.answer=='y'?'Yes':'No')+'</b></p>':'')
   +'<div id="detail" class="'+(q.answer=='y'||draft._open?'':'hide')+'"></div>'
   +'<p style="margin-top:20px"><button class="link" onclick="step(-1)">← Back</button><button class="link" onclick="step(1)">Next →</button></p></div>';
@@ -2728,12 +3360,12 @@ async function rv(id,action){try{await authed(function(){return api('/api/cv/rev
 function rCv(){
  var p=S.person;
  $('#cv').innerHTML='<div class="card"><h2>Your CV</h2><p class="mut">Last confirmed '+esc(S.verified_on||'never')+'. Everything a resume can say about you is here; changes apply to every future resume and re-run the job search.</p>'
-  +'<h3>Summary</h3><textarea id="c_sum" style="min-height:120px">'+esc(S.summary)+'</textarea><p><button class="b pri" onclick="saveSet({summary:$(\'#c_sum\').value})">Save summary</button></p></div>'
-  +'<div class="card"><h3>Contact</h3><div class="row"><div><label>Location</label><input id="p_loc" value="'+esc(p.location)+'"></div><div><label>Email on resumes</label><input id="p_mail" value="'+esc(p.email)+'"></div></div><div class="row"><div><label>LinkedIn</label><input id="p_li" value="'+esc(p.links.linkedin)+'"></div><div><label>Website</label><input id="p_site" value="'+esc(p.links.site)+'"></div></div><p><button class="b pri" onclick="saveSet({person:{location:$(\'#p_loc\').value,email:$(\'#p_mail\').value,links:{linkedin:$(\'#p_li\').value,site:$(\'#p_site\').value}}})">Save contact</button></p></div>'
-  +'<div class="card"><h3>Roles</h3><div id="roles"></div><p><button class="b" onclick="addRole()">+ Add a role</button> <button class="b pri" onclick="saveRoles()">Save roles</button></p></div>'
+  +'<h3>Summary</h3><textarea id="c_sum" style="min-height:120px">'+esc(S.summary)+'</textarea><p><button class="b" onclick="saveSet({summary:$(\'#c_sum\').value})">Save summary</button></p></div>'
+  +'<div class="card"><h3>Contact</h3><div class="row"><div><label>Location</label><input id="p_loc" value="'+esc(p.location)+'"></div><div><label>Email on resumes</label><input id="p_mail" value="'+esc(p.email)+'"></div></div><div class="row"><div><label>LinkedIn</label><input id="p_li" value="'+esc(p.links.linkedin)+'"></div><div><label>Website</label><input id="p_site" value="'+esc(p.links.site)+'"></div></div><p><button class="b" onclick="saveSet({person:{location:$(\'#p_loc\').value,email:$(\'#p_mail\').value,links:{linkedin:$(\'#p_li\').value,site:$(\'#p_site\').value}}})">Save contact</button></p></div>'
+  +'<div class="card"><h3>Roles</h3><div id="roles"></div><p><button class="b" onclick="addRole()">+ Add a role</button> <button class="b" onclick="saveRoles()">Save roles</button></p></div>'
   +'<div class="card"><h3>Achievements ('+S.facts.length+')</h3><p><button class="b" onclick="newFact()">+ Add an achievement</button></p><div id="fedit"></div><div id="facts"></div></div>'
-  +'<div class="card"><h3>Publications</h3><div id="pubs"></div><p><button class="b" onclick="addPub()">+ Add a publication</button> <button class="b pri" onclick="savePubs()">Save publications</button></p></div>'
-  +'<div class="card"><h3>Education (one per line)</h3><textarea id="c_edu">'+esc(S.education.join(String.fromCharCode(10)))+'</textarea><h3>Certifications (one per line)</h3><textarea id="c_cert">'+esc(S.certifications.join(String.fromCharCode(10)))+'</textarea><h3>Skills (comma separated)</h3><textarea id="c_sk">'+esc(S.skills.map(function(s){return s.name}).join(', '))+'</textarea><p><button class="b pri" onclick="saveLists()">Save these lists</button></p></div>'
+  +'<div class="card"><h3>Publications</h3><div id="pubs"></div><p><button class="b" onclick="addPub()">+ Add a publication</button> <button class="b" onclick="savePubs()">Save publications</button></p></div>'
+  +'<div class="card"><h3>Education (one per line)</h3><textarea id="c_edu">'+esc(S.education.join(String.fromCharCode(10)))+'</textarea><h3>Certifications (one per line)</h3><textarea id="c_cert">'+esc(S.certifications.join(String.fromCharCode(10)))+'</textarea><h3>Skills (comma separated)</h3><textarea id="c_sk">'+esc(S.skills.map(function(s){return s.name}).join(', '))+'</textarea><p><button class="b" onclick="saveLists()">Save these lists</button></p></div>'
   +'<div class="card"><h3>Backup</h3><p class="mut">Download your whole CV as a file, or restore one.</p><p><a href="/api/cv/export" download="cv-backup.json"><button class="b">Download backup</button></a> <input type="file" id="imp" accept="application/json" style="width:auto"></p></div>';
  drawRoles();drawFacts();drawPubs();$('#imp').onchange=importFile}
 async function saveSet(d){try{await authed(function(){return api('/api/cv/set',d)});await load();toast('Saved');rCv()}catch(e){alert(e.message)}}
@@ -2767,7 +3399,7 @@ function show(r){
  var gaps=(r.cv_gaps||[]).map(function(g){return '<div class="gap"><b>The posting asks for '+esc(g.cluster.replace(/_/g,' '))+' and your CV does not mention it.</b> Have you done any of this?'+g.questions.map(function(q){return '<div style="margin-top:6px">'+esc(q.ask)+' <button class="link" onclick="jump(\''+esc(q.id)+'\')"><b>Answer →</b></button></div>'}).join('')+'</div>'}).join('');
  var d=r.draft||{};
  $('#out').innerHTML='<div class="card noprint"><h2>'+esc(r.verdict)+' ('+r.fit_score+')</h2><div class="mut">'+esc(r.title)+' · '+esc(r.company)+' · '+esc(r.location)+'</div><p>'+(r.would_appear_in_your_search?'This kind of role is in your job search.':'This role would not show up in your search: '+esc((r.why_not_in_search||[]).join('; ')))+'</p>'
-  +(d.resume?'<div class="row"><button class="b pri" onclick="window.print()">Print or save as PDF</button><button class="b" onclick="cp(last.draft.resume)">Copy resume</button><button class="b" onclick="cp(last.draft.note)">Copy cover note</button>'+(r.apply?'<button class="b" onclick="saveFile(last.apply.resume_file,last.apply.resume_docx_b64)">Download Word (.docx)</button><button class="b pri" onclick="fireKit(last.apply)">Apply</button>':'')+'</div>'+kwHtml(r.keywords):'<div class="gap">Draft blocked: '+esc(d.blocked)+'</div>')+'</div>'
+  +(d.resume?'<div class="row"><button class="b'+(r.apply?'':' pri')+'" onclick="window.print()">Print or save as PDF</button><button class="b" onclick="cp(last.draft.resume)">Copy resume</button><button class="b" onclick="cp(last.draft.note)">Copy cover note</button>'+(r.apply?'<button class="b" onclick="saveFile(last.apply.resume_file,last.apply.resume_docx_b64)">Download Word (.docx)</button><button class="b pri" onclick="fireKit(last.apply)">Apply</button>':'')+'</div>'+kwHtml(r.keywords):'<div class="gap">Draft blocked: '+esc(d.blocked)+'</div>')+'</div>'
   +(d.resume?'<div class="resume">'+md(d.resume)+'</div><h3 class="noprint">Cover note</h3><div class="note noprint">'+esc(d.note)+'</div>':'')
   +'<div class="noprint"><h3>'+((r.cv_gaps||[]).length?'Gaps to close':'No gaps found')+'</h3>'+(gaps||'<div class="good">Everything this posting asks for is covered by your CV.</div>')+'</div>'}
 function cp(t){navigator.clipboard.writeText(t);toast('Copied')}

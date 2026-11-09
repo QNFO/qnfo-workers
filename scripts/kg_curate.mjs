@@ -824,6 +824,14 @@ export function communities(act, sem, ids) {
   }
   return out;
 }
+// PAPER-DRIFT-1 (issue 9767): Paper nodes in the graph against the papers rows of living-paper (KG 1,226 Paper nodes vs 616 papers, 2026-07-20).
+// Signed drift: positive means the graph holds nodes with no live row. Null when the living-paper read did not run.
+export function paperCountDrift(ctx) {
+  if (!ctx.lp || !Array.isArray(ctx.lp.papers)) return { paper_nodes: null, papers_rows: null, paper_count_drift: null };
+  let nodes = 0; for (const n of ctx.nodes.values()) if (n.label === "Paper" && n.status == null && String(n.id).startsWith("paper:")) nodes++;
+  const rows = ctx.lp.papers.length;
+  return { paper_nodes: nodes, papers_rows: rows, paper_count_drift: nodes - rows };
+}
 export async function phaseAnalytics(ctx) {
   const g = computeGraph(ctx), n = g.act.length, rep = {};
   const deg = g.adj.map((l) => l.length), degSem = g.sem.map((l) => l.length);
@@ -847,6 +855,7 @@ export async function phaseAnalytics(ctx) {
     orphans, orphan_share: n ? round(100 * orphans / n, 2) : 0, components: g.size.size, giant_component_share: nonNote ? round(100 * giantNon / nonNote, 2) : 0, giant_component_share_all: n ? round(100 * giant / n, 2) : 0, notes_total: isNote.filter(Boolean).length, notes_bridged: notesBridged,
     orphans_by_label: Object.fromEntries(Object.entries(orphansByLabel).sort((a, b) => b[1] - a[1]).slice(0, 12)),
     edge_density: n ? round(g.nEdges / n, 3) : 0, non_structural_density: n ? round(g.nSem / n, 3) : 0,
+    ...paperCountDrift(ctx),
     papers_active: papers.length, paper_unrelated_share: papers.length ? round(100 * unrelated / papers.length, 2) : 0,
     dup_groups: groups.length, dup_groups_unresolved: unresolved, sim_category_agreement: ctx.agreement == null ? null : round(100 * ctx.agreement, 1),
     by_source: srcCount, by_relationship: Object.fromEntries(Object.entries(semByRel).sort((a, b) => b[1] - a[1]).slice(0, 25)),

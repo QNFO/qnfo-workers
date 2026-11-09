@@ -55,7 +55,7 @@ const idx = V.actionIndex({ value: m, causes: [{ cause: "structure", title: "S",
 for (const k of ["unit:paper", "unit:code", "unit:issue", "unit:pageviews", "cause:structure", "program:QNFO.OPS", "metric:open_agent_issues", "quality", "activity", "handling"]) ok(idx[k] && idx[k].meaning && idx[k].why && idx[k].fleet_default && idx[k].doer, "action entry for " + k, idx[k]);
 
 const visitor = V.valueSectionHtml(m, false, idx, e), owner = V.valueSectionHtml(m, true, idx, e);
-ok(/What is this, why am I seeing it/.test(visitor) && /sign in/.test(visitor) && !/data-vact="fix"/.test(visitor), "stranger: explanation and sign-in line, no buttons");
+ok(/What is this, why am I seeing it/.test(visitor) && /sign in/i.test(visitor) && !/data-vact="fix"/.test(visitor), "stranger: explanation and sign-in line, no buttons");
 ok(/data-vact="fix"/.test(owner) && /Tell the system/.test(owner) && /papers published per \$100/.test(owner), "owner: Fix it and Tell the system on every unit");
 ok((owner.match(/data-vact="fix"/g) || []).length === 4, "one Fix it per unit");
 ok(/<\/script>$/.test(V.VALUE_JS) && !/<\\\/script>/.test(V.VALUE_JS), "script tag closes");

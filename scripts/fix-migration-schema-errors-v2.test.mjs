@@ -10,7 +10,7 @@ const previousRegistration = `INSERT OR REPLACE INTO metric_registry (
 ) VALUES ('research_deferred_pool_pct', 'quality', '10', 'lower_is_better',
   'Percentage of research queue in deferred state', 'MEASURED');`;
 const table = (file, name) => {
-  const sql = readFileSync(new URL(`../migrations/${file}`, import.meta.url), 'utf8');
+  const sql = readFileSync(new URL(`../migrations/${file.startsWith('2026-11-06-kernel') ? 'retired/' + file + '.txt' : file}`, import.meta.url), 'utf8');
   const match = sql.match(new RegExp(`CREATE TABLE IF NOT EXISTS ${name} \\([\\s\\S]*?\\);`));
   assert.ok(match, `canonical ${name} definition exists`);
   return match[0];

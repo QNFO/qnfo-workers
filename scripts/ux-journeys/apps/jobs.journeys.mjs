@@ -10,6 +10,12 @@ export const journeys = [
       await u.see("One-click apply: set up once");
       await u.screen("home");
     } },
+  { id: "recall-card-is-quiet-when-signed-out", title: "Open jobs.q08.org signed out on a phone: the list and the preferences load and the owner-only recall question does not appear", modes: ["live"],
+    async run(u) {
+      await u.open("/");
+      await u.see("Search preferences: yes or no questions");
+      await u.screen("home-recall");
+    } },
   { id: "apply-and-prepare-screens", title: "Open the Apply and prepare page on a phone and see its three screens: check fit, answers, interview prep", modes: ["live"],
     async run(u) {
       await u.open("/prep");

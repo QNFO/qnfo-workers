@@ -36,8 +36,9 @@ import { Workspace, unsafeToRepeat } from "@cloudflare/computer";
 import { WorkerJavaScriptBackend } from "@cloudflare/computer/backends/worker-javascript";
 import { generateText, jsonSchema, stepCountIs, streamText, tool } from "ai";
 import { z } from "zod";
-import { filedMismatch, MAINTAIN_REQUESTER, MAINTAIN_PROMPT, maintainDue, verifyGithubSignature, githubEventRoute, githubEventPrompt, stepUsages, stepUsageStatements, trimCells, LEAN_CELL_CHARS, compactMessages, callerOf, clip, scopeOf, codeTaskText, opsToolAllowed, readOnlySql, repoPathOk, runId, safeToolName, scheduleWhen, sliceLines, DRAIN_PER_TICK, agentDrainPlan, agentNeurons, AGENT_DAILY_NEURONS_DEFAULT, AGENT_RUN_NEURONS_EST_DEFAULT, AGENT_SHED_MIN, loopInstance, validateRequest, EMPTY_TEXT, FINAL_ANSWER_ASK, pickAnswer, stripToolMarkup, toolTranscript, codeSessionNeurons, codeSessionCost, isDynamicRoute, leanCaller, leanConfigOn, capResult, LEAN_MAX_STEPS, LEAN_RESULT_CHARS, approvalPayload, pendingApprovalMatches, stagedActionArgs, APPROVAL_SUFFIX, approvalNext, searchSkills, approvalCardSpec } from "./lib.js";
+import { hooksFor, hookBlock, sweepEmpty, wantsSystemMap, systemMapUrl, systemMapNote, cfSkillFor, cfSkillUrl, cfSkillNote, filedMismatch, MAINTAIN_REQUESTER, MAINTAIN_PROMPT, maintainDue, verifyGithubSignature, githubEventRoute, githubEventPrompt, stepUsages, stepUsageStatements, trimCells, LEAN_CELL_CHARS, compactMessages, callerOf, clip, scopeOf, codeTaskText, opsToolAllowed, readOnlySql, repoPathOk, runId, safeToolName, scheduleWhen, sliceLines, DRAIN_PER_TICK, agentDrainPlan, agentNeurons, AGENT_DAILY_NEURONS_DEFAULT, AGENT_RUN_NEURONS_EST_DEFAULT, AGENT_SHED_MIN, loopInstance, validateRequest, EMPTY_TEXT, FINAL_ANSWER_ASK, pickAnswer, stripToolMarkup, toolTranscript, codeSessionNeurons, codeSessionCost, isDynamicRoute, leanCaller, leanConfigOn, capResult, LEAN_MAX_STEPS, LEAN_RESULT_CHARS, approvalPayload, pendingApprovalMatches, stagedActionArgs, APPROVAL_SUFFIX, approvalNext, searchSkills, approvalCardSpec, approvalExpired, APPROVAL_EXPIRY_MS, APPROVAL_EXPIRY_NOTE, redactSecrets, shareToken, shareTokenOk, renderShareHtml } from "./lib.js";
 import { approvalModules, approvalSource } from "./approval.js";
+import { FLEET_SKILLS, skillSearch, skillGet, tasksFromPlan, taskUpdate, taskSummary } from "./skills.js";
 import { withLifecycle, sessionBudgetStep, sessionTurnRoute, shouldEscalateUnanswered, CODE_SESSION_ROUTE_ESCALATE, sessionBudgetFrom, sandboxGate, sandboxPlan, sandboxPrRef, CODE_SESSION_BUDGET_DEFAULT, CODE_SESSION_REPLAY_REQUESTER, CODE_SESSION_REPLAY_BUDGET, CODE_SESSION_REPLAY_TURNS, sessionLaneStep, codeSessionDailyCap, codeSessionLaneAllowed, CODE_SESSION_LANE_CHEAP, APPROVAL_SELFTEST_REQUESTER, approvalSelftestSeed } from "./session.js";
 
 // VERSION is the first line of the bundle (build.mjs writes `var VERSION = "<package.json version>"` there for the fleet guards).
@@ -69,6 +70,8 @@ const REQUEST_STALE_MIN = 30;
 interface Env {
   AI: any;
   AUDIT_DB: D1Database;
+  // SHARE-LINK-1: shared transcripts live under shares/<token>.json.
+  SHARES: R2Bucket;
   LOADER: any;
   OPS: Fetcher;
   FleetCodeAgent: DurableObjectNamespace<FleetCodeAgent>;
@@ -144,6 +147,7 @@ interface SandboxGate {
   check(name: string, args: unknown): Promise<{ ok: true } | { ok: false; error: string }>;
   after(name: string, args: unknown, res: any): Promise<void>;
   propose(input: unknown): Promise<any>;
+  updateTask(input: unknown): Promise<any>;
 }
 async function opsCall(env: Env, scope: Scope, name: string, args: unknown, approval?: typeof APPROVED_SEND_EMAIL, gate?: SandboxGate): Promise<any> {
   if (!opsToolAllowed(name, scope)) return { ok: false, error: "'" + name + "' changes the fleet: it needs the write scope (on the console: cfagent! <request>, which asks for a fresh code)" };
@@ -214,6 +218,17 @@ function directTools(c: ToolCtx): Record<string, any> {
       execute: async (i: any) => readRepoFile(i)
     })
   };
+  // SKILL-SEARCH-1 (issue 9675): the skill repository is searchable by keyword; a search and the skill used after it are logged so the discovery rate is measurable.
+  t.skill_search = tool({
+    description: "Search the fleet's skill repository by keyword (e.g. 'revert a pr', 'bump version', 'durable object'). Returns the best matching skills; call skill_get with a name to read the steps.",
+    inputSchema: z.object({ query: z.string().describe("what you want to do, in a few words") }),
+    execute: async (i: any) => skillLookup(c.env, "search", String(i.query || ""), c.caller)
+  });
+  t.skill_get = tool({
+    description: "Read one skill from the skill repository by its exact name (from skill_search). Counts as using it.",
+    inputSchema: z.object({ name: z.string() }),
+    execute: async (i: any) => skillLookup(c.env, "use", String(i.name || ""), c.caller)
+  });
   if (c.scope === "public") return t;
   t.fleet_sql = tool({
     description: "Read-only SQL (one SELECT or WITH) on the fleet's D1 qnfo-audit: agent_issues, v_issue_queue, code_tasks, metric_registry, v_metric_trigger_state, fleet_deploys, decision_log and the rest. Sign-in and secret tables are refused.",
@@ -281,6 +296,11 @@ function directTools(c: ToolCtx): Record<string, any> {
       inputSchema: z.object({ title: z.string(), steps: z.array(z.string()), files: z.array(z.string()).optional() }),
       execute: async (i: any) => gate.propose(i)
     });
+    t.update_task = tool({
+      description: "Move one step of the plan's task list: id (1-based step number) and status todo, doing or done. The list is kept with the session, so the owner sees it after a reload or on another device. Mark a step doing when you start it and done when it is verified.",
+      inputSchema: z.object({ id: z.number(), status: z.enum(["todo", "doing", "done"]) }),
+      execute: async (i: any) => gate.updateTask(i)
+    });
   }
   if (c.agent) {
     const agent = c.agent;
@@ -329,7 +349,33 @@ async function codeModeTool(c: ToolCtx, direct: Record<string, any>) {
   return createCodeTool({ tools: fns as any, executor, description: "Run JavaScript in an isolated sandbox. Inside it, every fleet tool is an async function on `codemode` (codemode.repo_read_file, codemode.fleet_sql, codemode.ops_<qnfo-ops tool>, ...). Use it to chain several calls, loop over results or compute; return the value you want back." } as any);
 }
 
+// CMDLINE-HOOKS-1: cmd_hooks rows (qnfo-audit) are checked around every tool call, outside the model. A pre_tool block answers the call with a refusal naming the hook;
+// a notify hook records the call in cmd_hook_events. No table, no rows or a read failure means no hooks: a hook never fails a turn.
 async function allTools(c: ToolCtx) {
+  const tools = await allToolsRaw(c);
+  let hooks: any[] = [];
+  try { hooks = ((await c.env.AUDIT_DB.prepare("SELECT id, event, matcher, action, note FROM cmd_hooks WHERE enabled = 1 LIMIT 50").all()).results || []) as any[]; } catch (e) { return tools; }
+  if (!hooks.length) return tools;
+  const out: Record<string, any> = {};
+  for (const name of Object.keys(tools)) {
+    const t = tools[name];
+    if (!t || typeof t.execute !== "function") { out[name] = t; continue; }
+    out[name] = Object.assign({}, t, {
+      execute: async (...a: any[]) => {
+        const b = hookBlock(hooks, name);
+        const note = (event: string, h: any, detail: string) => c.env.AUDIT_DB.prepare("INSERT INTO cmd_hook_events (hook_id, event, tool, detail, created_ms) VALUES (?1, ?2, ?3, ?4, ?5)").bind(h.id, event, name, detail.slice(0, 300), Date.now()).run().catch((e: any) => logErr("hook-event", e));
+        if (b.blocked) { for (const h of hooksFor(hooks, "pre_tool", name)) if (h.id === b.hook) void note("pre_tool", h, "blocked"); return { ok: false, error: b.error }; }
+        for (const h of hooksFor(hooks, "pre_tool", name)) if (h.action === "notify") void note("pre_tool", h, "called");
+        const res = await t.execute(...a);
+        for (const h of hooksFor(hooks, "post_tool", name)) if (h.action === "notify") void note("post_tool", h, "done");
+        return res;
+      }
+    });
+  }
+  return out;
+}
+
+async function allToolsRaw(c: ToolCtx) {
   const direct = directTools(c);
   const tools: Record<string, any> = Object.assign({}, direct);
   if (c.lean) return tools;
@@ -408,11 +454,46 @@ async function meterSteps(env: Env, runId: string, modelId: string, result: any)
   } catch (e) { logErr("meter-steps", e); }
 }
 
+// CF-AGENT-SETUP-1: the Cloudflare skill a prompt calls for, fetched as a raw file and kept in the edge cache for 6 hours (a failure returns "" and never fails a turn).
+async function cfSkillText(prompt: string): Promise<string> {
+  const name = cfSkillFor(prompt);
+  if (!name) return "";
+  try {
+    const url = cfSkillUrl(name);
+    const cache = (caches as any).default;
+    let res = await cache.match(url);
+    if (!res) {
+      res = await fetch(url, { signal: AbortSignal.timeout(4000) });
+      if (!res.ok) return "";
+      const copy = new Response(await res.clone().text(), { headers: { "cache-control": "public, max-age=21600" } });
+      await cache.put(url, copy);
+    }
+    return cfSkillNote(name, await res.text());
+  } catch (e) { return ""; }
+}
+
+// CODE-AGENT-UX-1.6: the head of the system map for a turn about fleet code or infrastructure, edge-cached for 6 hours like the skills (a failure returns "").
+async function systemMapText(prompt: string): Promise<string> {
+  if (!wantsSystemMap(prompt)) return "";
+  try {
+    const url = systemMapUrl();
+    const cache = (caches as any).default;
+    let res = await cache.match(url);
+    if (!res) {
+      res = await fetch(url, { signal: AbortSignal.timeout(4000) });
+      if (!res.ok) return "";
+      await cache.put(url, new Response(await res.clone().text(), { headers: { "cache-control": "public, max-age=21600" } }));
+    }
+    return systemMapNote(await res.text());
+  } catch (e) { return ""; }
+}
+
 async function ledger(env: Env, row: Record<string, unknown>) {
   try {
     await env.AUDIT_DB.prepare("INSERT OR REPLACE INTO cf_agent_runs (id, instance, caller, scope, status, model, steps, tools_used, prompt, result, error, created_ms, finished_ms) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)")
       .bind(row.id, row.instance, row.caller, row.scope, row.status, row.model ?? null, row.steps ?? 0, row.tools_used ?? null, clip(String(row.prompt || ""), 2000), row.result == null ? null : clip(String(row.result), 8000), row.error ?? null, row.created_ms, row.finished_ms ?? null).run();
     // A turn whose Durable Object never finished it (the agent sweeps its own SQLite in onStart) is closed here too.
+    // These 'abandoned%' rows are what the cmd_run_abandoned_7d metric counts (migrations/2026-11-09-cmd-run-abandoned-metric.sql).
     await env.AUDIT_DB.prepare("UPDATE cf_agent_runs SET status = 'failed', error = 'abandoned: no progress for " + STALE_RUN_MIN + " minutes', finished_ms = ?1 WHERE status IN ('queued', 'running') AND created_ms < ?2").bind(Date.now(), Date.now() - STALE_RUN_MIN * 60000).run();
   } catch (e) { logErr("ledger", e); }
 }
@@ -426,9 +507,19 @@ export class FleetCodeAgent extends Agent<Env, State> {
     // CMD-RUN-HEARTBEAT-1: each finished step stamps last_beat_ms and last_tool, so "no progress" means no step, not an old start.
     try { this.sql`ALTER TABLE runs ADD COLUMN last_beat_ms INTEGER`; } catch (e) { /* column exists */ }
     try { this.sql`ALTER TABLE runs ADD COLUMN last_tool TEXT`; } catch (e) { /* column exists */ }
+    try { this.sql`ALTER TABLE runs ADD COLUMN resumed INTEGER DEFAULT 0`; } catch (e) { /* column exists */ }
     const cut = Date.now() - STALE_RUN_MIN * 60000;
-    const stale: any = this.sql`SELECT id, last_tool FROM runs WHERE status IN ('queued', 'running') AND COALESCE(last_beat_ms, created_ms) < ${cut}`;
+    const stale: any = this.sql`SELECT id, last_tool, resumed FROM runs WHERE status IN ('queued', 'running') AND COALESCE(last_beat_ms, created_ms) < ${cut}`;
     for (const x of stale) {
+      // RESUME-ONCE-1: a stalled run is resumed once (resumed once: same prompt, caller and scope; the clock restarts); a second stall fails it below.
+      if (!x.resumed) {
+        const now = Date.now();
+        this.sql`UPDATE runs SET resumed = 1, status = 'queued', last_beat_ms = ${now}, error = NULL WHERE id = ${x.id}`;
+        try { await this.env.AUDIT_DB.prepare("UPDATE cf_agent_runs SET status = 'queued', error = NULL, created_ms = ?2 WHERE id = ?1").bind(x.id, now).run(); } catch (e) { logErr("resume-ledger", e); }
+        const rid = String(x.id);
+        void this.runFiber("turn:" + rid, async (fctx: any) => { fctx.stash({ id: rid }); await this.executeRun(rid); }).catch((e) => logErr("fiber-resume", e));
+        continue;
+      }
       const why = "abandoned: no progress for " + STALE_RUN_MIN + " minutes" + (x.last_tool ? " (last tool: " + String(x.last_tool).slice(0, 60) + ")" : "");
       this.sql`UPDATE runs SET status = 'failed', error = ${why}, finished_ms = ${Date.now()} WHERE id = ${x.id}`;
     }
@@ -487,7 +578,8 @@ export class FleetCodeAgent extends Agent<Env, State> {
         try { const lr: any = await this.env.AUDIT_DB.prepare("SELECT value FROM ops_config WHERE key = 'qnfo_agents_lean'").first(); lean = leanConfigOn(lr && lr.value); } catch (e) { lean = true; }
       }
       const tools = await allTools({ env: this.env, scope: r.scope, caller: r.caller, agent: this, runId: id, proposals, lean });
-      const out: any = await generateText({ model: m.model, system: withLifecycle(SYSTEM) + "\nScope of this turn: " + r.scope + ".", prompt: r.prompt, tools, onStepFinish: (st: any) => { try { const tc = st && st.toolCalls && st.toolCalls.length ? String(st.toolCalls[st.toolCalls.length - 1].toolName) : null; this.sql`UPDATE runs SET last_beat_ms = ${Date.now()}, last_tool = COALESCE(${tc}, last_tool) WHERE id = ${id}`; } catch (e) { /* a heartbeat never fails a run */ } }, stopWhen: stepCountIs(/(^|:)cmdline-maintain/.test(String(r.caller)) ? MAINTAIN_MAX_STEPS : lean ? LEAN_MAX_STEPS : /(^|:)issue-probe-agent/.test(String(r.caller)) ? PROBE_MAX_STEPS : MAX_STEPS), ...(lean ? { prepareStep: ({ messages }: any) => ({ messages: compactMessages(messages) }) } : {}), timeout: { totalMs: /(^|:)cmdline-maintain/.test(String(r.caller)) ? MAINTAIN_TURN_TIMEOUT_MS : TURN_TIMEOUT_MS, stepMs: STEP_TIMEOUT_MS } } as any);
+      const skillNote = (await systemMapText(r.prompt)) + (await cfSkillText(r.prompt));
+      const out: any = await generateText({ model: m.model, system: withLifecycle(SYSTEM) + skillNote + "\nScope of this turn: " + r.scope + ".", prompt: r.prompt, tools, onStepFinish: (st: any) => { try { const tc = st && st.toolCalls && st.toolCalls.length ? String(st.toolCalls[st.toolCalls.length - 1].toolName) : null; this.sql`UPDATE runs SET last_beat_ms = ${Date.now()}, last_tool = COALESCE(${tc}, last_tool) WHERE id = ${id}`; } catch (e) { /* a heartbeat never fails a run */ } }, stopWhen: stepCountIs(/(^|:)cmdline-maintain/.test(String(r.caller)) ? MAINTAIN_MAX_STEPS : lean ? LEAN_MAX_STEPS : /(^|:)issue-probe-agent/.test(String(r.caller)) ? PROBE_MAX_STEPS : MAX_STEPS), ...(lean ? { prepareStep: ({ messages }: any) => ({ messages: compactMessages(messages) }) } : {}), timeout: { totalMs: /(^|:)cmdline-maintain/.test(String(r.caller)) ? MAINTAIN_TURN_TIMEOUT_MS : TURN_TIMEOUT_MS, stepMs: STEP_TIMEOUT_MS } } as any);
       // FINAL-ANSWER-PICK-1: a preface, an empty last step or raw tool-call markup is not an answer (see pickAnswer in lib.js).
       const pick = pickAnswer(out.text, out.steps);
       result = pick.text;
@@ -498,7 +590,7 @@ export class FleetCodeAgent extends Agent<Env, State> {
       // EMPTY-TURN-ANSWER-1 and FINAL-ANSWER-PICK-1: no step wrote an answer, so one more call without tools turns what the tools returned into it.
       if (!pick.answered) {
         try {
-          const fin: any = await generateText({ model: m.model, system: withLifecycle(SYSTEM) + "\nScope of this turn: " + r.scope + ".", prompt: "Request:\n" + clip(r.prompt, 6000) + "\n\nTool results so far:\n" + (toolTranscript(out.steps, 24000) || "(none)") + "\n\n" + FINAL_ANSWER_ASK, abortSignal: AbortSignal.timeout(FINAL_ANSWER_TIMEOUT_MS) } as any);
+          const fin: any = await generateText({ model: m.model, system: withLifecycle(SYSTEM) + skillNote + "\nScope of this turn: " + r.scope + ".", prompt: "Request:\n" + clip(r.prompt, 6000) + "\n\nTool results so far:\n" + (toolTranscript(out.steps, 24000) || "(none)") + "\n\n" + FINAL_ANSWER_ASK, abortSignal: AbortSignal.timeout(FINAL_ANSWER_TIMEOUT_MS) } as any);
           const ft = stripToolMarkup(String(fin.text || "").trim());
           await meter(this.env, modelId, usageOf(fin));
           if (ft) { result = ft; used.push("final-answer"); }
@@ -507,6 +599,9 @@ export class FleetCodeAgent extends Agent<Env, State> {
       result = result || EMPTY_TEXT;
       // SWEEP-CLAIMS-FILED-1: "Issues Filed: N" counts only when N file_issue calls returned ids; otherwise say so and file the gap.
       if (/(^|:)cmdline-maintain/.test(String(r.caller))) {
+        if (sweepEmpty(out.steps)) {
+          try { await fileIssue(this.env, { title: "SWEEP-EMPTY-1: sweep run " + id + " filed nothing", description: "Run " + id + " (" + r.caller + ") finished with no file_issue call returning an id. Read runs.result for " + id + " and file each real finding, or record why the sweep found none.", priority: "medium", category: "code-change" }, r.caller); } catch (eE) { logErr("sweep-empty", eE); }
+        }
         const mm = filedMismatch(result, out.steps);
         if (mm) {
           result += "\n\nVerified: the sweep claimed " + mm.claimed + " issue(s) filed but " + mm.recorded + " file_issue call(s) returned an id" + (mm.ids.length ? " (" + mm.ids.join(", ") + ")" : "") + ".";
@@ -605,10 +700,10 @@ export class FleetCodeAgent extends Agent<Env, State> {
         .bind(spec.slug, spec.title, spec.why, spec.default_in_effect, spec.action).run();
     } catch (e) { logErr("approval-card", e); }
   }
-  private async resolveApprovalCard(runId: string) {
+  private async resolveApprovalCard(runId: string, resolution = "answered") {
     try {
-      await this.env.AUDIT_DB.prepare("UPDATE human_actions SET status = 'resolved', resolved_at = datetime('now'), updated_at = datetime('now'), resolution = 'answered' WHERE slug = ?1 AND source = 'qnfo-agents' AND status = 'open'")
-        .bind("approval-" + runId).run();
+      await this.env.AUDIT_DB.prepare("UPDATE human_actions SET status = 'resolved', resolved_at = datetime('now'), updated_at = datetime('now'), resolution = ?2 WHERE slug = ?1 AND source = 'qnfo-agents' AND status = 'open'")
+        .bind("approval-" + runId, resolution).run();
     } catch (e) { logErr("approval-card-resolve", e); }
   }
 
@@ -659,7 +754,7 @@ export class FleetCodeAgent extends Agent<Env, State> {
     };
   }
 
-  async respondToApproval(id: string, callId: string, caller: string, approved: boolean, decidedBy?: string) {
+  async respondToApproval(id: string, callId: string, caller: string, approved: boolean, decidedBy?: string, expiry = false) {
     const row = this.row(id);
     if (!row || row.scope !== "write" || row.caller !== caller) return { ok: false, error: "no such pending approval" };
     const workspace = await this.computerWorkspace();
@@ -670,8 +765,8 @@ export class FleetCodeAgent extends Agent<Env, State> {
     this.sql`UPDATE runs SET status = 'running' WHERE id = ${id} AND status = 'awaiting_approval'`;
     await this.env.AUDIT_DB.prepare("UPDATE cf_agent_runs SET status = 'running' WHERE id = ?1 AND caller = ?2 AND status = 'awaiting_approval'")
       .bind(id, caller).run();
-    await this.recordApproval(id, action, approved ? "approved" : "rejected", { decidedBy: decidedBy || caller });
-    await this.resolveApprovalCard(id);
+    await this.recordApproval(id, action, approved ? "approved" : "rejected", { decidedBy: decidedBy || caller, note: expiry ? APPROVAL_EXPIRY_NOTE : undefined });
+    await this.resolveApprovalCard(id, expiry ? APPROVAL_EXPIRY_NOTE : "answered");
     try {
       await workspace.runtime.respond(call.id, call.callId, { approved });
     } catch (e) {
@@ -687,6 +782,11 @@ export class FleetCodeAgent extends Agent<Env, State> {
         .bind(id, caller, now, why).run();
     }
     return { ok: true, run_id: id, action, status: approved ? "resuming" : "rejected" };
+  }
+
+  // APPROVAL-EXPIRY-1: the sweep's answer for an approval left awaiting 24 h; the same path as an owner's rejection, so the run ends with the rejection recorded.
+  async expireApproval(id: string, callId: string, caller: string) {
+    return this.respondToApproval(id, callId, caller, false, "expiry-sweep", true);
   }
 
   // RM-DURABLE-INTERRUPT-1 selftest, step 1: a write-scoped run that stages one irreversible step and pauses at the interrupt. No model is called and nothing is sent.
@@ -768,6 +868,26 @@ export class FleetCodeAgent extends Agent<Env, State> {
   @callable() schedules() { return this.listSchedules(); }
 }
 
+// SKILL-SEARCH-1: a lookup (search or use) of the skill repository, shared by the agent tools and the /skills route. The log row (agent_skill_events) is best effort.
+async function skillLookup(env: Env, kind: "search" | "use", text: string, caller: string) {
+  const q = clip(text, 200);
+  let result: any;
+  if (kind === "search") {
+    const hits = skillSearch(q, FLEET_SKILLS, 5);
+    result = { ok: true, query: q, count: hits.length, skills: hits.map((h: any) => ({ name: h.name, what: h.what, score: h.score })), next: hits.length ? "call skill_get with a name to read the steps" : "no skill matches: try other words, or list them all with GET /skill-repo" };
+  } else {
+    const s = skillGet(q, FLEET_SKILLS);
+    result = s ? { ok: true, skill: { name: s.name, what: s.what, steps: s.steps } } : { ok: false, error: "no skill named '" + q + "'; use skill_search" };
+  }
+  try {
+    const names = kind === "search" ? (result.skills || []).map((h: any) => h.name).join(",") : null;
+    const hit = kind === "use" ? (result.ok ? result.skill.name : null) : (result.skills && result.skills[0] ? result.skills[0].name : null);
+    await env.AUDIT_DB.prepare("INSERT INTO agent_skill_events (kind, query, hit, hits, ok, names, caller, created_ms) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)")
+      .bind(kind, q, hit, result.count == null ? (result.ok ? 1 : 0) : result.count, result.ok ? 1 : 0, names, clip(caller || "", 80), Date.now()).run();
+  } catch (e) { logErr("skill-log", e); }
+  return result;
+}
+
 // RM-CODE-SANDBOX-1: every gate decision and edit/PR step of a write-scope CodeSession is mirrored to D1 (cf_agent_sandbox_log) so the fleet can read the chain
 // plan -> plan_approved -> claim -> edit -> pr without opening a Durable Object. Best effort: a write failure is logged and never blocks the session.
 async function sandboxLog(env: Env, sessionId: string, turn: number, kind: string, tool: string | null, path: string | null, detail: unknown) {
@@ -793,6 +913,8 @@ export class CodeSession extends Agent<Env, State> {
     this.sql`CREATE TABLE IF NOT EXISTS code_session_events (seq INTEGER PRIMARY KEY AUTOINCREMENT, type TEXT NOT NULL, data TEXT NOT NULL, created_ms INTEGER NOT NULL)`;
     this.sql`CREATE TABLE IF NOT EXISTS code_session_plan (id INTEGER PRIMARY KEY CHECK (id = 1), title TEXT NOT NULL, steps TEXT NOT NULL, files TEXT NOT NULL, status TEXT NOT NULL, proposed_ms INTEGER NOT NULL, decided_ms INTEGER, decided_by TEXT)`;
     this.sql`CREATE TABLE IF NOT EXISTS code_session_claims (key TEXT PRIMARY KEY, token TEXT NOT NULL DEFAULT '', holder TEXT, note TEXT, pr INTEGER, url TEXT, created_ms INTEGER NOT NULL)`;
+    // TASKLIST-1 (issue 9673): the plan's steps as a task list that outlives the page; update_task moves a step.
+    this.sql`CREATE TABLE IF NOT EXISTS code_session_tasks (id INTEGER PRIMARY KEY, title TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'todo', updated_ms INTEGER NOT NULL)`;
     // RM-CODE-SESSION-1: a turn may ask for the premium route; the column is added once to a table that predates it.
     try { this.sql`ALTER TABLE code_session_turns ADD COLUMN escalate INTEGER NOT NULL DEFAULT 0`; } catch (e) { /* already there */ }
     // 0.8.2: a session started by a fleet loop runs in the cheap lane (dynamic/value, lean step cap); the column is added once to a table that predates it.
@@ -828,6 +950,27 @@ export class CodeSession extends Agent<Env, State> {
     this.sql`INSERT INTO code_session (id, caller, scope, status, neuron_budget, lane, created_ms) VALUES (${this.name}, ${input.caller}, ${scope}, 'idle', ${sessionBudgetFrom(input.budget)}, ${lane}, ${now})`;
     this.event("status", { status: "queued", turn: 1 });
     return this.startTurn(text, input.caller);
+  }
+
+  // CMDLINE-FORK-SHARE-1 (issue 8256): the done turns of a session (prompt and answer) up to a turn, for a fork or an export. Only the session's own caller reads it.
+  async exportTranscript(caller: string, upTo = 0) {
+    const session = this.sessionRow();
+    if (!session || session.caller !== caller) return { ok: false, error: "no such code session" };
+    const lim = upTo > 0 ? upTo : 1000000;
+    const rows: any = this.sql`SELECT turn, prompt, answer, model, neurons FROM code_session_turns WHERE status = 'done' AND turn <= ${lim} ORDER BY turn`;
+    return { ok: true, session_id: this.name, scope: session.scope, status: session.status, turns: Array.from(rows).map((r: any) => ({ turn: r.turn, prompt: r.prompt, answer: r.answer, model: r.model, neurons: r.neurons })) };
+  }
+
+  // A fork is a new session whose earlier turns are already done, so its next turn sees them as context (executeTurn reads the last 8 done turns). The fork starts idle: the caller sends the next turn.
+  async seedFork(input: { from: string; scope: Scope; caller: string; budget?: number; turns: { prompt: string; answer: string }[] }) {
+    if (this.sessionRow()) return { ok: false, error: "session exists" };
+    const now = Date.now();
+    const turns = (Array.isArray(input.turns) ? input.turns : []).slice(0, 40);
+    if (!turns.length) return { ok: false, error: "nothing to fork" };
+    this.sql`INSERT INTO code_session (id, caller, scope, status, neuron_budget, current_turn, created_ms) VALUES (${this.name}, ${input.caller}, ${input.scope}, 'idle', ${sessionBudgetFrom(input.budget)}, ${turns.length}, ${now})`;
+    turns.forEach((t, i) => { this.sql`INSERT INTO code_session_turns (turn, prompt, answer, status, created_ms, finished_ms) VALUES (${i + 1}, ${String(t.prompt || "").slice(0, 8000)}, ${String(t.answer || "").slice(0, 16000)}, 'done', ${now}, ${now})`; });
+    this.event("status", { status: "forked", from: input.from, turns: turns.length });
+    return { ok: true, session_id: this.name, forked_from: input.from, turns: turns.length, status: "idle" };
   }
 
   async startTurn(text: string, caller = "", opts: { escalate?: boolean } = {}) {
@@ -883,7 +1026,8 @@ export class CodeSession extends Agent<Env, State> {
     return {
       check: (name, args) => this.gateCheck(turn, name, args),
       after: (name, args, res) => this.gateAfter(turn, name, args, res),
-      propose: (input) => this.proposePlan(turn, input)
+      propose: (input) => this.proposePlan(turn, input),
+      updateTask: (input) => this.updateTaskStatus(turn, input)
     };
   }
 
@@ -959,9 +1103,36 @@ export class CodeSession extends Agent<Env, State> {
     if (p.error || !p.plan) return { ok: false, error: p.error || "invalid plan" };
     const now = Date.now();
     this.sql`INSERT OR REPLACE INTO code_session_plan (id, title, steps, files, status, proposed_ms, decided_ms, decided_by) VALUES (1, ${p.plan.title}, ${JSON.stringify(p.plan.steps)}, ${JSON.stringify(p.plan.files)}, 'approved', ${now}, ${now}, 'auto')`;
+    this.sql`DELETE FROM code_session_tasks`;
+    for (const t of tasksFromPlan(p.plan.steps)) this.sql`INSERT INTO code_session_tasks (id, title, status, updated_ms) VALUES (${t.id}, ${t.title}, 'todo', ${now})`;
     this.event("plan", { turn, status: "approved", title: p.plan.title, steps: p.plan.steps, files: p.plan.files });
+    this.event("tasks", { turn, tasks: this.taskRows() });
     await sandboxLog(this.env, this.name, turn, "plan", null, null, { title: p.plan.title, steps: p.plan.steps.length, files: p.plan.files.length });
     return { ok: true, status: "approved", note: "The plan is approved. Carry on in this turn: ship_change (or github_create_branch, github_file_write, github_pr), then verify the deploy." };
+  }
+
+  private taskRows(): any[] { // standards-ok: a method definition with a return type, not a call
+    const r: any = this.sql`SELECT id, title, status, updated_ms FROM code_session_tasks ORDER BY id`;
+    return (r || []).map((x: any) => ({ id: x.id, title: x.title, status: x.status, updated_ms: x.updated_ms }));
+  }
+
+  async updateTaskStatus(turn: number, input: unknown) {
+    const u: any = taskUpdate(input);
+    if (u.error) return { ok: false, error: u.error };
+    const cur: any = this.sql`SELECT id FROM code_session_tasks WHERE id = ${u.id}`;
+    if (!cur || !cur[0]) return { ok: false, error: "no task " + u.id + ": propose_plan creates the task list from its steps" };
+    this.sql`UPDATE code_session_tasks SET status = ${u.status}, updated_ms = ${Date.now()} WHERE id = ${u.id}`;
+    const tasks = this.taskRows();
+    this.event("tasks", { turn, tasks });
+    return { ok: true, id: u.id, status: u.status, summary: taskSummary(tasks) };
+  }
+
+  // The session's persistent task list (TASKLIST-1), for the page that reloads or opens on another device.
+  sessionTasks(caller = "") {
+    const session = this.sessionRow();
+    if (!session || session.caller !== caller) return { ok: false, error: "no such code session" };
+    const tasks = this.taskRows();
+    return { ok: true, session: { id: session.id, status: session.status }, plan: (this.planRow() || {}).title || null, tasks, summary: taskSummary(tasks) };
   }
 
   // The owner's answer to the plan (the console sends it only with a fresh code, so the route requires the write scope).
@@ -1078,7 +1249,8 @@ export class CodeSession extends Agent<Env, State> {
     if (!session || session.caller !== caller) return { ok: false, error: "no such code session" };
     const turns: any = this.sql`SELECT turn, prompt, answer, status, model, input_tokens, output_tokens, neurons, cost_usd, error, created_ms, finished_ms FROM code_session_turns ORDER BY turn`;
     const claims: any = this.sql`SELECT key, holder, note, pr, url FROM code_session_claims`;
-    return { ok: true, session: { id: session.id, status: session.status, scope: session.scope, neuron_budget: session.neuron_budget, neurons_used: session.neurons_used, budget: sessionBudgetStep(session.neurons_used, session.neuron_budget).state, plan: this.planRow(), claims: claims || [], turns } };
+    const tasks = this.taskRows();
+    return { ok: true, session: { id: session.id, status: session.status, scope: session.scope, neuron_budget: session.neuron_budget, neurons_used: session.neurons_used, budget: sessionBudgetStep(session.neurons_used, session.neuron_budget).state, plan: this.planRow(), tasks, claims: claims || [], turns } };
   }
 }
 
@@ -1135,8 +1307,9 @@ async function seedMeasurements(env: Env) {
     // CMDLINE-MAINTAIN-1: one sweep request a week; the newest request of any status counts, so a failed sweep is retried next week, not every tick.
     const lastSweep: any = await env.AUDIT_DB.prepare("SELECT MAX(created_at) AS last FROM cf_agent_requests WHERE requester = ?1").bind(MAINTAIN_REQUESTER).first();
     if (maintainDue(lastSweep && lastSweep.last, Date.now())) {
-      await env.AUDIT_DB.prepare("INSERT INTO cf_agent_requests (requester, kind, prompt, priority) VALUES (?1, 'run', ?2, 'low')").bind(MAINTAIN_REQUESTER, MAINTAIN_PROMPT).run();
-      seeded++;
+      // atomic (issue 8330): two overlapping ticks both pass maintainDue, only one insert finds no sweep in the last 7 days
+      const ins: any = await env.AUDIT_DB.prepare("INSERT INTO cf_agent_requests (requester, kind, prompt, priority) SELECT ?1, 'run', ?2, 'low' WHERE 1 = 1 AND NOT EXISTS (SELECT 1 FROM cf_agent_requests WHERE requester = ?1 AND created_at > datetime('now', '-7 days'))").bind(MAINTAIN_REQUESTER, MAINTAIN_PROMPT).run();
+      if (ins && ins.meta && Number(ins.meta.changes) > 0) seeded++;
     }
     return seeded;
   } catch (e) { logErr("seed-measurements", e); return 0; }
@@ -1361,10 +1534,25 @@ function selfDoc(caller: string, scope: Scope) {
     routes: {
       open: ["GET /", "GET /health", "GET /tools", "POST /mcp (public: repo_read_file)"],
       loops: ["INSERT INTO qnfo-audit.cf_agent_requests (requester, kind run|sandbox|schedule|code_session|approval_selftest, prompt | code, cron | delay_s, instance?, priority?): drained every 5 minutes, outcome written back to the row"],
-      trusted: ["POST /code-sessions {text}", "POST /code-sessions/<id>/turns {text}", "GET /code-sessions/<id>/events?after=<seq> (replayable SSE)", "GET /code-sessions/<id>", "GET|POST /code-sessions/<id>/plan {approved} (POST: write scope)", "GET /approvals", "POST /approvals/<run id>/<call id> {approved} (write scope)", "GET /requests?status=&requester=", "POST /requests/drain", "POST /run {text, instance?, wait_ms?}", "GET /runs", "GET /runs/<id>", "GET /schedules", "POST /schedules {text, cron|delay_s}", "DELETE /schedules/<id>", "GET /mcp-servers", "POST /mcp-servers {name, url}", "DELETE /mcp-servers/<id>", "POST /sandbox {code}", "/agents/fleet-code-agent/<instance> (WebSocket, callable methods)"]
+      trusted: ["POST /code-sessions {text}", "POST /code-sessions/<id>/turns {text}", "GET /code-sessions/<id>/export?turn=<n> (the done turns)", "POST /code-sessions/<id>/fork {turn} (a new session holding the turns up to <turn>)", "GET /code-sessions/<id>/events?after=<seq> (replayable SSE)", "GET /code-sessions/<id>", "GET|POST /code-sessions/<id>/plan {approved} (POST: write scope)", "GET /approvals", "POST /approvals/<run id>/<call id> {approved} (write scope)", "GET /requests?status=&requester=", "POST /requests/drain", "POST /run {text, instance?, wait_ms?}", "GET /runs", "GET /runs/<id>", "GET /schedules", "POST /schedules {text, cron|delay_s}", "DELETE /schedules/<id>", "GET /mcp-servers", "POST /mcp-servers {name, url}", "DELETE /mcp-servers/<id>", "POST /sandbox {code}", "/agents/fleet-code-agent/<instance> (WebSocket, callable methods)"]
     },
     surfaces: { console: "https://fleet.qnfo.org/cmd (cfagent <request>, cfagent! <request> for the write scope)", ops: "https://ops.qnfo.org/v1/agents/..." }
   };
+}
+
+// APPROVAL-EXPIRY-1 (issue 9761): rejects every cf_agent_approvals row awaiting for 24 h (default rejected after 24h); idempotent, because an answered row is no longer awaiting.
+async function expireApprovals(env: Env) {
+  const rows: any = await env.AUDIT_DB.prepare("SELECT run_id, instance, caller, call_id, status, created_ms FROM cf_agent_approvals WHERE status = 'awaiting' AND created_ms < ?1 ORDER BY created_ms LIMIT 20").bind(Date.now() - APPROVAL_EXPIRY_MS).all();
+  const out = { expired: 0, failed: 0 };
+  for (const r of (rows.results || [])) {
+    if (!approvalExpired(r, Date.now()) || !r.call_id || !r.instance) continue;
+    try {
+      const stub: any = await getAgentByName(env.FleetCodeAgent as any, String(r.instance));
+      const res: any = await stub.expireApproval(String(r.run_id), String(r.call_id), String(r.caller));
+      if (res && res.ok) out.expired++; else out.failed++;
+    } catch (e) { out.failed++; logErr("approval-expiry", e); }
+  }
+  return out;
 }
 
 export default {
@@ -1406,10 +1594,28 @@ export default {
         if (!dup) await env.AUDIT_DB.prepare("INSERT INTO cf_agent_requests (requester, kind, prompt, priority) VALUES ('github-webhook', 'code_session', ?1, 'high')").bind(prompt).run();
         return json({ ok: true, routed: true, kind: route.kind, issue_id: route.issue_id, duplicate: !!dup });
       }
+      // SHARE-LINK-1: the read-only page of a shared session; the unguessable token is the credential, so no sign-in, and a revoked token is a 404.
+      let shareGet: RegExpExecArray | null;
+      if ((shareGet = /^\/share\/([0-9a-f]{48})$/.exec(path)) && request.method === "GET") {
+        const obj = shareTokenOk(shareGet[1]) ? await env.SHARES.get("shares/" + shareGet[1] + ".json") : null;
+        const hdr = { "x-robots-tag": "noindex, nofollow", "cache-control": "private, no-store" };
+        if (!obj) return new Response("not found", { status: 404, headers: hdr });
+        let doc: any = {};
+        try { doc = await obj.json(); } catch (e) { return new Response("not found", { status: 404, headers: hdr }); }
+        return new Response(renderShareHtml(doc), { headers: { ...hdr, "content-type": "text/html; charset=utf-8" } });
+      }
       if (path === "/mcp") return createMcpHandler(() => mcpServer(env, scope, caller) as any, { route: "/mcp" } as any)(request, env, ctx);
       if (!caller) return json({ ok: false, error: "This route is for the fleet console and the ops endpoint. Use https://fleet.qnfo.org/cmd (cfagent <request>) or https://ops.qnfo.org/v1/agents.", open: ["/", "/health", "/tools", "/mcp"] }, 403);
       if (path.indexOf("/agents/") === 0) return (await routeAgentRequest(request, env)) || json({ ok: false, error: "no such agent" }, 404);
       const b = request.method === "POST" ? await body(request) : {};
+      // SKILL-SEARCH-1: GET /skill-repo?q=<words> searches the skill repository; GET /skill-repo/<name> reads one (counts as using it).
+      if (path === "/skill-repo" && request.method === "GET") {
+        const q = String(url.searchParams.get("q") || "").trim();
+        if (!q) return json({ ok: true, count: FLEET_SKILLS.length, skills: FLEET_SKILLS.map((x: any) => ({ name: x.name, what: x.what })) });
+        return json(await skillLookup(env, "search", q, caller));
+      }
+      let skillMatch: RegExpExecArray | null;
+      if ((skillMatch = /^\/skill-repo\/([a-z0-9-]{2,60})$/.exec(path)) && request.method === "GET") { const sk: any = await skillLookup(env, "use", skillMatch[1], caller); return json(sk, sk.ok ? 200 : 404); }
       if (path === "/code-sessions" && request.method === "POST") {
         const text = String(b.text || "").trim();
         if (text.length < 1 || text.length > 8000) return json({ ok: false, error: "text must contain 1 to 8000 characters" }, 400);
@@ -1418,9 +1624,38 @@ export default {
         return json(await session.startSession({ text, scope, caller, budget: b.budget }), 202);
       }
       let sessionMatch: RegExpExecArray | null;
-      if ((sessionMatch = /^\/code-sessions\/(run_[a-z0-9_]{8,60})(?:\/(events|turns|plan))?$/.exec(path))) {
+      if ((sessionMatch = /^\/code-sessions\/(run_[a-z0-9_]{8,60})(?:\/(events|turns|plan|tasks|export|fork|share))?$/.exec(path))) {
         const session: any = await getAgentByName(env.CodeSession as any, sessionMatch[1]);
+        if (sessionMatch[2] === "share" && (request.method === "POST" || request.method === "DELETE")) {
+          // SHARE-LINK-1 (issue 9833): the owner publishes the done turns (credentials removed) as a read-only link, and revokes it by token.
+          if (scope !== "write") return json({ ok: false, error: "sharing publishes the session: it needs the write scope (on the console: a fresh code)" }, 403);
+          if (request.method === "DELETE") {
+            const tok = String(url.searchParams.get("token") || b.token || "");
+            const key = "shares/" + tok + ".json";
+            const head = shareTokenOk(tok) ? await env.SHARES.head(key) : null;
+            if (!head || head.customMetadata?.session !== sessionMatch[1] || head.customMetadata?.caller !== caller) return json({ ok: false, error: "no such share" }, 404);
+            await env.SHARES.delete(key);
+            return json({ ok: true, revoked: true });
+          }
+          const ex: any = await session.exportTranscript(caller, 0);
+          if (!ex.ok) return json(ex, 404);
+          const tok = shareToken();
+          const doc = { session_id: sessionMatch[1], shared_at: new Date().toISOString(), turns: ex.turns.map((t: any) => ({ turn: t.turn, prompt: redactSecrets(t.prompt), answer: redactSecrets(t.answer) })) };
+          await env.SHARES.put("shares/" + tok + ".json", JSON.stringify(doc), { httpMetadata: { contentType: "application/json" }, customMetadata: { session: sessionMatch[1], caller } });
+          return json({ ok: true, token: tok, url: new URL("/share/" + tok, request.url).toString(), turns: doc.turns.length }, 201);
+        }
         if (sessionMatch[2] === "events" && request.method === "GET") return codeSessionStream(request, session, caller);
+        if (sessionMatch[2] === "tasks" && request.method === "GET") { const tl: any = await session.sessionTasks(caller); return json(tl, tl.ok ? 200 : 404); }
+        if (sessionMatch[2] === "export" && request.method === "GET") { const ex: any = await session.exportTranscript(caller, Number(url.searchParams.get("turn")) || 0); return json(ex, ex.ok ? 200 : 404); }
+        if (sessionMatch[2] === "fork" && request.method === "POST") {
+          // CMDLINE-FORK-SHARE-1: copy the done turns up to b.turn into a new session the same caller owns; the fork then takes new turns on its own.
+          const ex: any = await session.exportTranscript(caller, Number(b.turn) || 0);
+          if (!ex.ok) return json(ex, 404);
+          const forkId = runId();
+          const fork: any = await getAgentByName(env.CodeSession as any, forkId);
+          const out: any = await fork.seedFork({ from: sessionMatch[1], scope: ex.scope === "write" ? "write" : "read", caller, budget: b.budget, turns: ex.turns });
+          return json(out, out.ok ? 201 : 409);
+        }
         if (sessionMatch[2] === "turns" && request.method === "POST") {
           const text = String(b.text || "").trim();
           if (text.length < 1 || text.length > 8000) return json({ ok: false, error: "text must contain 1 to 8000 characters" }, 400);
@@ -1480,6 +1715,7 @@ export default {
   async scheduled(_event: ScheduledController, env: Env, ctx: ExecutionContext) {
     // CRON-HEARTBEAT-1: v_cron_activity reads fleet_heartbeat, so a tick that runs (or fails) is visible (metric crons_unobserved).
     const beat = (ok: number) => env.AUDIT_DB.prepare("INSERT OR REPLACE INTO fleet_heartbeat (worker, version, ts, ok) VALUES (?1, ?2, ?3, ?4)").bind(WORKER, VERSION, new Date().toISOString(), ok).run().catch((e) => logErr("heartbeat", e));
+    ctx.waitUntil(expireApprovals(env).then((r) => { if (r.expired || r.failed) console.log(JSON.stringify({ worker: WORKER, version: VERSION, where: "approval-expiry", note: "default rejected after 24h", ...r })); }).catch((e) => logErr("approval-expiry", e)));
     ctx.waitUntil(drainRequests(env).then((r) => { console.log(JSON.stringify({ worker: WORKER, version: VERSION, where: "drain", ...r })); return beat(1); }).catch((e) => { logErr("drain", e); return beat(0); }));
   }
 };

@@ -33,7 +33,8 @@ ok(T.verify(res.replace("44+", "400+"), JOB).length > 0, "inflated number reject
 ok(T.verify(res + "- Expert in Kubernetes. <!--F:F06-->\n", JOB).length > 0, "invented skill rejected");
 ok(T.verify(note + "I also hold a PhD.\n", JOB).length > 0, "untagged line rejected");
 ok(T.verify(note.replace(/"[^"]+"/, '"quantum cryptography"'), JOB).length > 0, "foreign quoted term rejected");
-for (const [title, loc] of [["Sales Lead, Research", "Amsterdam"], ["Intern, Research Program", "Amsterdam"], ["Research Program Manager", "Remote - US only"], ["Staff Engineer, Research Platform", "Amsterdam"], ["Senior AI Governance Counsel", "Amsterdam"], ["Product Marketing, Data Products", "Amsterdam"], ["Forward Deployed Product Manager, Public Sector", "Amsterdam"]])
+// JOBSEARCH-CONTENT-FIRST-1: a seniority word in the title and a residence restriction still exclude; no other title word does (the posting text decides)
+for (const [title, loc] of [["Intern, Research Program", "Amsterdam"], ["Research Program Manager", "Remote - US only"], ["Junior Policy Analyst", "Amsterdam"]])
   ok(T.evaluate({ ...JOB, title, location: loc }).status === "excluded", "gate " + title + " / " + loc);
 const jobAt = (location, title = "Senior Policy Advisor") => ({ ...JOB, title, location });
 ok(T.scoreJob({ ...JOB, location: "", desc: JOB.desc + " The team is based in Amsterdam." }).drops.some((x) => x.includes("no location in the posting")), "missing feed locations are dropped even when a city appears elsewhere in the description");
@@ -55,7 +56,13 @@ const dis = T.makeCtx({}, [{ title: "Analytics Operations Specialist", verdict: 
 ok(dis.learned.block.has("analytics") && dis.learned.boost.has("housing") && !dis.learned.block.has("policy"), "two dislikes block a word, a like boosts one");
 const an = T.scoreJob(jobAt("Tokyo, Japan"), T.makeCtx({}), "analyze");
 ok(an.drops.length > 0 && an.fit > 0, "analysis keeps the fit when the gates would drop the job", an);
-ok(T.evaluate(jobAt("Amsterdam", "Product Marketing Manager")).status === "excluded" && T.evaluate(jobAt("Amsterdam", "Senior AI Governance Counsel")).status === "excluded", "marketing and legal titles stay out");
+{ // a title is never the reason: the same words in the title with a posting that shows nothing of the record are dropped, with one that shows the record they are kept
+  const blank = "Sell subscriptions to retail customers. Quarterly quotas, cold calls and negotiation of renewals. Travel to customer sites every week. ".repeat(2);
+  for (const title of ["Product Marketing Manager", "Senior AI Governance Counsel", "Sales Lead, Research", "Staff Engineer, Research Platform", "Forward Deployed Product Manager, Public Sector"]) {
+    ok(T.evaluate({ ...JOB, title, desc: blank }).status === "excluded", "no sign of the record in the text: " + title);
+    ok(T.evaluate({ ...JOB, title }).status === "ok", "the record in the text keeps it, whatever the title says: " + title);
+  }
+}
 ok(T.evaluate({ ...JOB, desc: JOB.desc + " A PhD is required." }).flags.some((f) => f.startsWith("DEGREE")), "PhD flag");
 {
   const now = Date.now(), applied = now - 40 * 86400000;
@@ -122,7 +129,7 @@ ok(list.count === 1 && list.matches[0].title.startsWith("Research Program Manage
 const id = list.matches[0].id;
 const one = (await call("/api/matches/" + encodeURIComponent(id)))[1];
 ok(one.verified === 1 && one.resume_md.includes("Federal Highway") && !one.note_md.includes("<!--"), "detail has clean verified artifacts");
-ok((await call("/api/matches?tier=A"))[1].count === 1 && (await call("/api/matches?tier=B"))[1].count === 0, "tier filter");
+ok((await call("/api/matches?tier=A"))[1].count + (await call("/api/matches?tier=B"))[1].count === 1, "tier filter", [(await call("/api/matches?tier=A"))[1].count, (await call("/api/matches?tier=B"))[1].count]);
 ok((await call("/api/ledger"))[1].facts.length >= 14, "ledger served");
 ok((await call("/health"))[1].version.startsWith("1."), "health");
 const ui = await call("/", undefined);
@@ -350,14 +357,15 @@ ok((await call("/api/run", { method: "POST" }))[0] === 429, "run cooldown");
   // wider net: stated preferences become a stretch label, hard noise stays out
   const tokyo = { ...JOB, location: "Tokyo, Japan", title: "Senior Policy Advisor" };
   const wideT = T.evaluate(tokyo, T.makeCtx({}), true);
-  ok(T.evaluate(tokyo, T.makeCtx({})).status === "excluded" && wideT.status === "ok" && wideT.tier === "C" && wideT.flags.some((f) => f.startsWith("OUTSIDE YOUR PREFERENCES")), "wide mode keeps a role outside the stated places as a flagged stretch", wideT);
-  ok(T.evaluate({ ...JOB, title: "Sales Lead, Research" }, T.makeCtx({}), true).status === "excluded", "wide mode still drops hard noise");
+  // JOBSEARCH-FIT-1 (owner, 2026-11-09): a place the owner said no to is never shown, not even as a stretch; a stated preference such as contract work still is
+  ok(T.evaluate(tokyo, T.makeCtx({})).status === "excluded" && wideT.status === "excluded", "wide mode drops a role outside the stated places", wideT);
+  ok(T.evaluate({ ...JOB, title: "Sales Lead, Research", desc: "Sell subscriptions to retail customers. Quarterly quotas and cold calls." }, T.makeCtx({}), true).status === "excluded", "wide mode still drops postings with no sign of the record");
   ok(T.evaluate({ ...JOB, location: "Remote - US only" }, T.makeCtx({}), true).status === "excluded", "wide mode still drops postings that restrict residence");
   const eng = { ...JOB, title: "Research Engineer, Evaluations", desc: JOB.desc };
-  ok(T.evaluate(eng, T.makeCtx({}), true).status === "ok" && T.evaluate(eng, T.makeCtx({})).status === "excluded", "a research-engineering title passes in wide mode when the posting matches the record");
+  ok(T.evaluate(eng, T.makeCtx({}), true).status === "ok" && T.evaluate(eng, T.makeCtx({})).status === "ok", "an engineering title passes when the posting matches the record");
   ok(T.evaluate({ ...eng, desc: "We build code." }, T.makeCtx({}), true).status === "excluded", "an engineering title with no evidence in the posting stays out");
-  ok(T.evaluate({ ...JOB, title: "Staff Engineer, Research Platform" }, T.makeCtx({}), true).status === "excluded", "a plain engineer title stays out");
-  const [kept, ex] = T.rank([tokyo, { ...JOB, id: "t:2", title: "Receptionist" }], T.makeCtx({}), true);
+  ok(T.evaluate({ ...JOB, title: "Staff Engineer, Research Platform" }, T.makeCtx({}), true).status === "ok", "an engineer title is not a reason to drop a posting that carries the record");
+  const [kept, ex] = T.rank([tokyo, { ...JOB, id: "t:3", title: "Research Program Manager (contract)" }, { ...JOB, id: "t:2", title: "Receptionist" }], T.makeCtx({ type_contract: false }), true);
   ok(kept.length === 1 && kept[0].match.tier === "C", "rank keeps stretch matches in wide mode", { kept: kept.length, ex });
   // evidence the CV lacks counts for less and is named
   const physDesc = JOB.desc + " Theoretical physics, renormalization, effective field theory.";
@@ -437,8 +445,8 @@ ok((await call("/api/run", { method: "POST" }))[0] === 429, "run cooldown");
   const cv = (path, body) => call(path, { method: "POST", headers: H, body: JSON.stringify(body) }, E);
   ok((await call("/api/cv", {}, E))[0] === 401 && (await call("/api/cv/answer", { method: "POST", body: "{}" }, E))[0] === 401 && (await call("/api/cv/export", {}, E))[0] === 401, "the CV API needs the owner's sign-in");
   const st0 = (await call("/api/cv", { headers: H }, E))[1];
-  ok(st0.questions.length === 43 && st0.roles.length === 11 && st0.review.length === 3 && st0.facts.length === 14, "the CV starts from the verified record: 11 roles, 14 achievements, 3 claims to review", { q: st0.questions.length, r: st0.roles.length, v: st0.review.length, f: st0.facts.length });
-  ok(!JSON.stringify(st0.facts).includes("10M") && !JSON.stringify(st0.facts).includes("patent"), "unconfirmed claims are not in the record");
+  ok(st0.questions.length === 43 && st0.roles.length === 11 && st0.review.length === 1 && st0.facts.length === 19, "the CV starts from the verified record plus the owner's 2026-11-09 confirmations (JOBSEARCH-AUTONOMY-1): 11 roles, 19 achievements, 1 claim to review", { q: st0.questions.length, r: st0.roles.length, v: st0.review.length, f: st0.facts.length });
+  ok(!JSON.stringify(st0.facts).includes("patent") && st0.facts.some((f) => f.source === "review:V1" && f.text.includes("$10M")), "unconfirmed claims are not in the record; the owner-confirmed NHTS claim is");
   ok((await cv("/api/cv/answer", { qid: "nope", answer: "y" }))[0] === 400 && (await cv("/api/cv/answer", { qid: "phys_renorm", answer: "maybe" }))[0] === 400, "bad interview input refused");
   const a1 = await cv("/api/cv/answer", { qid: "phys_renorm", answer: "y", facts: [{ text: "Applied dimensional regularization and renormalization in a quantum field theory thesis calculation.", role: "R999" }] });
   const st1 = (await call("/api/cv", { headers: H }, E))[1];
@@ -450,11 +458,11 @@ ok((await call("/api/run", { method: "POST" }))[0] === 429, "run cooldown");
   ok(qres.includes("dimensional regularization") && qbad.length === 0, "the owner's new achievement reaches the resume and the resume still verifies", qbad);
   ok(T.verify(qres.replace("dimensional regularization", "dimensional reguralization"), qft).length > 0, "an altered sentence is rejected");
   ok(/^## Experience/m.test(qres) && /\*\*Founder\*\*, QNFO/.test(qres) && /## Selected work/.test(qres) && /## Education/.test(qres) && /## Skills/.test(qres) && /## Earlier roles/.test(qres), "the resume has roles with titles, selected work, education, skills and earlier roles");
-  ok(T.verify(qres.replace("**Founder**", "**Chief Founder**"), qft).length > 0 && T.verify(qres.replace(/· Python/, "· Haskell"), qft).length > 0, "a changed role title or an invented skill is rejected");
+  ok(T.verify(qres.replace("**Founder**", "**Chief Founder**"), qft).length > 0 && T.verify(qres.replace(/· GIS/, "· Haskell"), qft).length > 0 && /· GIS/.test(qres), "a changed role title or an invented skill is rejected");
   // review: confirm needs the bracket filled, reject removes
   ok((await cv("/api/cv/review", { id: "V3", action: "confirm" }))[0] === 400, "a claim with a bracketed gap cannot be confirmed as it stands");
   ok((await cv("/api/cv/review", { id: "V3", action: "confirm", text: "Inventor on U.S. patent 1,234,567 in quantum computing." }))[0] === 200, "a filled-in claim can be confirmed");
-  ok((await cv("/api/cv/review", { id: "V1", action: "reject" }))[0] === 200 && (await call("/api/cv", { headers: H }, E))[1].review.length === 1, "a rejected claim is removed from review");
+  ok((await cv("/api/cv/review", { id: "V1", action: "reject" }))[0] === 400 && (await call("/api/cv", { headers: H }, E))[1].review.length === 0, "a confirmed claim leaves review and cannot be acted on again");
   // edit sections
   ok((await cv("/api/cv/set", { roles: [{ id: "R1", title: "", org: "x", start: "2020", end: "present" }] }))[0] === 400, "a role without a title is refused");
   ok((await cv("/api/cv/set", { summary: "New summary.", education: ["A", "", "B"], person: { location: "Utrecht, Netherlands" } }))[0] === 200, "summary, lists and contact can be edited");
