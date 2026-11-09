@@ -43,3 +43,13 @@ test("the Markdown renderer escapes markup and renders tables, lists and links",
   assert.match(renderMarkdown("| a | b |\n|---|---|\n| 1 | 2 |"), /<th>a<\/th>[\s\S]*<td>2<\/td>/); assert.match(renderMarkdown("1. x\n2. y"), /<ol><li>x<\/li><li>y<\/li><\/ol>"?/);
   assert.ok(!renderMarkdown("[x](javascript:alert(1))").includes("href"));
 });
+
+// PM-REFS-1: a reference with a link is checkable; a figure that reaches the paper through a summary (Kalshi, the Metaculus synthesis) must say so in the text.
+test("every reference carries a link, and the paper names the figures that come through secondary summaries", () => {
+  const refs = md.split("## References")[1].split("\n").filter((l) => /^\d+\. /.test(l));
+  assert.ok(refs.length >= 11);
+  for (const r of refs) assert.match(r, /\]\(https?:\/\//, r.slice(0, 60));
+  assert.match(md, /CEPR summary/); assert.match(md, /secondary/i);
+  const kalshi = md.split("\n").filter((l) => /\[7\]\s*[^,]/.test(l) && !/^7\./.test(l) && !/^\| R\d/.test(l));
+  assert.ok(kalshi.length > 0 && kalshi.every((l) => /secondary|summary/i.test(l)), "Kalshi figures must be marked as coming through a summary");
+});

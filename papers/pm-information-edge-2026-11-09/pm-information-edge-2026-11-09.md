@@ -39,7 +39,7 @@ Each hypothesis states a mechanism and what would refute it. None is established
 
 **H2. Structural mispricing.** Related contracts that must sum to one often do not, and one study estimates about 40 million US dollars of realised arbitrage on Polymarket in a year [5]. This needs no forecasting skill, only consistent bookkeeping across contracts. *Refuted if* the gaps do not survive spreads and fees at the sizes we can trade. It is the only hypothesis in this list that does not depend on a model being better than the crowd.
 
-**H3. Systematic crowd bias.** Low-priced contracts win less often than their prices imply [6][7]. A model calibrated on outcomes can learn this correction. *Refuted if* the learned correction is indistinguishable from the identity on our own resolved sample.
+**H3. Systematic crowd bias.** Low-priced contracts win less often than their prices imply [6][7] (the Kalshi figure is from a secondary summary). A model calibrated on outcomes can learn this correction. *Refuted if* the learned correction is indistinguishable from the identity on our own resolved sample.
 
 **H4. Breadth.** A crowd attends to the headline markets. A program that reads evidence for every short-dated market in a category can cover the long tail. *Refuted if* edge appears only in markets with large volume, where the crowd is already attentive.
 
@@ -62,7 +62,7 @@ The pitfalls below shape the design, because each one can create an apparent edg
 
 ## 5. Costs and market structure
 
-A forecast is not a profit. Takers pay the spread and sometimes a fee, and the Kalshi study reports that takers lose more than makers [7]. Our shadow return therefore charges slippage on every simulated bet, markets with wide spreads are skipped, and position sizes are a fraction of a Kelly stake so that estimation error cannot dominate. Live trading, if it ever happens, should use resting limit orders where the terms allow, which is a design for a later phase.
+A forecast is not a profit. Takers pay the spread and sometimes a fee, and the Kalshi study reports that takers lose more than makers [7] (a figure reported through a secondary summary). Our shadow return therefore charges slippage on every simulated bet, markets with wide spreads are skipped, and position sizes are a fraction of a Kelly stake so that estimation error cannot dominate. Live trading, if it ever happens, should use resting limit orders where the terms allow, which is a design for a later phase.
 
 ## 6. Recommendations and what was done
 
