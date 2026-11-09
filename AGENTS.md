@@ -156,3 +156,8 @@ Each repo keeps a roadmap issue ("Roadmap: next 5 features") with at most 5 item
 - Never write that a reply, a note or the session is the guard or the only protection against a problem. An unclosed loop is closed in code (a probe, a guard, a trigger, a test) in the same change, or filed with a doer and a probe.
 - A finding or lesson lands as a change to a worker, prompt, scorer, probe, metric or test in the same PR, never as prose; a document is never a deliverable (NO-STANDALONE-DOCS-1).
 - `scripts/agents-md-rules.test.mjs` fails a PR that removes this section or the loop rules above it.
+
+## Merge every code change automatically (MERGE-ALL-AUTO-1, owner directive 2026-11-09)
+- Owner, verbatim: "You shall always merge all code changes automatically. Update all system/fleet instructions and merge all open PRs immediately." It binds every session, loop and code agent.
+- A pull request is merged the moment its required checks are green and GitHub accepts the merge; a session does it itself (mark ready, merge, verify the deploy) and never asks. A red check is fixed in the same turn and the pull request is merged then; a merge conflict is resolved by merging main in. At each session start and close-out, list the open pull requests and merge or fix every one.
+- It moves no limit: the harness's permission checks, the secret lock, live work claims, `HOLD:` comments from another session's review and a required check GitHub itself enforces keep their precedence; a pull request one of those stops is reported with the exact blocker and a closing probe, never skipped silently. `ops_config OWNER_DIRECTIVE_2026_11_09_MERGE_ALL_AUTO_1` records it (migrations/2026-11-09-merge-all-auto.sql).
