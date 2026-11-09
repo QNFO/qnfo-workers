@@ -190,6 +190,7 @@ def attach_tech_redirect(zone):
                 RESULT["redirect_rule_id"] = rule.get("id")
                 print("redirect rule already present: %s" % rule.get("id"))
                 return RESULT["redirect_rule_id"]
+        entry["enabled"] = True
         st, j = req("POST", "/zones/%s/rulesets/%s/rules" % (zone, ruleset_id), entry)
         if st in (200, 201) and j.get("success"):
             rules = j.get("result") or {}
@@ -198,15 +199,19 @@ def attach_tech_redirect(zone):
             return RESULT["redirect_rule_id"]
         report("redirect", "failed", http=st, error="add rule body=%s" % json.dumps(j)[:800])
         return None
-    # No dynamic redirect entrypoint yet: create it with the rule.
-    st, j = req("POST", "/zones/%s/rulesets" % zone,
-                {"name": "ASK-QWAV-ROUTE-1 redirects", "phase": "http_request_dynamic_redirect", "kind": "zone", "rules": [entry]})
+    # No dynamic redirect entrypoint yet: create the phase entrypoint with the rule via PUT,
+    # which is the canonical way to provision the http_request_dynamic_redirect phase for a zone
+    # (a plain POST /zones/{zone}/rulesets does not bind the phase entrypoint, so the rule never
+    # fires and ask.qwav.tech kept answering 200 instead of the required 301).
+    entry["enabled"] = True
+    st, j = req("PUT", "/zones/%s/rulesets/phases/http_request_dynamic_redirect/entrypoint" % zone,
+                {"rules": [entry]})
     if st in (200, 201) and j.get("success"):
         rules = (j.get("result") or {}).get("rules") or []
         RESULT["redirect_rule_id"] = rules[-1].get("id") if rules else None
-        print("redirect ruleset created: rule %s" % RESULT["redirect_rule_id"])
+        print("redirect entrypoint created: rule %s" % RESULT["redirect_rule_id"])
         return RESULT["redirect_rule_id"]
-    report("redirect", "failed", http=st, error="create ruleset body=%s" % json.dumps(j)[:800])
+    report("redirect", "failed", http=st, error="create entrypoint body=%s" % json.dumps(j)[:800])
     return None
 
 
