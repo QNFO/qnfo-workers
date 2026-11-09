@@ -60,7 +60,7 @@ END""".replace("@@CB@@", CB)
 DDL = """
 CREATE TABLE agent_issues (id INTEGER PRIMARY KEY, title TEXT, status TEXT DEFAULT 'open', close_channel TEXT, updated_at INTEGER);
 CREATE TABLE issue_triage (issue_id INTEGER PRIMARY KEY, rc TEXT NOT NULL, triage_state TEXT NOT NULL DEFAULT 'triaged', owner TEXT NOT NULL, sla_due_at TEXT NOT NULL, close_evidence TEXT, reopened_count INTEGER NOT NULL DEFAULT 0);
-CREATE TABLE remediation_contracts (class TEXT PRIMARY KEY, issue_id INTEGER, status TEXT DEFAULT 'active', attempts INTEGER DEFAULT 0, last_attempt_at TEXT, last_verdict TEXT, next_due_at TEXT);
+CREATE TABLE remediation_contracts (class TEXT PRIMARY KEY, issue_id INTEGER, status TEXT DEFAULT 'active', attempts INTEGER DEFAULT 0, last_attempt_at TEXT, last_verdict TEXT, next_due_at TEXT, escalate_to TEXT);
 CREATE TABLE remediation_verifications (id INTEGER PRIMARY KEY AUTOINCREMENT, issue_id INTEGER, class TEXT, probe_url TEXT, transport TEXT NOT NULL, expected TEXT, observed TEXT, pass INTEGER NOT NULL, verified_at TEXT DEFAULT (datetime('now')), verifier TEXT);
 """
 

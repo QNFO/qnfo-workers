@@ -521,3 +521,24 @@ export function approvalCardSpec(runId, action, callId, payloadJson) {
     action: "Answer the pending approval in /cmd"
   };
 }
+
+// CF-AGENT-SETUP-1 (issue 8240, slice a): the Cloudflare Skills (github.com/cloudflare/skills) a turn's prompt calls for, picked by keyword; at most one per turn so the prompt stays small.
+const CF_SKILL_KEYWORDS = [
+  ["durable-objects", /durable object|\bdo\b class|alarm\(|storage\.sql|websocket hibernation/i],
+  ["agents-sdk", /agents sdk|agents@|\bagent class|callable\(|\bschedule\(|AIChatAgent/i],
+  ["wrangler", /wrangler|wrangler\.toml|wrangler\.jsonc|\bwrangler\.json/i],
+  ["web-perf", /core web vitals|lighthouse|\bLCP\b|\bCLS\b|page speed|web perf/i],
+  ["workers-best-practices", /workers? best practice|waitUntil|compatibility_date|nodejs_compat|worker\.js|cloudflare worker/i]
+];
+export function cfSkillFor(prompt) {
+  const t = String(prompt || "").slice(0, 4000);
+  for (const [name, re] of CF_SKILL_KEYWORDS) if (re.test(t)) return name;
+  return null;
+}
+export function cfSkillUrl(name) { return "https://raw.githubusercontent.com/cloudflare/skills/main/skills/" + name + "/SKILL.md"; }
+export function cfSkillNote(name, text, max) {
+  const body = String(text || "").trim();
+  if (!name || !body) return "";
+  const cap = max || 6000;
+  return "\n\nCloudflare skill (" + name + ", from github.com/cloudflare/skills; follow it for this Cloudflare work):\n" + (body.length > cap ? body.slice(0, cap) + "\n[skill text cut]" : body);
+}

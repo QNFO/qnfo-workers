@@ -35,7 +35,7 @@ def check(cond, msg, extra=None):
 
 
 db = sqlite3.connect(":memory:")
-db.execute("CREATE TABLE remediation_contracts (class TEXT PRIMARY KEY, status TEXT, attempts INTEGER, last_attempt_at TEXT, last_verdict TEXT, next_due_at TEXT)")
+db.execute("CREATE TABLE remediation_contracts (class TEXT PRIMARY KEY, status TEXT, attempts INTEGER, last_attempt_at TEXT, last_verdict TEXT, next_due_at TEXT, escalate_to TEXT)")
 db.execute("CREATE TABLE remediation_verifications (id INTEGER PRIMARY KEY AUTOINCREMENT, issue_id INTEGER, class TEXT, probe_url TEXT, transport TEXT, "
            "expected TEXT, observed TEXT, pass INTEGER, verifier TEXT, verified_at TEXT DEFAULT (datetime('now')))")
 probe_read = {}
