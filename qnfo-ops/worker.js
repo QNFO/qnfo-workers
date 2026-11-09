@@ -552,7 +552,7 @@ __name222(gateAudit1CfWorkerDeploy, "gateAudit1CfWorkerDeploy");
 __name2222(gateAudit1CfWorkerDeploy, "gateAudit1CfWorkerDeploy");
 __name22222(gateAudit1CfWorkerDeploy, "gateAudit1CfWorkerDeploy");
 __name222222(gateAudit1CfWorkerDeploy, "gateAudit1CfWorkerDeploy");
-var VERSION = "2.69.8-codeagent";
+var VERSION = "2.70.0-codeagent";
 /* 2.62.20 OPS-ARG-ALIAS-1 (issues 5775, 5780, 6173, 6193, 6671, 6792, 6767, 6826, 6015, 6860, pillar autonomy; patch). Caller-input mistakes are no longer fleet failures: workspace_grep accepts query/regex/search for pattern, cf_worker_read/deploy/bindings accept name/script for worker, fleet_graph infers a missing op from its other arguments and accepts filter/q/name for query; a still-missing argument answers arg_error with a hint, and an arg_error or an exception thrown by the caller own run_code or run_code_net JavaScript (user_code_error) is logged as status rejected, so it files no TOOL-FAILURE or LOOP-BREAKER issue. errorDetailCapture writes worker_logs in batches of 25 and records a D1 overload as a deferral, not an error. qnfo-ops/tool-arg-alias.test.mjs. */
 /* 2.62.11 WORKER-LOAD-GATE-1 (issue #6518, pillar autonomy; patch): inline the OAuth broker in the deployable single-module worker. */
 /* 2.62.1 CONTAINER-WORKSPACE-TIMEOUT-1 (#3922, issue 1000117, pillar autonomy; patch): container_workspace_exec allows 120 seconds for cold-start initialization while preserving its 300-second ceiling. */
@@ -7133,9 +7133,31 @@ function opsD1Health(now) {
   var b = __opsD1Breaker;
   now = Number(now) || Date.now();
   var on = b.until > now;
-  return { state: on ? "degraded" : "ok", d1: on ? "overloaded" : "ok", since: b.since, retry_after_s: on ? Math.max(1, Math.ceil((b.until - now) / 1000)) : 0, trips: b.trips, refused: b.refused, trip_errors: OPS_D1_TRIP_ERRORS, window_s: OPS_D1_WINDOW_MS / 1000, degraded_s: OPS_D1_DEGRADED_MS / 1000 };
+  return { state: on ? "degraded" : "ok", d1: on ? "overloaded" : "ok", since: b.since, retry_after_s: on ? Math.max(1, Math.ceil((b.until - now) / 1000)) : 0, trips: b.trips, refused: b.refused, shared: __opsD1SharedOn, trip_errors: OPS_D1_TRIP_ERRORS, window_s: OPS_D1_WINDOW_MS / 1000, degraded_s: OPS_D1_DEGRADED_MS / 1000 };
 }
 function opsD1Reset() { __opsD1Breaker = { errs: [], until: 0, since: null, trips: 0, refused: 0, last_error: "" }; }
+// OPS-DEGRADED-2: the open state is shared across isolates through OPS_CACHE_KV (key ops:d1-degraded, TTL 60 s). A trip publishes it; every isolate reads it at most once per 5 s. A KV error never refuses or fails a tool.
+var OPS_D1_SHARED_KEY = "ops:d1-degraded";
+var __opsD1SharedReadAt = 0;
+var __opsD1SharedOn = false;
+async function opsD1SharedSync(env, now) {
+  try {
+    if (!env || !env.OPS_CACHE_KV) return;
+    now = Number(now) || Date.now();
+    if (now - __opsD1SharedReadAt < 5000) return;
+    __opsD1SharedReadAt = now;
+    __opsD1SharedOn = true;
+    var v = await env.OPS_CACHE_KV.get(OPS_D1_SHARED_KEY, "json");
+    var u = v && Number(v.until);
+    if (u && u > now && u > __opsD1Breaker.until) { __opsD1Breaker.until = u; __opsD1Breaker.since = v.since || __opsD1Breaker.since; }
+  } catch (e) { console.error(JSON.stringify({ worker: "qnfo-ops", where: "ops-degraded-kv", error: String(e && e.message || e) })); }
+}
+async function opsD1SharedPublish(env) {
+  try {
+    if (!env || !env.OPS_CACHE_KV || __opsD1Breaker.until <= Date.now()) return;
+    await env.OPS_CACHE_KV.put(OPS_D1_SHARED_KEY, JSON.stringify({ until: __opsD1Breaker.until, since: __opsD1Breaker.since }), { expirationTtl: 60 });
+  } catch (e) { console.error(JSON.stringify({ worker: "qnfo-ops", where: "ops-degraded-kv", error: String(e && e.message || e) })); }
+}
 // ---- OPS-DEGRADED-1:END
 async function execTool(env, name, rawArgs, userText, resultCap) {
   let args = {};
@@ -7146,6 +7168,7 @@ async function execTool(env, name, rawArgs, userText, resultCap) {
   }
   args = opsUnwrapToolArgs(name, args); // OPS-TOOL-ERRSHAPE-1: {name:<tool>, arguments:{...}} envelope sent as the arguments
   // OPS-DEGRADED-1: while qnfo-audit is overloaded a tool that writes it is refused before it starts (nothing is written, not even the tool event).
+  await opsD1SharedSync(env, Date.now()); // OPS-DEGRADED-2
   const __dg = opsD1Gate(Date.now(), name, args);
   if (__dg) return { tool_call_id: null, name, ok: false, degraded: true, retry_after_s: __dg.retry_after_s, text: JSON.stringify(__dg.body) };
   const t0 = Date.now();
@@ -7237,7 +7260,7 @@ async function execTool(env, name, rawArgs, userText, resultCap) {
   }
   const ms = Date.now() - t0;
   // OPS-DEGRADED-1: a qnfo-audit overload in the result feeds the breaker (another database named by the tool does not).
-  try { if (res && res.ok === false && opsD1TargetsAudit(name, args)) opsD1Note(Date.now(), res.error || res.message); } catch (e) { console.error(JSON.stringify({ worker: "qnfo-ops", where: "ops-degraded-feed", error: String(e && e.message || e) })); }
+  try { if (res && res.ok === false && opsD1TargetsAudit(name, args)) { var __tr = opsD1Note(Date.now(), res.error || res.message); if (__tr) await opsD1SharedPublish(env); } } catch (e) { console.error(JSON.stringify({ worker: "qnfo-ops", where: "ops-degraded-feed", error: String(e && e.message || e) })); }
   const audit = composioAuditPayload(name, args, res);
   await logToolEvent(env, name, audit.args, audit.result, ms);
   /* OPS-TOOL-MAILBOX-LOGIN-LINKS-1: a mailbox read never hands a login link, one-time code or token to the model. */
@@ -9495,7 +9518,7 @@ function manifest() {
     version: VERSION,
     base_url: "https://ops.qnfo.org",
     purpose: "QNFO ops/infrastructure AI execution endpoint: queue-and-query cloud-native services (research_queue -> intent orchestrator -> autonomous backend batch execution), full-fleet health, multi-DB read-only query, Vectorize/R2/KV read, machine-readable service registry.",
-    capabilities: ["ops-ai-gateway", "ops-degraded-mode", "openai-compatible", "chat", "agent", "code", "tool-execution", "fleet-probes", "full-fleet-probes", "multi-db-query", "vectorize-search", "r2-access", "kv-access", "research-queue", "queue-query", "analytics", "self-registration", "service-registry", "capability-advertising-audit", "telemetry", "self-heal", "isolated-ops-logging", "pure-server-exec", "streamed-answers", "async-jobs", "run-to-completion", "self-chaining-jobs", "workspace-edit", "workspace-grep", "workspace-glob", "workspace-diff", "workspace-patch", "run-code-net", "exec-pipeline", "git-ops", "parallel-reads", "claude-code-parity", "full-stack-shell", "cloudflare-containers", "real-python-interpreter", "real-node-interpreter", "bash-execution", "pip-install", "npm-install", "git-clone", "firecracker-vm", "agents-sdk", "durable-agent-sessions", "websocket-hibernation", "agent-http-rpc", "tool-bridge", "agent-schedule", "session-autocontinue"],
+    capabilities: ["ops-ai-gateway", "ops-degraded-mode", "ops-degraded-shared", "openai-compatible", "chat", "agent", "code", "tool-execution", "fleet-probes", "full-fleet-probes", "multi-db-query", "vectorize-search", "r2-access", "kv-access", "research-queue", "queue-query", "analytics", "self-registration", "service-registry", "capability-advertising-audit", "telemetry", "self-heal", "isolated-ops-logging", "pure-server-exec", "streamed-answers", "async-jobs", "run-to-completion", "self-chaining-jobs", "workspace-edit", "workspace-grep", "workspace-glob", "workspace-diff", "workspace-patch", "run-code-net", "exec-pipeline", "git-ops", "parallel-reads", "claude-code-parity", "full-stack-shell", "cloudflare-containers", "real-python-interpreter", "real-node-interpreter", "bash-execution", "pip-install", "npm-install", "git-clone", "firecracker-vm", "agents-sdk", "durable-agent-sessions", "websocket-hibernation", "agent-http-rpc", "tool-bridge", "agent-schedule", "session-autocontinue"],
     routes: ROUTES,
     tools: OPS_TOOLS.map(function(t) {
       return { name: t.name, description: t.description, parameters: t.parameters };
@@ -10943,7 +10966,7 @@ async function ownerRestRoutes(request, env, path, method) {
     return r.degraded ? { ok: r.ok, result: parsed, degraded: true, retry_after_s: r.retry_after_s } : { ok: r.ok, result: parsed };
   };
   if (path === "/v1/run-state" && method === "GET") return json(await opsRunState(env, new URL(request.url).searchParams.get("run_id"))); // TRACE-FOLD-1
-  if (path === "/v1/ideas" && method === "POST") { let b = {}; try { b = await request.json(); } catch (e) { return json({ error: "invalid JSON body" }, 400); } const __ig = opsD1Gate(Date.now(), "idea_submit", b); if (__ig) return new Response(JSON.stringify(Object.assign({ ok: false, result: __ig.body }, __ig.body)), { status: 503, headers: Object.assign({}, CORS_HEADERS, { "Retry-After": String(__ig.retry_after_s) }) }); return json(await ideaSubmit(env, b)); }
+  if (path === "/v1/ideas" && method === "POST") { let b = {}; try { b = await request.json(); } catch (e) { return json({ error: "invalid JSON body" }, 400); } await opsD1SharedSync(env, Date.now()); const __ig = opsD1Gate(Date.now(), "idea_submit", b); if (__ig) return new Response(JSON.stringify(Object.assign({ ok: false, result: __ig.body }, __ig.body)), { status: 503, headers: Object.assign({}, CORS_HEADERS, { "Retry-After": String(__ig.retry_after_s) }) }); return json(await ideaSubmit(env, b)); }
   if (path === "/v1/queue" && method === "GET") { const u = new URL(request.url); const a = {}; u.searchParams.forEach(function(v, k) { a[k] = v; }); return json(await queueRead(env, a)); }
   if (path === "/v1/tools" && method === "GET") return json({ object: "list", data: opsRestToolList(true).map(function(t) { return { type: "function", function: { name: t.name, description: t.description, parameters: t.parameters } }; }) });
   if (path === "/v1/tools/call" && method === "POST") { let b = {}; try { b = await request.json(); } catch (e) { return json({ error: "invalid JSON body" }, 400); } if (!b.name) return json({ error: "name required" }, 400); const __tr = await run(String(b.name), b.arguments || {}); if (__tr.degraded) return new Response(JSON.stringify(Object.assign({ ok: false, result: __tr.result }, __tr.result)), { status: 503, headers: Object.assign({}, CORS_HEADERS, { "Retry-After": String(__tr.retry_after_s) }) }); return json(__tr); }

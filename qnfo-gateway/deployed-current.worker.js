@@ -2888,46 +2888,6 @@ async function provVerify(sidecar, pubJwk) {
     return await crypto.subtle.verify({ name: "Ed25519" }, pk, provUnb64u(sidecar.signature.value), new TextEncoder().encode(provCanon(sidecar.statement)));
   } catch (e) { return false; }
 }
-async function paperBodySha256(body) { return provSha256Hex(String(body == null ? "" : body)); }
-// PAPER-PIDS-HASH-1 (issue 1000646): serve a content hash and an immutable version URL per paper version.
-// GET /papers/<slug>/v/<version> -> the stored body of that version with X-Content-SHA256; 410 when the stored hash no longer matches the body.
-async function handlePaperVersionPid(request, env, slug, version) {
-  var H = { "Content-Type": "text/markdown; charset=utf-8", "Access-Control-Allow-Origin": "*", "Cache-Control": "public, max-age=31536000, immutable" };
-  var v = String(version || "").replace(/^v/i, "");
-  try {
-    var row = await env.LIVING_PAPER.prepare("SELECT version, version_semver, body_md FROM papers WHERE slug = ?").bind(slug).first();
-    var cur = String((row && (row.version_semver || row.version)) || "").replace(/^v/i, "");
-    if (row && cur === v) {
-      var h = await paperBodySha256(row.body_md);
-      return new Response(String(row.body_md || ""), { status: 200, headers: Object.assign({}, H, { "X-Content-SHA256": h }) });
-    }
-    var ch = await env.LIVING_PAPER.prepare("SELECT body_md, sha256 FROM paper_change_bodies WHERE slug = ? AND version = ?").bind(slug, v).first();
-    if (!ch) return new Response(JSON.stringify({ error: "no such paper version" }), { status: 404, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } });
-    var h2 = await paperBodySha256(ch.body_md);
-    if (ch.sha256 && String(ch.sha256).toLowerCase() !== h2) {
-      return new Response(JSON.stringify({ error: "stored content hash no longer matches this version; it was withdrawn", sha256: String(ch.sha256), actual: h2 }), { status: 410, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*", "Cache-Control": "no-store" } });
-    }
-    return new Response(String(ch.body_md || ""), { status: 200, headers: Object.assign({}, H, { "X-Content-SHA256": h2 }) });
-  } catch (e) {
-    return new Response(JSON.stringify({ error: "paper version lookup failed" }), { status: 500, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*", "Cache-Control": "no-store" } });
-  }
-}
-// the sha256 of a paper's current body, published into GET /api/papers/<slug>
-async function paperCurrentSha256(env, slug) {
-  try {
-    var row = await env.LIVING_PAPER.prepare("SELECT body_md, sha256 FROM papers WHERE slug = ?").bind(slug).first();
-    if (!row) return null;
-    var h = await paperBodySha256(row.body_md);
-    if (row.sha256 && String(row.sha256).toLowerCase() !== h) return { sha256: h, hash_status: "mismatch_with_stored_hash" };
-    return { sha256: h };
-  } catch (e) { return null; }
-}
-// route dispatcher for the immutable-version surface: returns a Response when the URL is one of the new routes, else null
-async function paperPidsRoutes(request, env, urlObj) {
-  var m = String((urlObj && urlObj.pathname) || "").match(/^\/papers\/([^\/]+)\/v\/([^\/]+)\/?$/);
-  if (!m) return null;
-  return handlePaperVersionPid(request, env, decodeURIComponent(m[1]), decodeURIComponent(m[2]));
-}
 async function provKeyDoc(env) {
   var k = await provKey(env);
   if (!k) return null;
@@ -3590,7 +3550,7 @@ async function handlePaperDetail(request, env, path, ctx) {
       try {
         const rel = await kgRelatedPapers(slug);
         if (rel.length >= 2 && /<\/main>/.test(pageHtml)) pageHtml = pageHtml.replace(/<\/main>/, kgRelatedHtml(rel) + "</main>");
-      } catch (e) {}
+      } catch (e) { console.error(JSON.stringify({ worker: "qnfo-gateway", where: "kgRelatedPapers", error: String(e && e.message || e).slice(0, 160) })); }
       return new Response(pageHtml, {
         headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "public, max-age=3600", "Vary": "Accept", "Link": '<https://papers.qnfo.org/papers/' + slug + '.md>; rel="alternate"; type="text/markdown"' }
       });

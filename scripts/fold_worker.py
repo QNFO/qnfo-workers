@@ -454,6 +454,8 @@ def main():
     ap.add_argument("--callers", default="", help="comma-separated binder names besides qnfo-* that may reach the member through props.caller")
     ap.add_argument("--env-derive", default="{}", help='JSON {"MEMBER_NAME": "HOST_SECRET"}: the member gets HMAC-SHA256(host secret, "fold-kit|<guest>|MEMBER_NAME") as hex, never the secret')
     ap.add_argument("--env-const", default="{}", help='JSON {"MEMBER_NAME": "value"}: constants in the member env (e.g. its public base URL on the host)')
+    ap.add_argument("--host", dest="hostnames", action="append", default=[], help="FOLD-HOST-ROUTE-1: a public hostname (e.g. watch.q08.org, repeatable) whose requests reach the member with the path unchanged and no binding props; health stays on the prefix")
+    ap.add_argument("--allow-bindings", action="store_true", help="allow --host for a guest that has bindings, secrets or a cron (default: only a stateless guest)")
     ap.add_argument("--why", required=True, help="tracking reference for the FOLDED marker")
     ap.add_argument("--dry-run", action="store_true")
     a = ap.parse_args()
@@ -525,6 +527,14 @@ def main():
     gt_obj, ht_obj = tomllib.loads(rd(os.path.join(root, g, "wrangler.toml"))), tomllib.loads(rd(os.path.join(root, h, "wrangler.toml")))
     keys = member_keys(gt_obj, body)
     plane_check(g, h, gt_obj, ht_obj, keys, env_map)
+    for hn in a.hostnames:
+        if not re.match(r"^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$", hn):
+            die("--host %r is not a hostname" % hn)
+    if a.hostnames and not a.allow_bindings:
+        # FOLD-HOST-ROUTE-1: a hostname-root member is public, so it must be stateless unless the caller says otherwise
+        stateful = list(keys) + list(env_derive) + list(env_const) + (["cron"] if (gt_obj.get("triggers") or {}).get("crons") else []) + (["token"] if a.token else [])
+        if stateful:
+            die("--host %s: %s has bindings, secrets or a cron (%s); name --allow-bindings to fold it anyway (FOLD-HOST-ROUTE-1)" % (",".join(a.hostnames), g, ", ".join(stateful)))
     tok = a.token.split(":") if a.token else []
     public = [p.strip() for p in a.public.split(",") if p.strip()]
     block = []
@@ -543,7 +553,7 @@ def main():
         block.append(RUNTIME.rstrip("\n"))
     elif RUNTIME.rstrip("\n") not in hsrc:
         die(h + " carries an older FOLD-KIT runtime; refresh it to this kit's runtime before adding a member")
-    block.append("var %s = __foldWrap(%s, {" % (wrapped_var, host_default))
+    block.append("var %s = __foldWrap(%s, {" % (wrapped_var + ("__inner" if a.hostnames else ""), host_default))
     block.append("  name: %s, mod: %s, prefix: %s, publicPaths: %s," % (json.dumps(g), member_var, json.dumps(a.prefix), json.dumps(public)))
     block.append("  publicRoutes: %s, callers: %s," % (json.dumps(routes), json.dumps(callers)))
     block.append("  consts: %s, derive: %s," % (json.dumps(env_const), json.dumps(env_derive)))
@@ -553,6 +563,20 @@ def main():
     block.append("  env: function (raw) { var e = {}, k = this.keys; for (var i = 0; i < k.length; i++) if (raw[k[i]] !== undefined) e[k[i]] = raw[k[i]]; return Object.assign(e, {%s}); }," % ((" " + env_pairs + " ") if env_pairs else ""))
     block.append("  due: function (ms, cron) { return (%s); }" % a.due)
     block.append("});")
+    if a.hostnames:
+        block.append("// FOLD-HOST-ROUTE-1: a request whose hostname is one of these reaches the member with the path unchanged and no binding props.")
+        block.append("var %s = (function (inner) {" % wrapped_var)
+        block.append("  var hosts = %s, m = inner.__foldMember;" % json.dumps(a.hostnames))
+        block.append("  var out = Object.assign({}, inner, {")
+        block.append("    async fetch(request, env, ctx) {")
+        block.append("      if (hosts.indexOf(new URL(request.url).hostname) >= 0) return m.mod.fetch(request, Object.assign(m.env(env), m.consts || {}), { props: {}, waitUntil: function (x) { if (ctx && ctx.waitUntil) ctx.waitUntil(x); }, passThroughOnException: function () {} });")
+        block.append("      return inner.fetch(request, env, ctx);")
+        block.append("    }")
+        block.append("  });")
+        block.append('  Object.defineProperty(out, "__foldHost", { value: inner.__foldHost, enumerable: false });')
+        block.append('  Object.defineProperty(out, "__foldMember", { value: m, enumerable: false });')
+        block.append("  return out;")
+        block.append("})(%s);" % (wrapped_var + "__inner"))
     block.append("// ---- FOLD-KIT-1:%s:END ----" % g)
     # Imports go first in the module text (they are hoisted either way; first keeps the bundle readable).
     hsrc = "".join(i + "\n" for i in host_imports) + hsrc.rstrip("\n") + "\n" + "\n".join(block) + tail
@@ -581,6 +605,11 @@ def main():
         extra.append('  calls.length = 0;\n  await W.fetch(new Request("https://%s.example%s", { method: "%s", body: "x" }), env, {});\n  ok(calls.length === 1 && calls[0].who === "host", "%s %s is not a member route", calls);' % (h, path, other, other, path))
         if r["prefix"]:
             extra.append('  calls.length = 0;\n  await W.fetch(new Request("https://%s.example%s"), env, {});\n  ok(calls.length === 1 && calls[0].who === "host", "the bare prefix %s is not a member route", calls);' % (h, a.prefix + r["path"], a.prefix + r["path"]))
+    for hn in a.hostnames:
+        extra.append('  calls.length = 0;\n  await W.fetch(new Request("https://%s/page?s=1"), env, {});\n'
+                     '  ok(calls.length === 1 && calls[0].who === "member" && calls[0].path === "/page" && calls[0].search === "?s=1" && !(calls[0].props && calls[0].props.caller), "host %s reaches the member with the path unchanged and no binding props", calls);\n'
+                     '  calls.length = 0;\n  await W.fetch(new Request("https://other.example/page"), env, {});\n'
+                     '  ok(calls.length === 1 && calls[0].who === "host", "a foreign hostname reaches the host", calls);' % (hn, hn))
     for k, v in env_derive.items():
         extra.append('  calls.length = 0;\n  await W.fetch(new Request("https://internal/x"), env, { props: { caller: "qnfo-ops", member: "%s" } });\n'
                      '  ok(calls[0] && /^[0-9a-f]{64}$/.test(calls[0].env.%s || "") && calls[0].env.%s !== env.%s && !Object.values(calls[0].env).includes(env.%s), "%s is derived from %s and the member never sees %s", calls[0] && calls[0].env.%s);'
