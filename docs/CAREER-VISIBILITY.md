@@ -48,7 +48,7 @@ I am not softening these. Each has a fix, and the fix is mostly in your hands, n
 Stored with their limits in `reach_channel_profiles` so the profile sync and managers read one source. Status for all: **draft, owner approval required**.
 
 **LinkedIn headline (220):**
-> Builds AI research systems that find what is unknown, check themselves and keep running | Research program lead (FHWA, AARP) | Founder, QNFO
+> Systems researcher studying autonomous AI systems: how they operate, fail and get audited | Research program lead (FHWA, AARP) | Founder, QNFO
 
 **LinkedIn About:**
 > I work on one problem: making evidence trustworthy enough to act on.
@@ -75,14 +75,14 @@ data science, product management, statistical modeling.
 > Built and run an autonomous research system on Cloudflare that drafts, referees, revises, versions, publishes and corrects papers. Designed the Universal Ignorance Audit, a published method for auditing
 > AI-assisted research. Proposed JPCUB, a whole-system energy benchmark for computing, with estimates for 17 quantum platforms.
 
-**GitHub profile (bio, 160):** Builds AI research systems that find what is unknown and maintain themselves. Ex-FHWA, AARP. Amsterdam. qnfo.org
+**GitHub profile (bio, 160):** Systems researcher: autonomous AI systems, agent reliability and oversight. Ex-FHWA, AARP. Amsterdam. qnfo.org
 **GitHub pinned repositories:** the three `research-code` libraries (`agentic-collapse`, `ignorance-audit`, `ultrametric-lean`). Nothing else.
 
-**X bio (160):** Builds AI systems that research, ask what is unknown and maintain themselves. Ex-FHWA, AARP. Amsterdam. Open work: qnfo.org
+**X bio (160):** Systems researcher on autonomous AI: how agents operate, fail and get audited. Ex-FHWA, AARP. Amsterdam. Open work: qnfo.org
 
-**Bluesky bio (256):** I build AI systems that research, ask what is unknown and maintain themselves. Ex-FHWA and AARP. Some posts are drafted by my research pipeline. Open work and failures: qnfo.org
+**Bluesky bio (256):** Systems researcher studying autonomous AI systems: how they operate, fail and get audited. Ex-FHWA and AARP. Some posts are drafted by my research pipeline. Open work and failures: qnfo.org
 
-**Mastodon bio (500, scholar.social):** I build AI systems that research, ask what is unknown and maintain themselves (QNFO). Before that: national research programs at FHWA and AARP. Interested in AI evaluation, research integrity and epistemics. Some posts are drafted by my research pipeline and labelled. #AI #metascience #research
+**Mastodon bio (500, scholar.social):** Systems researcher studying autonomous AI systems (QNFO): operation, failure modes, oversight and audit. Before that: national research programs at FHWA and AARP. Interested in AI safety, agent reliability and the epistemics of AI-assisted research. Some posts are drafted by my research pipeline and labelled. #AI #AIsafety #agents #metascience
 
 **ORCID biography:** the first two paragraphs of the LinkedIn About, unchanged. One identity everywhere.
 
