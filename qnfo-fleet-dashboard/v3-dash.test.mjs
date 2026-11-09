@@ -67,7 +67,11 @@ const html = await r.text();
 ok(r.status === 200 && /text\/html/.test(r.headers.get("content-type")), "V1 / is html", r.status);
 ok(Date.now() - t0 < 1500, "V1 / paints without waiting on data");
 ok(["n-now", "n-readers", "n-code"].every((i) => html.includes('id="' + i + '"')), "V1 three screens in the nav");
-ok(!/ai_call_counters|reach_|v_metric_trigger_state/.test(queries.join(" ")), "V1 / reads no cost/reach table", queries);
+// FLEET-PUBLIC-SSR-1: the server HTML carries og tags and reads the aggregates only through the 45 s v3 cache, so a second view adds no reads.
+ok(html.includes('property="og:title"') && html.includes('rel="canonical"') && html.includes('id="pub"'), "V1 / carries og:title, canonical and the public block");
+const q1 = queries.length;
+await (await get("/")).text();
+ok(queries.length === q1, "V1 a second / view adds no D1 reads (cached aggregates)", queries.length - q1);
 const script = /<script>(\(function\(\)\{[\s\S]*?\}\)\(\);)<\/script>/.exec(html);
 let parses = false;
 try { new Function(script[1]); parses = true; } catch (e) { console.log(String(e)); }

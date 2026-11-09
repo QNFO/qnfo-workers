@@ -11,7 +11,7 @@ var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target,
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
 // 1.77.2 ERRATA-CHAIN-DISPATCH-1 (pillar research): wake the folded errata consumer and retry its legacy parked receipts.
 // VERSION-LINE-SPLIT-1 (agent_issues 100220): the release notes sit one per line below this statement, newest first, so a VERSION bump is a one-line patch; add a new note as the first line under it.
-var VERSION = "1.98.1";
+var VERSION = "1.99.0";
 // 1.89.0 NOW-NORTH-1 and HOME-MORE-1 (pillar core; minor): the Now screen opens with four numbers tied to the owner goals (readers, fleet cost, owner load, reliability) and drops the count of metrics off target (95 of 297; nothing can be done with it); a quiet footer on the home links the full dashboard, changelog, data index and managers.
 // 1.89.0 (cont.) MONEY-FIX-1 (pillar cost; patch): the Money card subtracted the subscription figure from a pace that never included it (fleet scope of v_cost_forecast), so it showed the fleet at 701 instead of 1151 a month; it now shows the fleet line, the subscriptions line and both together.
 // 1.85.0 (cont.) NOW-REVIEW-1: independent review fixes: Snooze and Not needed hide the card; a tap removes the card at once and reloads fresh, and the hand-back claims the card before filing (no duplicate tickets); strangers get no card keys or raw error text; only the signed-in owner (not the loop token) can run commands or hand work back; bound cards are read first; an unrefreshed metric reads n/a, not 0; one refresh in flight at a time and a failed refresh retries in 10 s; the Code poll says when the executor does not answer.
@@ -3724,10 +3724,10 @@ async function v3Work(env) {
   const ev = {};
   b.forEach(function(x) { ev[x.event] = Number(x.n) || 0; });
   const open = await d1all(env.AUDIT, "SELECT last_value FROM metric_registry WHERE metric = 'open_agent_issues'").catch(function() { return []; });
-  const mr = await d1all(env.AUDIT, "SELECT metric, last_value FROM metric_registry WHERE metric IN ('referral_30d','publications_30d')").catch(function() { return []; });
+  const mr = await d1all(env.AUDIT, "SELECT metric, last_value FROM metric_registry WHERE metric IN ('referral_30d','publications_30d','engaged_reader_sessions_7d')").catch(function() { return []; });
   const mv = {};
   mr.forEach(function(x) { const n = x.last_value == null ? NaN : Number(x.last_value); mv[x.metric] = isFinite(n) ? n : null; });
-  return { referral_30d: mv.referral_30d != null ? mv.referral_30d : null, publications_30d: mv.publications_30d != null ? mv.publications_30d : null, deploys_24h: a[0] ? Number(a[0].deploys) : null, code_merged_24h: a[0] ? Number(a[0].merged) : null, issues_opened_24h: ev.opened || 0, issues_closed_24h: ev.dispositioned || 0, issues_reopened_24h: ev.reopened || 0, open_issues: open[0] && open[0].last_value != null && isFinite(Number(open[0].last_value)) ? Number(open[0].last_value) : null };
+  return { engaged_reader_sessions_7d: mv.engaged_reader_sessions_7d != null ? mv.engaged_reader_sessions_7d : null, referral_30d: mv.referral_30d != null ? mv.referral_30d : null, publications_30d: mv.publications_30d != null ? mv.publications_30d : null, deploys_24h: a[0] ? Number(a[0].deploys) : null, code_merged_24h: a[0] ? Number(a[0].merged) : null, issues_opened_24h: ev.opened || 0, issues_closed_24h: ev.dispositioned || 0, issues_reopened_24h: ev.reopened || 0, open_issues: open[0] && open[0].last_value != null && isFinite(Number(open[0].last_value)) ? Number(open[0].last_value) : null };
 }
 async function v3Reach(env) {
   const [r, reg] = await Promise.all([reachScorecardData(env), d1all(env.AUDIT, "SELECT metric, last_value, last_refreshed FROM metric_registry WHERE metric IN ('pageviews_30d','referral_30d','publications_30d','subscribers_growth_monthly')").catch(function() { return []; })]);
@@ -3825,7 +3825,7 @@ async function v3Routes(request, env, ctx, path, url, owner) {
   const actor = !!(owner && owner.authed);
   const m = request.method;
   if ((path === "/" || path === "") && (m === "GET" || m === "HEAD") && url.searchParams.get("frag") !== "1") {
-    return new Response(m === "HEAD" ? null : v3Html(env), { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-cache" } });
+    return new Response(m === "HEAD" ? null : v3Html(env, await v3PublicBlock(env)), { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-cache" } });
   }
   if (path.indexOf("/api/v3/") !== 0) return null;
   if ((path === "/api/v3/now" || path === "/api/v3/readers") && (m === "GET" || m === "HEAD")) {
@@ -3951,9 +3951,26 @@ setInterval(function(){pill();if(cur!=='code')load(cur)},30000);setInterval(pill
 document.addEventListener('visibilitychange',function(){if(!document.hidden&&cur!=='code')load(cur,true)});
 who();show((location.hash||'#now').slice(1)==='readers'?'readers':(location.hash==='#code'?'code':'now'));
 })();`;
-function v3Html(env) {
-  return '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Fleet</title><style>' + V3_CSS + '</style></head><body>' +
-    '<header><b>Fleet</b><div id="pill"><i></i><span>loading</span></div></header><main><p id="off" class="err"></p>' +
+// FLEET-PUBLIC-SSR-1: one sentence and five numbers in the server HTML, read only from the cached v3 aggregates (public form, 45 s cache),
+// so link previews and crawlers see content. Slow or failed aggregates degrade to plain text, never an error.
+async function v3PublicBlock(env) {
+  const num = function(v, pre) { return v == null || !isFinite(Number(v)) ? "n/a" : (pre || "") + Number(v).toLocaleString("en-US"); };
+  let now = null, rd = null;
+  try {
+    const both = await Promise.race([Promise.all([v3Build(env, "now", false, false), v3Build(env, "readers", false, false)]), new Promise(function(_, rej) { setTimeout(function() { rej(new Error("slow")); }, 2500); })]);
+    now = both[0]; rd = both[1];
+  } catch (e) { now = null; rd = null; }
+  const w = now && now.work || {}, hl = now && now.health || {}, sp = now && now.spend || {}, rc = rd && rd.reach || {};
+  const mtd = sp.month_to_date_usd != null ? Math.round(Number(sp.month_to_date_usd)) : null;
+  const sentence = "QNFO runs an autonomous fleet of Cloudflare workers that publishes research, answers questions and fixes its own issues; these numbers are live.";
+  const facts = [["Open issues", num(w.open_issues)], ["Engaged readers, 7 days", num(w.engaged_reader_sessions_7d)], ["Papers published, 30 days", num(w.publications_30d != null ? w.publications_30d : rc.publications_30d)], ["Cost this month", num(mtd, "USD ")], ["Live workers", num(hl.workers_reporting)]];
+  const desc = sentence + " " + facts.map(function(f) { return f[0] + ": " + f[1]; }).join("; ") + ".";
+  return { desc: desc, html: '<section id="pub" class="card"><p>' + esc(sentence) + '</p><ul>' + facts.map(function(f) { return '<li>' + esc(f[0]) + ': <b>' + esc(f[1]) + '</b></li>'; }).join("") + '</ul></section>' };
+}
+function v3Html(env, pub) {
+  pub = pub || { desc: "QNFO fleet dashboard: open issues, readers, papers, cost and live workers.", html: "" };
+  return '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Fleet</title><meta name="description" content="' + esc(pub.desc) + '"><link rel="canonical" href="https://fleet.qnfo.org/"><meta property="og:title" content="QNFO fleet: live status"><meta property="og:description" content="' + esc(pub.desc) + '"><meta property="og:type" content="website"><meta property="og:url" content="https://fleet.qnfo.org/"><meta name="twitter:card" content="summary"><style>' + V3_CSS + '</style></head><body>' +
+    '<header><b>Fleet</b><div id="pill"><i></i><span>loading</span></div></header><main><p id="off" class="err"></p>' + pub.html +
     '<section id="s-now" class="scr on"><div class="hero"><h1>Loading...</h1><p>Reading the fleet.</p></div></section>' +
     '<section id="s-readers" class="scr"><div class="hero"><h1>Loading...</h1></div></section>' +
     '<section id="s-code" class="scr"><div class="chips"><button data-q="Give me a one-paragraph status of the fleet: what is broken, what changed in the last 24 hours.">Status</button><button data-q="Show the 5 most expensive workers by AI spend this week and how to cut each.">Cut costs</button><button data-q="List open pull requests and say which are safe to merge.">Open PRs</button></div>' +
