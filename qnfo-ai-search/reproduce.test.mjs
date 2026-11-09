@@ -135,7 +135,7 @@ const call = (path, headers) => X.worker_default.fetch(new Request("https://ask.
   const a = await call("/reproduce"), at = await a.text();
   ok(a.status === 200 && /data-page="reproduce"/.test(at) && /<title>Reproduce/.test(at), "the picker page and its marker");
   const b = await call("/reproduce/live"), bt = await b.text();
-  ok(b.status === 200 && /rel="canonical" href="https:\/\/ask\.qwav\.tech\/reproduce\/live"/.test(bt), "a record page has its own canonical address");
+  ok(b.status === 200 && /rel="canonical" href="https:\/\/ask.qwav.org\/reproduce\/live"/.test(bt), "a record page has its own canonical address");
   ok((await call("/reproduce/A")).status === 404, "a malformed address is a 404");
   const scripts = [...bt.matchAll(/<script[^>]*\ssrc="([^"]+)"[^>]*>/g)].map((m) => m[0]);
   ok(scripts.length === 1 && /KaTeX\/0\.16\.47\/katex\.min\.js/.test(scripts[0]) && /integrity="sha384-/.test(scripts[0]), "the only script tag with a source is the pinned KaTeX file", scripts);
@@ -145,7 +145,7 @@ const call = (path, headers) => X.worker_default.fetch(new Request("https://ask.
   ok(/prefers-color-scheme:dark/.test(bt) && /:focus-visible/.test(bt) && /name="viewport"/.test(bt) && /does not show that the paper's physics is right/.test(bt), "dark mode, focus style, viewport and the limit of what a match shows");
   ok(!/vector|pipeline|supplied summary|grounding/i.test(bt.replace(/<script[\s\S]*?<\/script>/g, "").replace(/Recorded when the pipeline ran it|research pipeline/g, "")), "reader text has no pipeline talk beyond naming the research pipeline that ran the script");
   const robots = await (await call("/robots.txt")).text(), sm = await (await call("/sitemap.xml")).text(), h = await (await call("/health")).json(), nav = await (await call("/concepts")).text();
-  ok(/Disallow: \/api\/reproduce/.test(robots) && /ask\.qwav\.tech\/reproduce</.test(sm) && h.capabilities.includes("paper-reproduce") && /href="\/reproduce"[^>]*>Reproduce</.test(nav), "robots, sitemap, health and nav know the page");
+  ok(/Disallow: \/api\/reproduce/.test(robots) && /ask.qwav.org\/reproduce</.test(sm) && h.capabilities.includes("paper-reproduce") && /href="\/reproduce"[^>]*>Reproduce</.test(nav), "robots, sitemap, health and nav know the page");
   ok(/id="lrep" href="\/reproduce"/.test(X.PAPER_PAGE) && /\$\('lrep'\)\.href='\/reproduce\//.test(X.PAPER_PAGE), "the living paper links to its reproduction");
 }
 // 5. the page script against a fake DOM and a fake worker

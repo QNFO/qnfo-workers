@@ -36,7 +36,7 @@
 //   LIMITS    public AI use is capped per visitor (hashed IP, hourly) and globally (daily); over a cap, or with the
 //             fleet's 30-day AI spend at SPEND_CAP_TOTAL_USD, the answer is sources-only (no model call).
 
-var VERSION = "2.19.6-codeagent";
+var VERSION = "2.19.7-codeagent";
 // 2.19.0 KERNEL-EVERYWHERE-1 (2026-11-06, owner directive "IMPLEMENT EVERYWHERE ACROSS ALL AI APPS AND SERVICES AND SURFACES", pillar reach): the Ask writer SYSTEM prompt carries the DOCTRINE-1 kernel 8.2.1 reply recognitions (KERNEL-REPLY-4): the answer body ends on the result; the designed FOLLOWUPS block remains the only question shape; no conditional offers or menus; ambiguity gets a stated assumption; limits are dispositions with their reason. prior 2.18.2-codeagent
 // 2.13.0 CROSS-LINK-1 (2026-11-04, pillar reach; minor: the Ask page links QWAV and q08 in its nav and footer and carries a Keep exploring strip to the paper library, QWAV, q08 and the idea threads). Prediction: ask.qwav.org visitors click through to another surface; revert: restore 2.12.17. // 2.12.17 earlier history follows: 
 
@@ -312,6 +312,10 @@ var worker_default = {
     var url = new URL(request.url);
     var path = url.pathname;
     var method = request.method;
+    // ASK-CANONICAL-1: ask.qwav.org is the plane domain; page routes of the .tech host redirect, /api and /health stay put.
+    if (url.hostname === "ask.qwav.tech" && method === "GET" && !/^\/(api|health|instances|search|ingest)(\/|$)/.test(path) && path !== "/robots.txt" && path !== "/sitemap.xml") {
+      return Response.redirect("https://ask.qwav.org" + path + url.search, 301);
+    }
     try {
       if (method === "OPTIONS") return new Response(null, { status: 204, headers: cors() });
       if (path === "/health" && method === "GET") return health(env);
@@ -333,20 +337,20 @@ var worker_default = {
       // LIVING-PAPER-1 (2.16.0): a published paper with live equations, explanations and a question box.
       if ((path === "/paper" || path === "/paper/") && method === "GET") return navPage(PAPER_PAGE);
       var pm = path.match(/^\/paper\/([a-z0-9][a-z0-9-]{2,180})\/?$/);
-      if (pm && method === "GET") return navPage(PAPER_PAGE.replace('href="https://ask.qwav.tech/paper"', 'href="https://ask.qwav.tech/paper/' + pm[1] + '"'));
+      if (pm && method === "GET") return navPage(PAPER_PAGE.replace('href="https://ask.qwav.org/paper"', 'href="https://ask.qwav.org/paper/' + pm[1] + '"'));
       if (path === "/api/paper" && method === "GET") return paperRoute(request, env, ctx);
       // REPRODUCE-1 (2.17.0): the recorded verification script of a paper, runnable in the reader's browser.
       if ((path === "/reproduce" || path === "/reproduce/") && method === "GET") return navPage(REPRODUCE_PAGE);
       var rm = path.match(/^\/reproduce\/([a-z0-9][a-z0-9-]{2,180})\/?$/);
-      if (rm && method === "GET") return navPage(REPRODUCE_PAGE.replace('href="https://ask.qwav.tech/reproduce"', 'href="https://ask.qwav.tech/reproduce/' + rm[1] + '"'));
+      if (rm && method === "GET") return navPage(REPRODUCE_PAGE.replace('href="https://ask.qwav.org/reproduce"', 'href="https://ask.qwav.org/reproduce/' + rm[1] + '"'));
       if (path === "/api/reproduce" && method === "GET") return reproRoute(request, env, ctx);
       // COMPUTE-1 (2.18.0): in-browser calculators (p-adic valuation, ultrametric distance, Laws of Form) and the way into the QWAV demos.
       if ((path === "/compute" || path === "/compute/") && method === "GET") return navPage(COMPUTE_PAGE);
       if (path === "/api/loop") return loopReport(env);
       // ASK-CRAWLER-GATE-1 (2.5.0): a renderer that honours robots.txt loads the page but does not post the question.
-      if (path === "/robots.txt") return new Response("User-agent: *\nAllow: /\nDisallow: /api/ask\nDisallow: /api/feedback\nDisallow: /api/consistency\nDisallow: /api/paper\nDisallow: /api/reproduce\nSitemap: https://ask.qwav.tech/sitemap.xml\n", { headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "public, max-age=3600" } });
+      if (path === "/robots.txt") return new Response("User-agent: *\nAllow: /\nDisallow: /api/ask\nDisallow: /api/feedback\nDisallow: /api/consistency\nDisallow: /api/paper\nDisallow: /api/reproduce\nSitemap: https://ask.qwav.org/sitemap.xml\n", { headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "public, max-age=3600" } });
       if (path === "/sitemap.xml" && method === "GET") {
-        return new Response('<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>https://ask.qwav.tech/</loc></url><url><loc>https://ask.qwav.tech/concepts</loc></url><url><loc>https://ask.qwav.tech/consistency</loc></url><url><loc>https://ask.qwav.tech/paper</loc></url><url><loc>https://ask.qwav.tech/reproduce</loc></url><url><loc>https://ask.qwav.tech/compute</loc></url></urlset>\n', { headers: { "content-type": "application/xml; charset=utf-8", "cache-control": "public, max-age=3600" } });
+        return new Response('<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>https://ask.qwav.org/</loc></url><url><loc>https://ask.qwav.org/concepts</loc></url><url><loc>https://ask.qwav.org/consistency</loc></url><url><loc>https://ask.qwav.org/paper</loc></url><url><loc>https://ask.qwav.org/reproduce</loc></url><url><loc>https://ask.qwav.org/compute</loc></url></urlset>\n', { headers: { "content-type": "application/xml; charset=utf-8", "cache-control": "public, max-age=3600" } });
       }
       return json({ error: "Not found", path: path }, 404);
     } catch (e) {
@@ -716,7 +720,7 @@ svg.graph text{fill:var(--ink);font:12px var(--sans)}svg.graph .edge{stroke:var(
 svg.graph .nd{cursor:pointer}svg.graph .nd:focus-visible{outline:2px solid var(--teal)}
 `;
 function navHead(title, desc, path, extra) {
-  return String.raw`<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>` + title + String.raw`</title><meta name="description" content="` + desc + String.raw`"><link rel="canonical" href="https://ask.qwav.tech` + path + String.raw`"><meta name="theme-color" content="#F5F7FB" media="(prefers-color-scheme: light)"><meta name="theme-color" content="#141A33" media="(prefers-color-scheme: dark)"><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@400;500;600&family=Newsreader:opsz,wght@6..72,400;6..72,500&display=swap" rel="stylesheet"><style>` + NAV_CSS + `</style>` + (extra || "") + String.raw`</head><body>`;
+  return String.raw`<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>` + title + String.raw`</title><meta name="description" content="` + desc + String.raw`"><link rel="canonical" href="https://ask.qwav.org` + path + String.raw`"><meta name="theme-color" content="#F5F7FB" media="(prefers-color-scheme: light)"><meta name="theme-color" content="#141A33" media="(prefers-color-scheme: dark)"><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@400;500;600&family=Newsreader:opsz,wght@6..72,400;6..72,500&display=swap" rel="stylesheet"><style>` + NAV_CSS + `</style>` + (extra || "") + String.raw`</head><body>`;
 }
 function navTop(current) {
   var a = function (href, label, key) { return '<a href="' + href + '"' + (current === key ? ' aria-current="page"' : "") + ">" + label + "</a>"; };
