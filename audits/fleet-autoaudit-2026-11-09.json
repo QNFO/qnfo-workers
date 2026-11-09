@@ -1,7 +1,7 @@
 {
-  "audited_at": "2026-11-09 02:08:46",
+  "audited_at": "2026-11-09 04:09:14",
   "d1_write_failures": [],
-  "d1_writes_ok": 4,
+  "d1_writes_ok": 5,
   "guard": {
     "_guard_rc": 0,
     "ahead": [],
@@ -48,6 +48,11 @@
         "worker": "qnfo-ai-yield"
       },
       {
+        "http": 404,
+        "version": null,
+        "worker": "qnfo-doc-gate"
+      },
+      {
         "http": 200,
         "version": null,
         "worker": "qnfo-workers"
@@ -79,6 +84,14 @@
       "match": 0,
       "note": "UNMANAGED_OK",
       "worker": "qnfo-ai-yield"
+    },
+    "qnfo-doc-gate": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "UNMANAGED_NO_HEALTH",
+      "worker": "qnfo-doc-gate"
     },
     "qnfo-workers": {
       "before": null,
