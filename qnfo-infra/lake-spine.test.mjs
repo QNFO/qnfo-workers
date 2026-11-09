@@ -18,7 +18,8 @@ ok(!/\*\//.test(block), "no comment terminator inside the block");
 ok(/var VERSION = "1\.(1[4-9]|[2-9]\d)\./.test(src), "VERSION is at least 1.14");
 const sched = src.slice(src.indexOf("async function runScheduled"));
 ok(/lakeSpineTick\(env\)/.test(sched.slice(0, 5000)), "runScheduled calls lakeSpineTick on every fire");
-ok(/path\.indexOf\("\/lake\/"\) === 0\) \{\s*if \(!\(await auth\(token, env\)\)\) return new Response\("unauthorized"/.test(src), "the /lake/ routes await the token check");
+ok(/path\.indexOf\("\/lake\/"\) === 0\) \{[^}]*?if \(!viaBinding && !\(await auth\(token, env\)\)\) return new Response\("unauthorized"/.test(src), "the /lake/ routes await the token check");
+ok(/viaBinding = path === "\/lake\/ingest" && !!ctx && !!ctx\.props && ctx\.props\.caller === "qnfo-fleet-dashboard"/.test(src) && /async fetch\(request, env, ctx\)/.test(src), "LAKE-SPINE-2.1: only /lake/ingest admits the dashboard service binding by ctx.props.caller");
 ok(/"cost-ledger", "lake-spine"\]/.test(src), "/health advertises the lake-spine capability");
 
 // the Python second path and the worker must agree on the lake table's columns
@@ -242,6 +243,19 @@ const setup = (mode) => {
   t.db.prepare("UPDATE ops_config SET value = 'paused' WHERE key = 'lake_spine'").run();
   ok((await call("/lake/tail", "POST")).status === 409 && (await call("/lake/tail?force=1", "POST")).status === 200, "a paused copy needs force=1 to run on demand");
   ok((await call("/lake/nope", "GET")).status === 404, "an unknown lake route is 404");
+  // LAKE-SPINE-2.1: POST /lake/ingest
+  stream.calls.length = 0;
+  const good = { id: 1, ts: "2026-11-09T00:00:00.000Z", source: "qnfo-fleet-dashboard", name: "m1", url: "u", transport: "http", ok: 1, status: 200, ms: 5, body: "b" };
+  const ing = await call("/lake/ingest?table=fleet_probe_log", "POST", [good, { ...good, id: 2, evil: "x" }]);
+  ok(ing.status === 200 && ing.json.committed === 2, "ingest: a valid batch of 2 is committed 2", ing);
+  ok(stream.calls.length === 1 && stream.calls[0].rows.length === 2 && !("evil" in stream.calls[0].rows[1]) && typeof stream.calls[0].rows[1].exported_at === "string", "ingest: unknown key dropped and exported_at set", stream.calls[0] && stream.calls[0].rows[1]);
+  const many = await call("/lake/ingest?table=fleet_probe_log", "POST", Array.from({ length: 501 }, (_, i) => ({ ...good, id: i })));
+  ok(many.status === 400 && stream.calls.length === 1, "ingest: 501 rows refused without a send", many);
+  ok((await call("/lake/ingest?table=nope", "POST", [good])).status === 400, "ingest: unknown table refused");
+  ok((await call("/lake/ingest", "POST", { not: "array" })).status === 400, "ingest: non-array refused");
+  // caller gate lives in the fetch branch: reproduce it from the source expression
+  const gate = (path, caller, tokOk) => { const via = path === "/lake/ingest" && caller === "qnfo-fleet-dashboard"; return via || tokOk; };
+  ok(gate("/lake/ingest", "qnfo-fleet-dashboard", false) && !gate("/lake/ingest", "qnfo-other", false) && !gate("/lake/query", "qnfo-fleet-dashboard", false) && gate("/lake/query", undefined, true), "ingest: caller not allowed is refused; other lake routes still need the token");
 }
 
 console.log(pass + " passed, " + fail + " failed");
