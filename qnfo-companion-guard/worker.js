@@ -28,9 +28,7 @@ async function probe(env){
   await q(env,"CREATE TABLE IF NOT EXISTS companion_probe_runs (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT, url TEXT, status INTEGER, len INTEGER, title TEXT, ids_total INTEGER, ids_missing INTEGER, ok INTEGER, reason TEXT)");
   await q(env,"CREATE TABLE IF NOT EXISTS companion_baseline (url TEXT PRIMARY KEY, title TEXT, len INTEGER, ids TEXT, captured_at TEXT)");
   const cols=await q(env,"PRAGMA table_info(companion_baseline)");
-  if(!cols.some(function(c){return c.name==="texts";})){
-    try{ await q(env,"ALTER TABLE companion_baseline ADD COLUMN texts TEXT"); }catch(e){ if(!/duplicate column/i.test(String(e))) console.error(JSON.stringify({worker:"qnfo-companion-guard",step:"add-texts-column",error:String(e).slice(0,120)})); }
-  }
+  if(!cols.some(function(c){return c.name==="texts";})){ try{ await q(env,"ALTER TABLE companion_baseline ADD COLUMN texts TEXT"); }catch(e){ console.error(JSON.stringify({worker:"qnfo-companion-guard",step:"add-texts-column",error:String(e).slice(0,120)})); } }
   const now=new Date().toISOString();
   const res=[];
   for(const url of URLS){
