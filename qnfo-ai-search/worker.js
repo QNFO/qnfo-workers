@@ -36,7 +36,7 @@
 //   LIMITS    public AI use is capped per visitor (hashed IP, hourly) and globally (daily); over a cap, or with the
 //             fleet's 30-day AI spend at SPEND_CAP_TOTAL_USD, the answer is sources-only (no model call).
 
-var VERSION = "2.19.9-codeagent";
+var VERSION = "2.19.10-codeagent";
 // 2.19.0 KERNEL-EVERYWHERE-1 (2026-11-06, owner directive "IMPLEMENT EVERYWHERE ACROSS ALL AI APPS AND SERVICES AND SURFACES", pillar reach): the Ask writer SYSTEM prompt carries the DOCTRINE-1 kernel 8.2.1 reply recognitions (KERNEL-REPLY-4): the answer body ends on the result; the designed FOLLOWUPS block remains the only question shape; no conditional offers or menus; ambiguity gets a stated assumption; limits are dispositions with their reason. prior 2.18.2-codeagent
 // 2.13.0 CROSS-LINK-1 (2026-11-04, pillar reach; minor: the Ask page links QWAV and q08 in its nav and footer and carries a Keep exploring strip to the paper library, QWAV, q08 and the idea threads). Prediction: ask.qwav.org visitors click through to another surface; revert: restore 2.12.17. // 2.12.17 earlier history follows: 
 
@@ -1475,6 +1475,107 @@ function lof(){
     out.appendChild(el('p',null,m===n?'The expression is marked whatever the letters are.':m===0?'The expression is void whatever the letters are.':'The expression is marked in '+m+' of '+n+' cases.'))
   }
 }
+function compareRat(a,b){
+  var left=a.n*b.d, right=b.n*a.d;
+  if(left<right)return -1;
+  if(left>right)return 1;
+  return 0;
+}
+function addRat(a,b){
+  return norm(a.n*b.d + b.n*a.d, a.d*b.d);
+}
+function ultrametric(){
+  var out=$('uout');clear(out);
+  var txt=$('umatrix').value.trim();
+  if(!txt){note(out,'Enter a symmetric distance matrix.');return}
+  var rows=txt.split('\n').map(function(l){return l.trim().split(/[\\s,]+/).filter(Boolean);});
+  var n=rows.length;
+  if(n<2||n>12){note(out,'Matrix must have between 2 and 12 points.');return}
+  for(var i=0;i<n;i++){
+    if(rows[i].length!==n){note(out,'Row '+(i+1)+' does not have '+n+' entries.');return}
+  }
+  var D=[];
+  for(i=0;i<n;i++){
+    D[i]=[];
+    for(var j=0;j<n;j++){
+      var r=parseRat(rows[i][j]);
+      if(r===null){note(out,'Invalid number at row '+(i+1)+', col '+(j+1)+'.');return}
+      D[i][j]=r;
+    }
+  }
+  for(i=0;i<n;i++){
+    if(compareRat(D[i][i],{n:0n,d:1n})!==0){note(out,'Diagonal must be zero.');return}
+    for(var j=i+1;j<n;j++){
+      if(compareRat(D[i][j],D[j][i])!==0){note(out,'Matrix must be symmetric.');return}
+    }
+  }
+  // Prim's algorithm for MST
+  var inMST=Array(n).fill(false);
+  var key=Array(n).fill(null);
+  var parent=Array(n).fill(-1);
+  key[0]={n:0n,d:1n};
+  for(var cnt=0;cnt<n;cnt++){
+    var u=-1;
+    for(var v=0;v<n;v++){
+      if(!inMST[v] && (u===-1 || compareRat(key[v],key[u])<0)){
+        u=v;
+      }
+    }
+    inMST[u]=true;
+    for(v=0;v<n;v++){
+      if(!inMST[v] && compareRat(D[u][v],key[v])<0){
+        key[v]=D[u][v];
+        parent[v]=u;
+      }
+    }
+  }
+  var adj=Array.from({length:n},()=>[]);
+  for(v=1;v<n;v++){
+    var p=parent[v];
+    var w=D[p][v];
+    adj[p].push({to:v,w:w});
+    adj[v].push({to:p,w:w});
+  }
+  function maxOnPath(a,b){
+    var visited=Array(n).fill(false);
+    var stack=[[a,null,{n:0n,d:1n}]];
+    while(stack.length){
+      var cur=stack.pop();
+      var node=cur[0], prev=cur[1], curMax=cur[2];
+      if(node===b)return curMax;
+      visited[node]=true;
+      for(var e of adj[node]){
+        if(e.to===prev)continue;
+        var newMax=curMax;
+        if(compareRat(e.w,curMax)>0) newMax=e.w;
+        stack.push([e.to,node,newMax]);
+      }
+    }
+    return null;
+  }
+  var U=Array.from({length:n},()=>Array(n));
+  for(i=0;i<n;i++)for(var j=0;j<n;j++)U[i][j]=i===j?{n:0n,d:1n}:maxOnPath(i,j);
+  var sum={n:0n,d:1n}, maxChange={n:0n,d:1n};
+  var count=0;
+  for(i=0;i<n;i++)for(j=i+1;j<n;j++){
+    var change=subRat(D[i][j],U[i][j]); // original - ultrametric
+    sum=addRat(sum,change);
+    if(compareRat(change,maxChange)>0)maxChange=change;
+    count++;
+  }
+  var mean=norm(sum.n, sum.d*BigInt(count));
+  // display matrices
+  function matRows(mat){
+    return mat.map(function(row){return row.map(ratText).join(' ')});
+  }
+  out.appendChild(el('h3',null,'Original distance matrix'));
+  out.appendChild(table([], matRows(D)));
+  out.appendChild(el('h3',null,'Subdominant ultrametric matrix'));
+  out.appendChild(table([], matRows(U)));
+  out.appendChild(el('h3',null,'Distortion'));
+  out.appendChild(el('p',null,'Maximum change: '+ratText(maxChange)));
+  out.appendChild(el('p',null,'Mean change: '+ratText(mean)));
+}
 `;
 var COMPUTE_PAGE = navHead("Compute | Ask QWAV", "Calculators from the QWAV papers that run in your browser: p-adic valuation and ultrametric distance, and Laws of Form reduction.", "/compute", "<style>" + LIVING_CSS + REPRO_CSS + String.raw`.fld{display:flex;flex-direction:column;gap:4px}.fld label{flex:none}.fld input{min-height:44px;padding:8px 12px;border:1px solid var(--rule);border-radius:8px;background:var(--surface);color:var(--ink);font:inherit;width:9em}
 #lf .fld{flex:1 1 220px}#lf .fld input{width:100%}section.tool{margin:0 0 28px}ul.demos{padding-left:20px}ul.demos li{margin:0 0 6px}` + "</style>") + navTop("compute") + String.raw`<main id="main" data-page="compute">
@@ -1502,6 +1603,15 @@ var COMPUTE_PAGE = navHead("Compute | Ask QWAV", "Calculators from the QWAV pape
 </form>
 <p class="meta">Try (()()) or ((a)a) or (a(b)).</p>
 <div id="lout" aria-live="polite"></div>
+</section>
+<section class="tool" aria-labelledby="uh">
+<h2 id="uh">Ultrametric embedding calculator</h2>
+<p class="meta">Paste a symmetric distance matrix (up to 12 points). The calculator computes the subdominant ultrametric, shows it as a matrix, the merge order, and distortion statistics.</p>
+<form id="uf">
+<div class="fld"><label for="umatrix">Matrix (rows separated by newlines, entries by spaces or commas)</label><textarea id="umatrix" rows="6" style="width:100%;"></textarea></div>
+<button class="go" type="submit">Compute</button>
+</form>
+<div id="uout" aria-live="polite"></div>
 </section>
 <section class="tool" aria-labelledby="mh">
 <h2 id="mh">More tools in your browser</h2>
