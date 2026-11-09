@@ -29,7 +29,7 @@
 # This config must never carry a credential.
 name = "qnfo-workers"
 main = "worker.js"
-compatibility_date = "2026-10-25"
+compatibility_date = "2026-11-04"
 workers_dev = true
 
 # BP26-OBSERVABILITY-1 (2026-10-26, agent_issues 1000354): the Cloudflare API shows this stub as the only one of 35 deployed Workers with observability off

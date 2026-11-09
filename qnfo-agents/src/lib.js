@@ -195,6 +195,32 @@ export function pickAnswer(text, steps) {
   return { text: t, answered: true };
 }
 
+// SWEEP-CLAIMS-FILED-1: a model's "Issues Filed: N" is a claim, not evidence. The ids come from the file_issue tool results.
+export function filedIssueIds(steps) {
+  const ids = [];
+  for (const st of Array.isArray(steps) ? steps : []) {
+    for (const tr of (st && st.toolResults) || []) {
+      if (!tr || tr.toolName !== "file_issue") continue;
+      const v = tr.output !== undefined ? tr.output : tr.result;
+      if (v && v.ok && v.id != null) ids.push(v.id);
+    }
+  }
+  return ids;
+}
+
+export function claimedFiled(text) {
+  const m = /issues?\s+filed\s*[:=-]?\s*\**\s*(\d+)/i.exec(String(text || ""));
+  return m ? Number(m[1]) : null;
+}
+
+/** The mismatch to record for a finished sweep, or null when the claim holds (or none was made). */
+export function filedMismatch(text, steps) {
+  const claimed = claimedFiled(text);
+  if (claimed == null) return null;
+  const ids = filedIssueIds(steps);
+  return claimed > ids.length ? { claimed, recorded: ids.length, ids } : null;
+}
+
 export function toolTranscript(steps, maxChars) {
   const out = [];
   for (const st of Array.isArray(steps) ? steps : []) {

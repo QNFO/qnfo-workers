@@ -17,4 +17,12 @@ ok(/file_issue as soon as its evidence is in hand/.test(MAINTAIN_PROMPT), "the p
 ok(/MAINTAIN_MAX_STEPS = 40/.test(src) && /cmdline-maintain\/\.test\(String\(r\.caller\)\) \? MAINTAIN_MAX_STEPS/.test(src), "the sweep has its own step budget");
 ok(/cmdline-maintain\/\.test\(String\(r\.caller\)\) \? MAINTAIN_MAX_STEPS : lean/.test(src), "the sweep budget wins over lean mode");
 ok(/MAINTAIN_TURN_TIMEOUT_MS/.test(src), "the sweep has its own turn timeout");
+import { filedMismatch, claimedFiled, filedIssueIds } from "./src/lib.js";
+const fi = (id) => ({ toolResults: [{ toolName: "file_issue", output: { ok: true, id } }] });
+ok(claimedFiled("Summary\nIssues Filed: 4") === 4 && claimedFiled("**Issues filed:** 2") === 2 && claimedFiled("none") === null, "claim parsing");
+ok(filedMismatch("Issues Filed: 4", [{ toolResults: [] }]).recorded === 0, "claim with no file_issue result is a mismatch");
+ok(filedMismatch("Issues Filed: 2", [fi(7), fi(8)]) === null, "claim backed by ids holds");
+ok(filedMismatch("Issues Filed: 3", [fi(7), { toolResults: [{ toolName: "file_issue", output: { ok: false, error: "x" } }] }]).recorded === 1, "failed file_issue is not counted");
+ok(filedMismatch("no claim here", []) === null && filedIssueIds([fi(9)])[0] === 9, "no claim, no mismatch");
+ok(/filedMismatch\(result, out\.steps\)/.test(src) && /SWEEP-CLAIMS-FILED-1/.test(src), "executeRun verifies the sweep's claim");
 console.log("maintain: " + pass + " passed, " + fail + " failed"); process.exit(fail ? 1 : 0);

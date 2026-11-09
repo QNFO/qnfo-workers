@@ -39,4 +39,18 @@ assert.deepEqual(d1.map((x) => x.dispatched), [true, true]);
 assert.equal(d1[0].wf, "r2-doc-audit.yml");
 const d2 = await sweepWorkflowDispatch(env, new Date("2026-11-09T05:00:00Z"));
 assert.deepEqual(d2.map((x) => x.skipped), ["already dispatched this period", "already dispatched this period"]);
+// R2-AUDIT-CLOSE-1: a group issue with no orphan left is resolved, a live one is not
+import { resolvedGroups, retireStatement, retireRoadmap } from "./r2_file_issues.mjs";
+const T = (g) => `DOC-IS-CODE-1: implement or retire R2 documents under ${g}`;
+const openG = [{ number: 1, title: T("b/a") }, { number: 2, title: T("b/gone") }, { number: 3, title: "something else" }];
+const resolved = resolvedGroups(openG, [{ title: T("b/a") }]);
+assert.deepEqual(resolved.map((x) => x.number), [2]);
+assert.equal(resolved[0].group, "b/gone");
+assert.deepEqual(resolvedGroups(openG, []).map((x) => x.number), [1, 2], "zero orphans resolves every group issue");
+assert.match(retireStatement("b/gone", "ev").sql, /status = 'retired'/);
+assert.deepEqual(retireStatement("b/gone", "ev").params, ["ev", "r2://b/gone/%"]);
+assert.equal(retireStatement("b/(root)", "ev").params.length, 3);
+let sent; const rr = await retireRoadmap(resolved, "ev", { tok: "t", acct: "a", fetchImpl: async (_u, o) => { sent = JSON.parse(o.body); return { json: async () => ({ success: true, result: [{ meta: { changes: 4 } }] }) }; } });
+assert.equal(rr.retired, 4); assert.equal(sent.batch.length, 1);
+assert.equal((await retireRoadmap([], "ev")).retired, 0);
 console.log("r2_file_issues.test ok");
