@@ -1,8 +1,180 @@
 {
- "ok": false,
- "error": "no parseable consumer output: Extra data: line 2 column 1 (char 451)",
+ "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
+ "verifier": "remediation-consumer@767c81878b81",
+ "due": 15,
+ "pass": 3,
+ "fail": 12,
+ "skipped": 0,
+ "deferred": 0,
+ "contracts": [
+  {
+   "class": "goal-PAPER-LEARN-5713",
+   "issue_id": null,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "fm-d1-overload-refile",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-1002028",
+   "issue_id": 1002028,
+   "verdict": "fail",
+   "expected": 0,
+   "observed": 1,
+   "written": true
+  },
+  {
+   "class": "fm-unprobed-issues",
+   "issue_id": null,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "goal-PAPER-LEARN-5820",
+   "issue_id": null,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "goal-PAPER-LEARN-6173",
+   "issue_id": null,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "fm-lake-spine-drift-silent",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "goal-PAPER-LEARN-5871",
+   "issue_id": null,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "goal-PAPER-LEARN-5881",
+   "issue_id": null,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "goal-PAPER-LEARN-5882",
+   "issue_id": null,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-1002391",
+   "issue_id": 1002391,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-consumer-pending-recorded-as-failure",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-reopen-without-live-path",
+   "issue_id": null,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "93",
+   "written": true
+  },
+  {
+   "class": "issue-1000459",
+   "issue_id": 1000459,
+   "verdict": "fail",
+   "expected": "ok: <=70 close-then-reopen pairs on METRIC-TRIGGER issues in 7d",
+   "observed": "flap: 227 close-then-reopen pairs on 65 METRIC-TRIGGER issues in 7d (doD <=70)",
+   "written": true
+  },
+  {
+   "class": "issue-1000697",
+   "issue_id": 1000697,
+   "verdict": "fail",
+   "expected": "every heaviest D1 worker is on smart placement",
+   "observed": "0 of 10 heaviest D1 workers are on smart placement",
+   "written": true
+  }
+ ],
+ "trusted_transports": [
+  "binding-http",
+  "cf-api",
+  "code-read",
+  "container",
+  "curl",
+  "d1-query",
+  "d1-query@ipatent-db",
+  "d1-query@living-paper",
+  "d1-query@personal-life",
+  "d1-query@portfolio-state",
+  "d1-query@q08-signal",
+  "d1-query@qnfo-cms",
+  "d1-query@qnfo-graph",
+  "dns",
+  "edge-ext",
+  "external",
+  "external-curl",
+  "external-http",
+  "external-https",
+  "http",
+  "runner-https"
+ ],
+ "budget_exhausted": false,
+ "runtime_verified_share_24h": 22.8,
+ "host_census": {
+  "skipped": "ran within 6h"
+ },
+ "view_health": {
+  "skipped": "runs in the views job (REMEDIATION_VIEW_HEALTH=sweeps)"
+ },
+ "fleet_journeys_error": "HTTP 400 from https://api.cloudflare.com/client/v4/accounts/edb167b78c9fb901ea5bca3ce58ccc4b/d1/database/35e2e573-92f3-46ac-83c6-22f6429fc5e5/query: {\"messages\":[],\"result\":[],\"success\":false,\"errors\"",
+ "cf_token_watch": {
+  "ok": 1,
+  "expires_in_min": 999999,
+  "path": "accounts"
+ },
+ "migrations": {
+  "opted_in": 1294,
+  "unapplied": [],
+  "applied_now": [],
+  "failed": [],
+  "metric": 0
+ },
+ "spent_ms": 68883,
  "head": "767c81878b81ee723b523dd27087e7a90c09b2d8",
  "job_status": "success",
- "ts": "2026-11-09T09:07:04Z"
+ "ts": "2026-11-09T09:12:48Z"
 }
