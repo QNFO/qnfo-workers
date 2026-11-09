@@ -31,6 +31,13 @@ for (const col of ["day", "provider", "caller", "model", "outcome", "calls", "in
 ok(/PRIMARY KEY \(day, provider, caller, model, outcome\)/.test(mig) && /ON CONFLICT\(day, provider, caller, model, outcome\)/.test(script), "the table key is the upsert's conflict target");
 ok(/CREATE VIEW IF NOT EXISTS v_ai_meter_ae_vs_ledger/.test(mig) && /LEFT JOIN ai_spend_ledger l ON l\.day = a\.day AND l\.provider = a\.provider AND l\.caller = a\.caller AND l\.model = a\.model/.test(mig), "the view joins the ledger on its own key");
 
+// AI-METER-AE-3: the daily reconcile table and its writer agree.
+const rmig = readFileSync(join(root, "migrations/2026-11-09-ai-meter-reconcile.sql"), "utf8");
+ok(/^-- APPLY-BY: ci$/m.test(rmig) && /^-- DB: qnfo-audit$/m.test(rmig) && /^-- Rollback: .+/m.test(rmig), "reconcile migration carries the runner headers");
+ok(!/\b(DELETE FROM|DROP TABLE IF EXISTS ai_meter_ae)/i.test(rmig.replace(/^--.*$/gm, "")), "reconcile migration destroys nothing");
+for (const col of ["day", "ae_calls", "ledger_calls", "missed_calls", "missed_share", "checked_at"]) ok(new RegExp("\\b" + col + "\\b").test(rmig) && new RegExp("\\b" + col + "\\b").test(script.split("def reconcile(")[1]), "reconcile column " + col);
+ok(/AI-METER-AE-3/.test(script) && /reconcile\(day, d1 or RC\.d1/.test(script), "run() calls reconcile once per run for the previous day");
+
 const wf = readFileSync(join(root, ".github/workflows/remediation-consumer.yml"), "utf8");
 const heavy = wf.slice(wf.indexOf("remediation-consumer-heavy"));
 ok(/scripts\/ai_meter_ae\.py --selftest && python3 scripts\/ai_meter_ae\.py/.test(heavy), "the heavy job runs the reader after its selftest");

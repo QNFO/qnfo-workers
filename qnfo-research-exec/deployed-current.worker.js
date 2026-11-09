@@ -496,7 +496,7 @@ var __defProp22222 = Object.defineProperty;
 var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(target, "name", { value, configurable: true }), "__name");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.55.8";
+var VERSION = "0.55.9";
 var __AI_ATTR_RATES = { "@cf/zai-org/glm-5.3": [127273, 4e5], "@cf/zai-org/glm-5.3-flash": [13636, 45455], "@cf/nvidia/nemotron-3-120b-a12b": [45455, 136364], "@cf/moonshotai/kimi-k2.6": [86364, 363636], "@cf/moonshotai/kimi-k2.7-code": [86364, 363636], "@cf/openai/gpt-oss-120b": [31818, 68182], "@cf/openai/gpt-oss-20b": [18182, 27273], "@cf/deepseek-ai/deepseek-v4-pro-0813": [12e4, 36e4], "@cf/deepseek-ai/deepseek-v4-flash-0731": [4e4, 12e4], "@cf/meta/llama-3.3-70b-instruct-fp8-fast": [26668, 204805], "@cf/qwen/qwen3-30b-a3b-fp8": [4625, 30475], "@cf/qwen/qwen3.8-27b": [40909, 290909], "@cf/baai/bge-base-en-v1.5": [6058, 0], "@cf/baai/bge-small-en-v1.5": [1841, 0], "@cf/baai/bge-large-en-v1.5": [18582, 0] };
 function __attrStageSet(env, stage) {
   if (env && env.__aiAttrCtx) env.__aiAttrCtx.stage = String(stage || "");
@@ -995,8 +995,12 @@ __name22222(reasoningPreamble, "reasoningPreamble");
 __name222222(reasoningPreamble, "reasoningPreamble");
 var TERMINAL_RECOVERY_MAX = 2;
 var LANE_REVISE_FIRST = 2;
+// RESEARCH-ROWS-OVER-4-CYCLES-1 (issue 8794): a paper that failed four full cycles is not drafted again from ground a fifth time. A row that still has open findings
+// keeps its draft and goes to revise (the draft is the asset; a fifth ground draft cost 85k to 100k neurons and failed review the same way).
+var LANE_GROUND_MAX = 4;
 function laneStageFor(kind, cycles) {
-  return kind === "findings" && Number(cycles || 0) < LANE_REVISE_FIRST ? "revise" : "ground";
+  var c = Number(cycles || 0);
+  return kind === "findings" && (c < LANE_REVISE_FIRST || c >= LANE_GROUND_MAX) ? "revise" : "ground";
 }
 __name(laneStageFor, "laneStageFor");
 function laneStatusFor(cycles) {
