@@ -45,9 +45,9 @@ Each hypothesis states a mechanism and what would refute it. None is established
 
 **H5. Speed on thin markets.** In newly listed or thinly traded markets, prices may lag fresh reporting. *Refuted if* the gap between our estimate and the price closes only after the evidence is already old.
 
-**H6. Domains where our sources lead.** Q08's own signal sources are Hacker News, GDELT and Wikipedia, the same ones its research ledger reads. For technology, AI and software-release questions, reporting there may lead the crowd; for geopolitics and elections it plausibly does not. *Refuted if* the per-domain evaluation shows no positive interval in any domain after 30 resolved estimates per domain.
+**H6. Domains where our sources lead.** Q08's own signal sources are Hacker News, GDELT and Wikipedia (its search and its daily current-events portal), the same ones its research ledger reads. For technology, AI and software-release questions, reporting there may lead the crowd; for geopolitics and elections it plausibly does not. *Refuted if* the per-domain evaluation shows no positive interval in any domain after 30 resolved estimates per domain.
 
-**Where we expect no edge.** Liquid headline markets, where public information is priced within minutes; sports, where the crowd and bookmakers already specialise (excluded from the Q08 universe); and markets resolved by a subjective judgment of wording rather than by a checkable fact.
+**Where we expect no edge.** Liquid headline markets, where public information is priced within minutes; sports, where the crowd and bookmakers already specialise (excluded from the Q08 universe); markets resolved by a price bracket or a count on a given day (price ranges, tweet counts), where news carries little beyond the live number and a structured price model is the right tool (excluded from the Q08 universe); and markets resolved by a subjective judgment of wording rather than by a checkable fact.
 
 ## 4. How forecasting evaluations go wrong
 
@@ -70,7 +70,7 @@ A forecast is not a profit. Takers pay the spread and sometimes a fee, and the K
 |---|---|---|---|
 | R1 | Hide the market price from the model | [2], [9] | Implemented; tested |
 | R2 | Use several model families and aggregate with the median | [2], [8] | Implemented: three families from the fleet's approved model table; agreement and spread rules |
-| R3 | Retrieve fresh evidence from several independent sources and keep a snapshot | [1], [9] | Implemented: Hacker News, GDELT, Wikipedia; per-source counts and an evidence digest in every log row |
+| R3 | Retrieve fresh evidence from several independent sources and keep a snapshot | [1], [9] | Implemented: Hacker News, GDELT, Wikipedia search and the Wikipedia current-events portal; per-source counts and an evidence digest in every log row |
 | R4 | Learn a recalibration (stretch or shrink) from resolved outcomes | [6], [7], [8] | Implemented: logistic recalibration fitted on raw ensemble probabilities, bounded, applied only after 50 resolved estimates |
 | R5 | Blend the model with the market price and size by fractional Kelly | [1], [2] | Implemented: blend weight chosen by Brier score on resolved estimates; quarter-Kelly sizing capped at the position limit |
 | R6 | Score the first forecast on each market, with lead time | section 4 | Implemented |

@@ -1,5 +1,5 @@
 import test from "node:test"; import assert from "node:assert/strict";
-import { CHARTER, domainOf, applyRecal, fitRecal, fitBlend, kellyStake, sha256Hex, chainHash, verifyChain, logLoss, byDomain, tuneActions, wikiItems, hnQuery, gdeltDelay, parseMarket, isSports, parseEstimate, newsQuery, aggregate, decide, signalEntries, exits, equity, markOf, priceOf, candidates, stats, currentDrawdown, bootstrapCI, evaluate, graduation, reviewActions, syntheticMarkets } from "./worker.js";
+import { CHARTER, isQuant, ceLines, ceMatch, domainOf, applyRecal, fitRecal, fitBlend, kellyStake, sha256Hex, chainHash, verifyChain, logLoss, byDomain, tuneActions, wikiItems, hnQuery, gdeltDelay, parseMarket, isSports, parseEstimate, newsQuery, aggregate, decide, signalEntries, exits, equity, markOf, priceOf, candidates, stats, currentDrawdown, bootstrapCI, evaluate, graduation, reviewActions, syntheticMarkets } from "./worker.js";
 
 test("parseMarket reads gamma outcomePrices and the end date", () => {
   const m = parseMarket({ slug: "a", question: "Q", outcomePrices: '["0.4","0.6"]', endDate: "2026-11-20T00:00:00Z" });
@@ -212,4 +212,18 @@ test("tuneActions: weekly lock, bounded parameter moves, immediate domain switch
   assert.deepEqual(dom.map((a) => a.kind), ["domain_off"]); assert.equal(dom[0].domain, "politics");
   assert.equal(tuneActions(bad, { recal_a: 1, recal_b: 0, blend_w: 0.5, last_tune_at: "2026-11-30T00:00:00Z", domains_off: { politics: "2026-12-10T00:00:00Z" } }, now).length, 0); // already off
   assert.equal(tuneActions(rows.slice(0, 20), { recal_a: 1, recal_b: 0, blend_w: 0.5 }, now).length, 0); // too few resolved
+});
+
+test("isQuant flags price brackets and post counts, not questions where news matters", () => {
+  for (const x of ["Will the price of Ethereum be above $2,200 on November 9?", "Will the price of Bitcoin be between $76,000 and $78,000 on November 10?", "Bitcoin Up or Down on November 9?", "Will Elon Musk post 300-319 tweets from November 3 to November 10?", "Exact Score: Any Other Score?"]) assert.ok(isQuant(x), x);
+  for (const x of ["US x Iran Effective Ceasefire by November 22?", "Will Bitcoin hit $100k in November?", "Will the Fed cut rates in December?", "Will OpenAI release GPT-6 before December?"]) assert.ok(!isQuant(x), x);
+  const soon = new Date(Date.now() + 5 * 86400000).toISOString();
+  assert.deepEqual(candidates([{ slug: "q", title: "Will the price of Ethereum be above $2,200 on November 9?", yes: 0.5, vol24: 5e4, closed: 0, ends_at: soon, sports: 0 }], new Set(), new Set()), []);
+});
+test("the current-events portal gives evidence lines matched to a question by its distinctive words", () => {
+  const html = '<ul><li><a href="/wiki/Iran">Iran</a> and <a href="/wiki/Israel">Israel</a> agree to extend their ceasefire for another week, mediators say. <a href="https://example.com">Reuters</a></li><li>A hurricane makes landfall in Florida, forcing evacuations of coastal counties.</li><li>short</li></ul>';
+  const lines = ceLines(html, "2026-11-08T10:00:00Z");
+  assert.equal(lines.length, 2); assert.match(lines[0].title, /Iran and Israel agree to extend their ceasefire.*\[Wikipedia current events 2026-11-08\]$/); assert.equal(lines[0].date, "20261108");
+  const hit = ceMatch(lines, "US x Iran Effective Ceasefire by November 22?"); assert.equal(hit.length, 1); assert.equal(hit[0].src, "events"); assert.ok(!("text" in hit[0]));
+  assert.deepEqual(ceMatch(lines, "Will the Senate pass the funding bill?"), []); assert.deepEqual(ceMatch([], "anything goes here"), []);
 });
