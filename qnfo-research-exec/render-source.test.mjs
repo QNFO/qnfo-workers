@@ -28,7 +28,7 @@ const events = [];
 const flags = new Map();
 const mkEnv = (extra) => Object.assign({ QNFO_AUDIT: { prepare(sql) { const s = { bind(...a) { s.a = a; return s; }, async first() { if (/FROM ops_config/.test(sql)) return flags.has("ground_render") ? { value: flags.get("ground_render") } : null; return null; }, async run() { if (/INSERT INTO cloud_ops_events/.test(sql)) events.push({ kind: s.a[2], text: s.a[3], status: s.a[6] }); return { success: true }; }, async all() { return { results: [] }; } }; return s; } } }, extra || {});
 let launches = [];
-globalThis.erratapublishMod = { renderSourceHtml: async (env, url, ms) => { launches.push({ url, ms }); if (globalThis.__renderMode === "throw") throw new Error("browser quota"); return globalThis.__renderMode === "thin" ? THIN : RICH; } };
+globalThis.__erratapublishMod = { renderSourceHtml: async (env, url, ms) => { launches.push({ url, ms }); if (globalThis.__renderMode === "throw") throw new Error("browser quota"); return globalThis.__renderMode === "thin" ? THIN : RICH; } };
 globalThis.__renderMode = "rich";
 
 // 1. gates
