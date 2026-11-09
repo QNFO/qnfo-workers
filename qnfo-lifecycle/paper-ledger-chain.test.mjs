@@ -270,6 +270,33 @@ const metric = (a, name) => a.prepare("SELECT last_value v, state FROM metric_re
     ok(live.headers.get("cache-control") === "public, max-age=60", "the route is cached for a minute");
   } finally { console.error = origErr; }
 }
+{ // PAPER-LEDGER-SIGN-1: signed seals
+  const signSql = readFileSync(new URL("../migrations/2026-11-09-paper-ledger-seal-signature.sql", import.meta.url), "utf8");
+  const mkSigned = () => { const au = mkAudit(); au.exec(signSql); return au; };
+  { // no key: unchanged, even with the column installed
+    const db = mkLiving(), au = mkSigned(); seed(db, 4);
+    const env = { LIVING_PAPER: d1(db), QNFO_AUDIT: d1(au) };
+    const r = await P.tick(env, { nowMs: Date.parse("2026-11-05T10:00:00Z") });
+    ok(r.anchored === true && !r.signed && au.prepare("SELECT signature s FROM paper_ledger_seals").get().s === null, "with no key the seal carries no signature", r);
+  }
+  { // key: signed, verified, a forged anchor is a break
+    const db = mkLiving(), au = mkSigned(); seed(db, 4);
+    const env = { LIVING_PAPER: d1(db), QNFO_AUDIT: d1(au), LEDGER_SEAL_KEY: "k-test-1" };
+    const r = await P.tick(env, { nowMs: Date.parse("2026-11-05T10:00:00Z") });
+    const row = au.prepare("SELECT head_seq, head_hash, signature FROM paper_ledger_seals").get();
+    ok(r.signed === true && /^hmac-sha256:[0-9a-f]{64}$/.test(row.signature), "with a key the seal is signed", row);
+    const st = await P.status(env, true);
+    ok(st.seals[0].signature === row.signature && st.verified.anchor_breaks === 0, "the status route lists the signature and verifies clean", st);
+    const bad = await P.checkAnchors({ ...env, LEDGER_SEAL_KEY: "another-key" }, Date.parse("2026-11-05T11:00:00Z"));
+    ok(bad.bad.length === 1 && bad.bad[0].kind === "anchor-signature-mismatch", "a seal that does not verify under the key is a break", bad);
+  }
+  { // key set before the migration: sealed without a signature, degraded, not thrown
+    const db = mkLiving(), au = mkAudit(); seed(db, 4);
+    const env = { LIVING_PAPER: d1(db), QNFO_AUDIT: d1(au), LEDGER_SEAL_KEY: "k-test-1" };
+    const r = await P.tick(env, { nowMs: Date.parse("2026-11-05T10:00:00Z") });
+    ok(r.anchored === true && !r.signed && r.errors.some((e) => /signature is not installed/.test(e)), "a missing signature column falls back to an unsigned seal", r);
+  }
+}
 { // source pins
   const src = readFileSync(new URL("./worker.js", import.meta.url), "utf8");
   ok(/var PLC_COLS = \[/.test(src) && src.includes("PAPER-LEDGER-CHAIN-1:BEGIN") && src.includes("PAPER-LEDGER-CHAIN-1:END"), "the chain block is delimited in worker.js");
