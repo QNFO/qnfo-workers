@@ -80,6 +80,9 @@ TIERS = [
      "ok": None, "ok_sql": "status = 'recovered'", "fail_sql": "status = 'fired'", "num": "metric_value", "newer": "id", "space_ts": True, "roll_days": 70, "chunk": 800},
     # BLOB-TIER-1: the row stays, base and patch go to R2 (see the docstring). keep_days 0.25: a row is only here once code_tasks.ctx no longer holds the text (slimmed = 1).
     {"table": "code_task_ctx_archive", "ts": "archived_at", "keep_days": 0.25, "mode": "blob", "cols": ("base", "patch"), "where": "slimmed = 1", "chunk": 16, "chunks": 12},
+    {"table": "errata_actions", "ts": "created_at", "keep_days": 0, "mode": "blob", "cols": ("body_md",), "where": "status = 'finished'", "chunk": 100, "chunks": 6},
+    {"table": "version_queue", "ts": "created_at", "keep_days": 0, "mode": "blob", "cols": ("body_md",), "where": "status = 'finished'", "chunk": 100, "chunks": 6},
+    {"table": "email_raw_archive", "ts": "created_at", "keep_days": 0, "mode": "blob", "cols": ("raw_body",), "where": "status = 'finished'", "chunk": 100, "chunks": 6},
     # COLD-TIER-3: archive old cloud_ops_events rows using timestamp ordering (id is TEXT, not time-ordered).
     # keep_days set to 90 (matching retention for non-housekeeping kinds). Uses a timestamp cursor rather than id ordering.
     {"table": "cloud_ops_events", "ts": "ts", "keep_days": 90, "mode": "delete", "latest": None, "dims": ("kind", "status"),
