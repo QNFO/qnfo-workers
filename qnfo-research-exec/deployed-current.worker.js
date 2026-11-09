@@ -496,7 +496,7 @@ var __defProp22222 = Object.defineProperty;
 var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(target, "name", { value, configurable: true }), "__name");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.55.3";
+var VERSION = "0.55.4";
 var __AI_ATTR_RATES = { "@cf/zai-org/glm-5.3": [127273, 4e5], "@cf/zai-org/glm-5.3-flash": [13636, 45455], "@cf/nvidia/nemotron-3-120b-a12b": [45455, 136364], "@cf/moonshotai/kimi-k2.6": [86364, 363636], "@cf/moonshotai/kimi-k2.7-code": [86364, 363636], "@cf/openai/gpt-oss-120b": [31818, 68182], "@cf/openai/gpt-oss-20b": [18182, 27273], "@cf/deepseek-ai/deepseek-v4-pro-0813": [12e4, 36e4], "@cf/deepseek-ai/deepseek-v4-flash-0731": [4e4, 12e4], "@cf/meta/llama-3.3-70b-instruct-fp8-fast": [26668, 204805], "@cf/qwen/qwen3-30b-a3b-fp8": [4625, 30475], "@cf/qwen/qwen3.8-27b": [40909, 290909], "@cf/baai/bge-base-en-v1.5": [6058, 0], "@cf/baai/bge-small-en-v1.5": [1841, 0], "@cf/baai/bge-large-en-v1.5": [18582, 0] };
 function __attrStageSet(env, stage) {
   if (env && env.__aiAttrCtx) env.__aiAttrCtx.stage = String(stage || "");
@@ -4774,7 +4774,7 @@ async function renderCheck(request, env, ctx) {
   var body = { ok: !!rr.ok, page: RENDER_CHECK_URL, rendered_at: (/* @__PURE__ */ new Date()).toISOString(), ms: rr.ms || 0, html_chars: rr.chars || 0, sections: secs.length, section_chars: secs.reduce(function(a, s) {
     return a + s.text.length;
   }, 0), first_heading: secs[0] ? String(secs[0].head || "").slice(0, 80) : "", reason: rr.reason || "", error: rr.error || "", note: "One fixed page is rendered with Browser Run and the result is kept for an hour; no other address can be rendered here." };
-  var res = new Response(JSON.stringify(body), { status: rr.ok ? 200 : 503, headers: { "Content-Type": "application/json; charset=utf-8", "Access-Control-Allow-Origin": "*", "Cache-Control": rr.ok ? "public, max-age=3600" : "no-store" } });
+  var res = new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json; charset=utf-8", "Access-Control-Allow-Origin": "*", "Cache-Control": rr.ok ? "public, max-age=3600" : "no-store" } });
   if (rr.ok) ctx.waitUntil(caches.default.put(key, res.clone()));
   return res;
 }
