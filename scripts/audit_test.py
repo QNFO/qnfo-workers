@@ -10,4 +10,7 @@ g = tag(loop_findings([{"number": 9, "labels": [{"name": "loop"}], "body": ""}])
 assert g["repo"] == "QNFO/other" and "[QNFO/other]" in g["title"] and "--repo QNFO/other" in g["probe"]
 h = tag(loop_findings([{"number": 9, "labels": [{"name": "loop"}], "body": ""}]), "QNFO/hub", "QNFO/hub")[0]
 assert "[" not in h["title"] and h["repo"] == "QNFO/hub"
+import audit
+audit.UNREACHABLE.clear()
+assert audit.gh_json(["repos/QNFO/this-repo-does-not-exist-8885/issues"]) == [] and audit.UNREACHABLE == ["repos/QNFO/this-repo-does-not-exist-8885/issues"]
 print("audit_test ok")
