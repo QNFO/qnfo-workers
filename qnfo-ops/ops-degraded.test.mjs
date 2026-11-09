@@ -154,6 +154,27 @@ const wrj = await wr.json();
 ok(wr.status === 200 && wrj.ok === true && scratchWrites >= 1, "and the write goes through to a recovered D1 (the statement itself reached it)", { status: wr.status, wrj, scratchWrites });
 Date.now = realNow;
 
+
+// ---- OPS-DEGRADED-2: the open state is shared across isolates through KV
+{
+  const mk = () => new Function("console", "DB_MAP", src.slice(a, b) + "\nreturn { note: opsD1Note, gate: opsD1Gate, health: opsD1Health, sync: opsD1SharedSync, publish: opsD1SharedPublish };")({ error() {}, log() {} }, DBM);
+  const store = new Map();
+  const kv = { async get(k) { return store.has(k) ? JSON.parse(store.get(k)) : null; }, async put(k, v) { store.set(k, v); } };
+  const A = mk(), B = mk();
+  const t0 = Date.now();
+  for (let i = 0; i < 3; i++) A.note(t0, "D1 DB is overloaded");
+  await A.publish({ OPS_CACHE_KV: kv });
+  ok(store.has("ops:d1-degraded"), "OPS-DEGRADED-2: a trip publishes ops:d1-degraded");
+  ok(B.gate(t0, "ops_d1_write", { db: "audit" }) === null, "OPS-DEGRADED-2: isolate B is open before it reads KV");
+  await B.sync({ OPS_CACHE_KV: kv }, t0);
+  ok(B.gate(t0 + 1000, "ops_d1_write", { db: "audit" }) !== null, "OPS-DEGRADED-2: isolate B refuses after one KV read");
+  ok(B.health(t0 + 1000).shared === true, "OPS-DEGRADED-2: /health reports shared true");
+  const C = mk();
+  await C.sync({ OPS_CACHE_KV: { async get() { throw new Error("kv down"); } } }, t0);
+  ok(C.gate(t0, "ops_d1_write", { db: "audit" }) === null, "OPS-DEGRADED-2: a throwing KV changes nothing");
+  await C.publish({ OPS_CACHE_KV: { async put() { throw new Error("kv down"); } } });
+  ok(/OPS-DEGRADED-2/.test(src) && /ops-degraded-shared/.test(src), "OPS-DEGRADED-2: marker and capability present");
+}
 console.error = realError;
 console.log(pass + " passed, " + fail + " failed");
 if (fail) process.exit(1);
