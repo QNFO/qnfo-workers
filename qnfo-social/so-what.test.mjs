@@ -38,5 +38,11 @@ let seen = null;
 const env2 = mk(good, "[]"); const run0 = env2.AI.run; env2.AI.run = async (m, i) => { if (!/list every claim/.test(JSON.stringify(i))) seen = i; return run0(m, i); };
 await mod.soWhatSentence(env2, "p-budget", "x");
 ok(seen && seen.max_tokens >= 1000 && seen.reasoning_effort === "none", "the so-what call leaves room for the answer and turns reasoning off", seen && { t: seen.max_tokens, r: seen.reasoning_effort });
+// SO-WHAT-POST-1.2: a failed attempt must not be cached for the 6 hours a sentence is (it would starve the retry).
+let calls = 0; const env3 = mk(good, "[]"); const r3 = env3.AI.run; env3.AI.run = async (m, i) => { calls++; return r3(m, i); };
+env3.AI.run = async () => { calls++; return { response: "" }; };
+await mod.soWhatSentence(env3, "p-neg", "x"); const c1 = calls;
+await mod.soWhatSentence(env3, "p-neg", "x");
+ok(calls === c1, "within the 10-minute window a failure is not retried (no model storm)", { c1, calls });
 console.log(pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);
