@@ -21,7 +21,14 @@ def suite_environment(platform=None, environ=None, git_path=None):
     return env
 
 def run(cmd, cwd):
-    p = subprocess.run(cmd, cwd=cwd, env=suite_environment(), capture_output=True, text=True)
+    env = suite_environment()
+    # Windows CreateProcess does not use the child's PATH to locate argv[0].
+    # Resolve against the selected environment before launching the process.
+    if os.name == 'nt':
+        executable = shutil.which(cmd[0], path=env.get('PATH'))
+        if executable:
+            cmd = [executable, *cmd[1:]]
+    p = subprocess.run(cmd, cwd=cwd, env=env, capture_output=True, text=True)
     return p.returncode, (p.stdout + p.stderr)
 
 def main(argv):

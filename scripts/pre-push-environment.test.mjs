@@ -26,6 +26,12 @@ with tempfile.TemporaryDirectory() as directory:
   run.return_value.stderr=''
   assert p.run(['node','fixture.test.mjs'],directory)==(0,'ok')
   assert run.call_args.kwargs['env']==env
+ with patch.object(p.os,'name','nt'),patch.object(p,'suite_environment',return_value=env),patch.object(p.shutil,'which',return_value=str(root/'bin'/'bash.exe')),patch.object(p.subprocess,'run') as run:
+  run.return_value.returncode=0
+  run.return_value.stdout='ok'
+  run.return_value.stderr=''
+  assert p.run(['bash','--version'],directory)==(0,'ok')
+  assert run.call_args.args[0]==[str(root/'bin'/'bash.exe'),'--version']
 print('suite environment selection passed')
 `;
 const r = spawnSync(process.platform === 'win32' ? 'python' : 'python3', ['-c', code], { encoding: 'utf8' });
