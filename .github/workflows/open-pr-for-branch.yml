@@ -1,0 +1,23 @@
+name: open-pr-for-branch
+run-name: open-pr-for-branch ${{ github.ref_name }}
+# COMPANION-PR-1: a session without a working GitHub token pushes a claude/** branch and this opens the pull request, so the lane merges it after checks.
+on:
+  push:
+    branches:
+      - 'claude/**'
+permissions:
+  contents: read
+  pull-requests: write
+jobs:
+  open:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Open a pull request when none exists
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          n=$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$BRANCH" --state open --json number --jq 'length')
+          if [ "$n" = "0" ]; then
+            gh pr create --repo "$GITHUB_REPOSITORY" --head "$BRANCH" --base main --title "$BRANCH" --body "Opened by open-pr-for-branch (COMPANION-PR-1) for a session without a GitHub token. work-claim: unreachable (no fleet network); no other open PR touches this branch."
+          fi
