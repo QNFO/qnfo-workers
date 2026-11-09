@@ -171,7 +171,8 @@ globalThis.fetch = async (u) => {
   await w.scheduled({}, env, ctx); await Promise.all(pending);
   const rows = db.prepare("SELECT id, why_json, resume_md, note_md, verified FROM jobsearch_matches ORDER BY id").all();
   ok(rows.length === 3 && rows.every((r) => r.verified === 1), "three verified matches stored", rows.length);
-  ok(calls.length === 1 && JSON.parse(calls[0].messages[1].content).length === 3, "the run asked the router once with the three postings");
+  const rr = calls.filter((c) => { try { return Array.isArray(JSON.parse(c.messages[1].content)); } catch (e) { return false; } });   // the judge (JOBSEARCH-TAILOR-2) adds one call per judged posting
+  ok(rr.length === 1 && JSON.parse(rr[0].messages[1].content).length === 3 && calls.length === 4, "the run asked the router once with the three postings, plus one judge read each");
   const llm = rows.map((r) => JSON.parse(r.why_json).filter((x) => x.startsWith("LLM: "))).flat();
   ok(llm.length >= 3 && llm.some((x) => /Responsible AI and public sector/.test(x)), "the AI lines are in why_json", llm);
   ok(rows.every((r) => !/LLM: /.test(r.resume_md + r.note_md)), "no stored draft contains a model line");
@@ -186,11 +187,11 @@ globalThis.fetch = async (u) => {
   const aiRuns = [];
   const env3 = { JOBS_DB: D1, LOOP_TOKEN: "t", AI: { run: async (model, input) => { aiRuns.push(model); return { choices: [{ message: { content: JSON.stringify({ order: [1, 2, 3] }) } }], usage: { prompt_tokens: 900, completion_tokens: 120 } }; } } };
   const pending3 = []; await w.scheduled({}, env3, { waitUntil: (p) => pending3.push(p) }); await Promise.all(pending3);
-  ok(aiRuns.length === 1 && aiRuns[0] === "@cf/zai-org/glm-5.3-flash", "the scheduled run asks the AI binding once", aiRuns);
+  ok(aiRuns.length === 4 && aiRuns.every((m) => m === "@cf/zai-org/glm-5.3-flash"), "the scheduled run asks the AI binding once to rerank and once per judged posting", aiRuns);
   const via = db.prepare("SELECT v FROM jobsearch_meta WHERE k='rerank_via'").get();
   ok(via && via.v === "ai" && db.prepare("SELECT v FROM jobsearch_meta WHERE k='rerank_status'").get().v === "ok", "the status and the way are recorded", via);
   const metered = db.prepare("SELECT worker, calls, in_tok FROM ai_call_counters WHERE worker = 'qnfo-jobsearch'").get();
-  ok(metered && metered.calls === 1 && metered.in_tok === 900, "the AI spend is counted under qnfo-jobsearch", metered);
+  ok(metered && metered.calls === 4 && metered.in_tok === 3600, "the AI spend is counted under qnfo-jobsearch", metered);
 }
 // ---- JOBSEARCH-RESEARCH-PORTFOLIO-1: the three QNFO papers are added to the owner's bank once, additively, and are the owner's afterwards
 {
