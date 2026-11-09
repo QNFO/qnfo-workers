@@ -569,8 +569,8 @@ export async function travelTick(env, deps = {}) {
 const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
 
 function page(title, inner, status) {
-  const html = "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><meta name=\"robots\" content=\"noindex\"><title>" + esc(title) + "</title>" +
-    "<style>body{font:16px/1.5 system-ui,sans-serif;max-width:34rem;margin:2rem auto;padding:0 1rem;color:#1a1a1a;background:#fff}a{color:#0b57d0}button{font:inherit;padding:.6rem 1rem;margin:.25rem .5rem .25rem 0;border-radius:.5rem;border:1px solid #888;background:#f4f4f4;cursor:pointer}.pick{background:#0b57d0;color:#fff;border-color:#0b57d0}.muted{color:#555}@media(prefers-color-scheme:dark){body{background:#121212;color:#eee}a{color:#8ab4f8}button{background:#222;color:#eee}.muted{color:#aaa}}</style></head><body>" + inner + "</body></html>";
+  // TRAVEL-DESIGN-1 (DESIGN-SYSTEM-3, #9929): the sign-in and approval pages use the shared design system; buttons are the ds buttons, one primary per screen.
+  const html = "<!doctype html><html lang=\"en\"><head><meta name=\"robots\" content=\"noindex\">" + trvHead(title, "", "body.ds{max-width:34rem;margin:0 auto;padding:24px 16px}.ds button{font:inherit;min-height:44px;min-width:44px;padding:10px 16px;margin:4px 8px 4px 0;border-radius:var(--ds-r-m);border:1px solid var(--ds-line-strong);background:var(--ds-surface);color:var(--ds-ink);cursor:pointer}.ds button.pick{background:var(--ds-accent);color:var(--ds-on-accent);border-color:var(--ds-accent)}.ds .muted{color:var(--ds-ink-2)}") + "</head><body class=\"ds\">" + inner + "</body></html>";
   return new Response(html, { status: status || 200, headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store", "X-Robots-Tag": "noindex", "Referrer-Policy": "no-referrer" } });
 }
 
@@ -889,22 +889,25 @@ export async function chatState(db, c, nowMs) {
   return { history: hist, where, models: { current: chatModels(c)[0], menu: CHAT_MODEL_MENU }, known: profile.map((p) => ({ id: p.id, facet: p.facet, label: p.label, statement: p.statement, removable: p.facet === "travel" })) };
 }
 
-function chatPage(nonce) {
-  return "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1,viewport-fit=cover\"><meta name=\"robots\" content=\"noindex\"><title>Travel planner</title><style nonce=\"" + nonce + "\">" + CHAT_CSS + "</style></head><body>" + CHAT_BODY + "<script nonce=\"" + nonce + "\">" + CHAT_JS + "</script></body></html>";
+// TRAVEL-DESIGN-1 (DESIGN-SYSTEM-3, #9929): in the worker the shared design system's dsHead() is in scope; standalone (the suites load this file alone) a plain head stands in.
+function trvHead(title, css) {
+  return typeof dsHead === "function" ? dsHead(title, "", css) : "<meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>" + esc(title) + "</title><style>" + css + "</style>";
 }
-
-const CHAT_CSS = ":root{--bg:#f7f6f3;--card:#fff;--ink:#1b1b1b;--muted:#5d5d5d;--line:#dedbd4;--accent:#0b57d0;--accent-ink:#fff;--me:#e6eefc;--warn:#9a3412}" +
-  "@media(prefers-color-scheme:dark){:root{--bg:#141414;--card:#1e1e1e;--ink:#ececec;--muted:#a3a3a3;--line:#333;--accent:#8ab4f8;--accent-ink:#0b0b0b;--me:#23314d;--warn:#fdba74}}" +
-  "*{box-sizing:border-box}html,body{margin:0;height:100%}body{font:16px/1.5 system-ui,-apple-system,Segoe UI,sans-serif;background:var(--bg);color:var(--ink);display:flex;flex-direction:column}" +
-  "header{padding:.75rem 1rem;border-bottom:1px solid var(--line);display:flex;gap:.75rem;align-items:baseline;flex-wrap:wrap}header h1{font-size:1.1rem;margin:0}#where{color:var(--muted);font-size:.9rem}" +
+function chatPage(nonce) {
+  return "<!doctype html><html lang=\"en\"><head><meta name=\"robots\" content=\"noindex\">" + trvHead("Travel planner", "", CHAT_CSS).replace("<style>", "<style nonce=\"" + nonce + "\">") + "</head><body class=\"ds\">" + CHAT_BODY + "<script nonce=\"" + nonce + "\">" + CHAT_JS + "</script></body></html>";
+}
+const CHAT_CSS = "/* TRAVEL-DESIGN-1 (DESIGN-SYSTEM-3, #9929): neutrals, accent, warning colour and contrast come from the shared design system (light and dark). */" +
+  ":root{--bg:var(--ds-bg);--card:var(--ds-surface);--ink:var(--ds-ink);--muted:var(--ds-ink-2);--line:var(--ds-line);--accent:var(--ds-accent);--accent-ink:var(--ds-on-accent);--me:var(--ds-accent-soft);--warn:var(--ds-warn)}" +
+  "*{box-sizing:border-box}html,body{margin:0;height:100%}body.ds{font:16px/1.5 system-ui,-apple-system,Segoe UI,sans-serif;background:var(--bg);color:var(--ink);display:flex;flex-direction:column}" +
+  "header{padding:.75rem 1rem;border-bottom:1px solid var(--line);display:flex;gap:.75rem;align-items:baseline;flex-wrap:wrap}.ds header h1{font-size:1.1rem;margin:0;font-weight:700}#where{color:var(--muted);font-size:.9rem}" +
   "main{flex:1;overflow-y:auto;padding:1rem;max-width:44rem;width:100%;margin:0 auto}" +
   ".msg{margin:0 0 1rem;max-width:100%}.msg.user{margin-left:auto;background:var(--me);padding:.55rem .85rem;border-radius:1rem 1rem .25rem 1rem;width:fit-content;max-width:85%}" +
   ".msg.assistant .text p{margin:.3rem 0}.msg.assistant .text ul{margin:.3rem 0;padding-left:1.2rem}.err{color:var(--warn)}" +
   ".opts{display:grid;gap:.6rem;margin:.6rem 0}.opt{background:var(--card);border:1px solid var(--line);border-radius:.8rem;padding:.75rem .9rem}.opt.pick{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}" +
-  ".opt h3{margin:0;font-size:1.02rem}.opt .meta{color:var(--muted);font-size:.88rem}.opt .why{margin:.35rem 0}.opt .tag{font-size:.75rem;color:var(--accent);font-weight:600;margin-left:.4rem}" +
+  ".opt h3{margin:0;font-size:1.02rem}.opt .meta{color:var(--muted);font-size:.88rem}.opt .why{margin:.35rem 0}.opt .tag{font-size:.875rem;color:var(--accent);font-weight:600;margin-left:.4rem}" +
   ".opt.rejected{opacity:.55}.opt.picked{border-color:var(--accent)}.row{display:flex;flex-wrap:wrap;gap:.4rem;margin-top:.45rem;align-items:center}" +
-  "button,.btn{font:inherit;font-size:.92rem;padding:.42rem .8rem;border-radius:.6rem;border:1px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer;text-decoration:none;display:inline-block}" +
-  "button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}button:disabled{opacity:.5;cursor:default}a{color:var(--accent)}" +
+  "button,.btn{font:inherit;font-size:.92rem;min-height:44px;min-width:44px;padding:.42rem .8rem;border-radius:.6rem;border:1px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer;text-decoration:none;display:inline-block}" +
+  "button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}button:disabled{opacity:.5;cursor:default}.ds a{color:var(--accent)}" +
   ".chips{display:flex;flex-wrap:wrap;gap:.4rem;margin:.4rem 0}.q{margin:.5rem 0 .2rem;font-weight:600}" +
   ".learned{font-size:.85rem;color:var(--muted);margin:.3rem 0}" +
   "footer{border-top:1px solid var(--line);padding:.6rem .75rem calc(.6rem + env(safe-area-inset-bottom));background:var(--bg)}" +
@@ -912,16 +915,16 @@ const CHAT_CSS = ":root{--bg:#f7f6f3;--card:#fff;--ink:#1b1b1b;--muted:#5d5d5d;-
   "details{max-width:44rem;margin:.4rem auto 0;font-size:.9rem;color:var(--muted)}details li{margin:.2rem 0}select{font:inherit;background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:.4rem;padding:.2rem}" +
   ".typing{color:var(--muted);font-style:italic}" +
   "nav.tabs{display:flex;gap:.3rem;margin-left:auto}nav.tabs button[aria-pressed=true]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}" +
-  "section.tab{flex:1;overflow-y:auto;padding:1rem;max-width:44rem;width:100%;margin:0 auto}section.tab h2{font-size:1rem;margin:1.2rem 0 .5rem}" +
+  "section.tab{flex:1;overflow-y:auto;padding:1rem;max-width:44rem;width:100%;margin:0 auto}.ds section.tab h2{font-size:1rem;margin:1.2rem 0 .5rem;font-weight:650}" +
   ".card{background:var(--card);border:1px solid var(--line);border-radius:.8rem;padding:.7rem .9rem;margin:0 0 .6rem}.card.warn{border-color:var(--warn)}.card.over{border-color:var(--warn);box-shadow:0 0 0 2px var(--warn)}" +
   ".big{font-size:1.4rem;font-weight:700}.flag{color:var(--warn);font-size:.88rem;margin:.15rem 0}.muted{color:var(--muted);font-size:.88rem}" +
-  ".day{display:grid;grid-template-columns:5.6rem 1fr;gap:.5rem;padding:.45rem 0;border-bottom:1px solid var(--line)}.day .d{color:var(--muted);font-size:.88rem}.day .wx{font-size:.88rem;color:var(--muted)}.badge{font-size:.75rem;border:1px solid var(--accent);color:var(--accent);border-radius:.4rem;padding:0 .3rem;margin-left:.3rem}" +
+  ".day{display:grid;grid-template-columns:5.6rem 1fr;gap:.5rem;padding:.45rem 0;border-bottom:1px solid var(--line)}.day .d{color:var(--muted);font-size:.88rem}.day .wx{font-size:.88rem;color:var(--muted)}.badge{font-size:.875rem;border:1px solid var(--accent);color:var(--accent);border-radius:.4rem;padding:0 .3rem;margin-left:.3rem}" +
   "pre.draft{white-space:pre-wrap;font:inherit;background:var(--bg);border:1px solid var(--line);border-radius:.5rem;padding:.5rem;margin:.4rem 0}" +
   ".ed{display:flex;flex-wrap:wrap;gap:.4rem;margin:.4rem 0}.ed label{display:flex;flex-direction:column;font-size:.8rem;color:var(--muted)}.ed input{font:inherit;font-size:.92rem;padding:.3rem .4rem;border:1px solid var(--line);border-radius:.4rem;background:var(--card);color:var(--ink);max-width:11rem}" +
   ".pillar{display:flex;flex-wrap:wrap;gap:.4rem;align-items:center;margin:.45rem 0 0}.picks{flex-basis:100%;margin:.1rem 0 .2rem;padding-left:1.1rem}.picks li{margin:.3rem 0}button.small{font-size:.8rem;padding:.15rem .5rem;margin:.2rem 0 0}.pillar .pl{font-weight:600;font-size:.85rem;min-width:3.2rem}" +
   "#imptext{width:100%;min-height:10rem;font:inherit;padding:.6rem;border-radius:.7rem;border:1px solid var(--line);background:var(--card);color:var(--ink)}" +
-  ".taps{display:flex;flex-wrap:wrap;gap:.3rem;align-items:center;margin:.3rem 0}.taps button{min-height:2.4rem;min-width:3.4rem}.chk{border-left:4px solid var(--line)}.chk.bad{border-left-color:var(--warn)}.chk.warn{border-left-color:#b45309}" +
-  ".st{font-size:.75rem;border:1px solid var(--line);border-radius:.4rem;padding:0 .35rem;margin-left:.4rem;font-weight:400}.st.booked{border-color:var(--accent);color:var(--accent)}.st.draft{border-color:var(--warn);color:var(--warn)}.wild{font-size:.8rem;color:var(--accent);font-weight:600}";
+  ".taps{display:flex;flex-wrap:wrap;gap:.3rem;align-items:center;margin:.3rem 0}.taps button{min-height:44px;min-width:3.4rem}.chk{border-left:4px solid var(--line)}.chk.bad{border-left-color:var(--warn)}.chk.warn{border-left-color:var(--warn)}" +
+  ".st{font-size:.875rem;border:1px solid var(--line);border-radius:.4rem;padding:0 .35rem;margin-left:.4rem;font-weight:400}.st.booked{border-color:var(--accent);color:var(--accent)}.st.draft{border-color:var(--warn);color:var(--warn)}.wild{font-size:.8rem;color:var(--accent);font-weight:600}";
 
 const CHAT_BODY = "<header><h1>Travel planner</h1><span id=\"where\"></span><nav class=\"tabs\"><button type=\"button\" data-tab=\"chat\" aria-pressed=\"true\">Chat</button><button type=\"button\" data-tab=\"places\" aria-pressed=\"false\">Places</button><button type=\"button\" data-tab=\"moving\" aria-pressed=\"false\">Getting around</button><button type=\"button\" data-tab=\"imp\" aria-pressed=\"false\">Import</button></nav></header>" +
   "<main id=\"log\" aria-live=\"polite\"></main>" +
