@@ -4869,7 +4869,7 @@ async function renderedSourceText(env, url, ctl) {
   if (c.budget) c.budget.left--;
   var t0 = Date.now();
   try {
-    var html = await (globalThis.__erratapublishMod || erratapublishMod).renderSourceHtml(env, String(url), RENDER_TIMEOUT_MS);
+    var html = await globalThis.__erratapublishMod.renderSourceHtml(env, String(url), RENDER_TIMEOUT_MS);
     html = String(html || "").slice(0, RENDER_MAX_HTML);
     var out = { ok: html.length > 0, html: html, chars: html.length, ms: Date.now() - t0 };
     if (c.rid) await logEvent(env, "ground-render", "row=" + c.rid + " url=" + url + " ok=" + (out.ok ? 1 : 0) + " html_chars=" + out.chars + " ms=" + out.ms, out.ok ? "ok" : "warn");
