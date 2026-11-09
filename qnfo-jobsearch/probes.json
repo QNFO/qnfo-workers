@@ -57,6 +57,20 @@
       "contains": [
         "sign in first"
       ]
+    },
+    {
+      "url": "https://qnfo-jobsearch.q08.workers.dev/api/linkedin",
+      "contains": [
+        "\"searches\"",
+        "linkedin.com/jobs/search"
+      ]
+    },
+    {
+      "url": "https://qnfo-jobsearch.q08.workers.dev/",
+      "contains": [
+        "What to search on LinkedIn",
+        "Too much coding"
+      ]
     }
   ]
 }
