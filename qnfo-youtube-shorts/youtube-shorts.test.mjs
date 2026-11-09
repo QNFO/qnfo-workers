@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { artPrompt, ART_STYLES, ART_MOTIFS, splitSentences, numTokens, validateBeats, capAllows, ttsEngine, directorPrompt, ctaBeat, rankByInterest, upgradesFirst, nextCandidate, parseSections, jsonFromText, buildMetadata, shapeOk, CRON_TABLE, VERSION } from "./worker.js";
+import { artRequest, artPrompt, ART_STYLES, ART_MOTIFS, splitSentences, numTokens, validateBeats, capAllows, ttsEngine, directorPrompt, ctaBeat, rankByInterest, upgradesFirst, nextCandidate, parseSections, jsonFromText, buildMetadata, shapeOk, CRON_TABLE, VERSION } from "./worker.js";
 
 const article = {
   title: "Why scientists stop testing ideas", short: "Safe stories pay better than risky guesses.",
@@ -293,4 +293,10 @@ test("YT-ART-1: art prompts are abstract, deterministic and vary across Shorts",
   const p = artPrompt("x", 3);
   assert.match(p, /no text/); assert.match(p, /no people/);
   for (const w of [...ART_STYLES, ...ART_MOTIFS]) assert.doesNotMatch(w, /\b(person|face|logo|text|number)\b/i);
+});
+
+test("YT-ART-FIX-1: the FLUX request has only schema-allowed fields", () => {
+  const r = artRequest("x", 1);
+  assert.deepEqual(Object.keys(r).sort(), ["prompt", "steps"]);
+  assert.ok(!("width" in r) && !("height" in r));
 });
