@@ -1,7 +1,7 @@
 {
  "mode": "live",
- "at": "2026-11-09T15:27:04.141Z",
- "sha": "6714b8607a209fdd9236ad6795c3cb83a7c92855",
+ "at": "2026-11-09T15:34:48.015Z",
+ "sha": "9d21f3f3cb8b59e766de15894c3fbf7639624261",
  "apps": [
   {
    "app": "ask-qwav",
@@ -30,7 +30,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 2572,
+     "ms": 2569,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -59,7 +59,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 2639,
+     "ms": 1322,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -90,7 +90,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1591,
+     "ms": 1678,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -126,7 +126,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 8823,
+     "ms": 9008,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -155,7 +155,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1347,
+     "ms": 1348,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -182,7 +182,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 2568,
+     "ms": 4493,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -209,7 +209,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 430,
+     "ms": 434,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -255,7 +255,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 2317,
+     "ms": 2616,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -392,7 +392,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 5249,
+     "ms": 5320,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -522,7 +522,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 4673,
+     "ms": 5523,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -554,7 +554,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 2011,
+     "ms": 1979,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -584,23 +584,7 @@
        "label": "paper-dashboard",
        "overflowPx": 0,
        "emptyOverlays": [],
-       "smallTargets": [
-        {
-         "name": "White paper",
-         "w": 86,
-         "h": 22
-        },
-        {
-         "name": "Charter and evidence",
-         "w": 152,
-         "h": 22
-        },
-        {
-         "name": "Track record",
-         "w": 86,
-         "h": 22
-        }
-       ],
+       "smallTargets": [],
        "narrowOverflowPx": 0,
        "axe": []
       }
@@ -611,7 +595,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 8744,
+     "ms": 9603,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -631,7 +615,7 @@
      "ok": false,
      "error": "expected to see \"Order size\" on https://markets.q08.org/",
      "attempts": 2,
-     "ms": 12378,
+     "ms": 12903,
      "grade": {
       "status": "broken",
       "reasons": [
@@ -653,14 +637,7 @@
        "emptyOverlays": [],
        "smallTargets": [],
        "narrowOverflowPx": 0,
-       "axe": [
-        {
-         "id": "scrollable-region-focusable",
-         "impact": "serious",
-         "nodes": 2,
-         "help": "Scrollable region must have keyboard access"
-        }
-       ]
+       "axe": []
       }
      ],
      "consoleErrors": [],
@@ -669,17 +646,14 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1260,
+     "ms": 1360,
      "grade": {
       "status": "ok",
       "reasons": []
      }
     }
    ],
-   "screenFindings": [
-    "paper-dashboard: 3 tap target(s) under 24px, e.g. \"White paper\" 86x22, \"Charter and evidence\" 152x22, \"Track record\" 86x22",
-    "whitepaper: accessibility serious scrollable-region-focusable (2x): Scrollable region must have keyboard access"
-   ]
+   "screenFindings": []
   },
   {
    "app": "me-companion-regression-guard",
@@ -708,7 +682,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 8554,
+     "ms": 8953,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -906,7 +880,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 5665,
+     "ms": 4548,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -1064,7 +1038,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 5271,
+     "ms": 4909,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -1138,7 +1112,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 14481,
+     "ms": 12532,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -1167,7 +1141,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 8587,
+     "ms": 8722,
      "grade": {
       "status": "new",
       "reasons": [
@@ -1200,7 +1174,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 4086,
+     "ms": 3977,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -1231,7 +1205,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1529,
+     "ms": 1821,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -1251,23 +1225,7 @@
        "label": "home markets.q08.org",
        "overflowPx": 0,
        "emptyOverlays": [],
-       "smallTargets": [
-        {
-         "name": "White paper",
-         "w": 86,
-         "h": 22
-        },
-        {
-         "name": "Charter and evidence",
-         "w": 152,
-         "h": 22
-        },
-        {
-         "name": "Track record",
-         "w": 86,
-         "h": 22
-        }
-       ],
+       "smallTargets": [],
        "narrowOverflowPx": 0,
        "axe": []
       }
@@ -1278,7 +1236,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 7153,
+     "ms": 8935,
      "grade": {
       "status": "new",
       "reasons": [
@@ -1315,7 +1273,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 8867,
+     "ms": 8821,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -1457,7 +1415,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 2268,
+     "ms": 2255,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -2810,7 +2768,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 3130,
+     "ms": 3750,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -2935,7 +2893,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1984,
+     "ms": 2167,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -2966,7 +2924,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 12954,
+     "ms": 15267,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3083,7 +3041,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 10846,
+     "ms": 9452,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3114,7 +3072,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 9495,
+     "ms": 9586,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3143,7 +3101,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1255,
+     "ms": 1254,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3265,7 +3223,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1833,
+     "ms": 1785,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3294,7 +3252,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 8870,
+     "ms": 8950,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3303,7 +3261,6 @@
    ],
    "screenFindings": [
     "home q08.org: 5 tap target(s) under 24px, e.g. \"QNFO\" 34x20, \"QWAV\" 36x20, \"q08\" 22x20",
-    "home markets.q08.org: 3 tap target(s) under 24px, e.g. \"White paper\" 86x22, \"Charter and evidence\" 152x22, \"Track record\" 86x22",
     "home travel.q08.org: 1 tap target(s) under 24px, e.g. \"Email me a code\" 115x21",
     "home qnfo.org: 22 tap target(s) under 24px, e.g. \"QNFO\" 37x20, \"QWAV\" 36x20, \"q08\" 22x20",
     "home papers.qnfo.org: 263 tap target(s) under 24px, e.g. \"QNFO\" 31x19, \"QWAV\" 34x19, \"q08\" 21x19",
@@ -3351,7 +3308,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 4977,
+     "ms": 5355,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3382,7 +3339,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 3240,
+     "ms": 4793,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3413,7 +3370,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 3502,
+     "ms": 4235,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3455,7 +3412,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1045,
+     "ms": 1014,
      "grade": {
       "status": "ok",
       "reasons": []
