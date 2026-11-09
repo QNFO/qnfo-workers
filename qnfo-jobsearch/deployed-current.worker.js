@@ -9,7 +9,7 @@
 // JOBSEARCH-CV-1 (1.5.0): the CV is part of this worker (page /cv): a yes/no interview that builds the claim bank, review of unconfirmed claims, roles, achievements and publications edited in D1, a resume per job (summary, roles, selected work, education, skills) and a cover note, history and backup. The search is tied to that bank (evidence the owner can back up weighs more; what the CV lacks is shown as a gap), decided postings (rejected, applied, approved) never come back under another id, rejections carry a reason the search learns from, and a wider net: stretch matches outside the stated preferences, more boards and aggregators.
 // Routes: GET / (web UI) | GET /api | GET /api/matches | GET /api/matches/:id | GET /api/runs | GET /api/ledger | POST /api/run | POST /api/matches/:id/status | GET /health
 // Port of the jobsearch/ Python modules (tests: jobsearch/test_jobsearch.py, qnfo-jobsearch/worker.test.mjs).
-var VERSION = "1.12.2-codeagent";
+var VERSION = "1.12.5-codeagent";
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -410,7 +410,7 @@ const BOARDS = {
   recruitee: ["bunq", "msf", "solvinity", "sweco"],   // sweco: transport, urban and water planning consultancy (probed 2026-11-05: 179 offers, Netherlands among them)
   smartrecruiters: ["oecd"],                           // JOBSEARCH-SOURCES-1 (JS-7): OECD policy research and statistics roles (probed 2026-11-05: 22 postings)
   remotive: ["data", "product", "all-others", "q=research", "q=policy", "q=scientist", "q=quantum", "q=program manager", "q=analyst"],
-  muse: ["Amsterdam, Netherlands|", "Amsterdam, Netherlands|Data and Analytics", "Amsterdam, Netherlands|Project & Product Management", "Amsterdam, Netherlands|Management", "Flexible / Remote|Data and Analytics", "Flexible / Remote|Project & Product Management", "Flexible / Remote|Management", "Flexible / Remote|Consulting"],
+  muse: [],   // JOBSEARCH-MUSE-RETIRED-1 (issue 2562, 2026-11-09): all 8 Muse feeds answered HTTP 404 for 20 runs in a row, so /api/ops stayed degraded (503) and the traffic-health journey counted it as a 5xx; an empty list drops them from ACTIVE_FEEDS and the fetch loop (re-add the combinations when the endpoint answers again)
   jobicy: ["netherlands", "europe", "emea", "tag:research", "tag:data science", "tag:policy", "tag:machine learning"],
   remoteok: [true],
   himalayas: [10],
@@ -2210,6 +2210,17 @@ async function authVerify(env, code) {
   return [200, { ok: true, token, expires_hours: SESSION_MS / 3600000 }, `jobs_session=${token}; Path=/; Max-Age=${SESSION_MS / 1000}; HttpOnly; Secure; SameSite=Strict`];
 }
 // Operational self-report: the same checks as the fm-jobsearch-* detector contracts in migrations/2026-10-27-jobsearch-ops.sql
+// JOBSEARCH-OPS-CACHE-1: /api/ops ran about a dozen D1 queries per probe and answered 503 while D1 was overloaded (issue 2562). One report per 60 s per isolate; on a D1 error the last report is served stale (up to 15 min) instead of a 5xx.
+let opsCache = null;
+async function opsReportCached(env, fresh) {
+  const now = Date.now();
+  if (!fresh && opsCache && now - opsCache.at < 60000) return opsCache.rep;
+  try { const rep = await opsReport(env); opsCache = { at: now, rep }; return rep; }
+  catch (e) {
+    if (opsCache && now - opsCache.at < 900000) return { ...opsCache.rep, stale: true, stale_age_s: Math.round((now - opsCache.at) / 1000) };
+    throw e;
+  }
+}
 async function opsReport(env) {
   await ensure(env);
   await loadBank(env);
@@ -2261,7 +2272,7 @@ const handler = {
     if (p === "/" && m === "GET") return new Response(UI, { headers: { "content-type": "text/html; charset=utf-8" } });
     if (p === "/api" && m === "GET") return J(INDEX);
     if (p === "/api/ledger" && m === "GET") { await loadBank(env); return J({ person: { ...LEDGER.person, sign_in_email: undefined }, owner_stated: LEDGER.owner_stated, unverified_needs_owner: LEDGER.unverified_needs_owner, facts: LEDGER.facts.filter((f) => ((BANK.facts.find((x) => x.id === f.id) || {}).source === "verified_cv")).map((f) => ({ id: f.id, text: f.text, employer: f.employer, period: f.period })), headlines: LEDGER.headlines }); }   // public: only the verified CV record; what the owner adds in the interview stays private
-    if (p === "/api/ops" && m === "GET") { const rep = await opsReport(env); return J(rep, rep.status === "ok" ? 200 : 503); }
+    if (p === "/api/ops" && m === "GET") { const rep = await opsReportCached(env, url.searchParams.get("fresh") === "1"); return J(rep, rep.status === "ok" ? 200 : 503); }
     if ((p === "/api/outcomes" || p === "/api/funnel") && m === "GET") return J(await outcomes(env));
     if (p === "/api/followups" && m === "GET") return J(await followups(env));
     if (p === "/api/prefs" && m === "GET") {
