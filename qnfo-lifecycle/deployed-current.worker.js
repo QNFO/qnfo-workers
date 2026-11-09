@@ -1,4 +1,4 @@
-var VERSION = "1.19.3-codeagent";
+var VERSION = "1.19.4-codeagent";
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -3286,7 +3286,7 @@ async function plRetriage(env, o, mechs, now, out) {
 // so rewriting the chain table alone is caught; (3) re-computes a rotating window of rows (and the newest ones) plus one older anchor, and records a hash mismatch in cloud_ops_events
 // (plc-break-*, resolved only when the row hashes true again); (4) publishes metrics paper_ledger_chain_breaks, paper_ledger_unsealed_min and the ADR-014 authorship counts.
 // ADR-014 (authorship mandate) is checked at publish by living-paper triggers (observe mode) and counted here from v_adr014_authorship_status. No signing key is used: the chain is
-// tamper-evident, not signed; the HMAC slice is filed as its own issue (an HMAC key must be minted under the secret lock).
+// tamper-evident, and signed too once the PROVENANCE_SIGNING_KEY (or LEDGER_SEAL_KEY) Worker secret exists (PAPER-LEDGER-SIGN-1): each anchor then carries an HMAC of "head_seq:head_hash".
 var PLC_COLS = ["seq", "ts", "slug", "slug_before", "identifier", "kind", "fields_changed", "actor", "reason", "withdrawal", "backfilled", "version_before", "version_after", "status_before", "status_after", "gate_reason_before", "gate_reason_after", "title_before", "abstract_before", "body_len_before", "body_fp_before", "body_len_after", "body_fp_after", "meta_before"];
 var PLC_MAX_ROWS = 500;
 var PLC_PAGE = 25;
@@ -3301,6 +3301,20 @@ function plcCanonical(row, bodySha) {
   return JSON.stringify(PLC_COLS.map(function (c) { return row[c] === undefined ? null : row[c]; }).concat([bodySha || null]));
 }
 async function plcHash(prev, row, bodySha) { return plcSha(prev + "\n" + plcCanonical(row, bodySha)); }
+// PAPER-LEDGER-SIGN-1 (issue #1002060): the chain is tamper-evident but unsigned; once the Worker secret exists each anchor seal is also HMAC-signed over "head_seq:head_hash",
+// so someone who can write both databases still cannot forge a consistent pair without the key, which lives in neither database.
+function plcSigText(headSeq, headHash) { return headSeq + ":" + headHash; }
+async function plcSign(key, text) {
+  var enc = new TextEncoder();
+  var k = await crypto.subtle.importKey("raw", enc.encode(String(key)), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  var s = new Uint8Array(await crypto.subtle.sign("HMAC", k, enc.encode(String(text))));
+  return "hmac:" + Array.from(s).map(function (b) { return b.toString(16).padStart(2, "0"); }).join("");
+}
+// The signature column lands by migration; a deploy that runs before it must behave exactly as before, so its presence is detected, not assumed.
+async function plcHasSealSignature(audit) {
+  try { await audit.prepare("SELECT signature FROM paper_ledger_seals LIMIT 1").first(); return true; }
+  catch (e) { if (/no such column/i.test(String(e && e.message || e))) return false; throw e; }
+}
 async function plcBodyShas(db, lo, hi) {
   var sha = {};
   var bodies = (await db.prepare("SELECT seq, body_md FROM paper_change_bodies WHERE seq >= ?1 AND seq <= ?2").bind(lo, hi).all()).results || [];
@@ -3363,14 +3377,17 @@ function plcWindowOffset(nowMs, chainRows, size) {
 async function plcCheckAnchors(env, nowMs) {
   var db = env.LIVING_PAPER, audit = env.QNFO_AUDIT, out = { checked: 0, bad: [], missing_table: false };
   if (!audit) return out;
-  var seals;
+  var seals, sigCol = false;
+  var key = env && (env.PROVENANCE_SIGNING_KEY || env.LEDGER_SEAL_KEY) || null;
   try {
     var cnt = await audit.prepare("SELECT COUNT(*) AS n FROM paper_ledger_seals").first();
     var n = cnt ? Number(cnt.n) : 0;
     if (!n) return out;
-    seals = ((await audit.prepare("SELECT id, head_seq, head_hash FROM paper_ledger_seals ORDER BY id DESC LIMIT 3").all()).results) || [];
+    sigCol = await plcHasSealSignature(audit);
+    var sigSel = sigCol ? ", signature" : "";
+    seals = ((await audit.prepare("SELECT id, head_seq, head_hash" + sigSel + " FROM paper_ledger_seals ORDER BY id DESC LIMIT 3").all()).results) || [];
     if (n > 3) {
-      var old = await audit.prepare("SELECT id, head_seq, head_hash FROM paper_ledger_seals ORDER BY id LIMIT 1 OFFSET ?1").bind(Math.floor(nowMs / 36e5) % (n - 3)).first();
+      var old = await audit.prepare("SELECT id, head_seq, head_hash" + sigSel + " FROM paper_ledger_seals ORDER BY id LIMIT 1 OFFSET ?1").bind(Math.floor(nowMs / 36e5) % (n - 3)).first();
       if (old) seals.push(old);
     }
   } catch (e) { if (plcMissingTable(e)) { out.missing_table = true; return out; } throw e; }
@@ -3379,6 +3396,8 @@ async function plcCheckAnchors(env, nowMs) {
     out.checked++;
     if (!c) out.bad.push({ seq: Number(seals[i].head_seq), kind: "anchor-row-missing" });
     else if (c.row_hash !== seals[i].head_hash) out.bad.push({ seq: Number(seals[i].head_seq), kind: "anchor-hash-mismatch" });
+    else if (key && sigCol && i < 3 && !seals[i].signature) out.bad.push({ seq: Number(seals[i].head_seq), kind: "seal-signature-missing" });
+    else if (key && seals[i].signature && (await plcSign(key, plcSigText(seals[i].head_seq, seals[i].head_hash))) !== seals[i].signature) out.bad.push({ seq: Number(seals[i].head_seq), kind: "seal-signature-mismatch" });
   }
   return out;
 }
@@ -3398,10 +3417,15 @@ async function paperLedgerChainTick(env, opts) {
   out.sealed = seal.sealed || 0;
   if (seal.head_seq !== undefined) out.head_seq = seal.head_seq;
   var anchored = false;
+  var sigKey = env && (env.PROVENANCE_SIGNING_KEY || env.LEDGER_SEAL_KEY) || null;
   if (audit && out.sealed > 0 && seal.head_hash) {
     try {
       var tot = await db.prepare("SELECT COUNT(*) AS n FROM paper_ledger_chain").first();
-      await audit.prepare("INSERT INTO paper_ledger_seals (head_seq, head_hash, chain_rows, sealed_by) VALUES (?1, ?2, ?3, ?4)").bind(seal.head_seq, seal.head_hash, tot ? Number(tot.n) : 0, PLC_SEALER).run();
+      var sigCol = await plcHasSealSignature(audit);
+      var sig = sigKey && sigCol ? await plcSign(sigKey, plcSigText(seal.head_seq, seal.head_hash)) : null;
+      if (sig) await audit.prepare("INSERT INTO paper_ledger_seals (head_seq, head_hash, chain_rows, sealed_by, signature) VALUES (?1, ?2, ?3, ?4, ?5)").bind(seal.head_seq, seal.head_hash, tot ? Number(tot.n) : 0, PLC_SEALER, sig).run();
+      else await audit.prepare("INSERT INTO paper_ledger_seals (head_seq, head_hash, chain_rows, sealed_by) VALUES (?1, ?2, ?3, ?4)").bind(seal.head_seq, seal.head_hash, tot ? Number(tot.n) : 0, PLC_SEALER).run();
+      if (sig) out.seal_signed = true;
       anchored = true;
     } catch (e) { out.errors.push("anchor: " + String(e && e.message || e).slice(0, 200)); }
   }
@@ -3523,7 +3547,10 @@ async function paperLedgerChainStatus(env, verify) {
   var s = await db.prepare("SELECT chain_rows, head_seq, head_hash, unsealed_rows, unsealed_min, sql_breaks FROM v_paper_ledger_chain_status").first();
   Object.assign(out, s || {});
   if (env.QNFO_AUDIT) {
-    try { out.seals = ((await env.QNFO_AUDIT.prepare("SELECT id, head_seq, head_hash, chain_rows, sealed_at FROM paper_ledger_seals ORDER BY id DESC LIMIT 5").all()).results) || []; } catch (e) { out.seals = []; }
+    try {
+      var sealSigCol = await plcHasSealSignature(env.QNFO_AUDIT);
+      out.seals = ((await env.QNFO_AUDIT.prepare("SELECT id, head_seq, head_hash, chain_rows, sealed_at" + (sealSigCol ? ", signature" : "") + " FROM paper_ledger_seals ORDER BY id DESC LIMIT 5").all()).results) || [];
+    } catch (e) { out.seals = []; }
   }
   if (verify) {
     var v = await plcVerifyRows(db, Math.max(0, (Number(out.chain_rows) || 0) - 50), 50);
