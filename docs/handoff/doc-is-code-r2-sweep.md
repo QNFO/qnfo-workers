@@ -16,3 +16,7 @@ Verify: node scripts/r2_file_issues.test.mjs; python3 scripts/audit_test.py; aft
 
 Follow-up PR (2026-11-09): roadmap inserts are D1 batches of 50 (first live run took 10+ minutes one row at a time); qnfo-ops dispatches r2-doc-audit daily with max_issues 100 until deferred is 0; r2_fetch_texts also reads owner_docs (table exists, 0 rows today); audit.py checks loop and PR findings in AUDIT_REPOS (default 7 repos) and tags findings with the repo.
 Still open: implementing or retiring each orphan document (issue 8838) is the code loop's work, one issue per document.
+
+Update 2026-11-09 (after PR 8885 merged and deployed, qnfo-ops 2.69.5): the first live r2-doc-audit run (42562406784) ended cancelled, not success; the second run was still going; roadmap_implementation holds 509 doc-orphan rows and 50 doc-orphan issues are open. audit.py now reports repos it could not read as `unreachable` in its summary (this PR).
+- code-task: find why run 42562406784 was cancelled (concurrency group r2-doc-audit with cancel-in-progress false, or the 20-minute timeout) and make the run finish under 20 minutes at 500+ orphans
+- code-task: personal-side copy of the Poland trip doc (personal bucket, not the research bucket)
