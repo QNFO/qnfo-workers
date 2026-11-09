@@ -34453,8 +34453,8 @@ function cachedOpsConfigDb(db) {
 }
 var worker_default = {
   async scheduled(event, env, ctx) {
-    try { env = Object.assign({}, env, { QNFO_AUDIT: cachedOpsConfigDb(env.QNFO_AUDIT) }); } catch (eOcc) { }
     var rawEnv = env;
+    try { env = Object.assign({}, env, { QNFO_AUDIT: cachedOpsConfigDb(env.QNFO_AUDIT) }); } catch (eOcc) { }   // members keep rawEnv: their bindings stay the host's own objects
     var _budTick = await researchBudget(rawEnv, Number(event && event.scheduledTime) || Date.now());
     // RESEARCH-TICK-ALLOWANCE-1: the reviser (6 runs a day, about 85k neurons on 11-03) and the thin-paper step are background revision of
     // published papers; once the day's target is spent they wait for the next UTC day while the pipeline keeps its trickle.
