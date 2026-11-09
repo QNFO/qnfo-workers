@@ -33,7 +33,7 @@ const db = new DatabaseSync(":memory:");
 db.exec(`
   CREATE TABLE published_pieces (id TEXT, signal_id TEXT, slug TEXT UNIQUE, title TEXT, body_md TEXT, core_concept TEXT, signal_source TEXT, published_at TEXT, sources_json TEXT, property TEXT, reads INTEGER DEFAULT 0, feedback_score REAL);
   CREATE TABLE signal_log (id TEXT PRIMARY KEY, source TEXT, source_id TEXT, title TEXT, url TEXT, points INTEGER, num_comments INTEGER, ratio REAL, volatility_score REAL, friction_point TEXT, signal_strength TEXT, status TEXT, processed_at TEXT);
-  CREATE TABLE engine_runs (status TEXT, top_signal TEXT, ran_at TEXT);
+  CREATE TABLE engine_runs (status TEXT, top_signal TEXT, ran_at TEXT, error TEXT);
   CREATE TABLE prompt_pool (id TEXT, piece_id TEXT, structure_md TEXT, active INTEGER, created_at TEXT DEFAULT (datetime('now')));
   CREATE TABLE q08_retractions (slug TEXT PRIMARY KEY);
 `);
@@ -67,6 +67,10 @@ db.prepare("UPDATE published_pieces SET published_at = ? WHERE slug = 'archive'"
 db.prepare("UPDATE q08_audits SET verdict = 'fail' WHERE slug = 'archive'").run();
 assert.equal(await F.pickForecastSource(env), null, "an unaudited or failed source cannot seed a forecast");
 db.prepare("UPDATE q08_audits SET verdict = 'pass' WHERE slug = 'archive'").run();
+// Q08-RESEARCH-DEFER-SKIP-1: three short-research deferrals in 24 h set the source aside.
+for (let i = 0; i < 3; i++) db.prepare("INSERT INTO engine_runs (status, top_signal, ran_at, error) VALUES ('deferred', 'q08-forecast:archive', datetime('now'), 'forecast research: 4 usable sources; need 6')").run();
+assert.equal(await F.pickForecastSource(env), null, "a source deferred three times in 24 h is skipped");
+db.exec("DELETE FROM engine_runs");
 
 const realFetch = globalThis.fetch;
 let sourceCount = 5;
