@@ -5,7 +5,7 @@ import { WorkflowEntrypoint } from "cloudflare:workers";
 // 1.1.3 (2026-10-02, pillar: reach): JOB-MARKET-INLINE-1 (the weekly job-market scan runs from the cron and records a
 // handoffs row with a claim_sheet), MENTION-RADAR-LEDGER-1 (one cloud_ops_events row per mention-radar run day),
 // EVENTS-RADAR-CF-DOW-1 (events cron moved from Sunday to Monday, the day its weekly sources are read).
-var VERSION = "1.6.0-heartbeat-retry";
+var VERSION = "1.6.1-heartbeat-retry";
 // agent_issues 1000854, 1000787 (#5485): bounded transient D1 heartbeat retries; one bumpable hub VERSION.
 // 1.5.0 RADAR-VENUE-RECOVERED-1 (agent_issues 2573, pillar personal; minor: a decision radar-hub now takes on its own): a venue that yields usable candidates again closes the open RADAR-VENUE-SILENT-1 issue this worker filed, through issue_triage.close_evidence (close_channel auto-recovery); the run result lists recoveredVenues. The counter already reset on recovery, but nothing closed the issue, so it sat open until the 48 h stale probe. venue-recovered.test.mjs. // 1.4.4 BAD-TAG-FILTER-1 (2026-10-19): HTML-to-text helpers handle odd end tags, unclosed blocks and entity order. // 1.4.3 WORKERS-BP-LOGGING-radar-hub-1 (2026-10-14, agent_issues 2540, child of 2342, pillar autonomy): the 13 swallowed catches log as a structured console.error (worker, where, error); control flow unchanged. // 1.4.2 FAMILIES-WINDOW-CLOCK-1: signal_source_families_7d counts its 7 days from the run clock, not the database clock.
 function rhex(n) { var b = new Uint8Array(Math.ceil(n / 2)); crypto.getRandomValues(b); return Array.prototype.map.call(b, function (x) { return ("0" + x.toString(16)).slice(-2); }).join("").slice(0, n); } // 1.3.5 CRYPTO-IDS-1: outreach_queue ids draw from crypto.getRandomValues. // 1.3.4-doi-scrub NOZ-DOI-1 (2026-10-10): the weekly attribution-audit job and its cron branch are gone; the citation watch tracks no static DOIs; the mention radar tracks only non-retired DOIs. // // 1.3.3 NO-TOPIC-HARDCODE-1 (owner directive 2026-10-10): the arXiv radar builds its query, keyword list and classes from the owner's accepted ideas in idea_proposals instead of fixed tables; with none on file it skips. // 1.3.2 RADAR-VENUE-SILENT-1 (2026-10-06, pillar: personal): a per-venue consecutive-zero counter kept as one row in the existing personal_radar table; a normally productive venue (>= 2 productive days) with zero usable candidates for 3 consecutive days files ONE agent_issues row "RADAR-VENUE-SILENT-1: <venue>" (source radar-hub, personal, low, epoch-ms), a failed fetch is a gap not a zero, a same-day re-run does not double count, and the run report names silent venues. 1.3.1 (2026-10-06): the intake run result never echoes exception text (CodeQL js/stack-trace-exposure on PR 662); details go to the worker log. 1.3.0 SIGNAL-INTAKE-SOURCES-1 (2026-10-06, agent_issues 1947, pillar: research): a D1-driven interdisciplinary feed intake (radar_sources kind 'signal': arXiv beyond quant-ph, journals, science news, community feeds) scored by lexicon with no model call into idea_proposals (name intake:<family>), bounded per run and per family, deduped by URL in signal_intake_seen, in the 08:30Z slot (no new cron); metric signal_source_families_7d; GET /intake, POST /intake/run; the events radar skips kind 'signal' rows. 1.2.4 RADAR-TASTE-SHRINK-1 + RADAR-TITLE-NOISE-2 (pillar: personal): taste prior shrunk by n/(n+3) with a 0.6 floor under 5 feedback rows and a half-the-day safety valve; Stedelijk date-range, Iamsterdam navigation and Eventbrite chrome titles dropped or cleaned. 1.2.3 RADAR-TITLE-NOISE-1 (pillar: personal): clean readable calendar titles for personal radar rows, dedupe key unchanged. 1.2.2 RADAR-TASTE-LEARN-1 (pillar: personal): the personal radar learns per-venue and per-domain taste from calendar_feedback. 1.2.1 AWAY-GATE-1 (pillar: personal): the personal radar skips Amsterdam events while a lodging row places the owner elsewhere. 1.2.0 CRON-SINGLE-TRIGGER-1 (#1785): one hourly trigger, CRON_TABLE in code
@@ -2384,6 +2384,25 @@ async function cronHeartbeat(env, ok) {
 // The hub's cron router (the handler this worker always had). The exported scheduled() below runs it, then writes the heartbeat.
 // cronTickDispatch logs and swallows a table entry's error by design (one failing job does not stop the rest), so ok is 0 only when the handler
 // throws or a waitUntil promise rejects; the swallowed entries stay visible in the logs.
+// RADAR-VAULT-EXPIRY-1 (issue 9678): the daily notes under notes/v1/ are put-only; delete those whose date folder is older than keepDays.
+async function vaultPrune(env, keepDays) {
+  if (!env.VAULT) return { deleted: 0, skipped: "no VAULT binding" };
+  const cutoff = new Date(Date.now() - (keepDays || 60) * 86400000).toISOString().slice(0, 10);
+  let cursor, deleted = 0, scanned = 0;
+  for (let page = 0; page < 5; page++) {
+    const l = await env.VAULT.list({ prefix: "notes/v1/", cursor: cursor, limit: 1000 });
+    const old = [];
+    for (const o of l.objects) {
+      scanned++;
+      const m = /^notes\/v1\/\d{4}\/\d{2}\/(\d{4}-\d{2}-\d{2})\//.exec(o.key);
+      if (m && m[1] < cutoff) old.push(o.key);
+    }
+    if (old.length) { await env.VAULT.delete(old); deleted += old.length; }
+    if (!l.truncated) break;
+    cursor = l.cursor;
+  }
+  return { deleted: deleted, scanned: scanned, cutoff: cutoff };
+}
 var hubRun = {
   async scheduled(event, env, ctx) {
     return cronTickDispatch(event, async function (event) {
@@ -2397,6 +2416,7 @@ var hubRun = {
       // SIGNAL-INTAKE-SOURCES-1: the interdisciplinary feed intake shares this daily slot (no new cron); isolated like the others.
       await Promise.allSettled([
         arxivMod.scheduled(event, env, ctx),
+        vaultPrune(env).then((o) => console.log("vault-prune", JSON.stringify(o)), (e) => console.error("vault-prune", String((e && e.message) || e))),
         mentionMod.run(env).then((o) => console.log("mention-radar", JSON.stringify(o)), (e) => console.error("mention-radar", String((e && e.message) || e))),
         intakeMod.run(env).then((o) => console.log("signal-intake", JSON.stringify(o).slice(0, 1500)), (e) => console.error("signal-intake", String((e && e.message) || e)))
       ]);
