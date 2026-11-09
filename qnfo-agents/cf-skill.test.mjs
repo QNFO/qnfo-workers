@@ -8,3 +8,9 @@ assert.equal(cfSkillUrl("wrangler"), "https://raw.githubusercontent.com/cloudfla
 assert.equal(cfSkillNote("wrangler", ""), "");
 assert.ok(cfSkillNote("wrangler", "x".repeat(7000), 100).includes("[skill text cut]"));
 console.log("cf-skill ok");
+import { wantsSystemMap, systemMapNote } from "./src/lib.js";
+assert.equal(wantsSystemMap("which worker binds this D1 table"), true);
+assert.equal(wantsSystemMap("write a haiku"), false);
+assert.equal(systemMapNote(""), "");
+assert.ok(systemMapNote("y".repeat(5000), 100).includes("[map cut]"));
+console.log("system-map ok");
