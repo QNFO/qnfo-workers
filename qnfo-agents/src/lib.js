@@ -293,6 +293,11 @@ export function agentDrainPlan(spent, budget, nowMs, est, perTick) {
   const left = Math.max(0, budget - Number(spent));
   const share = left / ticksLeft;
   const runs = Math.floor(share / e);
+  // AGENTS-SHED-PACING-1 (issue 8133): below the straight line of the day (budget x fraction elapsed, plus one run) start up to the per-tick cap; the duty cycle
+  // applies only above it. The line still bounds the day at the budget, so a request is not shed for waiting while most of the budget is unspent.
+  const line = budget * ((now - dayStart) / 864e5) + e;
+  const lineRuns = Math.min(left, line - Number(spent)) >= e ? Math.max(1, Math.floor((line - Number(spent)) / e)) : 0;
+  if (lineRuns >= 1) return { limited: true, take: Math.min(per, Math.max(runs, lineRuns)), duty: 1, left, share };
   if (runs >= 1) return { limited: true, take: Math.min(per, runs), duty: 1, left, share };
   const duty = share > 0 ? Math.min(AGENT_FLOOR_EVERY_TICKS, Math.ceil(e / share)) : AGENT_FLOOR_EVERY_TICKS;
   const slot = Math.floor(now / AGENT_TICK_MS) % duty === 0;

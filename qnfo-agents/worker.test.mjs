@@ -181,6 +181,15 @@ ok(agentNeurons(0, 0) === 0 && agentNeurons("x", null) === 0, "unusable token co
   // unreadable spend, no budget, 'off': not limited, at the per-tick bound
   ok(agentDrainPlan(null, 250000, DAY0, 2500, 3).limited === false && agentDrainPlan(null, 250000, DAY0, 2500, 3).take === 3, "an unreadable ledger never throttles the queue");
   ok(agentDrainPlan(1e9, 0, DAY0, 2500, 3).limited === false && agentDrainPlan(1e9, -1, DAY0, 2500, 3).take === 3, "budget 0 or below (off) disables the governor");
+  // AGENTS-SHED-PACING-1: 24 percent into the day with 11 percent spent (issue 8133) starts the per-tick cap every tick, not one request in three ticks
+  const t24 = DAY0 + Math.floor(0.24 * 864e5);
+  const pace = agentDrainPlan(27300, 250000, t24, 2500, DRAIN_PER_TICK);
+  ok(pace.take === DRAIN_PER_TICK && pace.duty === 1, "below the line of the day the drain starts the per-tick cap: " + pace.take);
+  let starts3 = 0;
+  for (let k = 0; k < 3; k++) starts3 += agentDrainPlan(27300, 250000, t24 + k * AGENT_TICK_MS, 2500, DRAIN_PER_TICK).take > 0 ? 1 : 0;
+  ok(starts3 === 3, "every consecutive tick below the line starts requests");
+  const above = agentDrainPlan(120000, 250000, t24, 2500, DRAIN_PER_TICK);
+  ok(above.take <= 1 && above.duty >= 1, "above the line (120k spent at 24 percent of the day) the duty cycle applies: take " + above.take + " duty " + above.duty);
   ok(AGENT_DAILY_NEURONS_DEFAULT === 250000, "the default budget is 250k neurons a day");
   ok(AGENT_SHED_MIN < 120 && AGENT_SHED_MIN >= 60, "a request the budget cannot start leaves the queue before the 120-minute bar");
 }

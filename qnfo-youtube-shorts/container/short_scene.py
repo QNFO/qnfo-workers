@@ -74,7 +74,7 @@ class ShortScene(Scene):
         tag = T(spec.get("tag", "QNFO IN PLAIN LANGUAGE"), 22, C1).move_to([0, 6.3, 0])
         ai = T("AI-GENERATED NARRATION", 16, SOFT, bold=False).next_to(tag, DOWN, buff=0.12)
         self.add(tag, ai)
-        exits = ["fade", "left", "up", "shrink", "right"]
+        exits = ["fade", "left", "up", "shrink", "right", "down", "grow"]   # YT-19: two more transitions; the pick below is per (beat, kind, slug) so Shorts differ
         for i, b in enumerate(spec["beats"]):
             t0 = self.time
             img = self.add_beat_art(b.get("bg"), b["dur"])
@@ -90,9 +90,10 @@ class ShortScene(Scene):
             hold = max(0.0, b["dur"] - used - 0.35)
             if hold > 0.05:
                 self.play(grp.animate.scale(1.035), run_time=hold, rate_func=linear)   # slow push-in instead of a dead hold
-            ex = b.get("exit") or exits[(i + sum(map(ord, b["kind"])) % 3) % len(exits)]
+            ex = b.get("exit") if b.get("exit") in exits else exits[(i + sum(map(ord, b["kind"])) + sum(map(ord, str(spec.get("slug", ""))))) % len(exits)]
             anim = {"fade": FadeOut(grp), "left": FadeOut(grp, shift=LEFT * 3), "right": FadeOut(grp, shift=RIGHT * 3),
-                    "up": FadeOut(grp, shift=UP * 3), "shrink": FadeOut(grp, scale=0.4)}[ex]
+                    "up": FadeOut(grp, shift=UP * 3), "shrink": FadeOut(grp, scale=0.4), "down": FadeOut(grp, shift=DOWN * 3),
+                    "grow": FadeOut(grp, scale=1.6)}[ex]
             self.play(anim, run_time=0.35)
             if img is not None:
                 self.remove(img)
