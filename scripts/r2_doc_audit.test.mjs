@@ -64,3 +64,14 @@ test2("retired prefix matches only at a path boundary", () => {
   const r = classifyG([{ bucket: "b", key: "docs/retro.md", size: 1 }, { bucket: "b", key: "docs/ret/x.md", size: 1 }], "", {}, { retired: parseRetired("b/docs/ret\treason") });
   assert2.deepEqual(r.map((x) => x.orphan), [true, false]);
 });
+
+// DOC-IS-CODE-1: the generated daily notes prefix is a recorded retirement with a reason, and only that prefix (docs/retired-r2-documents.txt).
+import { parseRetired as _parseRetired, classify as _classifyRet } from "./r2_doc_audit.mjs";
+const _retired = _parseRetired(_rf(new URL("../docs/retired-r2-documents.txt", import.meta.url), "utf8"));
+const _notes = _retired.find((r) => r.prefix === "qnfo-ddocs/obsidian-cloud/notes/v1/");
+assert.ok(_notes && _notes.reason && _notes.reason.length > 40, "the generated daily notes prefix is retired with a reason");
+const _rows = _classifyRet([
+  { bucket: "qnfo-ddocs", key: "obsidian-cloud/notes/v1/2026/09/01/_arxiv-radar-2026-09-01.md", size: 1 },
+  { bucket: "qnfo-ddocs", key: "obsidian-cloud/other/x.md", size: 1 },
+], "", {}, { retired: _retired });
+assert.deepEqual(_rows.map((r) => r.orphan), [false, true], "only the notes prefix is retired, a sibling path is still reported");

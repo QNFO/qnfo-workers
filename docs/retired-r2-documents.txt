@@ -1,3 +1,4 @@
 # Retired R2 documents (DOC-IS-CODE-1). One line per decision: <bucket>/<key prefix><TAB><reason>.
 # A document under a retired prefix is not reported by scripts/r2_doc_audit.mjs. Add a line in a PR that states why the prefix needs no code.
 qnfo-ddocs/2026-09-04/	Dated workspace snapshot (2026-09-04) kept in R2 as an archive; its documents have no runtime consumer by design.
+qnfo-ddocs/obsidian-cloud/notes/v1/	Generated daily notes kept as the archived daily record: the arXiv-radar and citation-watch notes are written put-only by radar-hub (and the workers folded into it), the system-health notes by an earlier writer no longer in the repo; no worker, script or page reads this prefix back (personal-companion reads only the self-authored _NN.md notes under obsidian/notes/v1/).
