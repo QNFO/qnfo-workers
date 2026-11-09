@@ -52,3 +52,10 @@ test2("groups orphans per bucket and top folder, retire list and index evidence 
   assert2.match(i.body, /code-task:/); assert2.match(i.body, /code-probe:/);
   assert2.equal(parseRetired("x/\t").length, 0);
 });
+// DOC-IS-CODE-1: the retirement registry cites each archived R2 key in a scanned source file, so classify() counts it as dispositioned.
+import { readFileSync as _rf } from "node:fs";
+const _reg = JSON.parse(_rf(new URL("./r2-doc-dispositions.json", import.meta.url), "utf8")).docs;
+assert.ok(_reg.length > 0);
+for (const d of _reg) assert.ok(d.reason && d.disposition === "archived", "registry row has a reason: " + d.key);
+const _blob = _rf(new URL("./r2-doc-dispositions.json", import.meta.url), "utf8");
+assert.equal(classify(_reg.map((d) => ({ bucket: d.bucket, key: d.key })), _blob).filter((r) => r.orphan).length, 0, "registry retires every listed doc");
