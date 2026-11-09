@@ -9,7 +9,7 @@
 // JOBSEARCH-CV-1 (1.5.0): the CV is part of this worker (page /cv): a yes/no interview that builds the claim bank, review of unconfirmed claims, roles, achievements and publications edited in D1, a resume per job (summary, roles, selected work, education, skills) and a cover note, history and backup. The search is tied to that bank (evidence the owner can back up weighs more; what the CV lacks is shown as a gap), decided postings (rejected, applied, approved) never come back under another id, rejections carry a reason the search learns from, and a wider net: stretch matches outside the stated preferences, more boards and aggregators.
 // Routes: GET / (web UI) | GET /api | GET /api/matches | GET /api/matches/:id | GET /api/runs | GET /api/ledger | POST /api/run | POST /api/matches/:id/status | GET /health
 // Port of the jobsearch/ Python modules (tests: jobsearch/test_jobsearch.py, qnfo-jobsearch/worker.test.mjs).
-var VERSION = "1.11.0-codeagent";
+var VERSION = "1.12.0-codeagent";
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -992,7 +992,8 @@ const TAG_TO_CLUSTERS = {
   numerics: ["numerics"], teaching: ["teaching"], writing: ["writing"],
 };
 const clustersOf = (tags) => [...new Set((tags || []).flatMap((t) => TAG_TO_CLUSTERS[t] || []))];
-const STATIC_BASE = ["Hello,", "Best regards,", "## Experience highlights", "## Credentials", "## Experience", "## Earlier roles", "## Selected work", "## Education", "## Certifications", "## Skills", "**Other experience**"];
+const REFERRAL_ASK = "Would you be open to a short chat about the team, or to passing my application to the hiring manager? I understand if not.";
+const STATIC_BASE = [REFERRAL_ASK, "Hello,", "Best regards,", "## Experience highlights", "## Credentials", "## Experience", "## Earlier roles", "## Selected work", "## Education", "## Certifications", "## Skills", "**Other experience**"];
 const endYr = (r) => (/present/i.test(r.end) ? 9999 : parseInt(r.end, 10) || 0);
 const byRecency = (a, b) => endYr(b) - endYr(a) || (parseInt(b.start, 10) || 0) - (parseInt(a.start, 10) || 0);
 const rolePeriod = (r) => (r.start === r.end ? r.start : `${r.start} to ${r.end}`);
@@ -1820,6 +1821,31 @@ function fileResponse(kind, row) {
 }
 // JOBSEARCH-FOLLOWUP-1: applications with no reply after 7 days (the status moves to no_reply on its own at 21), each with a short follow-up note.
 // The note states only facts the owner supplied by pressing Mark applied: the role, the employer and the date.
+// JOBSEARCH-REFERRAL-1: a referral is the strongest lever on whether an application is read. The fleet finds the people-search links and drafts a short message from
+// verified facts; the owner picks a person who knows them and sends it from their own account (no scraping, no automated messages: LinkedIn terms).
+const STAGES = ["recruiter_screen", "hiring_manager", "technical", "take_home", "panel", "final", "reference_check"];
+function referralKit(row, ctx) {
+  const job = { id: row.id, company: row.company, title: row.title, location: row.location || "", url: row.url, desc: "" };
+  const sc = scoreJob(job, ctx, "analyze"), facts = pickFacts(sc.clusters, 2);
+  const L = [tag("Hello,", "S"), "", tag(`I am applying for the ${job.title} role at ${job.company}.`, "J:title")];
+  for (const f of facts) L.push(tag(f.pitch !== f.text ? f.pitch : "- " + f.text, "F:" + f.id));
+  L.push("", tag(REFERRAL_ASK, "S"), "", tag("Best regards,", "S"), tag(P.name, "S"));
+  const bad = verify(L.join("\n") + "\n", job);
+  const q = encodeURIComponent(job.company);
+  return {
+    id: row.id, company: job.company, title: job.title,
+    search_urls: [
+      { label: "People who work at " + job.company, url: `https://www.linkedin.com/search/results/people/?keywords=${q}&network=%5B%22F%22%2C%22S%22%5D` },
+      { label: "Recruiters at " + job.company, url: `https://www.linkedin.com/search/results/people/?keywords=${q}%20recruiter` },
+    ],
+    message: bad.length ? null : stripTags(L.join("\n") + "\n"), blocked: bad.length ? bad.join("; ") : null,
+    left_for_you: ["choose a person who actually knows you or your field", "send it yourself from your own account"],
+  };
+}
+async function referralList(env, ctx) {
+  const rows = (await env.JOBS_DB.prepare("SELECT id, title, company, tier, score, status FROM jobsearch_matches WHERE verified=1 AND status IN ('pending_owner_approval','approved','applied') AND tier IN ('A','B') ORDER BY CASE tier WHEN 'A' THEN 0 ELSE 1 END, score DESC LIMIT 10").all()).results;
+  return { count: rows.length, items: rows.map((r) => ({ id: r.id, title: r.title, company: r.company, tier: r.tier, status: r.status, referral: "/api/matches/" + encodeURIComponent(r.id) + "/referral" })) };
+}
 async function followups(env) {
   await ensure(env);
   const cut = new Date(Date.now() - 7 * 86400000).toISOString();
@@ -2114,7 +2140,7 @@ async function outcomes(env) {
   const tiers = {};
   for (const t of ["A", "B"]) { const l = mature.filter((r) => r.tier === t); tiers[t] = { mature_applied: l.length, reply_rate: rate(l, "replied") }; }
   return {
-    funnel: funnel(rows), by_channel: group("channel"), by_score_band: group("band"), by_tier: { A: funnel(rows.filter((r) => r.tier === "A")), B: funnel(rows.filter((r) => r.tier === "B")) },
+    funnel: funnel(rows), by_stage: Object.fromEntries(STAGES.map((st) => [st, Object.values(by).filter((ev) => ev.some((e) => e.event === "stage:" + st)).length])), by_channel: group("channel"), by_score_band: group("band"), by_tier: { A: funnel(rows.filter((r) => r.tier === "A")), B: funnel(rows.filter((r) => r.tier === "B")) },
     mature_applied_90d: mature.length, min_mature_for_rate: MIN_N,
     reply_rate_90d: rate(mature, "replied"), interview_rate_90d: rate(mature, "interview"),
     applied_30d: rows.filter((r) => r.applied && r.applied_ms >= now - 30 * 86400000).length,
@@ -2216,6 +2242,7 @@ const INDEX = {
   routes: {
     "GET /": "web UI", "GET /api/matches?tier=A|B&status=&q=&limit=": "ranked matches without artifacts", "GET /api/matches/:id": "one match with resume_md and note_md",
     "GET /api/runs": "recent pipeline runs", "GET /api/funnel": "applications to replies, interviews and offers by board kind and score band", "GET /api/ledger": "the claim ledger every output sentence must come from", "GET /api/ops": "operational self-report: the fm-jobsearch-* checks, feed health, counts", "GET /api/prefs": "the yes/no search survey with your answers; POST {answers:{id:true|false|null}} saves and re-runs the search", "POST /api/analyze": "{input: link or pasted posting text, title?, company?} -> fit, strengths, gaps, whether it would appear in your search, verified draft", "POST /api/feedback": "{title, company, verdict: like|dislike} teaches the search", "GET /api/outcomes": "funnel (matches, approved, applied, replies, interviews, offers), reply rate of applications older than 21 days, by tier", "POST /api/auth/request": "e-mail a 6-digit sign-in code to the owner", "POST /api/auth/verify": "{code} -> owner session (cookie jobs_session, 12 h)", "GET /api/auth/me": "signed-in state", "POST /api/auth/logout": "revoke the session", "POST /api/run": "trigger a run (10-minute cooldown)",
+    "GET /api/referrals": "the best open matches with a referral kit link each", "GET /api/matches/:id/referral": "people-search links and a verified-facts message to ask someone you know for a referral (owner session)", "POST /api/matches/:id/stage": "record an interview stage {stage: recruiter_screen|hiring_manager|technical|take_home|panel|final|reference_check, note} (owner session)",
     "POST /api/matches/:id/status": "owner decision or outcome {status: approved|rejected|applied|replied|interview|offer|no_reply|pending_owner_approval}, logged as an event; needs an owner session or x-loop-token", "POST /api/answers": "draft free-response application answers {input, questions[]} from the verified record; pay, authorization and demographic questions come back owner_only", "POST /api/prep": "interview brief for a posting {input}: role summary, offer, gaps, STAR story picks, likely questions", "POST /api/prep/quiz": "feedback on one spoken answer {question, answer, role}", "POST /api/calibrate": "record your verdict {owner: qualified|stretch|not_qualified, title, company, rubric_fit, judge_fit}", "GET /api/calibration": "how often the rubric and the model reading agree with you", "GET /api/matches/:id/resume.pdf": "text PDF of the tailored resume (one column, selectable text)", "GET /health": "version", "GET /prep": "phone page: check fit with calibration, draft answers, interview brief and quiz", "GET /cv": "the CV page: interview, review, edit, resume per job, history", "GET /api/cv": "the CV bank, questions with answers, review queue (owner session)", "POST /api/cv/answer|fact|review|set|import": "edit the CV bank (owner session); GET /api/cv/export is the backup", "GET /api/cv/history": "resumes built for jobs",
   },
   policy: "nothing is sent; approval is a status change only",
@@ -2349,6 +2376,24 @@ const handler = {
       if (!row.resume_md) return J({ error: "no draft is kept for this match" }, 404);
       return fileResponse(ax[2], row);
     }
+    if (p === "/api/referrals" && m === "GET") { const ctx = await loadCtx(env); return J(await referralList(env, ctx)); }
+    const rf = p.match(/^\/api\/matches\/(.+?)\/referral$/);
+    if (rf && m === "GET") {
+      if (!(await ownerSession(request, env))) return J({ error: "sign in first: POST /api/auth/request, then POST /api/auth/verify" }, 401);
+      const row = await env.JOBS_DB.prepare("SELECT * FROM jobsearch_matches WHERE id=?").bind(decodeURIComponent(rf[1])).first();
+      if (!row) return J({ error: "not found" }, 404);
+      return J(referralKit(row, await loadCtx(env)));
+    }
+    const sg = p.match(/^\/api\/matches\/(.+?)\/stage$/);
+    if (sg && m === "POST") {
+      if (!(await ownerSession(request, env))) return J({ error: "sign in first: POST /api/auth/request, then POST /api/auth/verify" }, 401);
+      let body = {}; try { body = await request.json(); } catch (e) { logErr("bad-json-stage", e); }
+      if (!STAGES.includes(body.stage)) return J({ error: "stage must be one of " + STAGES.join("|") }, 400);
+      const id = decodeURIComponent(sg[1]);
+      if (!(await env.JOBS_DB.prepare("SELECT 1 AS x FROM jobsearch_matches WHERE id=?").bind(id).first())) return J({ error: "not found" }, 404);
+      await env.JOBS_DB.prepare("INSERT INTO jobsearch_events (match_id, event, ts, note) VALUES (?1,?2,?3,?4)").bind(id, "stage:" + body.stage, new Date().toISOString(), String(body.note || "").slice(0, 300)).run();
+      return J({ ok: true, id, stage: body.stage });
+    }
     let mm = p.match(/^\/api\/matches\/(.+?)(\/status)?$/);
     if (mm && m === "GET" && !mm[2]) {
       const row = await env.JOBS_DB.prepare("SELECT * FROM jobsearch_matches WHERE id=?").bind(decodeURIComponent(mm[1])).first();
@@ -2386,7 +2431,7 @@ const handler = {
     return J({ error: "not found", see: "/api" }, 404);
   },
 };
-handler.__test = { judgeTop, buildResume, verify, headlineVerdict, outcomes, pdfOf, pdfClean, checkAnswer, jsonLoose, PROTECTED_Q, draftAnswers, prepBrief, quizFeedback, judgeJob, calibrate, calibration, followups, atsOf, keywordReport, docxOf, resumeHtml, plainOf, applyKit, matchKit, stripTags, postingTerms, evaluate, rank, buildResume, buildNote, verify, stripHtml, locationGate, has, LEDGER, dedupeKey, feedPrefix, makeCtx, scoreJob, scoreFeatures, featuresFromWhy, applicationSnapshot, parseApplicationSnapshot, outcomeScoreWeights, loadCtx, SURVEY, BOARDS, normKey, applyBank, BANK_SEED, QUESTIONS, TAG_TO_CLUSTERS, clustersOf, cvAnswer, cvFact, cvReview, cvSet, cvImport, mutateBank, loadBank, decidedKeys, FETCHERS, getBank: () => BANK, llmRerank, llmRerankRun, ensureResearchPubs, RESEARCH_PUBS, pubLine, parseRerank, reasonOk, rerankMessages, artifactsFor, titleCandidate, sitemapUrls, slugTitle, PUBLIC_SECTOR, opsReport };
+handler.__test = { loadCtx, referralKit, referralList, STAGES, judgeTop, buildResume, verify, headlineVerdict, outcomes, pdfOf, pdfClean, checkAnswer, jsonLoose, PROTECTED_Q, draftAnswers, prepBrief, quizFeedback, judgeJob, calibrate, calibration, followups, atsOf, keywordReport, docxOf, resumeHtml, plainOf, applyKit, matchKit, stripTags, postingTerms, evaluate, rank, buildResume, buildNote, verify, stripHtml, locationGate, has, LEDGER, dedupeKey, feedPrefix, makeCtx, scoreJob, scoreFeatures, featuresFromWhy, applicationSnapshot, parseApplicationSnapshot, outcomeScoreWeights, loadCtx, SURVEY, BOARDS, normKey, applyBank, BANK_SEED, QUESTIONS, TAG_TO_CLUSTERS, clustersOf, cvAnswer, cvFact, cvReview, cvSet, cvImport, mutateBank, loadBank, decidedKeys, FETCHERS, getBank: () => BANK, llmRerank, llmRerankRun, ensureResearchPubs, RESEARCH_PUBS, pubLine, parseRerank, reasonOk, rerankMessages, artifactsFor, titleCandidate, sitemapUrls, slugTitle, PUBLIC_SECTOR, opsReport };
 export default handler;
 
 // ------------------------------------------------------------------ client script shared by both pages (JOBSEARCH-APPLY-1): kit handling and the Fill application bookmark
@@ -2462,11 +2507,15 @@ async function load(){
    +'<div class="mute">'+esc(x.why.join(' | '))+'</div>'+x.flags.map(f=>'<div class="flag">Check: '+esc(f)+'</div>').join('')
    +(x.verified?'':'<div class="flag">Blocked by verifier: '+esc(x.blocked_reason)+'</div>')
    +'<div class="acts">'+(x.verified?'<button class="p ap" data-id="'+esc(x.id)+'">Apply</button>':'')+'<a href="'+esc(x.url)+'" target="_blank" rel="noopener"><button>Open posting</button></a><button onclick="show(\\''+esc(x.id)+'\\')">Resume and note</button>'+(x.verified?'<a href="/api/matches/'+encodeURIComponent(x.id)+'/resume.pdf"><button>Resume .pdf</button></a>'+'<a href="/api/matches/'+encodeURIComponent(x.id)+'/resume.docx"><button>Resume .docx</button></a>':'')+''
-   +'<button onclick="decide(\\''+esc(x.id)+'\\',\\'approved\\')">Approve</button><button onclick="reject(\\''+esc(x.id)+'\\')">Reject</button><button onclick="decide(\\''+esc(x.id)+'\\',\\'applied\\')">Mark applied</button>'+[['replied','Got a reply'],['interview','Interview'],['offer','Offer']].map(o=>'<button onclick="decide(\\''+esc(x.id)+'\\',\\''+o[0]+'\\')">'+o[1]+'</button>').join('')+'</div><div class="art"></div></div>').join('')||'<p class="mute">No matches yet.</p>';
+   +'<button onclick="decide(\\''+esc(x.id)+'\\',\\'approved\\')">Approve</button><button onclick="reject(\\''+esc(x.id)+'\\')">Reject</button><button onclick="decide(\\''+esc(x.id)+'\\',\\'applied\\')">Mark applied</button>'+[['replied','Got a reply'],['interview','Interview'],['offer','Offer']].map(o=>'<button onclick="decide(\\''+esc(x.id)+'\\',\\''+o[0]+'\\')">'+o[1]+'</button>').join('')+'<button onclick="referral(\\''+esc(x.id)+'\\')">Referral</button><select onchange="stage(\\''+esc(x.id)+'\\',this)"><option value="">Interview stage</option>'+['recruiter_screen','hiring_manager','technical','take_home','panel','final','reference_check'].map(function(t){return '<option>'+t+'</option>'}).join('')+'</select>'+'</div><div class="art"></div></div>').join('')||'<p class="mute">No matches yet.</p>';
 }
 async function show(id){const el=document.getElementById('c-'+id).querySelector('.art');if(el.innerHTML){el.innerHTML='';return}
   const d=await api('/api/matches/'+encodeURIComponent(id));if(!d.verified){el.innerHTML='<pre>Blocked: '+esc(d.blocked_reason)+'</pre>';return}
   el.innerHTML='<h4>Resume</h4><pre>'+esc(d.resume_md)+'</pre><h4>Note</h4><pre>'+esc(d.note_md)+'</pre><button onclick="navigator.clipboard.writeText(this.dataset.t)" data-t="'+esc(d.note_md)+'">Copy note</button> <button onclick="navigator.clipboard.writeText(this.dataset.t)" data-t="'+esc(d.resume_md)+'">Copy resume</button>'}
+async function referral(id){var el=document.getElementById('c-'+id).querySelector('.art');
+  var d=await authed(function(){return api('/api/matches/'+encodeURIComponent(id)+'/referral')});
+  el.innerHTML='<h4>Ask for a referral</h4><div class="note">'+d.left_for_you.map(esc).join('; ')+'.</div>'+d.search_urls.map(function(u){return '<a href="'+esc(u.url)+'" target="_blank" rel="noopener"><button>'+esc(u.label)+'</button></a>'}).join(' ')+(d.message?'<pre>'+esc(d.message)+'</pre><button onclick="navigator.clipboard.writeText(this.dataset.t)" data-t="'+esc(d.message)+'">Copy message</button>':'<pre>Blocked: '+esc(d.blocked)+'</pre>')}
+async function stage(id,sel){if(!sel.value)return;var v=sel.value;await authed(function(){return api('/api/matches/'+encodeURIComponent(id)+'/stage',{method:'POST',body:JSON.stringify({stage:v})})});sel.blur();var o=sel.options[0];o.textContent='Stage: '+v;sel.selectedIndex=0}
 function signIn(){return new Promise(async(res)=>{let r;try{r=await api('/api/auth/request',{method:'POST'})}catch(e){if(!/limit/.test(e.message)){alert(e.message);return res(false)}r={sent:false,note:e.message}}
   let box=$('#signbox');if(!box){box=document.createElement('div');box.id='signbox';box.className='note';$('main').prepend(box)}
   box.innerHTML='<b>Sign in</b><div>'+esc(r.sent===false?r.note+' A code sent earlier still works.':'A 6-digit code was e-mailed to '+r.to+'.')+'</div><div class="bar"><input id="scode" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="6-digit code" size="10"><button class="p" id="sgo">Sign in</button><button id="scancel">Cancel</button><span id="smsg" class="mute"></span></div>';
