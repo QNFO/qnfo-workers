@@ -2653,7 +2653,8 @@ async function contentSignalAudit(env) {
         out.active++;
         var title = "[" + s.source + "] " + String(s.content || "").slice(0, 90);
         var prio = Number(s.evidential_weight) >= 0.8 ? "P1" : "P2";
-        var ex = await env.AUDIT.prepare("SELECT id FROM fleet_improvements WHERE kind='failure-mode' AND title=?1 AND status IN ('proposed','approved','in_progress') LIMIT 1").bind(title).first();
+        // RM-KAIZEN-SCHEDULED-1.2: queued is non-terminal too, else the hourly audit re-files the same title
+        var ex = await env.AUDIT.prepare("SELECT id FROM fleet_improvements WHERE kind='failure-mode' AND title=?1 AND status IN ('proposed','approved','in_progress','queued') LIMIT 1").bind(title).first();
         if (!ex) {
           var iid = await improvement(env, "content-signal", dom || "fleet", "failure-mode", title, String(s.decision || "").slice(0, 400), prio);
           try {

@@ -168,6 +168,21 @@ def fetch_deployments(ctx, acc, rows):
     return events, n_ok, len(scripts)
 
 
+def incident_workers(title):
+    """RM-BS-FLEET-TWIN-1.3: workers named by a CONTROL-PLANE/DEPLOY-PROBE REVERTED or CANARY-FAILED title.
+    Forms: "... reverted, a, b deploy canary failed", "... revert opened as a pull request, a, b ...", "... failed, a"."""
+    m = re.search(r"(?:reverted|failed|pull request),\s+(.+)", title, re.IGNORECASE)
+    if not m:
+        return []
+    out = []
+    for tok in re.split(r"[,\s]+", m.group(1)):
+        if re.fullmatch(r"[a-z0-9][a-z0-9_-]*", tok, re.IGNORECASE) and ("-" in tok or tok.startswith("qnfo")):
+            out.append(tok)
+        else:
+            break
+    return out
+
+
 def collect_deploys(ctx):
     acc = _acc()
     if not acc:
@@ -215,9 +230,9 @@ def collect_deploys(ctx):
     incidents = []
     try:
         for r in ctx.d1("SELECT title, created_at FROM agent_issues WHERE (title LIKE 'CONTROL-PLANE-REVERTED-1%' OR title LIKE 'DEPLOY-PROBE-REVERTED-1%' OR title LIKE 'CONTROL-PLANE-CANARY-FAILED-1%' OR title LIKE 'DEPLOY-PROBE-CANARY-FAILED%') AND created_at >= ?1", [int((ctx.now - WINDOW_DAYS * 86400) * 1000)]):
-            m = re.search(r"(?:reverted|failed),\s+([a-z0-9][a-z0-9_-]*)", str(r["title"]), re.IGNORECASE)
-            if m:
-                incidents.append((m.group(1), int(r["created_at"]) // 1000))
+            # RM-BS-FLEET-TWIN-1.3: both title forms, and every worker of a comma separated list
+            for w in incident_workers(str(r["title"])):
+                incidents.append((w, int(r["created_at"]) // 1000))
     except Exception as e:  # noqa: BLE001
         rows.append(("canary-reverts", None, "agent_issues unreadable: %s" % str(e)[:100]))
     a = analyse_deploys(events, incidents)
@@ -651,6 +666,9 @@ def selftest():
     a = analyse_deploys(evs, [("a", 1793000000 + 60), ("zz", 1793000000)])
     ok(a["total"] == 15 and a["gradual"] == 0, "totals: %r" % {k: a[k] for k in ("total", "gradual")})
     ok(a["failed_by_rollback"] == 3, "three failed deployments (a-3, b-2, c-2): %r" % a["rollbacks"])
+    ok(incident_workers("DEPLOY-PROBE-REVERTED-1: push abc reverted, qnfo-ops, qnfo-ai deploy probe failed") == ["qnfo-ops", "qnfo-ai"], "RM-BS-FLEET-TWIN-1.3 list form")
+    ok(incident_workers("DEPLOY-PROBE-REVERTED-1: revert opened as a pull request, qnfo-ops") == ["qnfo-ops"], "RM-BS-FLEET-TWIN-1.3 pull request form")
+    ok(incident_workers("CONTROL-PLANE-REVERTED-1: push 7a9d293 reverted, qnfo-gateway deploy canary failed") == ["qnfo-gateway"], "RM-BS-FLEET-TWIN-1.3 legacy form")
     ok(len(a["canary"]) == 1, "a canary incident counts only for a worker with a recorded window: %r" % a["canary"])
     ok(p95([1, 2, 3, 4, 100]) == 100 and p95([5]) == 5 and p95([]) is None and p95(list(range(1, 21))) == 19, "p95 nearest rank")
     # AI Gateway figures
