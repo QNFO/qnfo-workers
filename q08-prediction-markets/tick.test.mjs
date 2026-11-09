@@ -12,7 +12,7 @@ function fakeD1() {
 const soon = (d) => new Date(Date.now() + d * 86400000).toISOString();
 const feed = (markets) => ({ source: "polymarket", markets });
 const mk = (slug, yes, x = {}) => ({ slug, title: "Will " + slug + " happen?", yes, vol24: 50000, move: 0, closed: 0, ends_at: soon(5), sports: 0, ...x });
-const news = async () => [1, 2, 3, 4].map((i) => ({ title: "h" + i, domain: "x.com", date: "20261109" }));
+const news = async () => [1, 2, 3, 4].map((i) => ({ title: "h" + i, domain: "x.com", date: "20261109", src: "gdelt" }));
 const said = (ps) => (m, n, model) => Promise.resolve(JSON.stringify({ p: ps[model] ?? 0.5, confidence: "medium", why: "Three outlets report it (" + model + ")." }));
 const deps = (ps) => ({ news, ask: said(ps), models: Object.keys(ps) });
 const agree80 = deps({ a: 0.78, b: 0.8, c: 0.82 });
@@ -29,12 +29,14 @@ test("a full tick: three models agree on a gap, a paper trade opens with fair, e
 test("no trade, but the estimate is still recorded: small gap, a dissenting member, too few members, thin evidence", async () => {
   const env = { TRADES_DB: fakeD1() };
   const base = { news, models: ["a", "b", "c"] };
-  const byTitle = { "Will small happen?": { a: 0.56, b: 0.58, c: 0.6 }, "Will split happen?": { a: 0.9, b: 0.8, c: 0.45 }, "Will one happen?": { a: 0.9 }, "Will thin happen?": { a: 0.9, b: 0.9, c: 0.9 } };
-  const r = await tick(env, feed(["small", "split", "one", "thin"].map((s) => mk(s, 0.5)).slice(0, 3)), { ...base, ask: async (m, n, model) => { const ps = byTitle[m.title]; if (ps[model] == null) throw new Error("no answer"); return JSON.stringify({ p: ps[model], confidence: "high", why: "w" }); } });
-  assert.equal(r.opened, 0);
+  const byTitle = { "Will small happen?": { a: 0.56, b: 0.58, c: 0.6 }, "Will split happen?": { a: 0.9, b: 0.8, c: 0.45 }, "Will one happen?": { a: 0.9 } };
+  const ask = async (m, n, model) => { const ps = byTitle[m.title]; if (ps[model] == null) throw new Error("no answer"); return JSON.stringify({ p: ps[model], confidence: "high", why: "w" }); };
+  assert.equal((await tick(env, feed([mk("small", 0.5), mk("split", 0.5)]), { ...base, ask })).opened, 0); // two estimates per tick
+  assert.equal((await tick(env, feed([mk("one", 0.5)]), { ...base, ask })).opened, 0);
   const st = await get(env, "/api/state");
   assert.equal(st.predictions.length, 3); assert.ok(st.predictions.every((p) => !p.traded));
   assert.ok(st.predictions.find((p) => p.title.includes("one")).confidence === "no-ensemble");
+  assert.deepEqual(JSON.parse(st.predictions[0].sources), { gdelt: 4 }); // the evidence source counts are kept, so a dead source shows
   const r2 = await tick(env, feed([mk("thin", 0.5)]), { news: async () => [], ask: async () => "{}", models: ["a"] });
   assert.equal(r2.opened, 0); assert.equal((await get(env, "/api/state")).predictions.find((p) => p.title.includes("thin")).confidence, "no-evidence");
 });

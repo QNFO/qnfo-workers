@@ -1,5 +1,5 @@
 import test from "node:test"; import assert from "node:assert/strict";
-import { CHARTER, parseMarket, isSports, parseEstimate, newsQuery, aggregate, decide, signalEntries, exits, equity, markOf, priceOf, candidates, stats, currentDrawdown, bootstrapCI, evaluate, graduation, reviewActions, syntheticMarkets } from "./worker.js";
+import { CHARTER, wikiItems, hnQuery, gdeltDelay, parseMarket, isSports, parseEstimate, newsQuery, aggregate, decide, signalEntries, exits, equity, markOf, priceOf, candidates, stats, currentDrawdown, bootstrapCI, evaluate, graduation, reviewActions, syntheticMarkets } from "./worker.js";
 
 test("parseMarket reads gamma outcomePrices and the end date", () => {
   const m = parseMarket({ slug: "a", question: "Q", outcomePrices: '["0.4","0.6"]', endDate: "2026-11-20T00:00:00Z" });
@@ -113,4 +113,27 @@ test("reviewActions: pause on drawdown or a significantly worse model, widen the
   assert.deepEqual(reviewActions(good, { drawdown_pct: 0, min_edge: 0.10 }).map((x) => x.value), [0.09]);
   assert.equal(reviewActions(good, { drawdown_pct: 0, min_edge: 0.08 }).length, 0); // floor
   assert.equal(reviewActions(worse, { drawdown_pct: 0, min_edge: 0.20 }).filter((x) => x.kind === "min_edge").length, 0); // ceiling
+});
+
+test("sports are recognised from Polymarket's own markers, esports and exact-score markets, not only from words", () => {
+  const base = { slug: "x", question: "Will it happen?", outcomePrices: '["0.5","0.5"]' };
+  assert.equal(parseMarket({ ...base, sportsMarketType: "moneyline" }).sports, 1);
+  assert.equal(parseMarket({ ...base, gameStartTime: "2026-11-09 01:20:00+00" }).sports, 1);
+  assert.equal(parseMarket({ ...base, events: [{ gameId: 12345 }] }).sports, 1);
+  assert.equal(parseMarket({ ...base, events: [{ seriesSlug: "weekly-news" }] }).sports, 0);
+  for (const t of ["Exact Score: Any Other Score?", "Will Bilibili Gaming win Worlds 2026?", "Will Elon Musk post 40-64 tweets from November 7 to November 9, 2026?", "Valorant Champions winner"]) assert.ok(isSports({ title: t }), t);
+  assert.ok(!isSports({ title: "US x Iran Effective Ceasefire by November 22?" }));
+});
+test("hnQuery keeps three distinctive words and drops month names", () => {
+  assert.equal(hnQuery("US x Iran Effective Ceasefire by November 22?"), "Iran Effective Ceasefire");
+});
+test("gdeltDelay waits out the five second limit", () => {
+  assert.equal(gdeltDelay(10000, 10000), 5600); assert.equal(gdeltDelay(13000, 10000), 2600); assert.equal(gdeltDelay(20000, 10000), 0);
+});
+
+test("wikiItems keeps only recently edited articles and strips the markup", () => {
+  const now = Date.parse("2026-11-09T12:00:00Z");
+  const items = wikiItems({ query: { search: [{ title: "Iran ceasefire", snippet: "talks <span class=\"searchmatch\">continue</span> &amp; hold", timestamp: "2026-11-08T10:00:00Z" }, { title: "Old article", snippet: "x", timestamp: "2026-01-01T00:00:00Z" }] } }, now);
+  assert.equal(items.length, 1); assert.match(items[0].title, /^Iran ceasefire: talks continue & hold \[last edited 2026-11-08\]$/); assert.equal(items[0].src, "wiki");
+  assert.deepEqual(wikiItems(null), []);
 });

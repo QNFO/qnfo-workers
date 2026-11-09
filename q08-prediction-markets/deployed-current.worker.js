@@ -1,28 +1,28 @@
 // q08-prediction-markets: the paper-trading proving ground for q08's information edge (PM-CHARTER-1).
 // Paper money only. No wallet, no exchange key, no order ever leaves this worker: the only executor in this file writes D1 rows.
-var VERSION = "1.5.0";
+var VERSION = "1.5.2";
 
 // ---------- charter (the machine-readable form; GET /api/charter serves it with the live evidence) ----------
 export const CHARTER = {
   id: "PM-CHARTER-1",
   pillar: "personal",
   objective: "Find short-term, non-sports prediction-market questions where an independently researched probability beats the market price, and prove that on paper before any real money is considered.",
-  thesis: "A model that only reads the price adds nothing. The edge has to come from information the crowd has not priced yet: fresh primary reporting and q08's own signal sources (Hacker News, GDELT, and the research ledger behind q08 forecasts), read by several model families that never see the price. The literature says to expect no edge by default (a retrieval-augmented ensemble scored Brier 0.179 against 0.149 for the human crowd, Halawi et al. 2024), so every claim of an edge is measured here against the market price and against simply backing the market favourite.",
+  thesis: "A model that only reads the price adds nothing. The edge has to come from information the crowd has not priced yet: fresh reporting and q08's own signal sources (Hacker News, GDELT and Wikipedia, the same sources as the research ledger behind q08 forecasts), read by several model families that never see the price. The literature says to expect no edge by default (a retrieval-augmented ensemble scored Brier 0.179 against 0.149 for the human crowd, Halawi et al. 2024), so every claim of an edge is measured here against the market price and against simply backing the market favourite.",
   mode: "paper",
   universe: { sports: "excluded", horizon_days: 14, min_volume24: 10000, price_band: [0.05, 0.95] },
-  method: { evidence: ["gdelt", "hacker-news"], ensemble_min_members: 2, max_spread: 0.25, min_gap: 0.10, price_hidden_from_model: true, hold: "to resolution; early exit only on convergence to the estimate" },
+  method: { evidence: ["gdelt", "hacker-news", "wikipedia"], ensemble_min_members: 2, max_spread: 0.25, min_gap: 0.10, price_hidden_from_model: true, hold: "to resolution; early exit only on convergence to the estimate" },
   risk: { start_cash: 10000, position_pct: 0.05, exposure_pct: 0.30, max_open: 8, slippage: 0.01, breaker_drawdown_pct: 15 },
   graduation: { min_days: 30, min_resolved_estimates: 100, min_resolved_trades: 30, max_drawdown_pct: 20, confidence: 0.95, rule: "model (or model+market blend) beats the market price on Brier, shadow ROI after costs is above zero, and signal trades beat backing the market favourite, each with the 95% bootstrap interval clear of zero" },
   live: { enabled: false, why: "Real orders need a wallet-signed key, an API key, funding and a jurisdiction and terms-of-service review: the owner's identity, accounts and money. This worker contains no live executor. When the graduation gate passes, the owner decision is requested as an IDENTITY-BOUND item whose default is to stay on paper." },
   loops: [
-    "tick every 5 minutes: fetch, filter sports, settle estimates that resolved, estimate up to 3 new markets, trade clear gaps, exit on resolution or convergence",
+    "tick every 5 minutes: fetch, filter sports, settle estimates that resolved, estimate up to 2 new markets, trade clear gaps, exit on resolution or convergence",
     "review on every tick: score resolved estimates, apply bounded self-tuning (minimum gap 8-20 points) and the drawdown/accuracy circuit breaker with an expiry, log each change in pt_decision",
     "publish: metric_registry values and the worker heartbeat in qnfo-audit, where the fleet's metric triggers file breaches as issues",
     "graduation: evaluated continuously; never flips live by itself",
   ],
 };
 const CFG = { START: 10000, POS_PCT: 0.10, EXPO_PCT: 0.30, STOP: 0.15, TAKE: 0.30, SLIP: 0.01, MAX_OPEN: 8,
-  HORIZON_D: 14, SIG_MIN_VOL: 10000, MIN_EDGE: 0.10, SIG_POS_PCT: 0.05, MAX_EST: 3, EST_TTL_H: 6, CONVERGE: 0.03, MAX_SPREAD: 0.25, MIN_MEMBERS: 2,
+  HORIZON_D: 14, SIG_MIN_VOL: 10000, MIN_EDGE: 0.10, SIG_POS_PCT: 0.05, MAX_EST: 2, EST_TTL_H: 6, CONVERGE: 0.03, MAX_SPREAD: 0.25, MIN_MEMBERS: 2,
   EDGE_MIN: 0.08, EDGE_MAX: 0.20, BREAKER_DD: 15, PAUSE_H: 24 };
 const ENSEMBLE = ["glm-5.3-flash", "deepseek-v4-flash", "qwen3-30b-a3b"]; // three model families, none of which sees the market price
 
@@ -34,10 +34,12 @@ export function parseMarket(m) {
   if (!m.slug || !(yes >= 0 && yes <= 1)) return null;
   const t = Date.parse(m.endDate || "");
   const out = { slug: m.slug, title: m.question || m.slug, yes, vol24: +m.volume24hr || 0, move: +m.oneDayPriceChange || 0, closed: m.closed ? 1 : 0, ends_at: Number.isFinite(t) ? new Date(t).toISOString() : null };
-  out.sports = isSports({ title: out.title, slug: m.slug, category: m.category || m.groupItemTitle || "" }) ? 1 : 0;
+  // Polymarket marks sports structurally (market sportsMarketType and gameStartTime, event gameId); keywords catch what it does not mark
+  const marked = !!(m.sportsMarketType || m.gameStartTime || (Array.isArray(m.events) && m.events.some((e) => e && e.gameId)));
+  out.sports = marked || isSports({ title: out.title, slug: m.slug, category: m.category || m.groupItemTitle || "" }) ? 1 : 0;
   return out;
 }
-const SPORTS_RE = /\b(nba|nfl|mlb|nhl|wnba|ufc|mma|ncaa|fifa|uefa|epl|premier league|la liga|serie a|bundesliga|ligue 1|champions league|europa league|world cup|super bowl|stanley cup|world series|playoffs?|grand slam|wimbledon|us open|french open|australian open|atp|wta|formula 1|f1|grand prix|nascar|pga|the masters|ryder cup|olympics?|boxing|cricket|ipl|rugby|touchdown|moneyline|over\/under|o\/u|mvp|heisman|ballon d'or|vs|win on 20\d\d-\d\d-\d\d)\b|\bspread\s*[:(]/i;
+const SPORTS_RE = /\b(nba|nfl|mlb|nhl|wnba|ufc|mma|ncaa|fifa|uefa|epl|premier league|la liga|serie a|bundesliga|ligue 1|champions league|europa league|world cup|super bowl|stanley cup|world series|playoffs?|grand slam|wimbledon|us open|french open|australian open|atp|wta|formula 1|f1|grand prix|nascar|pga|the masters|ryder cup|olympics?|boxing|cricket|ipl|rugby|touchdown|moneyline|over\/under|o\/u|mvp|heisman|ballon d'or|vs|win on 20\d\d-\d\d-\d\d|exact score|any other score|correct score|total goals|both teams to score|esports?|league of legends|dota 2?|valorant|counter-strike|cs2|worlds 20\d\d)\b|\bspread\s*[:(]|\bpost\s+\d[\d-]*\s+tweets\b/i;
 export const isSports = (m) => /sport/i.test(m.category || "") || SPORTS_RE.test((m.title || "") + " " + (m.slug || "").replace(/-/g, " "));
 export const daysUntil = (iso, now = Date.now()) => { const t = Date.parse(iso || ""); return Number.isFinite(t) ? (t - now) / 86400000 : null; };
 export function syntheticMarkets(now = Date.now()) {
@@ -91,6 +93,16 @@ export function newsQuery(title) {
   const w = String(title).replace(/[^A-Za-z0-9 ]+/g, " ").split(/\s+/).filter((x) => x.length > 2 && !STOP.has(x.toLowerCase()) && !/^\d{4}$/.test(x));
   return w.slice(0, 7).join(" ");
 }
+// Wikipedia search hits as evidence: only articles edited in the last 14 days count, because a recently edited article is a sign of fresh reporting.
+export function wikiItems(json, nowMs = Date.now()) {
+  const hits = (json && json.query && json.query.search) || [];
+  return hits.map((h) => ({ ts: Date.parse(h.timestamp || ""), h })).filter((x) => Number.isFinite(x.ts) && nowMs - x.ts <= 14 * 86400000)
+    .map(({ ts, h }) => ({ title: (String(h.title) + ": " + String(h.snippet || "").replace(/<[^>]+>/g, "").replace(/&quot;/g, '"').replace(/&amp;/g, "&")).slice(0, 200) + " [last edited " + new Date(ts).toISOString().slice(0, 10) + "]", domain: "en.wikipedia.org", date: new Date(ts).toISOString().slice(0, 10).replace(/-/g, ""), src: "wiki" }));
+}
+const MONTHS = new Set("january february march april may june july august september october november december".split(" "));
+export function hnQuery(title) { return newsQuery(title).split(" ").filter((w) => !MONTHS.has(w.toLowerCase())).slice(0, 3).join(" "); }
+// GDELT allows one request every 5 seconds; this is how long to wait before the next one.
+export const gdeltDelay = (nowMs, lastMs, gapMs = 5600) => Math.max(0, gapMs - (nowMs - lastMs));
 // One model's answer. JSON or nothing: anything else is rejected rather than guessed at.
 export function parseEstimate(text) {
   const m = String(text || "").match(/\{[\s\S]*\}/);
@@ -216,7 +228,7 @@ const DDL = [
   "CREATE TABLE IF NOT EXISTS pt_decision (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL, actor TEXT NOT NULL, assumption TEXT, action TEXT NOT NULL, evidence TEXT, rollback TEXT)",
 ];
 const COLUMNS = [["pt_position", "fair", "REAL"], ["pt_position", "edge", "REAL"], ["pt_position", "why", "TEXT"], ["pt_position", "ends_at", "TEXT"], ["pt_market", "ends_at", "TEXT"],
-  ["pt_estimate", "outcome", "INTEGER"], ["pt_estimate", "resolved_at", "TEXT"], ["pt_estimate", "models", "TEXT"], ["pt_estimate", "spread", "REAL"]];
+  ["pt_estimate", "outcome", "INTEGER"], ["pt_estimate", "resolved_at", "TEXT"], ["pt_estimate", "models", "TEXT"], ["pt_estimate", "spread", "REAL"], ["pt_estimate", "sources", "TEXT"]];
 async function init(env) {
   const db = env.TRADES_DB;
   await db.batch(DDL.map((s) => db.prepare(s)));
@@ -269,22 +281,36 @@ const logDecision = (db, now, action, assumption, evidence, rollback) => db.prep
 const isPaused = (ctl, nowMs) => !!ctl.paused_until && Date.parse(ctl.paused_until) > nowMs;
 
 // ---------- evidence and the ensemble (q08's signal sources: Hacker News and GDELT) ----------
-async function getJson(url) {
-  const ctl = new AbortController(), tm = setTimeout(() => ctl.abort(), 8000);
-  try { const r = await fetch(url, { signal: ctl.signal }); return r.ok ? await r.json() : null; } catch (e) { return null; } finally { clearTimeout(tm); }
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+let lastGdelt = 0;
+async function getJson(url, spaced, headers) {
+  for (let attempt = 0; attempt < (spaced ? 2 : 1); attempt++) {
+    if (spaced) { await sleep(gdeltDelay(Date.now(), lastGdelt)); lastGdelt = Date.now(); }
+    const ctl = new AbortController(), tm = setTimeout(() => ctl.abort(), spaced ? 25000 : 9000); // GDELT answers in 10-20 s when it answers
+    try {
+      const r = await fetch(url, { signal: ctl.signal, headers: headers || {} });
+      if (!r.ok) { if (spaced && r.status >= 500 && attempt === 0) { console.error("gdelt " + r.status + ", retrying once"); continue; } return null; }
+      const t = await r.text();
+      if (spaced && /^Please limit requests/i.test(t)) { console.error("gdelt rate limit, retrying once"); continue; } // GDELT answers its limit in plain text
+      try { return JSON.parse(t); } catch (e) { console.error("evidence source returned non-JSON", t.slice(0, 80)); return null; }
+    } catch (e) { return null; } finally { clearTimeout(tm); }
+  }
+  return null;
 }
-async function fetchNews(title) {
+export async function fetchNews(title) {
   const q = newsQuery(title);
   if (!q) return [];
   const since = Math.floor(Date.now() / 1000 - 3 * 86400);
-  const [g, h] = await Promise.all([
-    getJson("https://api.gdeltproject.org/api/v2/doc/doc?query=" + encodeURIComponent(q + " sourcelang:english") + "&mode=artlist&maxrecords=10&format=json&timespan=3d&sort=datedesc"),
-    getJson("https://hn.algolia.com/api/v1/search_by_date?tags=story&hitsPerPage=6&query=" + encodeURIComponent(q) + "&numericFilters=" + encodeURIComponent("created_at_i>" + since)),
+  const hq = hnQuery(title);
+  const [g, h, w] = await Promise.all([
+    getJson("https://api.gdeltproject.org/api/v2/doc/doc?query=" + encodeURIComponent(q + " sourcelang:english") + "&mode=artlist&maxrecords=10&format=json&timespan=3d&sort=datedesc", true),
+    hq ? getJson("https://hn.algolia.com/api/v1/search_by_date?tags=story&hitsPerPage=6&query=" + encodeURIComponent(hq) + "&numericFilters=" + encodeURIComponent("created_at_i>" + since)) : null,
+    getJson("https://en.wikipedia.org/w/api.php?action=query&list=search&srlimit=4&format=json&srprop=snippet%7Ctimestamp&srsearch=" + encodeURIComponent(hq || q), false, { "user-agent": "q08-prediction-markets/1.5 (paper-trading research; https://q08.org)" }),
   ]);
-  const a = ((g && g.articles) || []).map((x) => ({ title: String(x.title || "").slice(0, 160), domain: x.domain, date: String(x.seendate || "").slice(0, 8) }));
-  const b = ((h && h.hits) || []).map((x) => ({ title: String(x.title || "").slice(0, 160), domain: "news.ycombinator.com", date: String(x.created_at || "").slice(0, 10).replace(/-/g, "") }));
+  const a = ((g && g.articles) || []).map((x) => ({ title: String(x.title || "").slice(0, 160), domain: x.domain, date: String(x.seendate || "").slice(0, 8), src: "gdelt" }));
+  const b = ((h && h.hits) || []).map((x) => ({ title: String(x.title || "").slice(0, 160), domain: "news.ycombinator.com", date: String(x.created_at || "").slice(0, 10).replace(/-/g, ""), src: "hn" }));
   const seen = new Set();
-  return a.concat(b).filter((x) => x.title && !seen.has(x.title) && seen.add(x.title));
+  return a.concat(b, wikiItems(w)).filter((x) => x.title && !seen.has(x.title) && seen.add(x.title));
 }
 // The model sees the question, the dates and the evidence, never the market price, so it cannot simply echo the crowd.
 async function askModel(env, m, news, model) {
@@ -305,12 +331,15 @@ async function estimate(env, db, cands, now, deps) {
   const status = deps.ask || env.QNFO_AI ? "ok" : "no-ai";
   const rows = [];
   if (status === "no-ai") return { rows, status };
+  const evidence = new Map();
+  for (const m of todo) { try { evidence.set(m.slug, await news(m.title)); } catch (e) { console.error("evidence failed", m.slug, String(e)); evidence.set(m.slug, []); } } // one at a time: GDELT allows a request every 5 seconds
   await Promise.all(todo.map(async (m) => {
     try {
-      const n = await news(m.title);
-      if (n.length < 3) { rows.push({ m, agg: null, headlines: n.length, members: [] }); return; }
+      const n = evidence.get(m.slug) || [];
+      const sources = n.reduce((o, x) => ((o[x.src || "other"] = (o[x.src || "other"] || 0) + 1), o), {});
+      if (n.length < 3) { rows.push({ m, agg: null, headlines: n.length, members: [], sources }); return; }
       const got = await Promise.all(models.map(async (model) => { try { const e = parseEstimate(await ask(m, n, model)); return e && { ...e, model }; } catch (err) { console.error("member failed", model, String(err)); return null; } }));
-      rows.push({ m, agg: aggregate(got), headlines: n.length, members: got.filter(Boolean).map((x) => ({ model: x.model, p: x.p, c: x.confidence })) });
+      rows.push({ m, agg: aggregate(got), headlines: n.length, sources, members: got.filter(Boolean).map((x) => ({ model: x.model, p: x.p, c: x.confidence })) });
     } catch (e) { console.error("estimate failed", m.slug, String(e)); }
   }));
   return { rows, status };
@@ -422,8 +451,8 @@ export async function tick(env, feed, deps = {}) {
       const d = row.agg ? decide(row.agg, m, ctl0.min_edge) : null;
       if (d && !paused && !coolNow.has(d.slug) && !closedSlugs.has(d.slug)) decisions.push(d);
       const conf = row.agg ? row.agg.confidence : row.headlines < 3 ? "no-evidence" : "no-ensemble";
-      writes.push(db.prepare("INSERT OR REPLACE INTO pt_estimate (slug,title,fair,market,edge,confidence,why,ends_at,headlines,traded,updated_at,models,spread,outcome,resolved_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,NULL,NULL)")
-        .bind(m.slug, m.title, row.agg ? row.agg.p : null, m.yes, row.agg ? row.agg.p - m.yes : null, conf, row.agg ? row.agg.why : row.headlines < 3 ? "fewer than 3 pieces of recent evidence" : "fewer than " + CFG.MIN_MEMBERS + " model answers", m.ends_at ?? null, row.headlines, d ? 1 : 0, now, JSON.stringify(row.members), row.agg ? row.agg.spread : null));
+      writes.push(db.prepare("INSERT OR REPLACE INTO pt_estimate (slug,title,fair,market,edge,confidence,why,ends_at,headlines,traded,updated_at,models,spread,sources,outcome,resolved_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,NULL,NULL)")
+        .bind(m.slug, m.title, row.agg ? row.agg.p : null, m.yes, row.agg ? row.agg.p - m.yes : null, conf, row.agg ? row.agg.why : row.headlines < 3 ? "fewer than 3 pieces of recent evidence" : "fewer than " + CFG.MIN_MEMBERS + " model answers", m.ends_at ?? null, row.headlines, d ? 1 : 0, now, JSON.stringify(row.members), row.agg ? row.agg.spread : null, JSON.stringify(row.sources || {})));
     }
     const opened = signalEntries(decisions, pos, { cash: cash0 }, pxNow, CFG);
     for (const o of opened) {
@@ -508,7 +537,7 @@ const json = (o, s = 200) => new Response(JSON.stringify(o), { status: s, header
 const PAGE = `<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>Q08 Markets (paper)</title>
 <style>:root{color-scheme:light dark}body{font:15px system-ui;max-width:860px;margin:0 auto;padding:16px}h1{font-size:20px}table{width:100%;border-collapse:collapse}td,th{padding:6px;border-bottom:1px solid #8884;text-align:left;overflow-wrap:anywhere}button{padding:8px 10px}.n{text-align:right}button{font:inherit}.b{background:#fc03;padding:8px;border-radius:6px}</style>
 <h1>Q08 Markets <small>paper trading</small></h1><div class=b>Simulated money only. No real orders.</div><p id=s>Loading...</p>
-<button id=t>Run tick now</button><p id=x></p><h2>Does the information beat the market?</h2><p id=ev>Collecting evidence...</p><h2>Predictions</h2><p><small>Three models read the last 3 days of Hacker News and GDELT reporting on short-term non-sports markets and give their own probabilities without seeing the price. A paper trade opens only when they agree on a gap of 10 points or more.</small></p><table id=pr></table><p><label>Order size $ <input id=amt type=number value=100 min=1 step=1></label> <span id=msg role=status></span></p><h2>Open positions</h2><table id=o></table><h2>Closed</h2><table id=c></table><h2>Markets</h2><table id=m></table>
+<button id=t>Run tick now</button><p id=x></p><h2>Does the information beat the market?</h2><p id=ev>Collecting evidence...</p><h2>Predictions</h2><p><small>Three models read the last 3 days of Hacker News, GDELT and Wikipedia reporting on short-term non-sports markets and give their own probabilities without seeing the price. A paper trade opens only when they agree on a gap of 10 points or more.</small></p><table id=pr></table><p><label>Order size $ <input id=amt type=number value=100 min=1 step=1></label> <span id=msg role=status></span></p><h2>Open positions</h2><table id=o></table><h2>Closed</h2><table id=c></table><h2>Markets</h2><table id=m></table>
 <script>const f=n=>(+n).toFixed(2);async function L(){const d=await (await fetch('/api/state')).json();
 s.textContent='Equity $'+f(d.equity)+' ('+f(d.return_pct)+'%) | cash $'+f(d.cash)+' | closed '+d.trades_closed+' | win rate '+(d.win_rate==null?'n/a':f(d.win_rate*100)+'%');
 x.textContent='Max drawdown '+f(d.stats.max_drawdown_pct)+'% | '+Object.entries(d.stats.by_strategy).map(([k,v])=>k+': '+v.trades+' trades, P&L $'+f(v.pnl)).join(' | ');

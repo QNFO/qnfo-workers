@@ -14,6 +14,22 @@
 --   decision    the design decision and its prediction, to be scored by the calibration scorer.
 -- Live trading is not built: the worker has no live executor. The graduation gate (GET https://markets.q08.org/api/charter) only reports; the owner step is IDENTITY-BOUND (issue PM-LIVE-1).
 
+-- The evidence and model dependencies changed after the 2026-11-09-pm-signals-spof.sql rows merged (that file is applied and is not edited): GDELT proved slow and
+-- unreliable (503 on 2026-11-09), so Hacker News and Wikipedia carry the estimate with it, and the model path is a three-family ensemble. Same components, replaced rows.
+INSERT OR REPLACE INTO spof_registry (component, critical_path, alternate_path, alternate_tested_at, evidence, reviewed_at) VALUES
+ ('q08-prediction-markets news evidence',
+  'GDELT (api.gdeltproject.org, 10-20 s per call, one call per 5 seconds), Hacker News (hn.algolia.com) and Wikipedia (en.wikipedia.org search, articles edited in the last 14 days) -> fetchNews() -> evidence for each candidate market, at most 2 markets per 5-minute tick, each re-estimated at most every 6 hours',
+  'the three sources are independent: a failure of one leaves the others; fewer than 3 pieces of evidence in total records the market as "no-evidence" and opens no trade; existing positions, exits and the dashboard are unaffected; per-source counts are stored in pt_estimate.sources so a dead source shows in the data',
+  '2026-11-09',
+  'q08-prediction-markets/worker.js fetchNews, wikiItems, estimate; live run of 1.4.0 on 2026-11-09 showed GDELT 503 and zero evidence on every market, which led to this design; tick.test.mjs "no trade, but the estimate is still recorded"',
+  '2026-11-09'),
+ ('q08-prediction-markets probability model',
+  'QNFO_AI service binding (qnfo-ai /v1/chat/completions, three model families glm-5.3-flash, deepseek-v4-flash and qwen3-30b-a3b, caller prop q08-prediction-markets) -> askModel() -> parseEstimate() -> aggregate()',
+  'the three members are independent: one failing leaves two, and fewer than two answers is no estimate and no trade; no binding means status "no-ai" in the tick result and no trade',
+  '2026-11-09',
+  'q08-prediction-markets/worker.js askModel, estimate, aggregate; tick.test.mjs "without the AI binding the strategy reports no-ai and trades nothing"',
+  '2026-11-09');
+
 INSERT OR IGNORE INTO metric_registry (metric, layer, kind, formula, source_of_truth, baseline, target, owner, disposition_actor, refresh_cadence, warning_band, kill_band, state, refresh_class) VALUES
  ('pm_paper_return_pct', 'operational', 'target', 'percent change of paper equity against the 10,000 starting cash', 'q08-prediction-markets review loop (TRADES_DB pt_equity) -> metric_registry.last_value; GET https://markets.q08.org/api/state', '0 on 2026-11-09', '> 0', 'q08-prediction-markets', 'observed with the graduation evidence; the breaker acts on drawdown', '*/5', '< -5', '< -15', 'NEW', 'runner'),
  ('pm_paper_drawdown_pct', 'operational', 'guard', 'percent the latest paper equity is below its peak', 'q08-prediction-markets review loop (TRADES_DB pt_equity)', '0 on 2026-11-09', '< 15', 'q08-prediction-markets', 'the circuit breaker pauses new entries at 15 (pm-circuit-breaker)', '*/5', '> 10', '> 15', 'NEW', 'runner'),
