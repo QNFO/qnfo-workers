@@ -1,7 +1,7 @@
 {
  "mode": "local",
- "at": "2026-11-09T15:22:55.141Z",
- "sha": "e4cdd072c8331304e74c737d828d41b0ad4603ba",
+ "at": "2026-11-09T15:30:24.953Z",
+ "sha": "6714b8607a209fdd9236ad6795c3cb83a7c92855",
  "apps": [
   {
    "app": "companion",
@@ -32,13 +32,13 @@
      "pageErrors": [],
      "badResponses": [],
      "ok": false,
-     "error": "expected to see \"What can I do right now?\" on http://127.0.0.1:37753/",
+     "error": "expected to see \"What can I do right now?\" on http://127.0.0.1:39387/",
      "attempts": 1,
-     "ms": 15294,
+     "ms": 15282,
      "grade": {
       "status": "broken",
       "reasons": [
-       "did not finish: expected to see \"What can I do right now?\" on http://127.0.0.1:37753/"
+       "did not finish: expected to see \"What can I do right now?\" on http://127.0.0.1:39387/"
       ]
      }
     },
@@ -55,16 +55,16 @@
      ],
      "pageErrors": [],
      "badResponses": [
-      "500 http://127.0.0.1:46881/companion/api/insights?days=60"
+      "500 http://127.0.0.1:34119/companion/api/insights?days=60"
      ],
      "ok": false,
-     "error": "expected to see \"What can I do right now?\" on http://127.0.0.1:46881/",
+     "error": "expected to see \"What can I do right now?\" on http://127.0.0.1:34119/",
      "attempts": 1,
-     "ms": 7100,
+     "ms": 7107,
      "grade": {
       "status": "broken",
       "reasons": [
-       "did not finish: expected to see \"What can I do right now?\" on http://127.0.0.1:46881/"
+       "did not finish: expected to see \"What can I do right now?\" on http://127.0.0.1:34119/"
       ]
      }
     },
@@ -81,16 +81,16 @@
      ],
      "pageErrors": [],
      "badResponses": [
-      "500 http://127.0.0.1:35457/companion/api/insights?days=60"
+      "500 http://127.0.0.1:45443/companion/api/insights?days=60"
      ],
      "ok": false,
-     "error": "expected to see \"What can I do right now?\" on http://127.0.0.1:35457/",
+     "error": "expected to see \"What can I do right now?\" on http://127.0.0.1:45443/",
      "attempts": 1,
-     "ms": 7103,
+     "ms": 7112,
      "grade": {
       "status": "broken",
       "reasons": [
-       "did not finish: expected to see \"What can I do right now?\" on http://127.0.0.1:35457/"
+       "did not finish: expected to see \"What can I do right now?\" on http://127.0.0.1:45443/"
       ]
      }
     },
@@ -107,16 +107,16 @@
      ],
      "pageErrors": [],
      "badResponses": [
-      "500 http://127.0.0.1:45537/companion/api/insights?days=60"
+      "500 http://127.0.0.1:43693/companion/api/insights?days=60"
      ],
      "ok": false,
-     "error": "expected to see \"What can I do right now?\" on http://127.0.0.1:45537/",
+     "error": "expected to see \"What can I do right now?\" on http://127.0.0.1:43693/",
      "attempts": 1,
-     "ms": 7099,
+     "ms": 7107,
      "grade": {
       "status": "broken",
       "reasons": [
-       "did not finish: expected to see \"What can I do right now?\" on http://127.0.0.1:45537/"
+       "did not finish: expected to see \"What can I do right now?\" on http://127.0.0.1:43693/"
       ]
      }
     },
@@ -133,16 +133,16 @@
      ],
      "pageErrors": [],
      "badResponses": [
-      "500 http://127.0.0.1:38923/companion/api/insights?days=60"
+      "500 http://127.0.0.1:44665/companion/api/insights?days=60"
      ],
      "ok": false,
-     "error": "expected to see \"What can I do right now?\" on http://127.0.0.1:38923/",
+     "error": "expected to see \"What can I do right now?\" on http://127.0.0.1:44665/",
      "attempts": 1,
-     "ms": 7111,
+     "ms": 7113,
      "grade": {
       "status": "broken",
       "reasons": [
-       "did not finish: expected to see \"What can I do right now?\" on http://127.0.0.1:38923/"
+       "did not finish: expected to see \"What can I do right now?\" on http://127.0.0.1:44665/"
       ]
      }
     },
@@ -159,16 +159,16 @@
      ],
      "pageErrors": [],
      "badResponses": [
-      "500 http://127.0.0.1:41589/companion/api/moments"
+      "500 http://127.0.0.1:39717/companion/api/moments"
      ],
      "ok": false,
-     "error": "expected to see \"What can I do right now?\" on http://127.0.0.1:41589/companion",
+     "error": "expected to see \"What can I do right now?\" on http://127.0.0.1:39717/companion",
      "attempts": 1,
-     "ms": 7081,
+     "ms": 7086,
      "grade": {
       "status": "broken",
       "reasons": [
-       "did not finish: expected to see \"What can I do right now?\" on http://127.0.0.1:41589/companion"
+       "did not finish: expected to see \"What can I do right now?\" on http://127.0.0.1:39717/companion"
       ]
      }
     },
@@ -185,33 +185,33 @@
      ],
      "pageErrors": [],
      "badResponses": [
-      "500 http://127.0.0.1:34183/companion/api/insights?days=60"
+      "500 http://127.0.0.1:33563/companion/api/insights?days=60"
      ],
      "ok": false,
-     "error": "expected to see \"What can I do right now?\" on http://127.0.0.1:34183/",
+     "error": "expected to see \"What can I do right now?\" on http://127.0.0.1:33563/",
      "attempts": 1,
-     "ms": 7104,
+     "ms": 7106,
      "grade": {
       "status": "broken",
       "reasons": [
-       "did not finish: expected to see \"What can I do right now?\" on http://127.0.0.1:34183/"
+       "did not finish: expected to see \"What can I do right now?\" on http://127.0.0.1:33563/"
       ]
      }
     }
    ],
    "screenFindings": [
     "console error in one-thing-now: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-    "HTTP 500 http://127.0.0.1:46881/companion/api/insights?days=60 during one-thing-now",
+    "HTTP 500 http://127.0.0.1:34119/companion/api/insights?days=60 during one-thing-now",
     "console error in mark-done: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-    "HTTP 500 http://127.0.0.1:35457/companion/api/insights?days=60 during mark-done",
+    "HTTP 500 http://127.0.0.1:45443/companion/api/insights?days=60 during mark-done",
     "console error in journal-one-tap: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-    "HTTP 500 http://127.0.0.1:45537/companion/api/insights?days=60 during journal-one-tap",
+    "HTTP 500 http://127.0.0.1:43693/companion/api/insights?days=60 during journal-one-tap",
     "console error in dictate-and-talk: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-    "HTTP 500 http://127.0.0.1:38923/companion/api/insights?days=60 during dictate-and-talk",
+    "HTTP 500 http://127.0.0.1:44665/companion/api/insights?days=60 during dictate-and-talk",
     "console error in checkin-from-notification: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-    "HTTP 500 http://127.0.0.1:41589/companion/api/moments during checkin-from-notification",
+    "HTTP 500 http://127.0.0.1:39717/companion/api/moments during checkin-from-notification",
     "console error in reading-pick: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-    "HTTP 500 http://127.0.0.1:34183/companion/api/insights?days=60 during reading-pick"
+    "HTTP 500 http://127.0.0.1:33563/companion/api/insights?days=60 during reading-pick"
    ]
   },
   {
@@ -247,7 +247,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 2699,
+     "ms": 2705,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -282,7 +282,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 3973,
+     "ms": 3970,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -306,7 +306,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 2120,
+     "ms": 2127,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -346,7 +346,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1393,
+     "ms": 1423,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -368,7 +368,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 2906,
+     "ms": 2919,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -390,7 +390,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 2904,
+     "ms": 2907,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -421,7 +421,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 3265,
+     "ms": 3276,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -453,7 +453,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 860,
+     "ms": 864,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -484,7 +484,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1270,
+     "ms": 1273,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -516,7 +516,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 2613,
+     "ms": 2606,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -551,7 +551,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 2962,
+     "ms": 2942,
      "grade": {
       "status": "ok",
       "reasons": []
