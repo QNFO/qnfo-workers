@@ -980,6 +980,405 @@
    "issue": 9058,
    "disposition": "archived",
    "reason": "Research-project artifact kept in R2 as the project's archived record; no runtime consumer by design (DOC-IS-CODE-1 retirement)."
+  },
+  {
+   "bucket": "qnfo-projects",
+   "key": "qnfo/projects/infomatics/DEEP-DIVE-SYNTHESIS.md",
+   "issue": 9149,
+   "disposition": "archived",
+   "reason": "Research-project artifact kept in R2 as the project's archived record; no runtime consumer by design (DOC-IS-CODE-1 retirement)."
+  },
+  {
+   "bucket": "qnfo-projects",
+   "key": "qnfo/projects/infomatics/AXIOMATIC-FRAMEWORK.md",
+   "issue": 9148,
+   "disposition": "archived",
+   "reason": "Research-project artifact kept in R2 as the project's archived record; no runtime consumer by design (DOC-IS-CODE-1 retirement)."
+  },
+  {
+   "bucket": "qnfo-projects",
+   "key": "qnfo/projects/infomatics-v2/releases/v0.5-synthesis/what-can-be-drawn.pdf",
+   "issue": 9147,
+   "disposition": "archived",
+   "reason": "Research-project artifact kept in R2 as the project's archived record; no runtime consumer by design (DOC-IS-CODE-1 retirement)."
+  },
+  {
+   "bucket": "qnfo-projects",
+   "key": "qnfo/projects/infomatics-v2/releases/v0.5-synthesis/what-can-be-drawn.md",
+   "issue": 9146,
+   "disposition": "archived",
+   "reason": "Research-project artifact kept in R2 as the project's archived record; no runtime consumer by design (DOC-IS-CODE-1 retirement)."
+  },
+  {
+   "bucket": "qnfo-projects",
+   "key": "qnfo/projects/infomatics-v2/artifacts/phase3-classification-matrix.md",
+   "issue": 9145,
+   "disposition": "archived",
+   "reason": "Research-project artifact kept in R2 as the project's archived record; no runtime consumer by design (DOC-IS-CODE-1 retirement)."
+  },
+  {
+   "bucket": "qnfo-projects",
+   "key": "qnfo/projects/infomatics-v2/artifacts/phase2-qnfo-due-diligence.md",
+   "issue": 9144,
+   "disposition": "archived",
+   "reason": "Research-project artifact kept in R2 as the project's archived record; no runtime consumer by design (DOC-IS-CODE-1 retirement)."
+  },
+  {
+   "bucket": "qnfo-projects",
+   "key": "qnfo/projects/infomatics-v2/artifacts/phase1-external-search.md",
+   "issue": 9143,
+   "disposition": "archived",
+   "reason": "Research-project artifact kept in R2 as the project's archived record; no runtime consumer by design (DOC-IS-CODE-1 retirement)."
+  },
+  {
+   "bucket": "qnfo-projects",
+   "key": "qnfo/projects/cfpe-paradigm-forecast/RISK-REGISTER.md",
+   "issue": 9142,
+   "disposition": "archived",
+   "reason": "Research-project artifact kept in R2 as the project's archived record; no runtime consumer by design (DOC-IS-CODE-1 retirement)."
+  },
+  {
+   "bucket": "qnfo-projects",
+   "key": "qnfo/projects/cfpe-paradigm-forecast/PORTFOLIO-ALLOCATION.md",
+   "issue": 9141,
+   "disposition": "archived",
+   "reason": "Research-project artifact kept in R2 as the project's archived record; no runtime consumer by design (DOC-IS-CODE-1 retirement)."
+  },
+  {
+   "bucket": "qnfo-projects",
+   "key": "qnfo/projects/cfpe-paradigm-forecast/DELIVERABLE-REGISTRY.md",
+   "issue": 9140,
+   "disposition": "archived",
+   "reason": "Research-project artifact kept in R2 as the project's archived record; no runtime consumer by design (DOC-IS-CODE-1 retirement)."
+  },
+  {
+   "bucket": "qnfo-projects",
+   "key": "qnfo/projects/cfpe-paradigm-forecast/CALIBRATION-REGISTER.md",
+   "issue": 9139,
+   "disposition": "archived",
+   "reason": "Research-project artifact kept in R2 as the project's archived record; no runtime consumer by design (DOC-IS-CODE-1 retirement)."
+  },
+  {
+   "bucket": "qnfo-projects",
+   "key": "qnfo-unified/F0.4-active-prime-conjecture-S-2-3-5.md",
+   "issue": 9138,
+   "disposition": "archived",
+   "reason": "Research-project artifact kept in R2 as the project's archived record; no runtime consumer by design (DOC-IS-CODE-1 retirement)."
+  },
+  {
+   "bucket": "qnfo-projects",
+   "key": "qnfo-unified/F0.3-why-Q-for-physicists.md",
+   "issue": 9137,
+   "disposition": "archived",
+   "reason": "Research-project artifact kept in R2 as the project's archived record; no runtime consumer by design (DOC-IS-CODE-1 retirement)."
+  },
+  {
+   "bucket": "qnfo-projects",
+   "key": "qnfo-unified/F0.2-rg-scale-dependence-adelic-product-formula.md",
+   "issue": 9136,
+   "disposition": "archived",
+   "reason": "Research-project artifact kept in R2 as the project's archived record; no runtime consumer by design (DOC-IS-CODE-1 retirement)."
+  },
+  {
+   "bucket": "qnfo-projects",
+   "key": "qnfo-unified/F0.1-q-vs-r-base-field-justification.md",
+   "issue": 9135,
+   "disposition": "archived",
+   "reason": "Research-project artifact kept in R2 as the project's archived record; no runtime consumer by design (DOC-IS-CODE-1 retirement)."
+  },
+  {
+   "bucket": "qnfo-projects",
+   "key": "qnfo-unified/C1.1-cross-pillar-constraint-engine.md",
+   "issue": 9134,
+   "disposition": "archived",
+   "reason": "Research-project artifact kept in R2 as the project's archived record; no runtime consumer by design (DOC-IS-CODE-1 retirement)."
+  },
+  {
+   "bucket": "qnfo-projects",
+   "key": "qnfo-unified-plan/qnr-justification-memo-v5.0.pdf",
+   "issue": 9133,
+   "disposition": "archived",
+   "reason": "Research-project artifact kept in R2 as the project's archived record; no runtime consumer by design (DOC-IS-CODE-1 retirement)."
+  },
+  {
+   "bucket": "qnfo-projects",
+   "key": "qnfo-unified-plan/artifacts/red-team-audit-memo.md",
+   "issue": 9132,
+   "disposition": "archived",
+   "reason": "Research-project artifact kept in R2 as the project's archived record; no runtime consumer by design (DOC-IS-CODE-1 retirement)."
+  },
+  {
+   "bucket": "qnfo-projects",
+   "key": "qnfo-unified-plan/artifacts/qnr-justification-memo.md",
+   "issue": 9131,
+   "disposition": "archived",
+   "reason": "Research-project artifact kept in R2 as the project's archived record; no runtime consumer by design (DOC-IS-CODE-1 retirement)."
+  },
+  {
+   "bucket": "qnfo-projects",
+   "key": "qnfo-unified-plan/artifacts/ota-formalization.md",
+   "issue": 9130,
+   "disposition": "archived",
+   "reason": "Research-project artifact kept in R2 as the project's archived record; no runtime consumer by design (DOC-IS-CODE-1 retirement)."
+  },
+  {
+   "bucket": "qnfo-projects",
+   "key": "qnfo-unified-plan/artifacts/oe-proof-sketch.md",
+   "issue": 9129,
+   "disposition": "archived",
+   "reason": "Research-project artifact kept in R2 as the project's archived record; no runtime consumer by design (DOC-IS-CODE-1 retirement)."
+  },
+  {
+   "bucket": "qnfo-projects",
+   "key": "qnfo-unified-plan/artifacts/literature-triage.md",
+   "issue": 9128,
+   "disposition": "archived",
+   "reason": "Research-project artifact kept in R2 as the project's archived record; no runtime consumer by design (DOC-IS-CODE-1 retirement)."
+  },
+  {
+   "bucket": "qnfo-projects",
+   "key": "qnfo-unified-plan/artifacts/gr-regge-q-construction.md",
+   "issue": 9127,
+   "disposition": "archived",
+   "reason": "Research-project artifact kept in R2 as the project's archived record; no runtime consumer by design (DOC-IS-CODE-1 retirement)."
+  },
+  {
+   "bucket": "qnfo-projects",
+   "key": "qnfo-unified-plan/artifacts/due-diligence.md",
+   "issue": 9126,
+   "disposition": "archived",
+   "reason": "Research-project artifact kept in R2 as the project's archived record; no runtime consumer by design (DOC-IS-CODE-1 retirement)."
+  },
+  {
+   "bucket": "qnfo-projects",
+   "key": "qnfo-photon-audit/releases/audit-report-v1.0.md",
+   "issue": 9125,
+   "disposition": "archived",
+   "reason": "Research-project artifact kept in R2 as the project's archived record; no runtime consumer by design (DOC-IS-CODE-1 retirement)."
+  },
+  {
+   "bucket": "qnfo-projects",
+   "key": "qnfo-photon-audit/notebooks/rubric.md",
+   "issue": 9124,
+   "disposition": "archived",
+   "reason": "Research-project artifact kept in R2 as the project's archived record; no runtime consumer by design (DOC-IS-CODE-1 retirement)."
+  },
+  {
+   "bucket": "qnfo-projects",
+   "key": "qnfo-photon-audit/notebooks/phase0-bin-table.md",
+   "issue": 9123,
+   "disposition": "archived",
+   "reason": "Research-project artifact kept in R2 as the project's archived record; no runtime consumer by design (DOC-IS-CODE-1 retirement)."
+  },
+  {
+   "bucket": "qnfo-projects",
+   "key": "qnfo-photon-audit/docs/doc-e-technical-audit-report.md",
+   "issue": 9122,
+   "disposition": "archived",
+   "reason": "Research-project artifact kept in R2 as the project's archived record; no runtime consumer by design (DOC-IS-CODE-1 retirement)."
+  },
+  {
+   "bucket": "qnfo-projects",
+   "key": "qnfo-photon-audit/docs/doc-d-v2-research-program.md",
+   "issue": 9121,
+   "disposition": "archived",
+   "reason": "Research-project artifact kept in R2 as the project's archived record; no runtime consumer by design (DOC-IS-CODE-1 retirement)."
+  },
+  {
+   "bucket": "qnfo-projects",
+   "key": "qnfo-photon-audit/docs/doc-c-experimental-tests.md",
+   "issue": 9120,
+   "disposition": "archived",
+   "reason": "Research-project artifact kept in R2 as the project's archived record; no runtime consumer by design (DOC-IS-CODE-1 retirement)."
+  },
+  {
+   "bucket": "qnfo-projects",
+   "key": "qnfo-photon-audit/docs/doc-b-v1-research-program.md",
+   "issue": 9119,
+   "disposition": "archived",
+   "reason": "Research-project artifact kept in R2 as the project's archived record; no runtime consumer by design (DOC-IS-CODE-1 retirement)."
+  },
+  {
+   "bucket": "qnfo-projects",
+   "key": "qnfo-photon-audit/docs/doc-a-vision.md",
+   "issue": 9118,
+   "disposition": "archived",
+   "reason": "Research-project artifact kept in R2 as the project's archived record; no runtime consumer by design (DOC-IS-CODE-1 retirement)."
+  },
+  {
+   "bucket": "qnfo-projects",
+   "key": "qnfo-photon-audit/artifacts/verdict-table.md",
+   "issue": 9117,
+   "disposition": "archived",
+   "reason": "Research-project artifact kept in R2 as the project's archived record; no runtime consumer by design (DOC-IS-CODE-1 retirement)."
+  },
+  {
+   "bucket": "qnfo-projects",
+   "key": "qnfo-photon-audit/artifacts/spin-statistics-barrier.md",
+   "issue": 9116,
+   "disposition": "archived",
+   "reason": "Research-project artifact kept in R2 as the project's archived record; no runtime consumer by design (DOC-IS-CODE-1 retirement)."
+  },
+  {
+   "bucket": "qnfo-projects",
+   "key": "qnfo-photon-audit/artifacts/seed-bibliography.md",
+   "issue": 9115,
+   "disposition": "archived",
+   "reason": "Research-project artifact kept in R2 as the project's archived record; no runtime consumer by design (DOC-IS-CODE-1 retirement)."
+  },
+  {
+   "bucket": "qnfo-projects",
+   "key": "qnfo-photon-audit/artifacts/phase2-red-team.md",
+   "issue": 9114,
+   "disposition": "archived",
+   "reason": "Research-project artifact kept in R2 as the project's archived record; no runtime consumer by design (DOC-IS-CODE-1 retirement)."
+  },
+  {
+   "bucket": "qnfo-projects",
+   "key": "qnfo-photon-audit/artifacts/phase1-due-diligence.md",
+   "issue": 9113,
+   "disposition": "archived",
+   "reason": "Research-project artifact kept in R2 as the project's archived record; no runtime consumer by design (DOC-IS-CODE-1 retirement)."
+  },
+  {
+   "bucket": "qnfo-projects",
+   "key": "qnfo-photon-audit/artifacts/lit-review-h4.md",
+   "issue": 9112,
+   "disposition": "archived",
+   "reason": "Research-project artifact kept in R2 as the project's archived record; no runtime consumer by design (DOC-IS-CODE-1 retirement)."
+  },
+  {
+   "bucket": "qnfo-projects",
+   "key": "qnfo-photon-audit/artifacts/lit-review-h3.md",
+   "issue": 9111,
+   "disposition": "archived",
+   "reason": "Research-project artifact kept in R2 as the project's archived record; no runtime consumer by design (DOC-IS-CODE-1 retirement)."
+  },
+  {
+   "bucket": "qnfo-projects",
+   "key": "qnfo-photon-audit/artifacts/lit-review-h2.md",
+   "issue": 9110,
+   "disposition": "archived",
+   "reason": "Research-project artifact kept in R2 as the project's archived record; no runtime consumer by design (DOC-IS-CODE-1 retirement)."
+  },
+  {
+   "bucket": "qnfo-projects",
+   "key": "qnfo-photon-audit/artifacts/h1-gate-memo.md",
+   "issue": 9105,
+   "disposition": "archived",
+   "reason": "Research-project artifact kept in R2 as the project's archived record; no runtime consumer by design (DOC-IS-CODE-1 retirement)."
+  },
+  {
+   "bucket": "qnfo-projects",
+   "key": "qnfo-photon-audit/artifacts/gate-summary.md",
+   "issue": 9104,
+   "disposition": "archived",
+   "reason": "Research-project artifact kept in R2 as the project's archived record; no runtime consumer by design (DOC-IS-CODE-1 retirement)."
+  },
+  {
+   "bucket": "qnfo-projects",
+   "key": "qnfo-photon-audit/artifacts/curve-fitting-audit.md",
+   "issue": 9103,
+   "disposition": "archived",
+   "reason": "Research-project artifact kept in R2 as the project's archived record; no runtime consumer by design (DOC-IS-CODE-1 retirement)."
+  },
+  {
+   "bucket": "qnfo-projects",
+   "key": "qnfo-photon-audit/artifacts/adversarial-review.md",
+   "issue": 9102,
+   "disposition": "archived",
+   "reason": "Research-project artifact kept in R2 as the project's archived record; no runtime consumer by design (DOC-IS-CODE-1 retirement)."
+  },
+  {
+   "bucket": "qnfo-projects",
+   "key": "qnfo-photon-audit/README.md",
+   "issue": 9101,
+   "disposition": "archived",
+   "reason": "Research-project artifact kept in R2 as the project's archived record; no runtime consumer by design (DOC-IS-CODE-1 retirement)."
+  },
+  {
+   "bucket": "qnfo-projects",
+   "key": "qnfo-photon-audit/PROJECT-PLAN.md",
+   "issue": 9100,
+   "disposition": "archived",
+   "reason": "Research-project artifact kept in R2 as the project's archived record; no runtime consumer by design (DOC-IS-CODE-1 retirement)."
+  },
+  {
+   "bucket": "qnfo-projects",
+   "key": "qnfo-100yr-forecast/QNFO_100YR_FORECAST_V2.pdf",
+   "issue": 9099,
+   "disposition": "archived",
+   "reason": "Research-project artifact kept in R2 as the project's archived record; no runtime consumer by design (DOC-IS-CODE-1 retirement)."
+  },
+  {
+   "bucket": "qnfo-projects",
+   "key": "numerata/test.txt",
+   "issue": 9098,
+   "disposition": "archived",
+   "reason": "Research-project artifact kept in R2 as the project's archived record; no runtime consumer by design (DOC-IS-CODE-1 retirement)."
+  },
+  {
+   "bucket": "qnfo-projects",
+   "key": "numerata/phase6-synthesis/phase1-synthesis-paper.pdf",
+   "issue": 9097,
+   "disposition": "archived",
+   "reason": "Research-project artifact kept in R2 as the project's archived record; no runtime consumer by design (DOC-IS-CODE-1 retirement)."
+  },
+  {
+   "bucket": "qnfo-projects",
+   "key": "numerata/phase6-synthesis/phase1-synthesis-paper.md",
+   "issue": 9096,
+   "disposition": "archived",
+   "reason": "Research-project artifact kept in R2 as the project's archived record; no runtime consumer by design (DOC-IS-CODE-1 retirement)."
+  },
+  {
+   "bucket": "qnfo-projects",
+   "key": "qnfo-photon-audit/artifacts/lit-review-h1.md",
+   "issue": 9002,
+   "disposition": "archived",
+   "reason": "Research-project artifact kept in R2 as the project's archived record; no runtime consumer by design (DOC-IS-CODE-1 retirement)."
+  },
+  {
+   "bucket": "qnfo-projects",
+   "key": "qnfo-photon-audit/artifacts/h5-verification.md",
+   "issue": 9001,
+   "disposition": "archived",
+   "reason": "Research-project artifact kept in R2 as the project's archived record; no runtime consumer by design (DOC-IS-CODE-1 retirement)."
+  },
+  {
+   "bucket": "qnfo-projects",
+   "key": "qnfo-photon-audit/artifacts/h4b-gate-memo.md",
+   "issue": 9000,
+   "disposition": "archived",
+   "reason": "Research-project artifact kept in R2 as the project's archived record; no runtime consumer by design (DOC-IS-CODE-1 retirement)."
+  },
+  {
+   "bucket": "qnfo-projects",
+   "key": "qnfo-photon-audit/artifacts/h4a-scale-estimate.md",
+   "issue": 8999,
+   "disposition": "archived",
+   "reason": "Research-project artifact kept in R2 as the project's archived record; no runtime consumer by design (DOC-IS-CODE-1 retirement)."
+  },
+  {
+   "bucket": "qnfo-projects",
+   "key": "qnfo-photon-audit/artifacts/h3-gate-memo.md",
+   "issue": 8998,
+   "disposition": "archived",
+   "reason": "Research-project artifact kept in R2 as the project's archived record; no runtime consumer by design (DOC-IS-CODE-1 retirement)."
+  },
+  {
+   "bucket": "qnfo-projects",
+   "key": "qnfo-photon-audit/artifacts/h2b-gate-memo.md",
+   "issue": 8997,
+   "disposition": "archived",
+   "reason": "Research-project artifact kept in R2 as the project's archived record; no runtime consumer by design (DOC-IS-CODE-1 retirement)."
+  },
+  {
+   "bucket": "qnfo-projects",
+   "key": "qnfo-photon-audit/artifacts/h2a-test-results.md",
+   "issue": 8996,
+   "disposition": "archived",
+   "reason": "Research-project artifact kept in R2 as the project's archived record; no runtime consumer by design (DOC-IS-CODE-1 retirement)."
   }
  ]
 }
