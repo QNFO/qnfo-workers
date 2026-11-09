@@ -47,11 +47,6 @@ binding = "GRAPH_DB"
 database_name = "qnfo-graph"
 database_id = "a1954b92-d681-4d02-b1f6-f9a2eb4c265d"
 
-# Service: qnfo-pdf (HTML/PDF rendering for provenance packages)
-[[services]]
-binding = "PDF_SVC"
-service = "qnfo-pdf"
-
 # Service: qnfo-ai (research gateway / model router) - ROUTER-EGRESS-BINDING-ABSENT-1.
 # routerFetch() in worker.js prefers env.QNFO_AI and otherwise falls back to a PUBLIC fetch.
 # A public fetch to a same-account workers.dev hostname does not work from Worker context
