@@ -9,7 +9,7 @@
 // JOBSEARCH-CV-1 (1.5.0): the CV is part of this worker (page /cv): a yes/no interview that builds the claim bank, review of unconfirmed claims, roles, achievements and publications edited in D1, a resume per job (summary, roles, selected work, education, skills) and a cover note, history and backup. The search is tied to that bank (evidence the owner can back up weighs more; what the CV lacks is shown as a gap), decided postings (rejected, applied, approved) never come back under another id, rejections carry a reason the search learns from, and a wider net: stretch matches outside the stated preferences, more boards and aggregators.
 // Routes: GET / (web UI) | GET /api | GET /api/matches | GET /api/matches/:id | GET /api/runs | GET /api/ledger | POST /api/run | POST /api/matches/:id/status | GET /health
 // Port of the jobsearch/ Python modules (tests: jobsearch/test_jobsearch.py, qnfo-jobsearch/worker.test.mjs).
-var VERSION = "1.14.1-codeagent";
+var VERSION = "1.15.1-codeagent";
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -892,6 +892,24 @@ function locationGate(loc, descHead, ctx = DEFAULT_CTX) {
   return a.loc_world ? ["check", `Elsewhere: you would move; authorized only in NL/US, visa needed (${loc})`] : ["fail", `outside NL, EU and US, not selected: ${loc}`];
 }
 // score the posting against the profile. mode "analyze" never drops a posting: it reports the fit and what the gates would say
+/* JOBSEARCH-EXPLORE-1 (owner 2026-11-09: "My diverse experience doesn't fit neatly into keywords"). A posting whose title is in no role family used to be
+   dropped before its text was read. Now, when the title is at least research- or systems-flavoured (EXPLORE_TITLE_RX is a wide net, not a verdict), the posting text is
+   compared with the owner's own record (RECORD_TERMS: distinct words from the verified facts, skills, roles, summaries and publications, minus common business words).
+   Enough shared terms keep the posting as an "explore" match, labelled as such, capped below a title-in-lane match. */
+const EXPLORE_TITLE_RX = /\b(research\w*|scientist|analyst|modell?er|modell?ing|systems?|autonom\w*|agent\w*|safety|evaluat\w*|assurance|simulation|network\w*|operations research|architect\w*|strateg\w*|fellow|technical staff|principal|staff|lead|director|head of|advis[eo]r|consultant|engineer\w*|manager|specialist)\b/i;
+const EXPLORE_MIN_TERMS = 8;
+const RECORD_STOP = new Set("experience management business working through support ability development including skills knowledge responsibilities requirements opportunity".split(" ").concat("environment excellent strategy strategic organization organisation professional demonstrated communication stakeholders leadership collaborate collaboration candidate position company customers customer product products solutions services results across within providing provide ensure ensuring manage managing years project projects programs program practices process processes team teams related relevant preferred required degree role roles employees employee salary benefits equal employer".split(" ")));
+let RECORD_TERMS = new Set();
+function recordTerms(text) {
+  const out = new Set();
+  for (const w of String(text || "").toLowerCase().split(/[^a-z]+/)) if (w.length >= 7 && !RECORD_STOP.has(w)) out.add(w);
+  return out;
+}
+function exploreOverlap(desc, terms = RECORD_TERMS) {
+  const hit = new Set();
+  for (const w of String(desc || "").toLowerCase().split(/[^a-z]+/)) if (w.length >= 7 && terms.has(w)) hit.add(w);
+  return { n: hit.size, terms: [...hit].sort().slice(0, 6) };
+}
 function scoreJob(job, ctx = DEFAULT_CTX, mode = "rank") {
   const title = (job.title || "").toLowerCase(), desc = job.desc || "";
   const why = [], flags = [], drops = [];
@@ -912,23 +930,28 @@ function scoreJob(job, ctx = DEFAULT_CTX, mode = "rank") {
   const famOff = Object.keys(FAMILIES).filter((k) => !ctx.fam.has(k) && has(title, FAMILIES[k]).length);
   const medium = has(title, TITLE_MEDIUM);
   const soft = TITLE_EXCLUDE_SOFT.some((x) => title.includes(x));
-  if (mode !== "analyze" && !famOn.length && !famOff.length && !medium.length && !soft) return early("title not in your role families");
+  let explore = null;
+  if (mode !== "analyze" && !famOn.length && !famOff.length && !medium.length && !soft) {
+    const ov = EXPLORE_TITLE_RX.test(title) && desc.length > 300 ? exploreOverlap(desc, ctx.recordTerms || RECORD_TERMS) : { n: 0 };
+    if (ov.n < EXPLORE_MIN_TERMS) return early("title not in your role families");
+    explore = ov;
+  }
   if (soft && !famOn.length) drop("role family excluded by title");
   if (!famOn.length && famOff.length) drop("family switched off in your preferences: " + famOff[0].replace("fam_", ""), true);
-  if (!famOn.length && !medium.length) drop("title not in your role families");
+  if (!famOn.length && !medium.length && !explore) drop("title not in your role families");
   if (!cl) cl = clustersIn(desc, job.title);
   const [gate, locNote] = locationGate(job.location, desc.slice(0, 3000), ctx);
   if (gate === "fail") drop(locNote, /not selected/.test(locNote));
   if (gate === "check" && locNote === "location missing" && mode !== "analyze") drop("no location in the posting; it cannot be placed against your preferences");
   else if (gate === "check") { flags.push("LOCATION: " + locNote); pen += /^(Elsewhere|Europe)/.test(locNote) ? 15 : 10; }
-  if (!famOn.length && cl.size < 2) drop("generic title and thin evidence in the posting");
+  if (!famOn.length && cl.size < 2 && !explore) drop("generic title and thin evidence in the posting");
   if (famOn.length && !cl.size) pen += 15;
-  const tScore = famOn.length ? 40 : (medium.length >= 2 || medium.includes("research")) ? 20 : 12;
+  const tScore = famOn.length ? 40 : (medium.length >= 2 || medium.includes("research")) ? 20 : explore ? Math.min(30, 10 + 2 * explore.n) : 12;
   const eScore = Math.min(45, 9 * cl.size);
   const eOwned = ctx.owned ? Math.min(45, [...cl].reduce((sum, c) => sum + (ctx.owned.has(c) ? 9 : 4), 0)) : eScore;   // evidence the CV can back up counts in full, evidence it lacks counts less
   const uniqA = [...cl].some((c) => CORE.has(c)) && [...cl].some((c) => FRONTIER.has(c));
   const uniqB = [...cl].some((c) => CORE.has(c)) && [...cl].some((c) => DATA_SIDE.has(c));
-  if (famOn.length) why.push("title in your lane: " + famOn.slice(0, 2).map((k) => k.replace("fam_", "")).join(", ")); else why.push("generic title: " + medium.slice(0, 2).join(", "));
+  if (famOn.length) why.push("title in your lane: " + famOn.slice(0, 2).map((k) => k.replace("fam_", "")).join(", ")); else if (explore) why.push("matches your record beyond title keywords: " + explore.n + " shared terms (" + explore.terms.join(", ") + ")"); else why.push("generic title: " + medium.slice(0, 2).join(", "));
   why.push(cl.size ? "evidence in the posting: " + [...cl].sort().join(", ") : "no matching evidence in the posting text");
   const lacking = ctx.owned ? [...cl].filter((c) => !ctx.owned.has(c)) : [];
   if (lacking.length) why.push("not in your CV yet: " + lacking.sort().join(", "));
@@ -961,11 +984,11 @@ function scoreJob(job, ctx = DEFAULT_CTX, mode = "rank") {
   if (lang.length) flags.push("LANGUAGE: posting asks for " + [...new Set(lang)].sort().join(", ") + "; you list English only");
   const yrs = [...low.matchAll(/(\d{1,2})\+?\s*(?:or more )?years/g)].map((m) => +m[1]);
   if (yrs.length && Math.max(...yrs) > 22) flags.push(`YEARS: asks ${Math.max(...yrs)}+ years`);
-  if (!famOn.length) score = Math.min(score, 49);   // a generic title never outranks a title in your lane
+  if (!famOn.length) score = Math.min(score, explore ? 64 : 49);   // a generic title never outranks a title in your lane; an explore match (the posting text carries the record) may reach 64
   const fit = score;
   score -= pen;
   const tier = stretch ? "C" : score >= 70 && cl.size ? "A" : score >= 35 ? "B" : "C";
-  return { stretch, fit, score, tier, clusters: [...cl].sort(), unique: uniqA || uniqB, why, flags, drops, gate, locNote, families: famOn };
+  return { stretch, fit, score, tier, clusters: [...cl].sort(), unique: uniqA || uniqB, why, flags, drops, gate, locNote, families: famOn, explore: !!explore };
 }
 function evaluate(job, ctx = DEFAULT_CTX, wide = false) {
   const r = scoreJob(job, ctx, wide ? "wide" : "rank");
@@ -1032,6 +1055,7 @@ function applyBank(b, rev) {
   for (const p of b.publications || []) clustersOf(p.tags).forEach((c) => owned.add(c));
   for (const s of b.skills || []) clustersOf(s.tags).forEach((c) => owned.add(c));
   OWNED = owned;
+  RECORD_TERMS = recordTerms(cvCorpus());   // JOBSEARCH-EXPLORE-1
 }
 const tag = (line, t) => `${line} <!--${t}-->`;
 const FORBIDDEN = ["kubernetes", "tensorflow", "pytorch", "java", "rust", "golang", "aws", "azure", "gcp", "spark", "docker", "react", "tableau", "power bi", "snowflake", "databricks", "scrum master", "six sigma", "cissp", "phd", "ph.d", "mba", "cfa", "security clearance", "fluent"];
@@ -2259,6 +2283,18 @@ async function saveHistory(env, d) {
 
 // ------------------------------------------------------------------ http
 const J = (o, status = 200) => new Response(JSON.stringify(o), { status, headers: { "content-type": "application/json", "access-control-allow-origin": "*", "cache-control": "no-store" } });
+/* JOBSEARCH-DIVERSE-1 (owner 2026-11-09: "Don't just show me jobs from Anthropic or OpenAI"). The list is ordered by score, so the few employers that score
+   highest fill the top. Within the first `window` rows no employer appears more than `per` times; the rows pushed down keep their order right after the window.
+   Nothing is removed. */
+function diversifyRows(rows, per = 2, window = 20) {
+  const seen = new Map(), head = [], rest = [];
+  for (const r of rows) {
+    const k = coKey(r.company);
+    if (head.length < window && (seen.get(k) || 0) < per) { head.push(r); seen.set(k, (seen.get(k) || 0) + 1); }
+    else rest.push(r);
+  }
+  return [...head, ...rest];
+}
 const parseRow = (r) => (r ? { ...r, why: JSON.parse(r.why_json || "[]"), flags: JSON.parse(r.flags_json || "[]"), why_json: undefined, flags_json: undefined } : r);
 async function tokenOk(request, env) {
   const t = request.headers.get("x-loop-token") || "";
@@ -2478,7 +2514,8 @@ const handler = {
     }
     if (p === "/api/calibration" && m === "GET") { if (!(await ownerSession(request, env))) return J({ error: "sign in first: POST /api/auth/request, then POST /api/auth/verify" }, 401); await ensure(env); return J(await calibration(env)); }
     if (p === "/api/recall" || p === "/api/recall/answer") {
-      if (!(await ownerSession(request, env))) return J({ error: "sign in first: POST /api/auth/request, then POST /api/auth/verify" }, 401);
+      // RECALL-CARD-1: the fleet dashboard card calls these through a service binding with the loop token, after its own owner-session check; a visitor gets 401
+      if (!(await ownerSession(request, env)) && !(await tokenOk(request, env))) return J({ error: "sign in first: POST /api/auth/request, then POST /api/auth/verify" }, 401);
       try {
         await ensure(env);
         if (p === "/api/recall" && m === "GET") return J(await recallQueue(env, url.searchParams.get("match"), Math.min(40, +url.searchParams.get("limit") || 12)));
@@ -2550,6 +2587,7 @@ const handler = {
       const cv = cvCorpus();
       let rows = r.results.map((x) => { const o = parseRow(x); o.recall_open = openGaps(parseGaps(x.gaps_json), cv).length; delete o.gaps_json; return o; });
       if (q) rows = rows.filter((x) => (x.title + " " + x.company + " " + x.location).toLowerCase().includes(q));
+      if (!q && url.searchParams.get("diverse") !== "0") rows = diversifyRows(rows);   // JOBSEARCH-DIVERSE-1
       return J({ count: rows.length, matches: rows.slice(0, lim) });
     }
     const ax = p.match(/^\/api\/matches\/(.+?)\/(resume\.docx|resume\.pdf|resume\.html|resume\.txt|resume\.md|note\.txt|kit)$/);
@@ -2619,7 +2657,7 @@ const handler = {
     return J({ error: "not found", see: "/api" }, 404);
   },
 };
-handler.__test = { recallGaps, recallQuestion, recallAnswer, recallQueue, RECALL_SEED, loadCtx, referralKit, referralList, STAGES, judgeTop, buildResume, verify, headlineVerdict, outcomes, pdfOf, pdfClean, checkAnswer, jsonLoose, PROTECTED_Q, draftAnswers, prepBrief, quizFeedback, judgeJob, calibrate, calibration, followups, atsOf, keywordReport, docxOf, resumeHtml, plainOf, applyKit, matchKit, stripTags, postingTerms, evaluate, rank, buildResume, buildNote, verify, stripHtml, locationGate, has, LEDGER, dedupeKey, feedPrefix, makeCtx, scoreJob, scoreFeatures, featuresFromWhy, applicationSnapshot, parseApplicationSnapshot, outcomeScoreWeights, loadCtx, SURVEY, BOARDS, normKey, applyBank, BANK_SEED, QUESTIONS, TAG_TO_CLUSTERS, clustersOf, cvAnswer, cvFact, cvReview, cvSet, cvImport, mutateBank, loadBank, decidedKeys, FETCHERS, getBank: () => BANK, llmRerank, llmRerankRun, ensureResearchPubs, ensureAutonomyBrand, RESEARCH_PUBS, FAMILIES, CLUSTER_KW, headline, pubLine, parseRerank, reasonOk, rerankMessages, artifactsFor, titleCandidate, sitemapUrls, slugTitle, PUBLIC_SECTOR, opsReport };
+handler.__test = { scoreJob, exploreOverlap, recordTerms, diversifyRows, recallGaps, recallQuestion, recallAnswer, recallQueue, RECALL_SEED, loadCtx, referralKit, referralList, STAGES, judgeTop, buildResume, verify, headlineVerdict, outcomes, pdfOf, pdfClean, checkAnswer, jsonLoose, PROTECTED_Q, draftAnswers, prepBrief, quizFeedback, judgeJob, calibrate, calibration, followups, atsOf, keywordReport, docxOf, resumeHtml, plainOf, applyKit, matchKit, stripTags, postingTerms, evaluate, rank, buildResume, buildNote, verify, stripHtml, locationGate, has, LEDGER, dedupeKey, feedPrefix, makeCtx, scoreJob, scoreFeatures, featuresFromWhy, applicationSnapshot, parseApplicationSnapshot, outcomeScoreWeights, loadCtx, SURVEY, BOARDS, normKey, applyBank, BANK_SEED, QUESTIONS, TAG_TO_CLUSTERS, clustersOf, cvAnswer, cvFact, cvReview, cvSet, cvImport, mutateBank, loadBank, decidedKeys, FETCHERS, getBank: () => BANK, llmRerank, llmRerankRun, ensureResearchPubs, ensureAutonomyBrand, RESEARCH_PUBS, FAMILIES, CLUSTER_KW, headline, pubLine, parseRerank, reasonOk, rerankMessages, artifactsFor, titleCandidate, sitemapUrls, slugTitle, PUBLIC_SECTOR, opsReport };
 export default handler;
 
 // ------------------------------------------------------------------ client script shared by both pages (JOBSEARCH-APPLY-1): kit handling and the Fill application bookmark

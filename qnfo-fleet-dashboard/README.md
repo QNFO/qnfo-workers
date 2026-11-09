@@ -76,6 +76,13 @@ File or clear an action from any worker/session (header `x-loop-token`, secret `
 
 `GET /api/human` returns the same view as JSON (`fleet-human/v1`).
 
+## Profile sync and paste cards (BRAND-PROFILE-SYNC-1, 1.103.0)
+Owner directive 2026-11-09: position Rowan as an autonomous AI systems researcher on every surface, by code. `brandProfileSync` runs from the cron at most every 6 hours:
+- **Applied by code** with `GITHUB_TOKEN`: the About text of the repositories in `BRAND_GH_ABOUT`, the topics in `BRAND_GH_TOPICS` on the profile repositories, and the profile bio. A refused write files a card with the exact text. (Bluesky and Mastodon bios: qnfo-social `PROFILE_DESCRIPTION`.)
+- **Owner cards** (`BRAND_OWNER_CARDS`, source `brand-profile-sync`, `IDENTITY-BOUND:`): one per surface the fleet cannot write (LinkedIn headline and About, ORCID biography and keywords, Google Scholar affiliation and interests, X bio, Gmail signature, GitHub pins). Each carries a **Copy box** (`human_actions.copy_text`, rendered by `copyRowHtml` on every queue renderer) and a deep link. A card the owner resolved is never reopened.
+- **Probes** close cards with evidence when the public record shows the new text: ORCID public API, the Scholar profile page, GitHub pins over GraphQL, About and bio reads.
+- `GET /api/brand-sync` returns the last run (`brand_profile_sync_log`) and the brand cards still open. Offline suite: `brand-sync.test.mjs`.
+
 ## Pages by functional area (AREA-PAGES-1, 1.45.0)
 Owner directive 2026-10-18, repeated 2026-10-19 ("REFACTOR FLEET DASHBOARD BY FUNCTIONAL AREA"): the dashboard is organised by the
 same six functional areas as its feeds. `AREA_REGISTRY` in worker.js is the one table: for each area it holds the name and what it

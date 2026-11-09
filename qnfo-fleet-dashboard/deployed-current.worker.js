@@ -11,7 +11,7 @@ var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target,
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
 // 1.77.2 ERRATA-CHAIN-DISPATCH-1 (pillar research): wake the folded errata consumer and retry its legacy parked receipts.
 // VERSION-LINE-SPLIT-1 (agent_issues 100220): the release notes sit one per line below this statement, newest first, so a VERSION bump is a one-line patch; add a new note as the first line under it.
-var VERSION = "1.102.2";
+var VERSION = "1.105.1";
 // 1.89.0 NOW-NORTH-1 and HOME-MORE-1 (pillar core; minor): the Now screen opens with four numbers tied to the owner goals (readers, fleet cost, owner load, reliability) and drops the count of metrics off target (95 of 297; nothing can be done with it); a quiet footer on the home links the full dashboard, changelog, data index and managers.
 // 1.89.0 (cont.) MONEY-FIX-1 (pillar cost; patch): the Money card subtracted the subscription figure from a pace that never included it (fleet scope of v_cost_forecast), so it showed the fleet at 701 instead of 1151 a month; it now shows the fleet line, the subscriptions line and both together.
 // 1.85.0 (cont.) NOW-REVIEW-1: independent review fixes: Snooze and Not needed hide the card; a tap removes the card at once and reloads fresh, and the hand-back claims the card before filing (no duplicate tickets); strangers get no card keys or raw error text; only the signed-in owner (not the loop token) can run commands or hand work back; bound cards are read first; an unrefreshed metric reads n/a, not 0; one refresh in flight at a time and a failed refresh retries in 10 s; the Code poll says when the executor does not answer.
@@ -3130,7 +3130,10 @@ function statusAgeMin(raw, nowMs) {
   return isNaN(t) ? null : Math.max(0, Math.round((nowMs - t) / 6e4));
 }
 function statusItem(it) {
-  return { key: it.key, source: it.source, title: String(it.title || ""), why: String(it.why || ""), action: String(it.action || ""), if_you_wait: String(it.fallback || ""), age_days: it.age != null ? Math.round(it.age * 10) / 10 : null, url: it.url || "", urgent: it.sev === "urgent" };
+  const o = { key: it.key, source: it.source, title: String(it.title || ""), why: String(it.why || ""), action: String(it.action || ""), if_you_wait: String(it.fallback || ""), age_days: it.age != null ? Math.round(it.age * 10) / 10 : null, url: it.url || "", urgent: it.sev === "urgent" };
+  // BRAND-PROFILE-SYNC-1: a card that asks the owner to paste text carries it; every other item keeps its shape.
+  if (it.copy) o.copy = String(it.copy);
+  return o;
 }
 // PRECONDITION: p = { human (humanView), metrics (v_fleet_metrics rows or null), activity (one row or null), quality (one row or null),
 // programs (programs rows or null), blind [names], now (ms) }. POSTCONDITION: the fleet-status/v1 document; a source that could not be read
@@ -3369,7 +3372,7 @@ function statusPageHtml(doc, rev, holder, decisions) {
       const quick = holder && !(decisions && decisions[it.key]) ? ownerQuickHtml(it.key, e) : "";
       o.push('<article class="card item' + (it.urgent ? " urgent" : "") + '"><div class="it-top"><span class="it-src">' + e(it.source) + "</span>" + (it.age_days != null ? '<span class="it-age">waiting ' + e(agoText(it.age_days).replace(" ago", "")) + "</span>" : "") + "</div><h2>" + e(it.title) + "</h2>" + (foldHome ? decCardHtml({ key: it.key, decision: decisions[it.key] }, e) + '<details class="it-more"><summary>Why, what if you wait, what to do</summary>' : "") + '<div class="it-rows">' +
         (it.why ? '<div class="row"><span class="k">Why you</span><span class="v">' + e(it.why) + "</span></div>" : "") + (it.if_you_wait ? '<div class="row"><span class="k">If you wait</span><span class="v">' + e(it.if_you_wait) + "</span></div>" : "") +
-        (it.action ? '<div class="row do-row"><span class="k">To do</span><span class="v">' + e(it.action) + "</span></div>" : "") + "</div>" + (foldHome ? "</details>" : "") + (decisions && decisions[it.key] ? decisions[it.key] === "closed" ? '<div class="dec"><p class="dec-h">Decided: this card leaves the list within a minute.</p></div>' : foldHome ? "" : decCardHtml({ key: it.key, decision: decisions[it.key] }, e) : !holder && decAsksDecision({ key: it.key, title: it.title, action: it.action }) ? DEC_SIGNIN_HTML : "") + quick + '<div class="acts">' + (holder ? '<button type="button" data-fleet-cmd="info ' + e(it.key) + '">Details</button>' : '<a class="do" href="/classic#queue">Act on it</a>') + (/^https:\/\//.test(it.url || "") ? '<a href="' + e(it.url) + '" rel="noopener">Open</a>' : "") + "</div></article>");
+        (it.action ? '<div class="row do-row"><span class="k">To do</span><span class="v">' + e(it.action) + "</span></div>" : "") + copyRowHtml(it.copy, e) + "</div>" + (foldHome ? "</details>" : "") + (decisions && decisions[it.key] ? decisions[it.key] === "closed" ? '<div class="dec"><p class="dec-h">Decided: this card leaves the list within a minute.</p></div>' : foldHome ? "" : decCardHtml({ key: it.key, decision: decisions[it.key] }, e) : !holder && decAsksDecision({ key: it.key, title: it.title, action: it.action }) ? DEC_SIGNIN_HTML : "") + quick + '<div class="acts">' + (holder ? '<button type="button" data-fleet-cmd="info ' + e(it.key) + '">Details</button>' : '<a class="do" href="/classic#queue">Act on it</a>') + (/^https:\/\//.test(it.url || "") ? '<a href="' + e(it.url) + '" rel="noopener">Open</a>' : "") + "</div></article>");
     }
     o.push("</section>");
   }
@@ -4013,6 +4016,89 @@ function v3Html(env, pub) {
     '<div id="cbar"><form id="cf"><textarea id="ci" placeholder="Tell it what to do. It runs in a small container on Cloudflare." disabled></textarea><button class="pri" type="submit">Run</button></form></div>' +
     '<nav><a id="n-now" href="#now">Now</a><a id="n-readers" href="#readers">Readers</a><a id="n-code" href="#code">Code</a></nav>' + TURNSTILE_SCRIPT + '<script>' + V3_JS + '</script></body></html>';
 }
+// ==== RECALL-LOOP-1 (2026-11-09): the owner's research focus, asked by tap and shown as the fleet's focus ====
+// Owner 2026-11-09: "Even research, I could tell you by now what research is working and what's not ... we need to be much clearer on what we're
+// focusing our attention on ... you're not asking me for enough feedback. And that needs to be done via existing interfaces."
+// /focus shows the next question in qnfo-audit.owner_asks (one at a time, 2 to 4 buttons plus Not sure, no typing, no script: plain form buttons) and
+// the focus each answer set (v_owner_focus). The effect of an answer is in D1 triggers (migrations/2026-11-09-recall-loop.sql): a paused line's ideas
+// leave the research queue, a pushed line moves to the front. The companion (me.q08.org Today) shows the same questions. GET /api/focus is the open read.
+var FOCUS_STANCE = { push: "Do more", keep: "Keep as is", pause: "Paused" };
+async function focusState(env) {
+  const out = { schema_version: "owner-focus/v1", lines: [], open_asks: 0, answered_14d: 0, recent: [], unavailable: [] };
+  try { out.lines = await d1all(env.AUDIT, "SELECT line, label, stance, stance_at, waiting, paused_by_owner, published_30d, open_asks FROM v_owner_focus ORDER BY CASE stance WHEN 'push' THEN 0 WHEN 'keep' THEN 1 WHEN 'pause' THEN 3 ELSE 2 END, sort", []); } catch (e) { out.unavailable.push("v_owner_focus"); }
+  try {
+    const c = await d1all(env.AUDIT, "SELECT SUM(CASE WHEN answered_at IS NULL THEN 1 ELSE 0 END) AS open_n, SUM(CASE WHEN answered_at >= strftime('%Y-%m-%dT%H:%M:%SZ','now','-14 days') THEN 1 ELSE 0 END) AS answered_n FROM owner_asks WHERE plane != 'personal'", []);
+    out.open_asks = Number(c[0] && c[0].open_n || 0); out.answered_14d = Number(c[0] && c[0].answered_n || 0);
+    out.recent = await d1all(env.AUDIT, "SELECT question, answer_label, answered_at, answered_via FROM owner_asks WHERE answered_at IS NOT NULL AND plane != 'personal' ORDER BY answered_at DESC LIMIT 8", []);
+  } catch (e) { out.unavailable.push("owner_asks"); }
+  return out;
+}
+async function focusNextAsk(env) {
+  const r = await d1all(env.AUDIT, "SELECT id, plane, kind, question, cue, options_json FROM owner_asks WHERE answered_at IS NULL AND plane != 'personal' ORDER BY priority, id LIMIT 1", []);
+  if (!r[0]) return null;
+  let options = [];
+  try { options = JSON.parse(r[0].options_json || "[]"); } catch (e) { options = []; }
+  return Object.assign({}, r[0], { options });
+}
+// Records one tap. Returns {ok, label} or {ok:false, error}. Shared by the form post here; the companion writes the same row the same way.
+async function focusAnswer(env, id, key, via) {
+  const row = (await d1all(env.AUDIT, "SELECT id, options_json, answered_at FROM owner_asks WHERE id = ?1", [Number(id) || 0]))[0];
+  if (!row) return { ok: false, error: "That question is gone." };
+  let options = [];
+  try { options = JSON.parse(row.options_json || "[]"); } catch (e) { options = []; }
+  const opt = options.find(function(o) { return o && o.key === key; });
+  if (!opt) return { ok: false, error: "Pick one of the buttons." };
+  await env.AUDIT.prepare("UPDATE owner_asks SET answer = ?1, answer_label = ?2, answered_at = ?3, answered_via = ?4 WHERE id = ?5").bind(opt.key, opt.label, new Date().toISOString(), via, row.id).run();
+  return { ok: true, label: opt.label };
+}
+function focusPage(state, ask, authed, notice) {
+  const e = ownerEsc;
+  const o = ['<main style="max-width:680px;margin:0 auto;padding:18px 16px 48px"><h1>Research focus</h1><p class="mut">What the fleet works on next follows your answers. A paused line stops getting new papers; a line you push goes first. Every answer can be changed by the next one.</p>'];
+  if (notice) o.push("<p><strong>" + e(notice) + "</strong></p>");
+  if (ask) {
+    o.push('<section style="border:1px solid #CBD5DE;border-radius:14px;padding:16px;margin:16px 0"><p style="font-size:1.15rem;font-weight:650;margin:0 0 6px">' + e(ask.question) + "</p>" + (ask.cue ? '<p class="mut" style="margin:0 0 12px">' + e(ask.cue) + "</p>" : ""));
+    if (authed) {
+      o.push('<form method="post" action="/focus" style="display:flex;flex-wrap:wrap;gap:8px"><input type="hidden" name="id" value="' + e(String(ask.id)) + '">');
+      ask.options.forEach(function(op) { o.push('<button name="key" value="' + e(op.key) + '" style="font:inherit;padding:12px 16px;min-height:48px;border-radius:12px;border:1px solid #14213A;' + (op.key === "unsure" ? "background:transparent;color:inherit" : "background:#14213A;color:#fff") + '">' + e(op.label) + "</button>"); });
+      o.push("</form>");
+      if (state.open_asks > 1) o.push('<p class="mut" style="margin-top:8px">' + (state.open_asks - 1) + " more after this.</p>");
+    } else o.push('<p>Answer it on your phone: <a href="https://me.q08.org/companion">me.q08.org</a>, Today, Quick question. Or sign in here from <a href="/cmd">the command line</a>.</p>');
+    o.push("</section>");
+  } else o.push('<p class="mut">No questions waiting. The next ones come within a day.</p>');
+  o.push('<h2>Where attention goes now</h2><table style="width:100%;border-collapse:collapse"><tr><th style="text-align:left">Line</th><th style="text-align:left">Your call</th><th>Waiting</th><th>Held</th><th>Published 30 d</th></tr>');
+  state.lines.forEach(function(l) {
+    o.push('<tr style="border-top:1px solid #CBD5DE"><td>' + e(l.label) + "</td><td>" + (l.stance ? "<strong>" + e(FOCUS_STANCE[l.stance] || l.stance) + "</strong>" : '<span class="mut">not asked yet</span>') + '</td><td style="text-align:center">' + e(String(l.waiting)) + '</td><td style="text-align:center">' + e(String(l.paused_by_owner)) + '</td><td style="text-align:center">' + e(String(l.published_30d)) + "</td></tr>");
+  });
+  o.push("</table>");
+  if (state.recent.length) {
+    o.push("<h2>Your last answers</h2><ul>");
+    state.recent.forEach(function(r) { o.push("<li>" + e(r.question) + " <strong>" + e(r.answer_label || "") + '</strong> <span class="mut">' + e(String(r.answered_at || "").slice(0, 10)) + (r.answered_via ? ", " + e(r.answered_via) : "") + "</span></li>"); });
+    o.push("</ul>");
+  }
+  if (state.unavailable.length) o.push('<p class="mut">Not readable right now: ' + e(state.unavailable.join(", ")) + ".</p>");
+  o.push('<p class="mut"><a href="/api/focus">JSON</a></p></main>');
+  return o.join("");
+}
+async function focusRoute(request, env, path, owner) {
+  if (path !== "/focus" && path !== "/focus/" && path !== "/api/focus") return null;
+  if (!env.AUDIT) return json({ ok: false, error: "AUDIT binding absent" }, 503);
+  if (path === "/api/focus") return json(Object.assign({ ok: true }, await focusState(env)));
+  const authed = !!(owner && (owner.authed || owner.loop));
+  let notice = "";
+  if (request.method === "POST") {
+    if (!authed) return ownerHtml("Research focus", '<main style="max-width:680px;margin:0 auto;padding:18px 16px"><p>Sign in first.</p><p><a href="/focus">Back</a></p></main>', 401);
+    let form = null;
+    try { form = new URLSearchParams((await request.text()).slice(0, 2000)); } catch (e) { form = new URLSearchParams(); }
+    const res = await focusAnswer(env, form.get("id"), String(form.get("key") || ""), "fleet.qnfo.org/focus");
+    return new Response(null, { status: 303, headers: { Location: "/focus?done=" + encodeURIComponent(res.ok ? "Saved: " + res.label : res.error), "Cache-Control": "no-store" } });
+  }
+  if (request.method !== "GET") return json({ error: "method not allowed" }, 405);
+  const u = new URL(request.url);
+  notice = String(u.searchParams.get("done") || "").slice(0, 120);
+  let ask = null;
+  try { ask = await focusNextAsk(env); } catch (e) { ask = null; }
+  return ownerHtml("Research focus", focusPage(await focusState(env), ask, authed, notice));
+}
 // ==== AREA-MAP platform: HTTP routes (handleRequest) ====
 async function handleRequest(request, env, ctx) {
   const url = new URL(request.url);
@@ -4023,6 +4109,8 @@ async function handleRequest(request, env, ctx) {
   if (v3res) return v3res;
   if (path === "/ctl.js" || path === "/cmd" || path === "/cmd/" || path.indexOf("/api/cmd") === 0) return await cmdRoutes(request, env, ctx, path, owner);
   if (path.indexOf("/api/owner/") === 0) return await ownerRoutes(request, env, ctx, path, owner);
+  // RECALL-LOOP-1: the owner's research focus (tap questions and the focus they set).
+  if (path === "/focus" || path === "/focus/" || path === "/api/focus") return await focusRoute(request, env, path, owner);
   // OWNER-PAGE-1 (2026-10-01): private owner page. Reconciled with OWNER-RESPOND-1: the owner cookie OR LOOP_TOKEN opens it.
   // OWNER-EDIT-1 (2026-10-01, CLOUDFLARE-ONLY-HOST-1): /owner/edit/<key> is the owner's editor for owner_docs, so the Identity
   // doc is read AND changed on Cloudflare; its claude.ai copy is retired.
@@ -4246,6 +4334,18 @@ if (path === "/health") {
     const rowsGsc = await d1all(env.AUDIT, "SELECT id, ts, status, text FROM cloud_ops_events WHERE kind = 'gsc-ingest' ORDER BY id DESC LIMIT 7").catch(function() { return []; });
     const saKey = ga4ParseKey(env.GA4_SA_KEY);
     return rtRead(request, url, { ok: true, version: VERSION, key_present: !!env.GA4_SA_KEY, sa_email: saKey ? saKey.email : null, runs: rowsG, gsc_runs: rowsGsc }, { schema: "ga4/v1" });
+  }
+  // RECALL-CARD-1: owner session only; the jobs app is reached through a service binding, never the public host
+  if (path === "/api/recall" && (request.method === "GET" || request.method === "POST")) {
+    if (!(owner && owner.authed)) return json({ error: "owner session required" }, 401);
+    let b = null;
+    if (request.method === "POST") {
+      b = await request.json().catch(function() { return null; });
+      if (!b || typeof b.key !== "string" || !/^(yes|no|unsure)$/.test(String(b.answer))) return json({ error: "send key and answer yes, no or unsure" }, 400);
+      b = { key: b.key.slice(0, 100), answer: b.answer, role: String(b.role || "").slice(0, 20), depth: String(b.depth || "").slice(0, 20) };
+    }
+    const r = await recallForward(env, request.method, b);
+    return json(r.body, r.status);
   }
   // PORTFOLIO-STRATEGIC-1 routes (2026-10-25): manual trigger for the strategic review (loop-token gated
   // when LOOP_TOKEN is set) and a public read of the latest review notes + runs.
@@ -4502,6 +4602,15 @@ if (path === "/health") {
   // Any worker or session files / clears a human action here (same token as the loop endpoints).
   //   {"op":"add","slug":"...","title":"...","why":"...","default":"...","action":"...","url":"https://...","sev":"urgent|normal","due":"YYYY-MM-DD"}
   //   {"op":"resolve","slug":"...","resolution":"evidence"}
+  // BRAND-PROFILE-SYNC-1: the last profile sync and the brand cards still open (read-only; the cron runs the sync).
+  if (path === "/api/brand-sync" && request.method === "GET") {
+    await brandEnsure(env);
+    const last = await env.AUDIT.prepare("SELECT ts, result FROM brand_profile_sync_log ORDER BY id DESC LIMIT 1").first().catch(function() { return null; });
+    const open = await d1all(env.AUDIT, "SELECT slug, title FROM human_actions WHERE status = 'open' AND source = 'brand-profile-sync' ORDER BY id").catch(function() { return []; });
+    let res = null;
+    try { res = last ? JSON.parse(last.result) : null; } catch (e) { res = null; }
+    return json({ schema: "brand-sync/v1", version: VERSION, last_run: last ? last.ts : null, result: res, open_cards: open });
+  }
   if (path === "/api/human" && request.method === "POST") {
     const tok = request.headers.get("x-loop-token") || "";
     if (!env.LOOP_TOKEN || !constEq(tok || "", env.LOOP_TOKEN)) return json({ error: "unauthorized" }, 401);
@@ -4833,6 +4942,9 @@ var worker_default = {
       console.log(JSON.stringify({ worker: NAME, where: "scheduled:fleet_heartbeat", note: String(e && e.message || e) }));
     }
     ctx.waitUntil(uxAudit(env));
+    ctx.waitUntil(brandProfileSync(env).catch(function(e) {
+      console.log(JSON.stringify({ worker: NAME, where: "scheduled:brand-sync", note: String(e && e.message || e) }));
+    }));
     if (!fullDashboardRefreshDue(controller)) {
       const saved = await loadState(env).catch(function() {
         return null;
@@ -7443,6 +7555,202 @@ var SPEND_CAP_USD = 150;
 var HUMAN_SNAPSHOT_MAX_AGE_MS = 5 * 6e4;
 async function ensureHumanTable(env) {
   await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS human_actions (id INTEGER PRIMARY KEY AUTOINCREMENT, slug TEXT UNIQUE, title TEXT NOT NULL, why TEXT, default_in_effect TEXT, action TEXT, url TEXT, sev TEXT DEFAULT 'normal', due TEXT, status TEXT DEFAULT 'open', source TEXT, created_at TEXT DEFAULT (datetime('now')), updated_at TEXT DEFAULT (datetime('now')), resolved_at TEXT, resolution TEXT)").run();
+  // BRAND-PROFILE-SYNC-1 (1.104.0): copy_text holds the exact text a card asks the owner to paste (the Copy box). Added once per
+  // isolate; "duplicate column" is the expected answer on every isolate after the first and is not an error.
+  if (!humanCopyColReady) {
+    try {
+      await env.AUDIT.prepare("ALTER TABLE human_actions ADD COLUMN copy_text TEXT").run();
+    } catch (e) {
+      if (!/duplicate column/i.test(String(e && e.message || e))) console.log(JSON.stringify({ worker: NAME, where: "ensureHumanTable:copy_text", note: String(e && e.message || e) }));
+    }
+    humanCopyColReady = true;
+  }
+}
+var humanCopyColReady = false;
+// BRAND-PROFILE-SYNC-1 (1.104.0, owner directive 2026-11-09, Personal Brand project: "update all surfaces ... positioning me ... as a systems
+// researcher, specifically autonomous systems ... I want all this done by code ... if I need to do something ... I need actions that are
+// linked to my dashboard"). Wording is rwnq8/resume docs/BRAND.md. Three parts, run at most every BRAND_SYNC_EVERY_MS from the cron:
+//  1. GitHub, applied by code with the fleet's GITHUB_TOKEN (classic PAT of rwnq8): each repository's About text, the brand topics on
+//     the profile repositories, and the profile bio. A write GitHub refuses becomes an owner card carrying the exact text to paste.
+//  2. Surfaces with no write API for the fleet (LinkedIn, ORCID, Google Scholar, X, Gmail signature, GitHub pins) become one owner
+//     card each, IDENTITY-BOUND, with a Copy box (human_actions.copy_text) and the deep link to the edit page. A card is filed once and
+//     never reopened after the owner taps Done.
+//  3. Closing probes: a card closes itself with evidence when the public record shows the new text (ORCID biography and keywords,
+//     Scholar affiliation and interests, GitHub pins, About and bio). Bluesky and Mastodon bios are written by qnfo-social.
+// Each run is logged to brand_profile_sync_log; GET /api/brand-sync returns the last run.
+var BRAND_SYNC_EVERY_MS = 6 * 3600e3;
+var BRAND_GH_ABOUT = {
+  "rwnq8/resume": "CV and portfolio of Rowan Brad Quni-Gudzinas, autonomous AI systems researcher: 20 years of network and systems modeling (FHWA, AARP) leading to research on how autonomous AI systems behave, fail and are governed.",
+  "rwnq8/rwnq8": "Profile of Rowan Brad Quni-Gudzinas, autonomous AI systems researcher.",
+  "rwnq8/.github": "Profile of Rowan Brad Quni-Gudzinas, autonomous AI systems researcher.",
+  "rwnq8/rwnq8.github.io": "Personal site of Rowan Brad Quni-Gudzinas, autonomous AI systems researcher: career record, selected work and a sourced description for AI systems.",
+  "rwnq8/agent-operating-system": "One written agreement that keeps autonomous coding agents from different vendors inside the same limits, with human oversight. Part of Rowan Quni-Gudzinas's autonomous AI systems research.",
+  "rwnq8/AIOS": "Design experiment in autonomous AI systems: how far a local, offline AI can take itself from bare hardware to a working OS, and which safety gates keep that autonomy accountable.",
+  "rwnq8/career-engine": "Retired prototype of a prompted-recall CV and job-matching tool; superseded by jobs.q08.org.",
+  "rwnq8/ipatent": "LLM-assisted prior-art and patentability analysis prototype. Reports are machine-generated and are not legal advice.",
+  "QNFO/qnfo-research": "Published papers and full provenance of an autonomous AI research pipeline: drafts, adversarial reviews, verification runs and failure records."
+};
+var BRAND_GH_TOPICS = ["autonomous-systems", "ai-agents", "ai-governance", "ai-evaluation", "systems-research"];
+var BRAND_GH_TOPIC_REPOS = ["rwnq8/resume", "rwnq8/rwnq8", "rwnq8/rwnq8.github.io", "rwnq8/.github"];
+var BRAND_GH_BIO = "Autonomous AI systems researcher. How agentic systems behave, fail and are governed. 20 years of network and systems modeling (FHWA, AARP). Founder, QNFO.";
+var BRAND_GH_PINS = ["rwnq8/resume", "rwnq8/agent-operating-system", "rwnq8/AIOS", "rwnq8/solo-scientist", "rwnq8/qwav-research-pipeline", "rwnq8/joules-per-compute-benchmark"];
+var BRAND_ORCID = "0009-0002-4317-5604";
+var BRAND_SCHOLAR = "https://scholar.google.com/citations?user=eHIbqxkAAAAJ&hl=en";
+var BRAND_LI_HEADLINE = "Autonomous AI systems researcher \u00b7 How agentic systems behave, fail and are governed \u00b7 20 years of network and systems modeling (FHWA, AARP) \u00b7 Founder, QNFO";
+var BRAND_LI_ABOUT = "I study autonomous AI systems as systems: how they are structured, how they behave in operation, how they fail, and how people can audit and govern them.\n\nMy work has been about systems for twenty years. I started in transportation with GIS, then built and ran transportation network models at DVRPC and IBI Group. At the U.S. Federal Highway Administration I specified the national Tour-Based Model System, a simulation of long-distance travel, directed the contractor team that built it, co-directed the $10M National Household Travel Survey, and managed a $1.5M federal research portfolio as a certified Contracting Officer's Representative. At Deloitte I delivered analytics and machine-learning engagements for public-sector clients. At AARP's Public Policy Institute I led the Livability Index, a decision-support system that scores U.S. neighborhoods from 50+ data sources across 7 domains.\n\nSince 2024 I have designed and run QNFO, an autonomous research system of 44 live agents that draft, referee, revise, publish and correct papers, and I have published what it delivers, what it costs and where it fails (Operating the Quniverse Fleet), along with methods for auditing what AI-assisted work does not know (The Universal Ignorance Audit).\n\nI am a systems researcher, not a software engineer. Open to autonomous and AI systems research, AI evaluation and assurance, AI governance and oversight research, and research program leadership for AI. Earlier work is published under Brad Gudzinas.";
+var BRAND_ORCID_BIO = "Rowan Quni-Gudzinas is a systems researcher focused on autonomous AI systems: how they behave, fail and can be audited and governed. Their career began in transportation network modeling, continued with a national travel forecasting model for the U.S. Federal Highway Administration and a data-driven national decision tool at AARP, and now centres on autonomous AI. As founder of QNFO, Rowan runs an autonomous research system in production and publishes its objectives, costs and failure record openly. Earlier work is published under Brad Gudzinas.";
+var BRAND_ORCID_KEYWORDS = "autonomous AI systems, agentic systems, systems research, AI evaluation and auditability, AI governance and oversight, network modeling, travel demand modeling, evidence-based decision systems";
+var BRAND_SCHOLAR_AFFIL = "Autonomous AI systems researcher, QNFO";
+var BRAND_SCHOLAR_INTERESTS = "Autonomous AI systems, AI evaluation, AI governance, Network modeling, Travel demand modeling";
+var BRAND_X_BIO = "Autonomous AI systems researcher: how agentic systems behave, fail and are governed. 20 yrs network and systems modeling (FHWA, AARP). Founder, QNFO.";
+var BRAND_SIGNATURE = "Rowan Brad Quni-Gudzinas\nAutonomous AI systems researcher \u00b7 Founder, QNFO\nhttps://rwnq8.github.io \u00b7 ORCID " + BRAND_ORCID;
+var BRAND_WHY = "IDENTITY-BOUND: only your own sign-in can edit this profile; the fleet has no write access to it. ";
+var BRAND_OWNER_CARDS = [
+  { slug: "brand-linkedin-headline", title: "LinkedIn: paste your new headline", why: BRAND_WHY + "LinkedIn offers no profile-write API.", action: "Open, tap the pencil on your intro, replace Headline with the text below, Save. Then tap Done here.", url: "https://www.linkedin.com/in/rowan-quni/edit/intro/", copy: BRAND_LI_HEADLINE },
+  { slug: "brand-linkedin-about", title: "LinkedIn: paste your new About section", why: BRAND_WHY + "LinkedIn offers no profile-write API.", action: "Open your profile, tap the pencil on About, replace the text with the text below, Save. Then tap Done here.", url: "https://www.linkedin.com/in/rowan-quni/", copy: BRAND_LI_ABOUT },
+  { slug: "brand-orcid-bio", title: "ORCID: paste your new biography", why: BRAND_WHY + "ORCID's write API is for member institutions only.", action: "Open, sign in, tap the pencil on Biography, replace it with the text below, Save. This card closes itself when ORCID shows it.", url: "https://orcid.org/my-orcid", copy: BRAND_ORCID_BIO, probe: "orcid-bio" },
+  { slug: "brand-orcid-keywords", title: "ORCID: paste your new keywords", why: BRAND_WHY + "ORCID's write API is for member institutions only.", action: "Open, tap the pencil on Keywords, remove the old ones, paste the text below, Save. This card closes itself when ORCID shows them.", url: "https://orcid.org/my-orcid", copy: BRAND_ORCID_KEYWORDS, probe: "orcid-keywords" },
+  { slug: "brand-scholar-affiliation", title: "Google Scholar: paste your new affiliation", why: BRAND_WHY + "Google Scholar has no API.", action: "Open, tap the pencil next to your name, replace Affiliation with the text below, Save. This card closes itself when Scholar shows it.", url: BRAND_SCHOLAR, copy: BRAND_SCHOLAR_AFFIL, probe: "scholar-affiliation" },
+  { slug: "brand-scholar-interests", title: "Google Scholar: paste your new areas of interest", why: BRAND_WHY + "Google Scholar has no API.", action: "Open, tap the pencil next to your name, replace Areas of interest with the text below, Save. This card closes itself when Scholar shows it.", url: BRAND_SCHOLAR, copy: BRAND_SCHOLAR_INTERESTS, probe: "scholar-interests" },
+  { slug: "brand-x-bio", title: "X: paste your new bio", why: BRAND_WHY + "X charges for profile writes through its API.", action: "Open, replace Bio with the text below, Save. Then tap Done here.", url: "https://x.com/settings/profile", copy: BRAND_X_BIO },
+  { slug: "brand-gmail-signature", title: "Gmail: paste your new email signature", why: BRAND_WHY + "the fleet's mail access cannot change Gmail settings.", action: "Open, scroll to Signature, replace it with the text below, Save Changes at the bottom. Then tap Done here.", url: "https://mail.google.com/mail/u/0/#settings/general", copy: BRAND_SIGNATURE },
+  { slug: "brand-github-pins", title: "GitHub: pin your autonomous-systems repositories", why: BRAND_WHY + "GitHub has no API for profile pins.", action: "Open your profile, tap Customize your pins, tick resume, agent-operating-system, AIOS, solo-scientist, qwav-research-pipeline and joules-per-compute-benchmark, untick the rest, Save. This card closes itself when GitHub shows them.", url: "https://github.com/rwnq8", copy: "", probe: "gh-pins" }
+];
+var brandSyncLast = 0;
+async function brandEnsure(env) {
+  await ensureHumanTable(env);
+  await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS brand_profile_sync_log (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')), result TEXT)").run();
+}
+// An open card is refreshed in place; a card the owner resolved is never reopened by this sync (ON CONFLICT ... WHERE status = 'open').
+async function brandCard(env, c) {
+  await env.AUDIT.prepare("INSERT INTO human_actions (slug, title, why, default_in_effect, action, url, sev, due, source, copy_text) VALUES (?1,?2,?3,'',?4,?5,'normal','','brand-profile-sync',?6) ON CONFLICT(slug) DO UPDATE SET title=excluded.title, why=excluded.why, action=excluded.action, url=excluded.url, copy_text=excluded.copy_text, updated_at=datetime('now') WHERE human_actions.status = 'open'").bind(c.slug, c.title, c.why, c.action, c.url, c.copy || "").run();
+}
+async function brandResolve(env, slug, evidence) {
+  const r = await env.AUDIT.prepare("UPDATE human_actions SET status='resolved', resolved_at=datetime('now'), updated_at=datetime('now'), resolution=?1 WHERE slug=?2 AND status='open'").bind(String(evidence).slice(0, 500), slug).run();
+  return (r && r.meta && r.meta.changes) || 0;
+}
+function brandNorm(s) {
+  return String(s || "").replace(/\s+/g, " ").trim().toLowerCase();
+}
+// PRECONDITION: env.GITHUB_TOKEN may be absent. POSTCONDITION: { repos: {repo: status}, topics: {...}, bio: status }; never throws
+// for a single refused write, and a refused write files that surface's owner card.
+async function brandGithub(env, f) {
+  const out = { repos: {}, topics: {}, bio: null, pins: null };
+  if (!env.GITHUB_TOKEN) return { skipped: "no GITHUB_TOKEN" };
+  const H = { Authorization: "Bearer " + env.GITHUB_TOKEN, Accept: "application/vnd.github+json", "User-Agent": "qnfo-fleet-dashboard brand-sync", "X-GitHub-Api-Version": "2022-11-28" };
+  const gh = function(method, path, body) {
+    return f("https://api.github.com" + path, { method, headers: body ? Object.assign({ "Content-Type": "application/json" }, H) : H, body: body ? JSON.stringify(body) : undefined });
+  };
+  for (const repo of Object.keys(BRAND_GH_ABOUT)) {
+    const want = BRAND_GH_ABOUT[repo], slug = "brand-gh-about-" + repo.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+    try {
+      const g = await gh("GET", "/repos/" + repo);
+      if (!g.ok) { out.repos[repo] = "read " + g.status; continue; }
+      const cur = await g.json();
+      if (brandNorm(cur.description) === brandNorm(want)) {
+        out.repos[repo] = "ok";
+        await brandResolve(env, slug, "GitHub About of " + repo + " reads the brand text (brand-profile-sync probe)");
+      } else {
+        const p = await gh("PATCH", "/repos/" + repo, { description: want });
+        out.repos[repo] = p.ok ? "updated" : "refused " + p.status;
+        if (p.ok) await brandResolve(env, slug, "GitHub About of " + repo + " written by brand-profile-sync");
+        else await brandCard(env, { slug, title: "GitHub: paste the About text of " + repo, why: "IDENTITY-BOUND: GitHub refused the fleet's write (" + p.status + "), so only your sign-in can change it.", action: "Open the repository, tap the gear next to About, replace Description with the text below, Save. This card closes itself when GitHub shows it.", url: "https://github.com/" + repo, copy: want });
+      }
+      if (BRAND_GH_TOPIC_REPOS.indexOf(repo) >= 0) {
+        const have = Array.isArray(cur.topics) ? cur.topics : [];
+        const missing = BRAND_GH_TOPICS.filter(function(t) { return have.indexOf(t) < 0; });
+        if (!missing.length) out.topics[repo] = "ok";
+        else {
+          const t = await gh("PUT", "/repos/" + repo + "/topics", { names: have.concat(missing).slice(0, 20) });
+          out.topics[repo] = t.ok ? "added " + missing.length : "refused " + t.status;
+        }
+      }
+    } catch (e) {
+      out.repos[repo] = "error " + String(e && e.message || e).slice(0, 80);
+    }
+  }
+  try {
+    const u = await gh("GET", "/user");
+    const me = u.ok ? await u.json() : null;
+    if (me && brandNorm(me.bio) === brandNorm(BRAND_GH_BIO)) {
+      out.bio = "ok";
+      await brandResolve(env, "brand-github-bio", "GitHub bio reads the brand text (brand-profile-sync probe)");
+    } else {
+      const p = await gh("PATCH", "/user", { bio: BRAND_GH_BIO });
+      out.bio = p.ok ? "updated" : "refused " + p.status;
+      if (p.ok) await brandResolve(env, "brand-github-bio", "GitHub bio written by brand-profile-sync");
+      else await brandCard(env, { slug: "brand-github-bio", title: "GitHub: paste your new profile bio", why: "IDENTITY-BOUND: the fleet's GitHub token has no user scope (" + p.status + "), so only your sign-in can change the bio.", action: "Open, replace Bio with the text below, tap Update profile. This card closes itself when GitHub shows it.", url: "https://github.com/settings/profile", copy: BRAND_GH_BIO });
+    }
+  } catch (e) {
+    out.bio = "error " + String(e && e.message || e).slice(0, 80);
+  }
+  try {
+    const q = await gh("POST", "/graphql", { query: "{user(login:\"rwnq8\"){pinnedItems(first:6,types:REPOSITORY){nodes{... on Repository{nameWithOwner}}}}}" });
+    const j = q.ok ? await q.json() : null;
+    const pins = j && j.data && j.data.user ? j.data.user.pinnedItems.nodes.map(function(n) { return String(n.nameWithOwner || "").toLowerCase(); }) : null;
+    if (pins) {
+      const lack = BRAND_GH_PINS.filter(function(p) { return pins.indexOf(p.toLowerCase()) < 0; });
+      out.pins = lack.length ? "missing " + lack.length : "ok";
+      if (!lack.length) await brandResolve(env, "brand-github-pins", "GitHub profile pins show the autonomous-systems repositories (brand-profile-sync probe)");
+    } else out.pins = "read " + (q && q.status);
+  } catch (e) {
+    out.pins = "error " + String(e && e.message || e).slice(0, 80);
+  }
+  return out;
+}
+// Public-record probes for the owner cards. Each returns true (shows the new text), false (does not) or null (could not read).
+async function brandProbe(kind, f) {
+  try {
+    if (kind === "orcid-bio" || kind === "orcid-keywords") {
+      const r = await f("https://pub.orcid.org/v3.0/" + BRAND_ORCID + "/" + (kind === "orcid-bio" ? "biography" : "keywords"), { headers: { Accept: "application/json", "User-Agent": "qnfo-fleet-dashboard brand-sync" } });
+      if (!r.ok) return null;
+      const j = await r.json();
+      if (kind === "orcid-bio") return /autonomous AI systems/i.test(String(j && j.content || ""));
+      return ((j && j.keyword) || []).some(function(k) { return /autonomous AI systems/i.test(String(k && k.content || "")); });
+    }
+    if (kind === "scholar-affiliation" || kind === "scholar-interests") {
+      const r = await f(BRAND_SCHOLAR, { headers: { "User-Agent": "Mozilla/5.0 (qnfo-fleet-dashboard brand-sync; bot)" } });
+      if (!r.ok) return null;
+      const html = await r.text();
+      if (!/gsc_prf_in/.test(html)) return null;
+      return kind === "scholar-affiliation" ? /Autonomous AI systems researcher/i.test(html) : /label:autonomous_ai_systems/i.test(html);
+    }
+  } catch (e) {
+    return null;
+  }
+  return null;
+}
+async function brandProfileSync(env, opts) {
+  const o = opts || {}, f = o.fetch || fetch, now = o.now || Date.now();
+  if (!o.force && now - brandSyncLast < BRAND_SYNC_EVERY_MS) return { skipped: "ran in this isolate" };
+  await brandEnsure(env);
+  if (!o.force) {
+    const last = await env.AUDIT.prepare("SELECT ts FROM brand_profile_sync_log ORDER BY id DESC LIMIT 1").first().catch(function() { return null; });
+    const at = last ? Date.parse(String(last.ts)) : NaN;
+    if (at && now - at < BRAND_SYNC_EVERY_MS) { brandSyncLast = at; return { skipped: "ran at " + last.ts }; }
+  }
+  brandSyncLast = now;
+  const result = { github: null, cards: {}, probes: {} };
+  for (const c of BRAND_OWNER_CARDS) {
+    try { await brandCard(env, c); result.cards[c.slug] = "filed"; } catch (e) { result.cards[c.slug] = "error " + String(e && e.message || e).slice(0, 80); }
+  }
+  result.github = await brandGithub(env, f).catch(function(e) { return { error: String(e && e.message || e).slice(0, 120) }; });
+  for (const c of BRAND_OWNER_CARDS) {
+    if (!c.probe || c.probe === "gh-pins") continue;
+    const seen = await brandProbe(c.probe, f);
+    result.probes[c.slug] = seen === null ? "unreadable" : seen ? "shows new text" : "old text";
+    if (seen) await brandResolve(env, c.slug, "public record shows the new text (brand-profile-sync probe " + c.probe + ")");
+  }
+  await env.AUDIT.prepare("INSERT INTO brand_profile_sync_log (result) VALUES (?1)").bind(JSON.stringify(result).slice(0, 4000)).run().catch(function(e) {
+    console.log(JSON.stringify({ worker: NAME, where: "brand-sync:log", note: String(e && e.message || e) }));
+  });
+  return result;
+}
+// The Copy box on an owner card (BRAND-PROFILE-SYNC-1): the exact text, selectable, and a button that copies it in one tap.
+function copyRowHtml(text, e) {
+  if (!text) return "";
+  const rows = Math.min(10, Math.max(2, Math.ceil(String(text).length / 60)));
+  return '<div class="row copy-row"><span class="k">Paste this</span><span class="v"><textarea readonly rows="' + rows + '" style="width:100%;box-sizing:border-box;font:inherit">' + e(text) + '</textarea><button type="button" onclick="var t=this.previousElementSibling,b=this;t.focus();t.select();var d=function(){b.textContent=\'Copied\'};if(navigator.clipboard){navigator.clipboard.writeText(t.value).then(d,function(){document.execCommand(\'copy\');d()})}else{document.execCommand(\'copy\');d()}">Copy</button></span></div>';
 }
 // OBJECTIVE-REVISION-APPLY-1 (1.13.0, agent_issues 1725): the Cloudflare consumer for an owner-ratified objective revision,
 // which until now was recorded and never applied (the 2026-09-26 change, goals.id=51, was applied by hand in a session).
@@ -8393,11 +8701,15 @@ async function collectHumanActions(env) {
     // OWNER-REQUEST-RECEIPT-1: `source` says where a card came from; a database without the column (an older D1, an offline fixture) reads every card as a card.
     let rows;
     try {
-      rows = await d1all(env.AUDIT, "SELECT slug, title, why, default_in_effect, action, url, sev, due, created_at, source AS origin FROM human_actions WHERE status='open' ORDER BY id");
-    } catch (e) {
-      rows = await d1all(env.AUDIT, "SELECT slug, title, why, default_in_effect, action, url, sev, due, created_at FROM human_actions WHERE status='open' ORDER BY id");
+      rows = await d1all(env.AUDIT, "SELECT slug, title, why, default_in_effect, action, url, sev, due, created_at, source AS origin, copy_text FROM human_actions WHERE status='open' ORDER BY id");
+    } catch (e0) {
+      try {
+        rows = await d1all(env.AUDIT, "SELECT slug, title, why, default_in_effect, action, url, sev, due, created_at, source AS origin FROM human_actions WHERE status='open' ORDER BY id");
+      } catch (e) {
+        rows = await d1all(env.AUDIT, "SELECT slug, title, why, default_in_effect, action, url, sev, due, created_at FROM human_actions WHERE status='open' ORDER BY id");
+      }
     }
-    for (const r of rows) add({ key: "ha:" + r.slug, source: "queue", receipt: r.origin === "owner-request-issue", title: r.title, why: r.why || "", fallback: r.default_in_effect || "", action: r.action || "", url: safeLink(r.url), sev: urgentSev(r.sev) ? "urgent" : "normal", due: r.due || "", age: ageDaysOf(r.created_at) });
+    for (const r of rows) add({ key: "ha:" + r.slug, source: "queue", receipt: r.origin === "owner-request-issue", title: r.title, why: r.why || "", fallback: r.default_in_effect || "", action: r.action || "", copy: r.copy_text || "", url: safeLink(r.url), sev: urgentSev(r.sev) ? "urgent" : "normal", due: r.due || "", age: ageDaysOf(r.created_at) });
   });
   await read("register", async function() {
     const rows = await d1all(env.AUDIT, "SELECT id, title, dod, due, updated_at FROM v_waiting_on_human ORDER BY due = '', due, id");
@@ -9723,7 +10035,7 @@ function areaPageParts(reg, v, m, dataAge) {
       (it.due ? '<span class="it-due">due ' + e(it.due) + "</span>" : "") + (it.age != null ? '<span class="it-age">waiting ' + e(agoText(it.age).replace(" ago", "")) + "</span>" : "") + "</div><h2>" + e(it.title) + '</h2><div class="it-rows">' +
       (it.why ? '<div class="row"><span class="k">Why you</span><span class="v">' + e(it.why) + "</span></div>" : "") +
       (it.fallback ? '<div class="row"><span class="k">If you wait</span><span class="v">' + e(it.fallback) + "</span></div>" : "") +
-      (it.action ? '<div class="row do-row"><span class="k">To do</span><span class="v">' + e(it.action) + "</span></div>" : "") +
+      (it.action ? '<div class="row do-row"><span class="k">To do</span><span class="v">' + e(it.action) + "</span></div>" : "") + copyRowHtml(it.copy, e) +
       '</div><div class="acts">' + (/^https:\/\//.test(it.url || "") ? '<a class="do" href="' + e(it.url) + '" rel="noopener">Open</a>' : "") + '<a href="/#queue">Respond on the overview</a></div></article>');
   });
   if (mine.length > 6) o.push('<p class="meta">' + (mine.length - 6) + ' more in <a href="/#queue">the overview queue</a>.</p>');
@@ -9801,6 +10113,7 @@ function humanFragment(v) {
     if (it.why) o.push('<div class="row"><span class="k">Why you</span><span class="v">' + e(it.why) + "</span></div>");
     if (it.fallback) o.push('<div class="row"><span class="k">If you wait</span><span class="v">' + e(it.fallback) + "</span></div>");
     if (it.action) o.push('<div class="row do-row"><span class="k">To do</span><span class="v">' + e(it.action) + "</span></div>");
+    if (it.copy) o.push(copyRowHtml(it.copy, e));
     // OWNER-SURFACE-HONESTY-1: each message on an inbox card: who and the subject (the owner's view) or the domain, age, auth.
     if (it.mail && it.mail.length) for (const m of it.mail) o.push('<div class="pr"><div>' + e(m.from_address ? (m.from_name ? m.from_name + " <" + m.from_address + ">" : m.from_address) : "someone at " + m.domain) + (m.from_address ? " &middot; " + e(m.subject || "(no subject)") : "") + '</div><div class="meta">received ' + e(agoText(ageDaysOf(m.received_at))) + " &middot; " + e(m.category) + " &middot; " + e(m.auth) + "</div></div>");
     o.push("</div>");
@@ -11735,6 +12048,21 @@ function changelogHtml(v, holder) {
   return fleetHead("Fleet changelog") + css + fleetTop("changelog", false, holder) + '<main class="wrap fl" style="max-width:980px"><h1 class="fl-h" style="font-size:30px;margin:10px 0 6px">Changelog</h1><p class="meta" style="margin:0 0 18px;max-width:90ch">What the fleet has shipped for itself: new capabilities (a major or minor version), new workers, and changes to public sites. Fixes and small improvements (patch versions) are counted, not listed' + (v.patches_30d != null ? ': ' + v.patches_30d + ' in the last 30 days' : '') + '. Updated every 15 minutes from the canonical deploy ledger. JSON: <a href="/api/changelog">/api/changelog</a>.</p><div class="fl-kpis cl-kpis" style="display:grid;gap:12px;margin:0 0 22px">' + kpi(c.releases_7d, "Releases, 7 days") + kpi(c.releases_30d, "Releases, 30 days") + kpi(c.autonomy_30d, "Autonomy releases, 30 days") + kpi(c.public_30d, "Public-facing, 30 days") + kpi(c.new_workers_30d, "New workers, 30 days") + '</div><section class="card" style="margin-bottom:22px"><h3 style="font:600 12px var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0 0 6px">Is the fleet getting more autonomous?</h3>' + trendRows + '</section><div class="cl-chips" role="group" aria-label="Filter releases">' + chips + '</div>' + (items || '<div class="card empty"><b>No releases recorded yet.</b> The first sync after this deploy reads the deploy ledger.</div>') + '<p class="fl-foot">' + esc(v.rule) + '</p></main>' + js + FLEET_SHELL_JS + '</body></html>';
 }
 // ---- FLEET-CHANGELOG-1:END ----
+/* RECALL-CARD-1 (owner 2026-11-09: "virtuous feedback loops ... in the fleet dashboard, the jobs, everywhere"; shape from docs/PROMPTED-RECALL.md, PROMPTED-RECALL-1).
+   qnfo-jobsearch keeps the questions: what the open shortlist asks for that the CV cannot yet back, each with the posting's own sentence. This card shows the
+   most-asked one to the signed-in owner: Yes / No / Not sure, then how involved (each button shows the exact line a yes adds, so nothing is typed). A yes goes to the
+   CV and the next resume; the search re-runs. Both routes (/api/recall) need the owner session and call qnfo-jobsearch through the SVC_JOBSEARCH binding with the
+   loop token, so the question, which names shortlisted employers, is never public. Text is written with textContent, never as markup. */
+var RECALL_CARD_HTML = '<section id="fl-recall" class="card" aria-live="polite" hidden><p class="q-eyebrow" id="rc-n"></p><h2 class="fl-h" id="rc-q" style="margin:4px 0"></h2><p id="rc-cue" class="mute"></p><div id="rc-b"><button class="btn" data-a="yes">Yes</button> <button class="btn" data-a="no">No</button> <button class="btn" data-a="unsure">Not sure</button></div><div id="rc-d" hidden><p class="mute">Where?</p><div id="rc-r"></div><p class="mute">How involved?</p><div id="rc-l"></div></div><p id="rc-m" class="mute" role="status"></p></section>';
+var RECALL_JS = "<script>(function(){var box=document.getElementById('fl-recall');if(!box||!window.fetch)return;var H={'Content-Type':'application/json','x-fleet-ui':'1'},Q=null,role='';function g(i){return document.getElementById(i)}function T(i,t){g(i).textContent=t}function btn(label,fn,cls){var b=document.createElement('button');b.className='btn'+(cls?' '+cls:'');b.type='button';b.textContent=label;b.addEventListener('click',fn);return b}function show(d){var q=d&&d.questions&&d.questions[0];if(!q){box.hidden=true;return}Q=q;role=q.roles&&q.roles[0]?q.roles[0].id:'';T('rc-n','One quick question'+(d.total>1?' ('+d.total+' waiting)':''));T('rc-q',q.ask);T('rc-cue',q.cue||'');T('rc-m','');g('rc-b').hidden=false;g('rc-d').hidden=true;box.hidden=false}function load(){fetch('/api/recall',{headers:H,credentials:'same-origin'}).then(function(r){return r.ok?r.json():null}).then(show).catch(function(){box.hidden=true})}function send(a,depth){fetch('/api/recall',{method:'POST',headers:H,credentials:'same-origin',body:JSON.stringify({key:Q.key,answer:a,role:role,depth:depth||''})}).then(function(r){return r.json()}).then(function(r){if(r.error){T('rc-m','Could not save: '+r.error);return}g('rc-b').hidden=true;g('rc-d').hidden=true;T('rc-m',a==='yes'&&r.added?'Added to your resume: '+r.added:a==='no'?'Noted. I will not ask again.':'Okay, I will ask again in two weeks.');setTimeout(load,a==='yes'?4000:900)}).catch(function(){T('rc-m','Could not save right now.')})}g('rc-b').addEventListener('click',function(e){var a=e.target&&e.target.getAttribute&&e.target.getAttribute('data-a');if(!a)return;if(a!=='yes'){send(a);return}g('rc-b').hidden=true;var R=g('rc-r'),L=g('rc-l');R.textContent='';L.textContent='';(Q.roles||[]).forEach(function(x,i){R.appendChild(btn(x.label,function(){role=x.id;Array.prototype.forEach.call(R.children,function(c){c.setAttribute('aria-pressed',c===this?'true':'false')},this)},i===0?'on':''))});(Q.depths||[]).forEach(function(x){L.appendChild(btn(x.draft,function(){send('yes',x.id)}))});g('rc-d').hidden=false});load()})()</script>";
+function recallForward(env, method, body) {
+  if (!env.SVC_JOBSEARCH || !env.LOOP_TOKEN) return Promise.resolve({ status: 503, body: { error: "recall is not connected" } });
+  const init = { method: method, headers: { "x-loop-token": env.LOOP_TOKEN, "content-type": "application/json" } };
+  if (body) init.body = JSON.stringify(body);
+  return env.SVC_JOBSEARCH.fetch("https://qnfo-jobsearch/api/recall" + (method === "GET" ? "?limit=1" : "/answer"), init).then(function(r) {
+    return r.json().catch(function() { return { error: "bad answer from the jobs app" }; }).then(function(j) { return { status: r.status, body: j }; });
+  }).catch(function() { return { status: 502, body: { error: "the jobs app did not answer" } }; });
+}
 // ==== AREA-MAP platform: overview page wrapper: humanHtml and its 15 s refresh ====
 function humanHtml(v) {
   const o = [];
@@ -11744,6 +12072,7 @@ function humanHtml(v) {
   o.push('<main class="wrap fl">');
   o.push(cmdPanelHtml(holder, "", ""));
   o.push('<section id="since" class="card since" aria-live="polite" hidden></section>');
+  if (holder) o.push(RECALL_CARD_HTML + RECALL_JS);   // RECALL-CARD-1
   o.push('<div id="live">' + humanFragment(v) + "</div>" + CHANGES_JS);
   // Real-time: re-fetch the server-rendered fragment every 15s (queue is read live from D1 on each call). The dot
   // goes amber/red when updates stop arriving, so a frozen page cannot masquerade as an all-clear.
@@ -13299,7 +13628,7 @@ var MAIL_DRAFT_RX = /\b(draft|compose|write|prepare|redo|rewrite)\b[\s\S]{0,40}\
 var MAIL_SEND_DRAFT_RX = /^\s*(?:(?:ok(?:ay)?|yes|good|great|looks good|perfect)[,.!]?\s*)?send(?: it| this| that| the (?:draft|reply|draft reply|email))?(?: now| as is)?[.!]?\s*$/i;
 var OWNER_SIGN_NAME = "Rowan Quni"; // the owner's public name (qnfo-gateway Person alternateName); nothing is ever added to it
 // The qnfo.org Person record (qnfo-gateway): the public facts the fleet already publishes about the owner.
-var OWNER_PUBLIC_FACTS = "Name: Rowan Brad Quni-Gudzinas, signs as Rowan Quni (also known as Brad Gudzinas). Public description on qnfo.org: systems researcher studying autonomous AI systems (not a software engineer). Affiliation: QNFO (qnfo.org). ORCID: 0009-0002-4317-5604. Email: rowan.quni@qnfo.org. He owns the QNFO GitHub organisation and directs the QNFO/qnfo-workers repository (the QNFO Cloudflare Workers fleet); who authored a given commit is what REPO_FACTS says.";
+var OWNER_PUBLIC_FACTS = "Name: Rowan Brad Quni-Gudzinas, signs as Rowan Quni (also known as Brad Gudzinas). Public description on qnfo.org: systems researcher studying autonomous AI systems (not a software engineer). Career arc: began modelling transportation networks (Delaware Valley Regional Planning Commission, IBI Group), led technical components of the national tour-based travel model at the Federal Highway Administration, then analytics and machine learning, and now studies and runs autonomous AI systems at QNFO; describe him as a systems researcher. Affiliation: QNFO (qnfo.org). ORCID: 0009-0002-4317-5604. Email: rowan.quni@qnfo.org. He owns the QNFO GitHub organisation and directs the QNFO/qnfo-workers repository (the QNFO Cloudflare Workers fleet); who authored a given commit is what REPO_FACTS says.";
 var MAIL_DRAFT_REPO = "QNFO/qnfo-workers";
 var MAIL_DRAFT_FACTS_MS = 5e3;
 var MAIL_DRAFT_MODEL_MS = 2e4; // facts + model stay under the 30 s waitUntil limit (CMD-ASK-BUDGET-1)

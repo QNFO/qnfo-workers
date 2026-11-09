@@ -21,6 +21,7 @@ because each one was broken at least once; the linked issue holds the evidence.
 ## Ask the owner by prompted recall (PROMPTED-RECALL-1, owner directive 2026-11-09)
 - Owner: "If you want to know something, ask me, but ask me in a structured, prompted recall kind of way. Don't make me type." Whenever the fleet needs a fact, a preference or feedback from the owner, it asks inside a fleet interface (the job search, the personal companion, a dashboard), never by expecting free text in a third-party chat app.
 - Shape: one question at a time, Yes / No / Not sure, a concrete cue, at most two more multiple-choice taps, and the final button shows the exact sentence it saves. Storage and loop: `docs/PROMPTED-RECALL.md`; reference implementation `qnfo-jobsearch` (`/api/recall`, `recall.test.mjs`). An answer that changes nothing downstream is a defect.
+- RECALL-LOOP-1 (2026-11-09): fleet questions share one queue, `qnfo-audit.owner_asks`, answered by tap on the companion's Today card (me.q08.org) or fleet.qnfo.org/focus; research focus answers steer `research_queue` through D1 triggers. Every owner-facing surface asks; see `docs/PROMPTED-RECALL.md` (Surfaces).
 
 ## Code is the only output (CODE-ONLY-OUTPUT-1, owner directive 2026-11-06)
 - Owner, verbatim in substance: "Do it. Don't tell me you're going to do it. Always do it. I want code, not text responses. This thread will disappear. The only things left are the code and artifacts like issues. I don't want documents. I want issues, PRs and deployed code."
