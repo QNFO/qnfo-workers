@@ -220,6 +220,9 @@ export function claimedFiled(text) {
   return m ? Number(m[1]) : null;
 }
 
+/** SWEEP-EMPTY-1 (issue 8329): a finished sweep whose steps returned no filed-issue id. */
+export function sweepEmpty(steps) { return filedIssueIds(steps).length === 0; }
+
 /** The mismatch to record for a finished sweep, or null when the claim holds (or none was made). */
 export function filedMismatch(text, steps) {
   const claimed = claimedFiled(text);
@@ -484,7 +487,8 @@ export const MAINTAIN_PERIOD_MS = 7 * 86400000;
 export function maintainDue(lastCreatedIso, nowMs) {
   if (!lastCreatedIso) return true;
   const t = Date.parse(String(lastCreatedIso).replace(" ", "T") + (/[zZ]|[+-]\d\d:?\d\d$/.test(String(lastCreatedIso)) ? "" : "Z"));
-  return !Number.isFinite(t) || nowMs - t >= MAINTAIN_PERIOD_MS;
+  // fail closed (issue 8330): an unreadable timestamp is not due, so a bad row cannot re-seed a sweep every tick
+  return Number.isFinite(t) && nowMs - t >= MAINTAIN_PERIOD_MS;
 }
 export const MAINTAIN_PROMPT = [
   "CMDLINE-MAINTAIN-1, the weekly sweep for program QNFO.OPS (front end and back end of the fleet command line). Work from evidence, file at most five issues, and report counts.",
@@ -523,4 +527,25 @@ export function approvalCardSpec(runId, action, callId, payloadJson) {
     default_in_effect: "rejected after 24 h",
     action: "Answer the pending approval in /cmd"
   };
+}
+
+// CF-AGENT-SETUP-1 (issue 8240, slice a): the Cloudflare Skills (github.com/cloudflare/skills) a turn's prompt calls for, picked by keyword; at most one per turn so the prompt stays small.
+const CF_SKILL_KEYWORDS = [
+  ["durable-objects", /durable object|\bdo\b class|alarm\(|storage\.sql|websocket hibernation/i],
+  ["agents-sdk", /agents sdk|agents@|\bagent class|callable\(|\bschedule\(|AIChatAgent/i],
+  ["wrangler", /wrangler|wrangler\.toml|wrangler\.jsonc|\bwrangler\.json/i],
+  ["web-perf", /core web vitals|lighthouse|\bLCP\b|\bCLS\b|page speed|web perf/i],
+  ["workers-best-practices", /workers? best practice|waitUntil|compatibility_date|nodejs_compat|worker\.js|cloudflare worker/i]
+];
+export function cfSkillFor(prompt) {
+  const t = String(prompt || "").slice(0, 4000);
+  for (const [name, re] of CF_SKILL_KEYWORDS) if (re.test(t)) return name;
+  return null;
+}
+export function cfSkillUrl(name) { return "https://raw.githubusercontent.com/cloudflare/skills/main/skills/" + name + "/SKILL.md"; }
+export function cfSkillNote(name, text, max) {
+  const body = String(text || "").trim();
+  if (!name || !body) return "";
+  const cap = max || 6000;
+  return "\n\nCloudflare skill (" + name + ", from github.com/cloudflare/skills; follow it for this Cloudflare work):\n" + (body.length > cap ? body.slice(0, cap) + "\n[skill text cut]" : body);
 }

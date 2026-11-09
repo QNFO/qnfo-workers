@@ -67,6 +67,13 @@ db.prepare("UPDATE published_pieces SET published_at = ? WHERE slug = 'archive'"
 db.prepare("UPDATE q08_audits SET verdict = 'fail' WHERE slug = 'archive'").run();
 assert.equal(await F.pickForecastSource(env), null, "an unaudited or failed source cannot seed a forecast");
 db.prepare("UPDATE q08_audits SET verdict = 'pass' WHERE slug = 'archive'").run();
+// Q08-FORECAST-PASS-OVER-1 (issue 9636): three thin-research deferrals in 24 h pass the essay over; old ones do not count.
+for (let i = 0; i < 3; i++) db.prepare("INSERT INTO engine_runs (status, top_signal, ran_at) VALUES ('deferred', 'q08-forecast:archive', datetime('now', '-' || ? || ' hours'))").run(i + 1);
+assert.equal(await F.pickForecastSource(env), null, "an essay whose research deferred 3 times in 24 h is passed over");
+db.exec("DELETE FROM engine_runs WHERE top_signal = 'q08-forecast:archive'");
+for (let i = 0; i < 3; i++) db.prepare("INSERT INTO engine_runs (status, top_signal, ran_at) VALUES ('deferred', 'q08-forecast:archive', datetime('now', '-' || ? || ' hours'))").run(30 + i);
+assert.equal((await F.pickForecastSource(env)).slug, "archive", "deferrals older than 24 h are retried");
+db.exec("DELETE FROM engine_runs WHERE top_signal = 'q08-forecast:archive'");
 
 const realFetch = globalThis.fetch;
 let sourceCount = 5;

@@ -103,7 +103,7 @@ const run = (o) => X.runTurnBudgeted({}, X.MODELS[o.primaryKey], [], 700, null, 
   ok(n.turn === null && !n.hedged, "with no hedge (spend cap: one leg) a failed primary ends the turn", n);
 }
 ok(/type: "router_timeout"/.test(src) && /, 504\);/.test(src), "an exhausted budget answers 504 router_timeout, not canned text");
-ok(src.includes("primaryKey: _primaryKey, hedgeKey: null"), "dynamic routes keep one consumer leg; gateway owns fallback");
+ok(src.includes("primaryKey: _primaryKey, hedgeKey: (/^(dynamic") && src.includes("hedgeMs: _budgetMs"), "QNFO-AI-504-HEDGE-1: a dynamic primary that fails or answers empty hedges once to the cheap Workers AI model");
 for (const label of ["calendar-context", "web-search", "web-fetch", "rag-context", "semantic-cache", "free-fallback"]) ok(src.includes('"' + label + '"'), "a timeout bounds " + label);
 
 // ---- semantic cache: mkLogRec no longer reads a variable before its declaration ----
