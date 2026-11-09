@@ -19,7 +19,7 @@ if (!src.includes(IMPORT)) throw new Error("worker.js import line changed: updat
 const patched = src.replace(IMPORT, "var connect = function () { throw new Error('sockets are stubbed in this test'); };") +
   "\nexport { jobOutreach as __jobOutreach, jobOutreachLearner as __tick, learnerTopic as __topic, learnerRtype as __rtype, learnerAddr as __addr," +
   " learnerClassify as __classify, learnerPlan as __plan, learnerBeta as __beta, LEARNER_RNG as __RNG, sentAsYouDigest as __digest," +
-  " jobEmailTriage as __triage, OUTREACH_OPT_OUT as __OPT_OUT, CRON_COMPANIONS as __COMP, JOBS as __JOBS, LEARNER_METRICS as __METRICS, LEARNER_METRIC_ACTOR as __ACTOR, pivotAllows as __pivotAllows, pivotAcademic as __pivotAcademic };\n";
+  " jobEmailTriage as __triage, OUTREACH_OPT_OUT as __OPT_OUT, CRON_COMPANIONS as __COMP, JOBS as __JOBS, LEARNER_METRICS as __METRICS, LEARNER_METRIC_ACTOR as __ACTOR, pivotAllows as __pivotAllows, pivotAcademic as __pivotAcademic };\nexport function __setPivotScan(n) { PIVOT_SCAN_ROWS = n; }\n";
 const mod = await import("data:text/javascript;base64," + Buffer.from(patched).toString("base64"));
 
 let pass = 0, fail = 0;
@@ -398,6 +398,35 @@ ok(mod.__pivotAllows("arxiv-radar widened: Dissipative Quantum Battery from Many
   const r2 = await mod.__jobOutreach(t.env);
   ok(r2.notes.pivot.on === false && r2.notes.pivot.released === 3, "switch off releases all held rows (" + JSON.stringify(r2.notes && r2.notes.pivot) + ")");
   ok(!t.audit.prepare("SELECT 1 FROM outreach_queue WHERE status = 'held-pivot-quantum'").get(), "nothing stays held after release");
+}
+
+
+// 11. OUTREACH-PIVOT-1 (codex review of #9886): the guard runs on every row at send time, and the pitch follows the audience
+{
+  const t = fresh();
+  await ensureTables(t);
+  t.uncfg("outreach_pivot_autonomy");
+  mod.__setPivotScan(1);   // the maintenance scan sees one row; the send loop must still refuse the rest
+  t.queue("q1@acme-qc.com", "arxiv-radar widened: Threshold Behavior of ZX Surface Codes", "pending", 300);
+  t.queue("q2@acme-qc.com", "arxiv-radar widened: Dissipative Quantum Battery", "pending", 200);
+  t.queue("q3@acme-qc.com", "arxiv-radar widened: Magic State Distillation Thresholds", "pending", 100);
+  const r = await mod.__jobOutreach(t.env);
+  ok(t.sent.length === 0, "no quantum row is mailed when the scan cap leaves rows unscanned (sent " + t.sent.length + ")");
+  ok(["q1@acme-qc.com", "q2@acme-qc.com", "q3@acme-qc.com"].every((e) => t.qs(e) === "held-pivot-quantum"), "all three are held, the extra ones by the send-time guard: " + JSON.stringify(["q1@acme-qc.com", "q2@acme-qc.com", "q3@acme-qc.com"].map(t.qs)));
+  mod.__setPivotScan(400);
+  t.queue("a1@agents-lab.com", "arxiv-radar widened: Oversight of Autonomous LLM Agents in Long-Horizon Operations", "pending", 50);
+  await mod.__jobOutreach(t.env);
+  const m = t.sent.find((x) => x.to === "a1@agents-lab.com");
+  ok(m && /autonomous AI systems operate, fail and get audited/.test(m.subject) && !/quantum/i.test(m.subject + m.text), "an autonomy row to a company address gets the autonomy pitch, not the quantum one");
+  ok(m && /I am Rowan Brad Quni-Gudzinas, a systems researcher/.test(m.text) && /arXiv|your recent work/.test(m.text) && /stop|unsubscribe|opt/i.test(m.text), "it names the author work, says who is writing and carries the opt-out line");
+  ok(t.audit.prepare("SELECT template FROM outreach_learner_sends WHERE email = 'a1@agents-lab.com'").get().template === "autonomy-first-v1", "the template is recorded as autonomy-first-v1");
+  // switch off: the old pitch and the old audience come back
+  t.cfg("outreach_pivot_autonomy", "off");
+  t.queue("old@oldlab.com", "arxiv-radar widened: Threshold Behavior of ZX Surface Codes", "pending", 10);
+  const before = t.sent.length;
+  await mod.__jobOutreach(t.env);
+  const old = t.sent.slice(before).find((x) => x.to === "old@oldlab.com");
+  ok(old && /energy-efficiency benchmark for quantum computing/.test(old.subject), "with the switch off the JPCUB pitch is used again");
 }
 
 console.log(pass + " passed, " + fail + " failed");
