@@ -3321,6 +3321,52 @@ export async function handleCompanion(request, env, ctx, deps) {
     }
     if (r === "push/unsubscribe" && m === "POST") { const b = await body(); await env.PERSONAL.prepare("DELETE FROM cmp_push_subs WHERE endpoint = ?").bind(s(b.endpoint, 1000)).run(); return J({ ok: true }); }
     if (r === "push/test" && m === "POST") return stub().fetch("https://do/companion-do/test-push");
+    // COMPANION-HEALTH-IMPORT-1: import Apple Health export or a daily-summary JSON/CSV, compute per-day aggregates
+    // server-side into cmp_health_daily (personal D1 only) and add sleep-regularity and activity proxy pairings to
+    // insights. A web page cannot read Apple Health or Health Connect directly: file import first, native app later.
+    if (r === "health/import" && m === "POST") {
+      const ct = request.headers.get("Content-Type") || "";
+      if (!ct.includes("multipart/form-data")) return J({ ok: false, error: "multipart/form-data with a file field required" }, 400);
+      const f = await request.formData();
+      const file = f.get("file");
+      if (!file || typeof file.arrayBuffer !== "function") return J({ ok: false, error: "file field required" }, 400);
+      const txt = new TextDecoder().decode(new Uint8Array(await file.arrayBuffer()));
+      let entries = [];
+      const num = (v) => { const n = Number(v); return Number.isFinite(n) ? n : null; };
+      const key = (obj, names) => { for (const n of names) { for (const k of Object.keys(obj)) if (k.toLowerCase() === n) return obj[k]; } return undefined; };
+      try {
+        if (file.type === "application/json" || /^\s*[\[{]/.test(txt)) {
+          const parsed = JSON.parse(txt);
+          const arr = Array.isArray(parsed) ? parsed : (Array.isArray(parsed.days) ? parsed.days : (Array.isArray(parsed.data) ? parsed.data : [parsed]));
+          entries = arr.filter((e) => e && typeof e === "object");
+        } else {
+          const lines = txt.split(/\r?\n/).filter((l) => l.trim());
+          const headers = lines[0].split(",").map((h) => h.trim().toLowerCase());
+          for (let i = 1; i < lines.length; i++) {
+            const cols = lines[i].split(",").map((c) => c.trim());
+            if (cols.length !== headers.length) continue;
+            const obj = {}; for (let j = 0; j < headers.length; j++) obj[headers[j]] = cols[j];
+            entries.push(obj);
+          }
+        }
+      } catch (e) { return J({ ok: false, error: "could not parse the health file: " + s(e && e.message, 200) }, 400); }
+      await env.PERSONAL.prepare("CREATE TABLE IF NOT EXISTS cmp_health_daily (day TEXT PRIMARY KEY, sleep_regularity REAL, steps INTEGER, rhr REAL, hrv REAL, daylight REAL, audio_exposure REAL, mindful_minutes REAL, raw_json TEXT)").run();
+      let imported = 0;
+      const upIns = async (day, kind, label, value) => { await env.PERSONAL.prepare("INSERT OR REPLACE INTO cmp_insights (day, kind, label, value, proxy) VALUES (?,?,?,?,1)").bind(day, kind, label, value).run().catch(() => null); };
+      for (const e of entries) {
+        const day = s(key(e, ["day", "date", "ds"]), 10);
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) continue;
+        const sleep_regularity = num(key(e, ["sleep_regularity", "sleep_regular", "sleepregularity"]));
+        const steps = num(key(e, ["steps", "step_count"]));
+        await env.PERSONAL.prepare("INSERT OR REPLACE INTO cmp_health_daily (day, sleep_regularity, steps, rhr, hrv, daylight, audio_exposure, mindful_minutes, raw_json) VALUES (?,?,?,?,?,?,?,?,?)")
+          .bind(day, sleep_regularity, steps == null ? null : Math.round(steps), num(key(e, ["rhr", "resting_heart_rate", "restingheartrate"])), num(key(e, ["hrv", "heart_rate_variability"])), num(key(e, ["daylight", "daylight_minutes", "time_in_daylight"])), num(key(e, ["audio_exposure", "audio", "environmental_audio"])), num(key(e, ["mindful_minutes", "mindfulminutes", "mindfulness"])), JSON.stringify(e)).run();
+        // Pairings with check-ins are proxies, labelled as such.
+        if (sleep_regularity != null) await upIns(day, "sleep-regularity", "Sleep regularity (proxy)", sleep_regularity);
+        if (steps != null) await upIns(day, "activity", "Steps (proxy)", steps);
+        imported++;
+      }
+      return J({ ok: true, imported, note: "personal D1 only; values are proxies paired with check-ins", native_read_blocker: "a web page cannot read Apple Health or Health Connect; file import first, native app later" });
+    }
     if (r === "tick" && m === "POST") return stub().fetch("https://do/companion-do/tick" + (url.searchParams.get("force") === "1" ? "?force=1" : url.searchParams.get("dry") === "1" ? "?dry=1" : ""));
     if (r === "privacy" && m === "GET") return J(await privacy(env));
     if (r === "export" && m === "GET") return new Response(JSON.stringify(await exportAll(env), null, 1), { headers: { "Content-Type": "application/json; charset=utf-8", "Content-Disposition": "attachment; filename=\"companion-export-" + dayKey(nowIso()) + ".json\"", "Cache-Control": "no-store" } });
