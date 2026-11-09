@@ -6,7 +6,7 @@ main = "worker.js"
 # 2026-08-04 nodejs_compat default on (this worker reads no timer id as a number, has no typeof process/Buffer branch and
 # imports no node: module), 2026-10-01 Durable Object eviction (no Durable Object here). /ops/deploy keeps the date only
 # when /health answers with the deployed VERSION and otherwise restores the previous date (deployment_history compat-restore).
-# compat-advance: reviewed 2026-10-12
+# compat-advance: reviewed 2026-11-09 (compat-risk-scan clean; no COMPAT_FLIPS entry between 2026-10-10 and 2026-11-04)
 compatibility_date = "2026-11-04"
 # LIFECYCLE-PING-1042-1 (2026-10-05, agent_issues 1994): runPing and runSync fetch *.q08.workers.dev; without
 # global_fetch_strictly_public that subrequest is Cloudflare error 1042 (same zone), served as HTTP 404. Measured:
