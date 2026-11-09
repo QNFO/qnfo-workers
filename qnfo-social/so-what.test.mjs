@@ -32,5 +32,11 @@ t = await mod.soWhatSentence(mk(good, 'not json'), "p-chk", "x");
 ok(t === null, "an unusable checker reply keeps the old text (fail closed)", t);
 t = await mod.soWhatSentence({ DB: mk(good, "[]").DB }, "p-nobind", "x");
 ok(t === null, "no LIVING_PAPER binding keeps the old text", t);
+// SO-WHAT-POST-1.1: the live model is a reasoning model; with max_tokens 200 it spent the budget thinking and returned empty text
+// (4 of 4 live calls read fallback:empty or reach-denied on 2026-11-06..08). The call must leave room for the answer and switch reasoning off.
+let seen = null;
+const env2 = mk(good, "[]"); const run0 = env2.AI.run; env2.AI.run = async (m, i) => { if (!/list every claim/.test(JSON.stringify(i))) seen = i; return run0(m, i); };
+await mod.soWhatSentence(env2, "p-budget", "x");
+ok(seen && seen.max_tokens >= 1000 && seen.reasoning_effort === "none", "the so-what call leaves room for the answer and turns reasoning off", seen && { t: seen.max_tokens, r: seen.reasoning_effort });
 console.log(pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);
