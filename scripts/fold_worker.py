@@ -448,6 +448,7 @@ def main():
     ap.add_argument("--test-due-at", required=True, help="an epoch-ms expression at which --due returns a cron (for the generated test)")
     ap.add_argument("--test-due-cron", required=True, help="the cron string --due returns at --test-due-at")
     ap.add_argument("--host-cron", required=True, help="the host trigger the member rides (for the generated test)")
+    ap.add_argument("--h", dest="host_opt", help="alias for host positional argument (optional)")
     ap.add_argument("--token", default="", help="HEADER:ENVVAR[:bearer]: the guest's inbound token gate the props stand in for")
     ap.add_argument("--public-route", action="append", default=[], help='"METHODS PATH": e.g. "GET,POST /e/*" (a trailing * matches a prefix); body and query kept, no binding props')
     ap.add_argument("--callers", default="", help="comma-separated binder names besides qnfo-* that may reach the member through props.caller")
@@ -456,6 +457,8 @@ def main():
     ap.add_argument("--why", required=True, help="tracking reference for the FOLDED marker")
     ap.add_argument("--dry-run", action="store_true")
     a = ap.parse_args()
+    if getattr(a, "host_opt", None):
+        a.host = a.host_opt
 
     root = os.getcwd()
     g, h = a.guest, a.host
