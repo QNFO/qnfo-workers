@@ -496,7 +496,7 @@ var __defProp22222 = Object.defineProperty;
 var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(target, "name", { value, configurable: true }), "__name");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.55.9";
+var VERSION = "0.55.11";
 var __AI_ATTR_RATES = { "@cf/zai-org/glm-5.3": [127273, 4e5], "@cf/zai-org/glm-5.3-flash": [13636, 45455], "@cf/nvidia/nemotron-3-120b-a12b": [45455, 136364], "@cf/moonshotai/kimi-k2.6": [86364, 363636], "@cf/moonshotai/kimi-k2.7-code": [86364, 363636], "@cf/openai/gpt-oss-120b": [31818, 68182], "@cf/openai/gpt-oss-20b": [18182, 27273], "@cf/deepseek-ai/deepseek-v4-pro-0813": [12e4, 36e4], "@cf/deepseek-ai/deepseek-v4-flash-0731": [4e4, 12e4], "@cf/meta/llama-3.3-70b-instruct-fp8-fast": [26668, 204805], "@cf/qwen/qwen3-30b-a3b-fp8": [4625, 30475], "@cf/qwen/qwen3.8-27b": [40909, 290909], "@cf/baai/bge-base-en-v1.5": [6058, 0], "@cf/baai/bge-small-en-v1.5": [1841, 0], "@cf/baai/bge-large-en-v1.5": [18582, 0] };
 function __attrStageSet(env, stage) {
   if (env && env.__aiAttrCtx) env.__aiAttrCtx.stage = String(stage || "");
@@ -3526,11 +3526,33 @@ function paperAffinityKey(model, prompt) {
   return "pp-" + (h >>> 0).toString(36);
 }
 __name(paperAffinityKey, "paperAffinityKey");
+var _gwSharePct = null;
+var _gwShareAt = 0;
+async function gatewaySharePct(env) {
+  var now = Date.now();
+  if (_gwSharePct !== null && now - _gwShareAt < RESEARCH_AFFINITY_TTL_MS) return _gwSharePct;
+  var pct = 5;
+  try {
+    var r = await env.QNFO_AUDIT.prepare("SELECT value FROM ops_config WHERE key = 'bp26_gw_research_exec_pct'").first();
+    if (r && r.value != null && isFinite(Number(r.value))) pct = Math.max(0, Math.min(100, Number(r.value)));
+  } catch (e) {
+    pct = 0;
+  }
+  _gwSharePct = pct;
+  _gwShareAt = now;
+  return pct;
+}
+__name(gatewaySharePct, "gatewaySharePct");
 async function aiRunOpts(env, model, prompt) {
   try {
-    if (await researchAffinityScope(env) !== "paper") return void 0;
-    var k = paperAffinityKey(model, prompt);
-    return k ? { extraHeaders: { "x-session-affinity": k } } : void 0;
+    var opts = {};
+    if (await researchAffinityScope(env) === "paper") {
+      var k = paperAffinityKey(model, prompt);
+      if (k) opts.extraHeaders = { "x-session-affinity": k };
+    }
+    var pct = await gatewaySharePct(env);
+    if (pct > 0 && Math.random() * 100 < pct) opts.gateway = { id: "default", skipCache: true, metadata: { worker: "qnfo-research-exec", purpose: "aiText" } };
+    return opts.extraHeaders || opts.gateway ? opts : void 0;
   } catch (e) {
     return void 0;
   }
@@ -35042,6 +35064,7 @@ var worker_default = {
     if (url.pathname === "/health") return json({ ok: true, worker: WORKER, version: VERSION, capabilities: ["research-pipeline", "pre-submission-check", "ground-render", "arxiv-grounding", "ensemble-drafting", "review", "python-verification", "inhouse-publish", "claim-integrity", "revision-loop", "repo-deposit"], limitations: ["stages run only on the */10 cron under a single-flight lease (research_parallel rows at once, stages back to back within the tick budget)", "papers cite only the grounding bibliography (arXiv API, DataCite arXiv records, QNFO corpus)", "a quantitative claim is checked at the precision the paper states", "quantitative verification needs the qnfo-containers-pilot binding", "a new paper must reach 20000 chars to publish"] });
     if (url.pathname === "/run" && request.method === "POST") {
       if (url.searchParams.get("sync") !== "1") {
+        if (isPublicHost(url.hostname)) return json({ error: "forbidden: internal callers only (RUN-INTERNAL-1, WRITE-ROUTES-RESEARCH-KICK-1); the cron drains the queue" }, 403);
         await logEvent(env, "kick", "HTTP /run kick accepted; drained by the cron under the single-flight lease", "ok");
         return json({ ok: true, worker: WORKER, version: VERSION, accepted: true, mode: "deferred", note: "research stages run on the cron under a single-flight lease (RESEARCH-SINGLE-FLIGHT-1); POST /run?sync=1 runs one stage inline" }, 202);
       }

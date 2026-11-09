@@ -549,3 +549,35 @@ export function cfSkillNote(name, text, max) {
   const cap = max || 6000;
   return "\n\nCloudflare skill (" + name + ", from github.com/cloudflare/skills; follow it for this Cloudflare work):\n" + (body.length > cap ? body.slice(0, cap) + "\n[skill text cut]" : body);
 }
+
+// CMDLINE-HOOKS-1 (issue 8255): user hooks evaluated outside the model. A hook row is { id, event: pre_tool | post_tool | session_end, matcher, action: block | notify, note }.
+// The matcher is "*" (every tool) or a comma list of tool names, each an exact name or a prefix ending in "*" (ops_github*).
+export function hookMatches(matcher, toolName) {
+  const m = String(matcher || "*").trim();
+  if (m === "*" || m === "") return true;
+  const name = String(toolName || "");
+  return m.split(",").slice(0, 20).some((p0) => {
+    const p = p0.trim().slice(0, 80);
+    if (!p) return false;
+    return p.endsWith("*") ? name.startsWith(p.slice(0, -1)) : name === p;
+  });
+}
+export function hooksFor(hooks, event, toolName) {
+  return (Array.isArray(hooks) ? hooks : []).filter((h) => h && h.event === event && hookMatches(h.matcher, toolName));
+}
+export function hookBlock(hooks, toolName) {
+  const h = hooksFor(hooks, "pre_tool", toolName).find((x) => x.action === "block");
+  return h ? { blocked: true, hook: h.id, error: "blocked by hook " + h.id + (h.note ? ": " + String(h.note).slice(0, 200) : "") } : { blocked: false };
+}
+
+// CODE-AGENT-UX-1.6 (issue 8245): a turn about fleet code or infrastructure gets the head of docs/SYSTEM-MAP.md (the whole system on one page) instead of the agent reading whole worker files.
+export function wantsSystemMap(prompt) {
+  return /\b(worker|binding|d1|route|cron|deploy|queue|vectorize|r2|durable object|blast radius|depends on|fleet graph)\b/i.test(String(prompt || "").slice(0, 4000));
+}
+export function systemMapUrl() { return "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/SYSTEM-MAP.md"; }
+export function systemMapNote(text, max) {
+  const body = String(text || "").trim();
+  if (!body) return "";
+  const cap = max || 3500;
+  return "\n\nFleet system map (docs/SYSTEM-MAP.md, head; read the file or ops_fleet_graph for more):\n" + (body.length > cap ? body.slice(0, cap) + "\n[map cut]" : body);
+}
