@@ -8,7 +8,6 @@
 -- CAUSE-MAPPED: issues_over_7d is the issue-backlog family; its lever is the ISSUE-AGE-24H-1 ladder plus this rung.
 -- APPLY-BY: ci
 -- DB: qnfo-audit
--- BACKUP: issue_week_cap_ledger
 -- Rollback: DELETE FROM fleet_crons WHERE name = 'issue-week-cap'; DELETE FROM fleet_tasks WHERE id = 'issue-week-cap'; DELETE FROM fleet_tasks_canonical WHERE id = 'issue-week-cap'; DELETE FROM analytics_metric_triggers WHERE metric_key = 'issues_over_7d'; DELETE FROM metric_registry WHERE metric = 'issues_over_7d'; UPDATE agent_issues SET status = 'open' WHERE id IN (SELECT issue_id FROM issue_week_cap_ledger WHERE action = 'wontfix');
 
 CREATE TABLE IF NOT EXISTS issue_week_cap_ledger (
