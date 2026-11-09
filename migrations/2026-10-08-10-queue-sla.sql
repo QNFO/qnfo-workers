@@ -71,9 +71,7 @@ CREATE VIEW IF NOT EXISTS v_stuck_summary AS
 SELECT
   (SELECT COUNT(*) FROM research_queue WHERE status = 'review' AND error IS NOT NULL
      AND datetime(claimed_at) < datetime('now', '-30 minutes')) AS research_review_error,
-  (CASE WHEN (SELECT COUNT(*) FROM research_queue WHERE status IN ('queued', 'researching')) > 0
-     AND NOT EXISTS (SELECT 1 FROM cloud_ops_events WHERE job = 'qnfo-research-exec' AND kind = 'done' AND status = 'ok'
-       AND ts > strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-60 minutes')) THEN 1 ELSE 0 END) AS research_head_stalled,
+  (SELECT COUNT(*) FROM research_queue WHERE status IN ('queued', 'researching')) AS research_head_stalled,
   (SELECT COUNT(*) FROM research_queue WHERE status = 'queued' AND datetime(created_at) < datetime('now', '-180 minutes')) AS research_queued_180m,
   (SELECT COUNT(*) FROM intents WHERE status = 'pending' AND datetime(created_at) < datetime('now', '-60 minutes')) AS intents_pending,
   (SELECT COUNT(*) FROM outreach_queue WHERE status IN ('needs-email', 'needs-contact')
