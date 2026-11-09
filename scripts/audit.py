@@ -54,9 +54,36 @@ def pr_findings(prs):
     return out
 
 
+UNREACHABLE = []
+
+
 def gh_json(args):
     r = subprocess.run(["gh", "api", *args], capture_output=True, text=True)
-    return json.loads(r.stdout) if r.returncode == 0 and r.stdout.strip() else []
+    if r.returncode != 0:
+        UNREACHABLE.append(args[0].split("?")[0])
+        return []
+    return json.loads(r.stdout) if r.stdout.strip() else []
+
+
+DEFAULT_REPOS = ["QNFO/qnfo-workers", "QNFO/qnfo-research", "QNFO/.github", "QNFO/qnfo-fleet-issues", "rwnq8/qnfo-fleet-dashboard", "rwnq8/ipatent", "rwnq8/rwnq8"]
+
+
+def tag(findings, repo, hub):
+    """Findings from a repo other than the hub carry the repo in key and title so the hub issue says where to look."""
+    for f in findings:
+        f["repo"] = repo
+        if repo != hub:
+            f["key"] = f"{repo}{f['key']}" if f["key"].startswith(("#", "PR#")) else f["key"]
+            f["title"] = f["title"].replace("FLEET-AUDIT ", f"FLEET-AUDIT [{repo}] ", 1)
+            f["probe"] = f["probe"].replace("gh issue view", f"gh issue view --repo {repo}").replace("gh pr view", f"gh pr view --repo {repo}")
+    return findings
+
+
+def repo_findings(repo, hub):
+    """Loop and PR checks for any repo the token can read; (findings, reachable)."""
+    issues = gh_json([f"repos/{repo}/issues?labels=loop&state=open&per_page=100"])
+    prs = gh_json([f"repos/{repo}/pulls?state=open&per_page=100"])
+    return tag(loop_findings(issues) + pr_findings(prs), repo, hub)
 
 
 def collect(root="."):
@@ -66,8 +93,10 @@ def collect(root="."):
             files[os.path.relpath(p, root)] = open(p, encoding="utf-8", errors="replace").read()
     findings = claim_findings(files, lambda c: os.path.exists(os.path.join(root, c)))
     repo = os.environ.get("GITHUB_REPOSITORY", "QNFO/qnfo-workers")
-    findings += loop_findings(gh_json([f"repos/{repo}/issues?labels=loop&state=open&per_page=100"]))
-    findings += pr_findings(gh_json([f"repos/{repo}/pulls?state=open&per_page=100"]))
+    tag(findings, repo, repo)
+    repos = [r for r in os.environ.get("AUDIT_REPOS", " ".join(DEFAULT_REPOS)).split() if r]
+    for r in repos:
+        findings += repo_findings(r, repo)
     return findings, repo
 
 
@@ -95,7 +124,7 @@ if __name__ == "__main__":
         print(json.dumps(f))
     if "--file" in sys.argv:
         subprocess.run(["gh", "label", "create", "fleet-audit", "--repo", repo, "--color", "D93F0B", "--description", "scripts/audit.py finding"], capture_output=True)
-        print(json.dumps(file_and_close(findings, repo)), file=sys.stderr)
+        print(json.dumps({**file_and_close(findings, repo), "unreachable": sorted(set(UNREACHABLE))}), file=sys.stderr)
     else:
-        print(json.dumps({"open_findings": len(findings)}), file=sys.stderr)
+        print(json.dumps({"open_findings": len(findings), "unreachable": sorted(set(UNREACHABLE))}), file=sys.stderr)
     sys.exit(1 if findings and "--file" not in sys.argv else 0)
