@@ -37,7 +37,7 @@
 // Q08-ASCII-SOURCE-1 (2026-10-01): this file is ASCII-only; every typographic character is a \uXXXX escape. The deploy path
 // double-encoded raw UTF-8, so live pages read "... \u00e2 q08" and posts "\u00e2\u0080\u0094". Keep new literals escaped.
 // VERSION-NOTES-MOVED-1: release notes live in the block below
-var VERSION = "0.48.1";
+var VERSION = "0.48.2";
 /* 0.43.0 Q08-TICK-ALLOWANCE-1 (2026-11-04, pillar cost; minor: the engine now decides on its own whether a tick starts an attempt; BUDGET-SOFT-ROUTE-1, attempts slow down and never stop): ai_call_counters showed 119,552, 129,547 and 110,450 neurons on 2026-11-01..03 against the 50,000 target (ops_config q08_daily_neurons) because q08Budget() only steered the first writer model and nothing bounded the attempts a tick starts (40 a day, the attempt cap, at about 2,760 neurons each). Now the :00 cron and the :30 stall retry go through governedGenerate: tick k of 48 starts an attempt only while the day is under the pace line budget x (k + 1) / 48, an essay after a forecast attempt that spent model calls starts only while the day is still under it, and 150 minutes without an attempt starts one whatever the line says (8 a day at least). No row is written for a tick that waits. The writer gate, reader panels, fact-check, final read and accuracy audit are unchanged, and an attempt already started runs all its rounds. ops_config q08_tick_governor = off restores the old behaviour. tick-allowance.test.mjs replays a UTC day. */
 /* 0.42.0 RM-FORECAST-UPDATE-SCORING-1 (#5578; research): score the last valid update before the horizon with the resolved outcome. */
 /* 0.41.6 FORECAST-CALIBRATION-BUCKET-COVERAGE-1 (#5576, charter pillar research; patch): calibration buckets include probabilities across the full [0,1] range, including the tails, rather than silently omitting forecasts below 5% or above 96%. */
@@ -2981,6 +2981,8 @@ async function pickForecastSource(env) {
     "AND p.slug IN (SELECT slug FROM q08_audits WHERE verdict = 'pass') AND p.slug NOT IN (SELECT slug FROM q08_retractions) " +
     "AND NOT EXISTS (SELECT 1 FROM q08_forecasts f WHERE f.source_slug = p.slug) " +
     "AND (SELECT COUNT(*) FROM engine_runs e WHERE e.status = 'gate_failed' AND e.top_signal = substr('q08-forecast:' || p.slug, 1, 80)) < 2 " +
+    // Q08-FORECAST-PASS-OVER-1 (issue 9636): a source whose research came back thin 3 times in 24 h (runs 1633-1647: one essay, "4 usable sources; need 6", every 3 h) is passed over for the next essay until the window clears.
+    "AND (SELECT COUNT(*) FROM engine_runs e WHERE e.status = 'deferred' AND e.top_signal = substr('q08-forecast:' || p.slug, 1, 80) AND e.ran_at >= datetime('now', '-24 hours')) < 3 " +
     "ORDER BY COALESCE(p.feedback_score, 0) DESC, p.reads DESC, p.published_at DESC LIMIT 1"
   ).bind(new Date(Date.now() - 30 * 864e5).toISOString()).first();
 }
