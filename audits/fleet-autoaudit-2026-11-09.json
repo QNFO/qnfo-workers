@@ -1,7 +1,7 @@
 {
-  "audited_at": "2026-11-09 10:33:58",
+  "audited_at": "2026-11-09 11:02:16",
   "d1_write_failures": [],
-  "d1_writes_ok": 2,
+  "d1_writes_ok": 1,
   "guard": {
     "_guard_rc": 0,
     "ahead": [],
@@ -33,27 +33,14 @@
     "unmanaged_truncated": false,
     "unmanaged_workers": [
       {
-        "http": 404,
-        "version": null,
-        "worker": "qnfo-doc-gate"
-      },
-      {
         "http": 200,
         "version": null,
         "worker": "qnfo-workers"
       }
     ]
   },
-  "purge_error": "purge skipped: run classified 2 workers, table held 3; a partial report must not shrink the audit surface",
+  "purge_error": "purge skipped: run classified 1 workers, table held 3; a partial report must not shrink the audit surface",
   "rows": {
-    "qnfo-doc-gate": {
-      "before": null,
-      "http": 404,
-      "live": null,
-      "match": 0,
-      "note": "UNMANAGED_NO_HEALTH",
-      "worker": "qnfo-doc-gate"
-    },
     "qnfo-workers": {
       "before": null,
       "http": 200,
