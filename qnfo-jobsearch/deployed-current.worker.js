@@ -9,7 +9,7 @@
 // JOBSEARCH-CV-1 (1.5.0): the CV is part of this worker (page /cv): a yes/no interview that builds the claim bank, review of unconfirmed claims, roles, achievements and publications edited in D1, a resume per job (summary, roles, selected work, education, skills) and a cover note, history and backup. The search is tied to that bank (evidence the owner can back up weighs more; what the CV lacks is shown as a gap), decided postings (rejected, applied, approved) never come back under another id, rejections carry a reason the search learns from, and a wider net: stretch matches outside the stated preferences, more boards and aggregators.
 // Routes: GET / (web UI) | GET /api | GET /api/matches | GET /api/matches/:id | GET /api/runs | GET /api/ledger | POST /api/run | POST /api/matches/:id/status | GET /health
 // Port of the jobsearch/ Python modules (tests: jobsearch/test_jobsearch.py, qnfo-jobsearch/worker.test.mjs).
-var VERSION = "1.12.5-codeagent";
+var VERSION = "1.12.6-codeagent";
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -300,7 +300,7 @@ const LEDGER = {
     "ai_systems",
     "research_integrity"
    ],
-   "text": "Research systems builder: founder of QNFO, an independent research imprint with an AI-assisted pipeline, a published audit method, and a public correction trail."
+   "text": "Systems researcher in autonomous AI systems: founder of QNFO, an independent research imprint with an AI-assisted pipeline, a published audit method, and a public correction trail."
   },
   {
    "id": "H3",
@@ -1043,10 +1043,10 @@ function pickFacts(clusters, k) {
 function headline(clusters) {
   const cl = new Set(clusters);
   // Prefer a research/AI headline for quantum or AI system clusters
-  if ([...cl].some(c => c.includes("quantum")) || cl.has("ai_systems")) {   // JOBSEARCH-RESEARCH-HEADLINE-1: research headline for quantum/AI postings
+  if ([...cl].some(c => c.includes("quantum")) || cl.has("ai_systems")) {   // JOBSEARCH-RESEARCH-HEADLINE-1: research headline for quantum/AI postings; JOBSEARCH-AUTONOMY-PIVOT-1 (2026-11-09): that headline is H2, the autonomous-AI-systems researcher line, not the H3 data and product line
     if (typeof jobsearch_meta === "object") jobsearch_meta.research_headline = "on";
     else globalThis.jobsearch_meta = { research_headline: "on" };
-    return HEADS.H3;
+    return HEADS.H2;
   }
   const a = ["research_mgmt"].filter((c) => cl.has(c)).length + ["federal", "policy_research", "transport_modeling"].filter((c) => cl.has(c)).length;
   const b = HEADS.H2.cluster.filter((c) => cl.has(c)).length;
@@ -2442,7 +2442,7 @@ const handler = {
     return J({ error: "not found", see: "/api" }, 404);
   },
 };
-handler.__test = { loadCtx, referralKit, referralList, STAGES, judgeTop, buildResume, verify, headlineVerdict, outcomes, pdfOf, pdfClean, checkAnswer, jsonLoose, PROTECTED_Q, draftAnswers, prepBrief, quizFeedback, judgeJob, calibrate, calibration, followups, atsOf, keywordReport, docxOf, resumeHtml, plainOf, applyKit, matchKit, stripTags, postingTerms, evaluate, rank, buildResume, buildNote, verify, stripHtml, locationGate, has, LEDGER, dedupeKey, feedPrefix, makeCtx, scoreJob, scoreFeatures, featuresFromWhy, applicationSnapshot, parseApplicationSnapshot, outcomeScoreWeights, loadCtx, SURVEY, BOARDS, normKey, applyBank, BANK_SEED, QUESTIONS, TAG_TO_CLUSTERS, clustersOf, cvAnswer, cvFact, cvReview, cvSet, cvImport, mutateBank, loadBank, decidedKeys, FETCHERS, getBank: () => BANK, llmRerank, llmRerankRun, ensureResearchPubs, RESEARCH_PUBS, pubLine, parseRerank, reasonOk, rerankMessages, artifactsFor, titleCandidate, sitemapUrls, slugTitle, PUBLIC_SECTOR, opsReport };
+handler.__test = { headline, loadCtx, referralKit, referralList, STAGES, judgeTop, buildResume, verify, headlineVerdict, outcomes, pdfOf, pdfClean, checkAnswer, jsonLoose, PROTECTED_Q, draftAnswers, prepBrief, quizFeedback, judgeJob, calibrate, calibration, followups, atsOf, keywordReport, docxOf, resumeHtml, plainOf, applyKit, matchKit, stripTags, postingTerms, evaluate, rank, buildResume, buildNote, verify, stripHtml, locationGate, has, LEDGER, dedupeKey, feedPrefix, makeCtx, scoreJob, scoreFeatures, featuresFromWhy, applicationSnapshot, parseApplicationSnapshot, outcomeScoreWeights, loadCtx, SURVEY, BOARDS, normKey, applyBank, BANK_SEED, QUESTIONS, TAG_TO_CLUSTERS, clustersOf, cvAnswer, cvFact, cvReview, cvSet, cvImport, mutateBank, loadBank, decidedKeys, FETCHERS, getBank: () => BANK, llmRerank, llmRerankRun, ensureResearchPubs, RESEARCH_PUBS, pubLine, parseRerank, reasonOk, rerankMessages, artifactsFor, titleCandidate, sitemapUrls, slugTitle, PUBLIC_SECTOR, opsReport };
 export default handler;
 
 // ------------------------------------------------------------------ client script shared by both pages (JOBSEARCH-APPLY-1): kit handling and the Fill application bookmark

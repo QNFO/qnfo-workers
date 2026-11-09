@@ -484,6 +484,14 @@ ok((await call("/api/run", { method: "POST" }))[0] === 429, "run cooldown");
   ok(page[2].headers.get("content-type").includes("text/html"), "the CV page is served");
 }
 
+
+{ // JOBSEARCH-AUTONOMY-PIVOT-1 (2026-11-09): AI and quantum postings get the autonomous-AI-systems researcher headline, never the data and product line
+  const a = T.headline(["ai_systems"]), q = T.headline(["quantum_energy"]), d = T.headline(["data_product", "survey_methods"]);
+  ok(/Systems researcher in autonomous AI systems/.test(a.text) && a.id === "H2" && q.id === "H2", "an ai_systems or quantum posting is headlined as a systems researcher in autonomous AI systems");
+  ok(!/builder|software engineer/i.test(a.text), "the research headline never calls the owner a builder or a software engineer");
+  ok(d.id !== "H2", "a data and product posting keeps its own headline");
+}
+
 globalThis.fetch = realFetch;
 console.log(`qnfo-jobsearch: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
