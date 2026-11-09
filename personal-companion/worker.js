@@ -3732,7 +3732,7 @@ var __name22 = __name2;
 // line below (VERSION-LINE-NOTES-1, 2026-10-19). Its older trailing notes stay until length-lede.test.mjs stops pinning "LENGTH-LEDE-1" on that line.
 // VERSION-NOTES-MOVED-1: release notes live in the block below
 // W-META-1 (agent_issues 1002316/1002317/1002318): aiRunAttr records in_tok/out_tok/neurons per purpose.
-var VERSION = "1.47.1-codeagent";
+var VERSION = "1.47.2-codeagent";
 // 1.46.0 KERNEL-EVERYWHERE-1 (2026-11-06, owner directive "IMPLEMENT EVERYWHERE ACROSS ALL AI APPS AND SERVICES AND SURFACES", pillar personal): the travel planner CHAT_SYSTEM carries the DOCTRINE-1 kernel 8.2.1 reply recognitions (KERNEL-REPLY-4, scoped to the planner's one designed question): end on the plan or proposal, never a conditional offer or questionnaire; refusals and limits are dispositions with their reason; reversible steps are taken and reported in the same reply. prior 1.45.8-codeagent
 /* 1.44.14 COMPANION-LENGTH-HEADROOM-1 (issue 1000633, pillar personal; patch): repeated length failures alongside exhausted retry budgets expose too little headroom for model output variation. Length-only repairs now target 500 words below the unchanged ceiling while remaining inside each form's normal writer band. */
 /* 1.43.6 BP26-AI-ACT-ART50-1 and BP26-STRUCTURED-DATA-1 (2026-10-26, agent_issues 1000341 and 1000336, pillar core; patch): the visible AI-generated label of every reading.q08.org piece now has its machine-readable half. A piece page carries an Article JSON-LD block (headline, datePublished, url, an Organization as author, never an AI or invented persona, and creditText saying it was written by AI and that no human reviews pieces before they appear) and the index page a Blog block. Measured before: the reading pages carried the visible label and no JSON-LD at all. */
@@ -7931,6 +7931,17 @@ async function writeSourceMetrics(env, now) {
     var r = await env.PERSONAL.prepare("SELECT COUNT(*) AS n FROM companion_pieces WHERE created_at >= ?1 AND CASE WHEN json_valid(anchor_json) THEN EXISTS (SELECT 1 FROM json_each(companion_pieces.anchor_json, '$.refs') j WHERE j.value LIKE 'https://%' AND j.value NOT LIKE 'https://%wikipedia.org/%' AND j.value NOT LIKE 'https://arxiv.org/%') ELSE 0 END AND " + VISIBLE_SQL).bind(since).first();
     var n = Number(r && r.n) || 0;
     await env.AUDIT.prepare("UPDATE metric_registry SET last_value = ?2, last_refreshed = ?3, state = 'MEASURED' WHERE metric = ?1").bind("companion_independent_source_pieces_30d", String(n), new Date(now).toISOString()).run();
+    try {
+      var logSince = now - 7 * 864e5;
+      var logDb = env.RUN_LOG || env.PERSONAL;
+      var logRes = await logDb.prepare("SELECT COUNT(*) AS asked, SUM(CASE WHEN contestedSourcesOk THEN 1 ELSE 0 END) AS passed FROM run_log WHERE contested = 1 AND timestamp >= ?1").bind(logSince).first();
+      var asked = Number(logRes && logRes.asked) || 0;
+      var passed = Number(logRes && logRes.passed) || 0;
+      var share = asked === 0 ? 0 : passed / asked;
+      await env.AUDIT.prepare("UPDATE metric_registry SET last_value = ?2, last_refreshed = ?3, state = 'MEASURED' WHERE metric = ?1")
+        .bind("companion_contested_supply_share_7d", String(share), new Date(now).toISOString())
+        .run();
+    } catch (e2) { stallLog("contested.metric", e2); }
     return { pieces: n };
   } catch (e) { stallLog("source.metric", e); return null; }
 }
