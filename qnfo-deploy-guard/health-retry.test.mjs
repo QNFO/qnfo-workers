@@ -45,4 +45,9 @@ const abortErr = () => Object.assign(new Error("The operation was aborted"), { n
   assert.equal(await ctx.read("personal-watch", 1, bad), "9.9.9"); assert.equal(pub, 1);
   assert.equal(await ctx.read("personal-watch", 1, {}), "9.9.9"); assert.equal(pub, 2);
 }
+{ // DEPLOY-GUARD-HEALTH-BINDING-2 (issue 9708): every deploy target and every worker with a /health route has a CH_<WORKER> binding
+  const toml = readFileSync(new URL("./wrangler.toml", import.meta.url), "utf8");
+  const bound = new Set([...toml.matchAll(/binding = "CH_([A-Z0-9_]+)"/g)].map((m) => m[1]));
+  for (const w of ["qnfo-social", "q08-mind", "q08-signal-engine", "qnfo-waste-agent", "personal-watch", "qnfo-ai", "qnfo-fleet-control", "qnfo-research-exec", "qnfo-companion-guard"]) assert.ok(bound.has(w.toUpperCase().replace(/-/g, "_")), "CH_ binding for " + w);
+}
 console.log("health-retry: passed");

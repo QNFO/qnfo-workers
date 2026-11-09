@@ -213,6 +213,9 @@ export function claimedFiled(text) {
   return m ? Number(m[1]) : null;
 }
 
+/** SWEEP-EMPTY-1 (issue 8329): a finished sweep whose steps returned no filed-issue id. */
+export function sweepEmpty(steps) { return filedIssueIds(steps).length === 0; }
+
 /** The mismatch to record for a finished sweep, or null when the claim holds (or none was made). */
 export function filedMismatch(text, steps) {
   const claimed = claimedFiled(text);
@@ -472,7 +475,8 @@ export const MAINTAIN_PERIOD_MS = 7 * 86400000;
 export function maintainDue(lastCreatedIso, nowMs) {
   if (!lastCreatedIso) return true;
   const t = Date.parse(String(lastCreatedIso).replace(" ", "T") + (/[zZ]|[+-]\d\d:?\d\d$/.test(String(lastCreatedIso)) ? "" : "Z"));
-  return !Number.isFinite(t) || nowMs - t >= MAINTAIN_PERIOD_MS;
+  // fail closed (issue 8330): an unreadable timestamp is not due, so a bad row cannot re-seed a sweep every tick
+  return Number.isFinite(t) && nowMs - t >= MAINTAIN_PERIOD_MS;
 }
 export const MAINTAIN_PROMPT = [
   "CMDLINE-MAINTAIN-1, the weekly sweep for program QNFO.OPS (front end and back end of the fleet command line). Work from evidence, file at most five issues, and report counts.",
