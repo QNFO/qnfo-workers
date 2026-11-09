@@ -1,0 +1,175 @@
+// q08-prediction-markets: the one paper-trading prediction-market worker (PM-CONSOLIDATE-1).
+// Paper money only. No wallet, no exchange key, no order ever leaves this worker.
+var VERSION = "1.0.0";
+const CFG = { START: 10000, POS_PCT: 0.10, EXPO_PCT: 0.30, STOP: 0.15, TAKE: 0.30, SLIP: 0.01, MIN_MOVE: 0.05, MIN_VOL: 5000, MAX_OPEN: 8 };
+
+// ---------- pure engine (tested in engine.test.mjs) ----------
+export function parseMarket(m) {
+  let p = m.outcomePrices;
+  if (typeof p === "string") { try { p = JSON.parse(p); } catch { p = null; } }
+  const yes = p ? parseFloat(p[0]) : NaN;
+  if (!m.slug || !(yes >= 0 && yes <= 1)) return null;
+  return { slug: m.slug, title: m.question || m.slug, yes, vol24: +m.volume24hr || 0, move: +m.oneDayPriceChange || 0, closed: m.closed ? 1 : 0 };
+}
+export function syntheticMarkets(now = Date.now()) {
+  const names = ["Rates cut next meeting", "BTC above 100k by Dec", "Team A wins final", "Bill passes Senate", "Storm landfall this week", "Chip export rule lifted"];
+  const b = Math.floor(now / 300000);
+  return names.map((n, i) => {
+    const w = (k) => (Math.sin((b + k) * 1.7 + i * 2.3) + 1) / 2;
+    const yes = Math.min(0.97, Math.max(0.03, 0.2 + 0.6 * w(0)));
+    return { slug: "synthetic-" + i, title: n + " (synthetic)", yes: +yes.toFixed(3), vol24: 20000 + i * 1000, move: +(yes - (0.2 + 0.6 * w(-288))).toFixed(3), closed: 0 };
+  });
+}
+export const priceOf = (side, yes) => (side === "yes" ? yes : 1 - yes);
+export function equity(acct, positions, px) {
+  return acct.cash + positions.reduce((s, p) => s + p.qty * priceOf(p.side, px[p.slug] ?? p.entry), 0);
+}
+export function entries(markets, positions, acct, cfg = CFG) {
+  const open = new Set(positions.map((p) => p.slug));
+  const px = Object.fromEntries(markets.map((m) => [m.slug, m.yes]));
+  const eq = equity(acct, positions, px);
+  let exposure = positions.reduce((s, p) => s + p.qty * p.entry, 0), cash = acct.cash, n = positions.length;
+  const out = [];
+  const cands = markets.filter((m) => !m.closed && !open.has(m.slug) && m.yes > 0.1 && m.yes < 0.9 && Math.abs(m.move) >= cfg.MIN_MOVE && m.vol24 >= cfg.MIN_VOL)
+    .sort((a, b) => Math.abs(b.move) - Math.abs(a.move));
+  for (const m of cands) {
+    if (n >= cfg.MAX_OPEN) break;
+    const usd = Math.min(eq * cfg.POS_PCT, cash);
+    if (usd < 1 || exposure + usd > eq * cfg.EXPO_PCT) break;
+    const side = m.move > 0 ? "yes" : "no";
+    const fill = Math.min(0.99, priceOf(side, m.yes) * (1 + cfg.SLIP));
+    out.push({ slug: m.slug, title: m.title, side, usd, entry: fill, qty: usd / fill, strategy: "momentum" });
+    cash -= usd; exposure += usd; n++;
+  }
+  return out;
+}
+export function exits(positions, markets, cfg = CFG) {
+  const byslug = Object.fromEntries(markets.map((m) => [m.slug, m]));
+  const out = [];
+  for (const p of positions) {
+    const m = byslug[p.slug];
+    if (!m) continue;
+    const cur = priceOf(p.side, m.yes);
+    const r = cur / p.entry - 1;
+    let reason = null;
+    if (m.closed || m.yes >= 0.99 || m.yes <= 0.01) reason = "resolved";
+    else if (r <= -cfg.STOP) reason = "stop_loss";
+    else if (r >= cfg.TAKE) reason = "take_profit";
+    if (reason) out.push({ id: p.id, exit: reason === "resolved" ? Math.round(cur) : cur * (1 - cfg.SLIP), reason });
+  }
+  return out;
+}
+
+// ---------- storage ----------
+const DDL = [
+  "CREATE TABLE IF NOT EXISTS pt_account (id INTEGER PRIMARY KEY, cash REAL NOT NULL, start_cash REAL NOT NULL, created_at TEXT)",
+  "CREATE TABLE IF NOT EXISTS pt_position (id INTEGER PRIMARY KEY AUTOINCREMENT, slug TEXT, title TEXT, side TEXT, qty REAL, entry REAL, strategy TEXT, opened_at TEXT, closed_at TEXT, exit REAL, pnl REAL, reason TEXT)",
+  "CREATE TABLE IF NOT EXISTS pt_market (slug TEXT PRIMARY KEY, title TEXT, yes REAL, vol24 REAL, move REAL, closed INTEGER, source TEXT, updated_at TEXT)",
+  "CREATE TABLE IF NOT EXISTS pt_equity (ts TEXT PRIMARY KEY, equity REAL, cash REAL, open_n INTEGER, source TEXT)",
+];
+async function init(env) {
+  const db = env.TRADES_DB;
+  await db.batch(DDL.map((s) => db.prepare(s)));
+  await db.prepare("INSERT OR IGNORE INTO pt_account (id,cash,start_cash,created_at) VALUES (1,?,?,?)").bind(CFG.START, CFG.START, new Date().toISOString()).run();
+}
+async function fetchMarkets() {
+  try {
+    const r = await fetch("https://gamma-api.polymarket.com/markets?active=true&closed=false&limit=100&order=volume24hr&ascending=false", { headers: { accept: "application/json" }, cf: { cacheTtl: 60 } });
+    if (!r.ok) throw new Error("gamma " + r.status);
+    const ms = (await r.json()).map(parseMarket).filter(Boolean);
+    if (ms.length) return { markets: ms, source: "polymarket" };
+  } catch (e) { /* fall through to the synthetic feed so the paper book keeps running */ }
+  return { markets: syntheticMarkets(), source: "synthetic" };
+}
+const openPositions = async (db) => (await db.prepare("SELECT * FROM pt_position WHERE closed_at IS NULL").all()).results;
+const account = async (db) => await db.prepare("SELECT * FROM pt_account WHERE id=1").first();
+
+export async function tick(env, feed) {
+  await init(env);
+  const db = env.TRADES_DB, now = new Date().toISOString();
+  const { markets, source } = feed || (await fetchMarkets());
+  await db.batch(markets.map((m) => db.prepare("INSERT OR REPLACE INTO pt_market VALUES (?,?,?,?,?,?,?,?)").bind(m.slug, m.title, m.yes, m.vol24, m.move, m.closed, source, now)));
+  let acct = await account(db), pos = await openPositions(db);
+  // markets we hold but the feed no longer lists keep their last stored price
+  const held = pos.filter((p) => !markets.find((m) => m.slug === p.slug));
+  const all = markets.concat(held.length ? (await db.prepare(`SELECT slug,title,yes,vol24,move,closed FROM pt_market WHERE slug IN (${held.map(() => "?").join(",")})`).bind(...held.map((p) => p.slug)).all()).results : []);
+  const closed = exits(pos, all);
+  let cash = acct.cash;
+  for (const x of closed) {
+    const p = pos.find((q) => q.id === x.id), pnl = p.qty * (x.exit - p.entry);
+    cash += p.qty * x.exit;
+    await db.prepare("UPDATE pt_position SET closed_at=?, exit=?, pnl=?, reason=? WHERE id=?").bind(now, x.exit, pnl, x.reason, x.id).run();
+  }
+  pos = pos.filter((p) => !closed.find((x) => x.id === p.id));
+  const opened = entries(source === "polymarket" ? markets : markets, pos, { cash }, CFG);
+  for (const o of opened) {
+    cash -= o.usd;
+    await db.prepare("INSERT INTO pt_position (slug,title,side,qty,entry,strategy,opened_at) VALUES (?,?,?,?,?,?,?)").bind(o.slug, o.title, o.side, o.qty, o.entry, o.strategy, now).run();
+  }
+  await db.prepare("UPDATE pt_account SET cash=? WHERE id=1").bind(cash).run();
+  pos = await openPositions(db);
+  const px = Object.fromEntries(all.map((m) => [m.slug, m.yes]));
+  const eq = equity({ cash }, pos, px);
+  await db.prepare("INSERT OR REPLACE INTO pt_equity VALUES (?,?,?,?,?)").bind(now, eq, cash, pos.length, source).run();
+  return { source, markets: markets.length, opened: opened.length, closed: closed.length, equity: eq, cash };
+}
+export async function manualOrder(env, { slug, side, usd }) {
+  await init(env);
+  const db = env.TRADES_DB;
+  if (!["yes", "no"].includes(side) || !(usd > 0)) return { error: "side yes|no and usd > 0 required" };
+  const m = await db.prepare("SELECT * FROM pt_market WHERE slug=?").bind(slug).first();
+  if (!m || m.closed) return { error: "unknown or closed market" };
+  const acct = await account(db), pos = await openPositions(db);
+  const eq = equity(acct, pos, { [slug]: m.yes });
+  if (usd > acct.cash) return { error: "insufficient paper cash" };
+  if (usd > eq * CFG.POS_PCT) return { error: `position limit ${(CFG.POS_PCT * 100)}% of equity` };
+  const fill = Math.min(0.99, priceOf(side, m.yes) * (1 + CFG.SLIP));
+  await db.batch([
+    db.prepare("INSERT INTO pt_position (slug,title,side,qty,entry,strategy,opened_at) VALUES (?,?,?,?,?,?,?)").bind(slug, m.title, side, usd / fill, fill, "manual", new Date().toISOString()),
+    db.prepare("UPDATE pt_account SET cash=cash-? WHERE id=1").bind(usd),
+  ]);
+  return { ok: true, fill, qty: usd / fill };
+}
+async function state(env) {
+  await init(env);
+  const db = env.TRADES_DB;
+  const acct = await account(db), pos = await openPositions(db);
+  const mk = (await db.prepare("SELECT * FROM pt_market ORDER BY vol24 DESC LIMIT 100").all()).results;
+  const px = Object.fromEntries(mk.map((m) => [m.slug, m.yes]));
+  const history = (await db.prepare("SELECT * FROM pt_position WHERE closed_at IS NOT NULL ORDER BY closed_at DESC LIMIT 50").all()).results;
+  const curve = (await db.prepare("SELECT ts,equity FROM pt_equity ORDER BY ts DESC LIMIT 288").all()).results.reverse();
+  const realized = (await db.prepare("SELECT COALESCE(SUM(pnl),0) s, COUNT(*) n, SUM(pnl>0) w FROM pt_position WHERE closed_at IS NOT NULL").first());
+  const eq = equity(acct, pos, px);
+  return { paper: true, start: acct.start_cash, cash: acct.cash, equity: eq, return_pct: (eq / acct.start_cash - 1) * 100,
+    open: pos.map((p) => ({ ...p, mark: priceOf(p.side, px[p.slug] ?? p.entry), unrealized: p.qty * (priceOf(p.side, px[p.slug] ?? p.entry) - p.entry) })),
+    closed: history, realized: realized.s, trades_closed: realized.n, win_rate: realized.n ? realized.w / realized.n : null, curve, markets: mk.slice(0, 30) };
+}
+
+const json = (o, s = 200) => new Response(JSON.stringify(o), { status: s, headers: { "content-type": "application/json", "access-control-allow-origin": "*" } });
+const PAGE = `<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>Q08 Markets (paper)</title>
+<style>:root{color-scheme:light dark}body{font:15px system-ui;max-width:860px;margin:0 auto;padding:16px}h1{font-size:20px}table{width:100%;border-collapse:collapse}td,th{padding:6px;border-bottom:1px solid #8884;text-align:left}.n{text-align:right}button{padding:8px 12px;font:inherit}.b{background:#fc03;padding:8px;border-radius:6px}</style>
+<h1>Q08 Markets <small>paper trading</small></h1><div class=b>Simulated money only. No real orders.</div><p id=s>Loading...</p>
+<button id=t>Run tick now</button><h2>Open positions</h2><table id=o></table><h2>Closed</h2><table id=c></table><h2>Markets</h2><table id=m></table>
+<script>const f=n=>(+n).toFixed(2);async function L(){const d=await (await fetch('/api/state')).json();
+s.textContent='Equity $'+f(d.equity)+' ('+f(d.return_pct)+'%) | cash $'+f(d.cash)+' | closed '+d.trades_closed+' | win rate '+(d.win_rate==null?'n/a':f(d.win_rate*100)+'%');
+const r=(a,k)=>'<tr>'+k.map(x=>'<td>'+x+'</td>').join('')+'</tr>';
+o.innerHTML='<tr><th>Market<th>Side<th class=n>Entry<th class=n>Mark<th class=n>P&L</tr>'+d.open.map(p=>r(0,[p.title,p.side,f(p.entry),f(p.mark),f(p.unrealized)])).join('');
+c.innerHTML='<tr><th>Market<th>Side<th>Reason<th class=n>P&L</tr>'+d.closed.map(p=>r(0,[p.title,p.side,p.reason,f(p.pnl)])).join('');
+m.innerHTML='<tr><th>Market<th class=n>Yes<th class=n>Move<th>Feed</tr>'+d.markets.map(p=>r(0,[p.title,f(p.yes),f(p.move),p.source])).join('')}
+t.onclick=async()=>{t.disabled=1;await fetch('/api/tick',{method:'POST'});t.disabled=0;L()};L();setInterval(L,30000)</script>`;
+
+export default {
+  async fetch(req, env) {
+    const u = new URL(req.url), p = u.pathname;
+    try {
+      if (p === "/health") return json({ ok: true, worker: "q08-prediction-markets", version: VERSION, paper_trading: true, features: ["paper-trading", "momentum"] });
+      if (p === "/api/state") return json(await state(env));
+      if (p === "/api/markets") return json((await state(env)).markets);
+      if (p === "/api/tick" && req.method === "POST") return json(await tick(env));
+      if (p === "/api/order" && req.method === "POST") { const r = await manualOrder(env, await req.json()); return json(r, r.error ? 400 : 200); }
+      if (p === "/" || p === "/dashboard") return new Response(PAGE, { headers: { "content-type": "text/html; charset=utf-8" } });
+      return json({ error: "not found" }, 404);
+    } catch (e) { return json({ error: String(e.message || e) }, 500); }
+  },
+  async scheduled(_e, env, ctx) { ctx.waitUntil(tick(env)); },
+};
