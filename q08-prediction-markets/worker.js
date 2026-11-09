@@ -1,6 +1,6 @@
 // q08-prediction-markets: the one paper-trading prediction-market worker (PM-CONSOLIDATE-1).
 // Paper money only. No wallet, no exchange key, no order ever leaves this worker.
-var VERSION = "1.2.0";
+var VERSION = "1.2.1";
 const CFG = { START: 10000, POS_PCT: 0.10, EXPO_PCT: 0.30, STOP: 0.15, TAKE: 0.30, SLIP: 0.01, MIN_MOVE: 0.05, MIN_VOL: 5000, MAX_OPEN: 8 };
 
 // ---------- pure engine (tested in engine.test.mjs) ----------
@@ -140,19 +140,22 @@ export async function tick(env, feed) {
     const all = stamp.concat(stored);
     const closed = exits(pos, all);
     let delta = 0;
+    const writes = [];
     for (const x of closed) {
       const p = pos.find((q) => q.id === x.id), pnl = p.qty * (x.exit - p.entry);
       delta += p.qty * x.exit;
-      await db.prepare("UPDATE pt_position SET closed_at=?, exit=?, pnl=?, reason=? WHERE id=?").bind(now, x.exit, pnl, x.reason, x.id).run();
+      writes.push(db.prepare("UPDATE pt_position SET closed_at=?, exit=?, pnl=?, reason=? WHERE id=?").bind(now, x.exit, pnl, x.reason, x.id));
     }
     pos = pos.filter((p) => !closed.find((x) => x.id === p.id));
     const cash0 = (await account(db)).cash + delta;
     const opened = entries(markets, pos, { cash: cash0 }, CFG);
     for (const o of opened) {
       delta -= o.usd;
-      await db.prepare("INSERT INTO pt_position (slug,title,side,qty,entry,strategy,opened_at) VALUES (?,?,?,?,?,?,?)").bind(o.slug, o.title, o.side, o.qty, o.entry, o.strategy, now).run();
+      writes.push(db.prepare("INSERT INTO pt_position (slug,title,side,qty,entry,strategy,opened_at) VALUES (?,?,?,?,?,?,?)").bind(o.slug, o.title, o.side, o.qty, o.entry, o.strategy, now));
     }
-    await db.prepare("UPDATE pt_account SET cash=cash+? WHERE id=1").bind(delta).run();
+    // closes, opens and the cash change commit together: a failure leaves the book as it was
+    writes.push(db.prepare("UPDATE pt_account SET cash=cash+? WHERE id=1").bind(delta));
+    await db.batch(writes);
     const cash = (await account(db)).cash;
     pos = await openPositions(db);
     const px = Object.fromEntries(all.map((m) => [m.slug, m.yes]));
@@ -174,6 +177,9 @@ export async function manualOrder(env, { slug, side, usd }) {
     const eq = equity(acct, pos, px);
     if (usd > acct.cash) return { error: "insufficient paper cash" };
     if (usd > eq * CFG.POS_PCT) return { error: `position limit ${(CFG.POS_PCT * 100)}% of equity` };
+    const exposure = pos.reduce((t, q) => t + q.qty * q.entry, 0);
+    if (pos.length >= CFG.MAX_OPEN) return { error: `at most ${CFG.MAX_OPEN} open positions` };
+    if (exposure + usd > eq * CFG.EXPO_PCT) return { error: `portfolio exposure limit ${(CFG.EXPO_PCT * 100)}% of equity` };
     const fill = Math.min(0.99, priceOf(side, m.yes) * (1 + CFG.SLIP));
     await db.batch([
       db.prepare("INSERT INTO pt_position (slug,title,side,qty,entry,strategy,opened_at) VALUES (?,?,?,?,?,?,?)").bind(slug, m.title, side, usd / fill, fill, "manual", new Date().toISOString()),
@@ -205,7 +211,7 @@ const PAGE = `<!doctype html><meta charset=utf-8><meta name=viewport content="wi
 <script>const f=n=>(+n).toFixed(2);async function L(){const d=await (await fetch('/api/state')).json();
 s.textContent='Equity $'+f(d.equity)+' ('+f(d.return_pct)+'%) | cash $'+f(d.cash)+' | closed '+d.trades_closed+' | win rate '+(d.win_rate==null?'n/a':f(d.win_rate*100)+'%');
 x.textContent='Max drawdown '+f(d.stats.max_drawdown_pct)+'% | '+Object.entries(d.stats.by_strategy).map(([k,v])=>k+': '+v.trades+' trades, P&L $'+f(v.pnl)).join(' | ');
-const r=(a,k)=>'<tr>'+k.map(x=>'<td>'+x+'</td>').join('')+'</tr>';
+const E=v=>String(v).replace(/[&<>"']/g,c=>'&#'+c.charCodeAt(0)+';');const r=(a,k)=>'<tr>'+k.map(x=>'<td>'+E(x)+'</td>').join('')+'</tr>';
 o.innerHTML='<tr><th>Market<th>Side<th class=n>Entry<th class=n>Mark<th class=n>P&L</tr>'+d.open.map(p=>r(0,[p.title,p.side,f(p.entry),f(p.mark),f(p.unrealized)])).join('');
 c.innerHTML='<tr><th>Market<th>Side<th>Reason<th class=n>P&L</tr>'+d.closed.map(p=>r(0,[p.title,p.side,p.reason,f(p.pnl)])).join('');
 m.innerHTML='<tr><th>Market<th class=n>Yes<th class=n>Move<th>Feed</tr>'+d.markets.map(p=>r(0,[p.title,f(p.yes),f(p.move),p.source])).join('')}

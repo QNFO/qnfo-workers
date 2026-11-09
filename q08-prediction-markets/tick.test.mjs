@@ -40,3 +40,15 @@ test("a NO position with no current price is marked at its own entry, not 1 - en
   assert.equal(markOf(p, {}), 0.8);
   assert.equal(equity({ cash: 0 }, [p], {}), 100);
 });
+
+test("manual orders respect the 30% exposure cap and the 8 position cap like automated entries", async () => {
+  const env = { TRADES_DB: fakeD1() };
+  await tick(env, { source: "test", markets: ["a", "b", "c", "d"].map((k) => ({ slug: k, title: k, yes: 0.5, vol24: 1, move: 0, closed: 0 })) });
+  const ok = [];
+  for (const k of ["a", "b", "c", "d"]) ok.push((await worker.fetch(new Request("https://x/api/order", { method: "POST", body: JSON.stringify({ slug: k, side: "yes", usd: 900 }) }), env)).status);
+  assert.deepEqual(ok, [200, 200, 200, 400]);
+});
+test("dashboard escapes market titles", async () => {
+  const html = await (await worker.fetch(new Request("https://x/"), {})).text();
+  assert.match(html, /const E=v=>String\(v\)\.replace\(/);
+});
