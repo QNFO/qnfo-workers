@@ -142,6 +142,18 @@ try {
 }
 ok(r.status === 504 && r.j.error.type === "router_timeout" && r.j.error.legs.some((leg) => /direct Workers AI unavailable/.test(leg.err)), "a failed independent fallback remains visible as an error", r);
 
+// 6b KERNEL-REPLY-3: a trailing question, offer or menu is stripped; a declarative disposition line is kept.
+reset();
+aiPlan = { "dynamic/value": { text: "The token wasn't accepted.\nWould you like me to retry with a fresh code?" } };
+r = await chat({ model: "dynamic/value", messages: msgs, max_tokens: 64 });
+ok(r.status === 200 && r.j.choices[0].message.content === "The token wasn't accepted.", "a trailing conditional offer is stripped from the final answer", r.j && r.j.choices[0].message.content);
+reset();
+aiPlan = { "dynamic/value": { text: "The token wasn't accepted." } };
+r = await chat({ model: "dynamic/value", messages: msgs, max_tokens: 64 });
+ok(r.status === 200 && r.j.choices[0].message.content === "The token wasn't accepted.", "a declarative disposition line ends the reply unchanged", r.j && r.j.choices[0].message.content);
+reset();
+aiPlan = {};
+
 // 7 the router-down drill: 503 after auth, no model call, one evidence row.
 reset();
 r = await chat({ model: "dynamic/missing", messages: msgs });
