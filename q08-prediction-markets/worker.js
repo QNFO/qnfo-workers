@@ -112,7 +112,7 @@ export async function tick(env, feed) {
   let acct = await account(db), pos = await openPositions(db);
   // markets we hold but the feed no longer lists keep their last stored price
   const held = pos.filter((p) => !markets.find((m) => m.slug === p.slug));
-  const all = markets.concat(held.length ? (await db.prepare(`SELECT slug,title,yes,vol24,move,closed FROM pt_market WHERE slug IN (${held.map(() => "?").join(",")})`).bind(...held.map((p) => p.slug)).all()).results : []);
+  const all = markets.concat(held.length ? (await db.prepare(`SELECT slug,title,yes,vol24,move,closed FROM pt_market WHERE slug IN (${held.map(() => "?").join(",")})`).bind(...held.map((p) => p.slug)).all()).results : []); // standards-ok: only "?" placeholders are interpolated, every value goes through .bind()
   const closed = exits(pos, all);
   let cash = acct.cash;
   for (const x of closed) {
