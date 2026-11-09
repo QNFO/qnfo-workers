@@ -22,3 +22,4 @@ qnfo-waste-agent/wrangler.toml worker-budget-net-zero qnfo-waste-agent # reviewe
 # It matched the rule's synthetic stamp, so it silenced the Worker cap for every change fleet-wide, failed the guard self-test on
 # main, and held guard_rcs at 1 from 2026-10-29. Do not re-add an exception against the guard script's own path: the cap rule's
 # escape hatch is a same-change RETIRED/FOLDED marker, not an allowlist entry.
+qnfo-ai-yield/wrangler.toml worker-budget-net-zero qnfo-ai-yield # reviewed 2026-11-09 (WORKER-SOURCE-IN-REPO-1 #9620 PR #9682): recovers source for an already-deployed Worker, not new capacity

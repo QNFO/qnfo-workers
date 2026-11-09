@@ -1,4 +1,4 @@
-var VERSION = "0.10.1-art";
+var VERSION = "0.10.2-art";
 /* 0.4.1: new Shorts descriptions include the QNFO channel context. */ /* #5479, pillar reach: authenticated re-consent and code exchange with the stored OAuth client. */ /* 0.3.0 YT-6 (2026-10-28, pillar reach; minor: a data product; agent_issues 1000597): views and average view duration of each uploaded Short are read hourly from the YouTube Data and Analytics APIs into youtube_videos (views, avg_view_duration_s) and metric youtube_avg_view_duration_s; without the extra owner consent (human_actions yt-analytics-consent) the read is refused, recorded as youtube.retention_scope and nothing is written. */ /* 0.2.1 HEALTH-CONTRACT-1 (2026-10-28, pillar autonomy; patch; agent_issues 2852): /health declares capabilities[] and limitations[], so capability_contract_conformance counts this worker. */ /* 0.2.0 YT-QUALITY-1 (2026-10-28, pillar reach; minor: new capabilities): the Shorts stop looking alike and sounding flat. Voice: Workers AI Deepgram Aura 2 (more natural than melotts, which stays as the per-sentence fallback). Director: four new templates (bignum, flow, compare, list) beside the old ones, rules for speech-written narration (contractions, short sentences, pitch-bearing punctuation, no spoken URL) and for variety (at least four kinds, never one kind three times). Render image: scene fitted to a safe width so nothing leaves the frame, five themes (palette plus animated background) chosen per paper, captions measured in the real font and chunked at phrases in the Shorts safe zone, loudness-normalised audio, an AI-generated mp4 comment tag and provenance.json (BP26-AI-ACT-ART50-1). Closing line no longer speaks a URL. Sources: scripts/youtube_poc (YT-POC-3/4), docs/YOUTUBE-PIPELINE.md. */ /* prior: 0.1.5 */ /* 0.1.5 YT-MANIM-PIN-1 (2026-10-27, pillar reach; patch): the render image pins manim 0.22.0, the version the scene was tested on; 0.18.1 has no Scene.time and the first container render failed with that AttributeError (visible since 0.1.4 returns the Manim stderr). */ /* prior: 0.1.4 */ /* 0.1.4 YT-RENDER-ERR-1 (2026-10-27, pillar reach; patch): the render container returns the Manim stderr tail when Manim fails (the first live render failed with only a traceback of the wrapper). */ /* prior: 0.1.3 */ /* 0.1.3 YT-DIRECTOR-1 (2026-10-27, pillar reach; patch): the director takes the first reply that holds a beats array from qnfo-ai, then Workers AI kimi, then gpt-oss, and a failure note quotes each reply (the first live run failed with "no JSON in model reply" from one model). */ /* prior: 0.1.2 */ /* 0.1.2 YT-EXPORTS-1 (2026-10-27, pillar reach; patch): wrangler.toml declares RenderContainer in `exports` instead of `migrations`, so a deploy after a secrets write through the script API is accepted and re-attaches the container (the pilot incident 1485 class). */ /* prior: 0.1.1 */ /* 0.1.1 YT-RUN-SYNC-1 (2026-10-27, pillar reach; patch): POST /run did its pass inside ctx.waitUntil, which a fetch handler loses 30 s after the response, so a manual run died at the director; it now awaits one bounded pass (budget_s, default 80, under the edge 100 s limit) and returns the row states. */ /* prior: 0.1.0 */ /* 0.1.0 YT-SERVER-1 (2026-10-27, pillar reach; minor: a new worker): the plain-language paper to YouTube Short pipeline runs on Cloudflare only. One hourly tick takes the newest plain_article (living-paper, status ok) with no youtube_videos row (cap 2 videos a week), an LLM director writes the beats, a second model family and a number check drop any beat the article does not support, Workers AI TTS speaks each sentence, a Cloudflare Container renders 1080x1920 with Manim, word-timed captions and the visible AI-narration tag into R2, and videos.insert uploads it (public by default, owner directive 2026-10-27) with containsSyntheticMedia. */
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
@@ -312,6 +312,27 @@ function ctaBeat(slug, paperTitle) {
   return { kind: "cta", narr: name ? line.replace("{t}", name) : line.replace(" called {t}", ""), title: "Read it free", url: "papers.qnfo.org", sub: "No jargon. No mathematics." };
 }
 // YT-AUDIT-1b: the storyboard rules the prompt states but nothing enforced (a read of Shorts 23 to 25 found four flow beats in a row).
+// YT-STOCK-HYBRID-1 (issue 8326): consecutive Shorts must not share theme plus template mix. The theme is chosen here (render.py honours job.theme_name) away from the previous Short's;
+// the kind mix is checked against the previous Short's beats and a repeat is a script issue, so the director's self-correcting pass varies the templates.
+var THEME_NAMES = ["midnight", "ember", "forest", "ocean", "violet"];
+function pickTheme(slug, prev) {
+  var i = hashStr(String(slug)) % THEME_NAMES.length;
+  if (THEME_NAMES[i] === prev) i = (i + 1) % THEME_NAMES.length;
+  return THEME_NAMES[i];
+}
+function kindMix(beats) { var seen = {}; (beats || []).forEach(function (b) { if (b && b.kind) seen[b.kind] = 1; }); return Object.keys(seen).sort().join(","); }
+function sameMixIssues(beats, prevBeats) {
+  var m = kindMix(beats);
+  return m && m === kindMix(prevBeats) ? ["same template mix as the previous Short (" + m + "); use different kinds"] : [];
+}
+async function prevJson(env, row, name) {
+  try {
+    var p = await env.QNFO_AUDIT.prepare("SELECT id FROM youtube_videos WHERE id < ?1 AND state NOT IN ('rejected','failed') ORDER BY id DESC LIMIT 1").bind(row.id).first();
+    if (!p) return null;
+    var o = await env.MEDIA.get("youtube/" + p.id + "/" + name);
+    return o ? JSON.parse(await o.text()) : null;
+  } catch (e) { return null; }
+}
 function beatIssues(beats) {
   var ks = (beats || []).map(function (b) { return b && b.kind; }).filter(Boolean), out = [], seen = {};
   for (var i = 1; i < ks.length; i++) if (ks[i] === ks[i - 1]) { out.push("kind '" + ks[i] + "' twice in a row"); break; }
@@ -364,12 +385,14 @@ async function stageDirect(env, row) {
       if (pre2.kept.length > pre.kept.length) { dj = dj2; spec = dj2.json; pre = pre2; }
     } catch (e) { await logEvent(env, "youtube.director_retry", String(e && e.message || e).slice(0, 200), null, "warn"); }
   }
-  var issues = scriptIssues(spec.script).concat(beatIssues(spec.beats)); // YT-AUDIT-1: one self-correcting pass when the script breaks a house rule
+  var prevBeats = await prevJson(env, row, "beats.json");
+  var mixIssues = function (bs) { return sameMixIssues(bs, prevBeats && prevBeats.kept); };
+  var issues = scriptIssues(spec.script).concat(beatIssues(spec.beats), mixIssues(spec.beats)); // YT-AUDIT-1: one self-correcting pass when the script breaks a house rule
   if (issues.length && pre.kept.length) {
     try {
       var dj3 = await aiJson(env, directorPrompt(), text.slice(0, 9000) + "\n\nREVISE: your previous script had these problems: " + issues.join("; ") + ". Write the whole JSON again with them fixed, keeping every claim supported by the article.", 3500, 0.7);
       var pre3 = validateBeats(dj3.json.beats, article, []);
-      if (pre3.kept.length >= MIN_CONTENT_BEATS && scriptIssues(dj3.json.script).concat(beatIssues(dj3.json.beats)).length < issues.length) { dj = dj3; spec = dj3.json; pre = pre3; issues = scriptIssues(spec.script).concat(beatIssues(spec.beats)); }
+      if (pre3.kept.length >= MIN_CONTENT_BEATS && scriptIssues(dj3.json.script).concat(beatIssues(dj3.json.beats), mixIssues(dj3.json.beats)).length < issues.length) { dj = dj3; spec = dj3.json; pre = pre3; issues = scriptIssues(spec.script).concat(beatIssues(spec.beats), mixIssues(spec.beats)); }
     } catch (e) { await logEvent(env, "youtube.script_audit", String(e && e.message || e).slice(0, 200), null, "warn"); }
   }
   var unsupported = [];
@@ -411,9 +434,11 @@ async function ttsSentence(env, text) {
 }
 // YT-VOICE-1: the first attempt is voiced in the render container by Kokoro-82M (CPU, no per-character cost, one pass per beat, real word times for the captions);
 // a row that has already failed once is re-voiced here with Aura/melotts, so a Kokoro fault never costs the Short.
-function ttsEngine(attempts) { return (attempts || 0) < 1 ? "kokoro" : "aura"; }
+// YT-VOICE-RETRY-1 (issue 8019): Aura only after a failure in the audio or rendering stage, which advance() records as the row note prefix ("audio: ..." / "rendering: ...");
+// a retry caused by the director, the checker or the upload keeps Kokoro, which never failed for that row.
+function ttsEngine(row) { return /^(audio|rendering): /.test(String(row && row.note || "")) ? "aura" : "kokoro"; }
 async function stageAudio(env, row, beats) {
-  var out = [], auraChars = 0, melChars = 0, engine = ttsEngine(row.attempts);
+  var out = [], auraChars = 0, melChars = 0, engine = ttsEngine(row);
   for (var i = 0; i < beats.length; i++) {
     var b = Object.assign({}, beats[i]), ss = [];
     var sents = splitSentences(b.narr);
@@ -424,7 +449,7 @@ async function stageAudio(env, row, beats) {
   }
   if (auraChars) await addSpend(env, row.id, "tts_aura", auraChars, "aura-2 characters");
   if (melChars) await addSpend(env, row.id, "tts", melChars, "melotts characters");
-  await env.MEDIA.put("youtube/" + row.id + "/job.json", JSON.stringify({ id: String(row.id), slug: row.slug, title: row.title, tts: engine, beats: out }), { httpMetadata: { contentType: "application/json" } });
+  await env.MEDIA.put("youtube/" + row.id + "/job.json", JSON.stringify({ id: String(row.id), slug: row.slug, title: row.title, tts: engine, theme_name: pickTheme(row.slug, ((await prevJson(env, row, "job.json")) || {}).theme_name), beats: out }), { httpMetadata: { contentType: "application/json" } });
   await setState(env, row.id, "audio", { note: engine + " voice, " + out.length + " beats" });
 }
 // YT-ART-1: every beat gets its own generated backdrop (Workers AI FLUX), so Shorts stop sharing five Manim backgrounds. The prompt is built ONLY from fixed abstract motifs and styles,
@@ -454,13 +479,28 @@ async function stageArt(env, row, job) {
   if (!made) await logEvent(env, "youtube.art_none", row.slug + ": no backdrop was generated for any beat", { row: row.id }, "error");
   return made;
 }
+// YT-ART-SIZE-1 (issue 8780): up to eight base64 JPEGs ride in one submit body; keep the total under a budget (later beats lose their backdrop first) so the body cannot grow without bound.
+var BG_BUDGET_B64 = 3000000;
+function capBackdrops(job, budget) {
+  var used = 0, beats = (job.beats || []).map(function (b) {
+    var o = Object.assign({}, b);
+    if (o.bg_b64) { if (used + o.bg_b64.length <= budget) used += o.bg_b64.length; else delete o.bg_b64; }
+    return o;
+  });
+  return Object.assign({}, job, { beats: beats });
+}
 function renderStub(env) { return env.RENDER.get(env.RENDER.idFromName("default")); }
 async function stageSubmit(env, row) {
   var obj = await env.MEDIA.get("youtube/" + row.id + "/job.json");
   if (!obj) throw new Error("job.json missing in R2");
   var job = JSON.parse(await obj.text());
   var art = await stageArt(env, row, job);
-  var r = await renderStub(env).fetch("https://render.internal/submit", { method: "POST", body: JSON.stringify({ id: String(row.id), job: job }) });
+  var r = await renderStub(env).fetch("https://render.internal/submit", { method: "POST", body: JSON.stringify({ id: String(row.id), job: capBackdrops(job, BG_BUDGET_B64) }) });
+  if (r.status === 413 || r.status === 502) { // YT-ART-SIZE-1: body too large for the container hop; the backdrops stay in R2, a render without them still ships (Manim backgrounds)
+    await logEvent(env, "youtube.art_size", row.slug + ": submit " + r.status + " with backdrops; resubmitting without", { row: row.id }, "warn");
+    art = 0;
+    r = await renderStub(env).fetch("https://render.internal/submit", { method: "POST", body: JSON.stringify({ id: String(row.id), job: capBackdrops(job, 0) }) });
+  }
   if (!r.ok) throw new Error("container submit " + r.status + ": " + (await r.text()).slice(0, 300));
   await setState(env, row.id, "rendering", { note: "submitted " + nowIso() + ", art " + art });
 }
@@ -863,5 +903,5 @@ var worker_default = {
     ctx.waitUntil(runTick(env, {}).then(function (r) { return logEvent(env, "youtube.tick", JSON.stringify(r), r, "ok"); }).catch(function (e) { console.error(JSON.stringify({ worker: WORKER, where: "scheduled", error: String(e && e.message || e) })); return logEvent(env, "youtube.tick", String(e && e.message || e), null, "error"); }));
   }
 };
-export { beatIssues, scriptIssues, spokenTitle, buildSocialCopy, dailyAllows, uploadCooldownUntil, RenderContainer, spendUsd, spendAllows, splitSentences, numTokens, validateBeats, capAllows, ttsEngine, directorPrompt, ctaBeat, rankByInterest, upgradesFirst, nextCandidate, parseSections, jsonFromText, buildMetadata, shapeOk, CRON_TABLE, VERSION, parseRetentionReport, parseVideoStats, retentionDue, retentionFailure, readRetention, storeProvenance, stagePoll, sha256Hex, artPrompt, artRequest, stageArt, ART_STYLES, ART_MOTIFS };
+export { beatIssues, scriptIssues, spokenTitle, buildSocialCopy, dailyAllows, uploadCooldownUntil, RenderContainer, spendUsd, spendAllows, splitSentences, numTokens, validateBeats, capAllows, ttsEngine, pickTheme, kindMix, sameMixIssues, capBackdrops, THEME_NAMES, directorPrompt, ctaBeat, rankByInterest, upgradesFirst, nextCandidate, parseSections, jsonFromText, buildMetadata, shapeOk, CRON_TABLE, VERSION, parseRetentionReport, parseVideoStats, retentionDue, retentionFailure, readRetention, storeProvenance, stagePoll, sha256Hex, artPrompt, artRequest, stageArt, ART_STYLES, ART_MOTIFS };
 export default worker_default;

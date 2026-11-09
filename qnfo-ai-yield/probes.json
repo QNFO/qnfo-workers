@@ -1,0 +1,15 @@
+{
+  "mode": "revert",
+  "health": "https://qnfo-ai-yield.q08.workers.dev/health",
+  "http": [
+    {
+      "url": "https://qnfo-ai-yield.q08.workers.dev/health",
+      "contains": ["ok"]
+    },
+    {
+      "url": "https://qnfo-ai-yield.q08.workers.dev/",
+      "status": 401,
+      "contains": ["Sign in with an emailed code"]
+    }
+  ]
+}
