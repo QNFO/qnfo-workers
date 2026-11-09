@@ -36,7 +36,7 @@ import { Workspace, unsafeToRepeat } from "@cloudflare/computer";
 import { WorkerJavaScriptBackend } from "@cloudflare/computer/backends/worker-javascript";
 import { generateText, jsonSchema, stepCountIs, streamText, tool } from "ai";
 import { z } from "zod";
-import { filedMismatch, MAINTAIN_REQUESTER, MAINTAIN_PROMPT, maintainDue, verifyGithubSignature, githubEventRoute, githubEventPrompt, stepUsages, stepUsageStatements, trimCells, LEAN_CELL_CHARS, compactMessages, callerOf, clip, scopeOf, codeTaskText, opsToolAllowed, readOnlySql, repoPathOk, runId, safeToolName, scheduleWhen, sliceLines, DRAIN_PER_TICK, agentDrainPlan, agentNeurons, AGENT_DAILY_NEURONS_DEFAULT, AGENT_RUN_NEURONS_EST_DEFAULT, AGENT_SHED_MIN, loopInstance, validateRequest, EMPTY_TEXT, FINAL_ANSWER_ASK, pickAnswer, stripToolMarkup, toolTranscript, codeSessionNeurons, codeSessionCost, isDynamicRoute, leanCaller, leanConfigOn, capResult, LEAN_MAX_STEPS, LEAN_RESULT_CHARS, approvalPayload, pendingApprovalMatches, stagedActionArgs, APPROVAL_SUFFIX, approvalNext, searchSkills, approvalCardSpec } from "./lib.js";
+import { sweepEmpty, filedMismatch, MAINTAIN_REQUESTER, MAINTAIN_PROMPT, maintainDue, verifyGithubSignature, githubEventRoute, githubEventPrompt, stepUsages, stepUsageStatements, trimCells, LEAN_CELL_CHARS, compactMessages, callerOf, clip, scopeOf, codeTaskText, opsToolAllowed, readOnlySql, repoPathOk, runId, safeToolName, scheduleWhen, sliceLines, DRAIN_PER_TICK, agentDrainPlan, agentNeurons, AGENT_DAILY_NEURONS_DEFAULT, AGENT_RUN_NEURONS_EST_DEFAULT, AGENT_SHED_MIN, loopInstance, validateRequest, EMPTY_TEXT, FINAL_ANSWER_ASK, pickAnswer, stripToolMarkup, toolTranscript, codeSessionNeurons, codeSessionCost, isDynamicRoute, leanCaller, leanConfigOn, capResult, LEAN_MAX_STEPS, LEAN_RESULT_CHARS, approvalPayload, pendingApprovalMatches, stagedActionArgs, APPROVAL_SUFFIX, approvalNext, searchSkills, approvalCardSpec } from "./lib.js";
 import { approvalModules, approvalSource } from "./approval.js";
 import { withLifecycle, sessionBudgetStep, sessionTurnRoute, shouldEscalateUnanswered, CODE_SESSION_ROUTE_ESCALATE, sessionBudgetFrom, sandboxGate, sandboxPlan, sandboxPrRef, CODE_SESSION_BUDGET_DEFAULT, CODE_SESSION_REPLAY_REQUESTER, CODE_SESSION_REPLAY_BUDGET, CODE_SESSION_REPLAY_TURNS, sessionLaneStep, codeSessionDailyCap, codeSessionLaneAllowed, CODE_SESSION_LANE_CHEAP, APPROVAL_SELFTEST_REQUESTER, approvalSelftestSeed } from "./session.js";
 
@@ -507,6 +507,9 @@ export class FleetCodeAgent extends Agent<Env, State> {
       result = result || EMPTY_TEXT;
       // SWEEP-CLAIMS-FILED-1: "Issues Filed: N" counts only when N file_issue calls returned ids; otherwise say so and file the gap.
       if (/(^|:)cmdline-maintain/.test(String(r.caller))) {
+        if (sweepEmpty(out.steps)) {
+          try { await fileIssue(this.env, { title: "SWEEP-EMPTY-1: sweep run " + id + " filed nothing", description: "Run " + id + " (" + r.caller + ") finished with no file_issue call returning an id. Read runs.result for " + id + " and file each real finding, or record why the sweep found none.", priority: "medium", category: "code-change" }, r.caller); } catch (eE) { logErr("sweep-empty", eE); }
+        }
         const mm = filedMismatch(result, out.steps);
         if (mm) {
           result += "\n\nVerified: the sweep claimed " + mm.claimed + " issue(s) filed but " + mm.recorded + " file_issue call(s) returned an id" + (mm.ids.length ? " (" + mm.ids.join(", ") + ")" : "") + ".";
@@ -1135,8 +1138,9 @@ async function seedMeasurements(env: Env) {
     // CMDLINE-MAINTAIN-1: one sweep request a week; the newest request of any status counts, so a failed sweep is retried next week, not every tick.
     const lastSweep: any = await env.AUDIT_DB.prepare("SELECT MAX(created_at) AS last FROM cf_agent_requests WHERE requester = ?1").bind(MAINTAIN_REQUESTER).first();
     if (maintainDue(lastSweep && lastSweep.last, Date.now())) {
-      await env.AUDIT_DB.prepare("INSERT INTO cf_agent_requests (requester, kind, prompt, priority) VALUES (?1, 'run', ?2, 'low')").bind(MAINTAIN_REQUESTER, MAINTAIN_PROMPT).run();
-      seeded++;
+      // atomic (issue 8330): two overlapping ticks both pass maintainDue, only one insert finds no sweep in the last 7 days
+      const ins: any = await env.AUDIT_DB.prepare("INSERT INTO cf_agent_requests (requester, kind, prompt, priority) SELECT ?1, 'run', ?2, 'low' WHERE 1 = 1 AND NOT EXISTS (SELECT 1 FROM cf_agent_requests WHERE requester = ?1 AND created_at > datetime('now', '-7 days'))").bind(MAINTAIN_REQUESTER, MAINTAIN_PROMPT).run();
+      if (ins && ins.meta && Number(ins.meta.changes) > 0) seeded++;
     }
     return seeded;
   } catch (e) { logErr("seed-measurements", e); return 0; }
