@@ -1,0 +1,29 @@
+name: port-companion
+run-name: port-companion ${{ github.ref_name }}
+# COMPANION-REGRESSION-1: one-shot port of the live companion UI (KV copy 1.23.2) into personal-api/worker.js on a branch.
+on:
+  push:
+    branches:
+      - 'claude/port-companion-**'
+permissions:
+  contents: write
+jobs:
+  port:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Merge the KV copy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: python3 scripts/port_companion_from_kv.py
+      - name: Syntax check
+        run: node --check personal-api/worker.js
+      - name: Commit the port
+        run: |
+          git config user.name "port-companion"
+          git config user.email "noreply@qnfo.org"
+          git add personal-api/worker.js personal-api/deployed-current.worker.js
+          git commit -m "personal-api: port live companion 1.23.2 from KV (COMPANION-REGRESSION-1) [skip ci]" || echo nothing
+          git push origin HEAD
