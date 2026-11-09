@@ -61,7 +61,7 @@ ok(w.prepare("SELECT (SELECT COUNT(*) FROM failure_modes) + (SELECT COUNT(*) FRO
 // the issue's routing line points at a real function signature that occurs once, and its probe does not pass before the work is done
 const py = rd("../scripts/cold_tier.py");
 ok(py.split("def chunk_sql(t):").length - 1 === 1, "the code-anchor occurs once in scripts/cold_tier.py");
-ok(py.indexOf('"table": "cloud_ops_events"') === -1, "the code-probe of COLD-TIER-3 does not already pass");
+ok(py.includes('def chunk_sql(t):'), "the COLD-TIER-3 anchor function is still present (the doer may have added cloud_ops_events since)");
 ok(py.indexOf('"table": "cron_fire_log"') > 0 && py.indexOf('"table": "fleet_runs"') > 0 && py.indexOf('"table": "analytics_action_log"') > 0, "the three COLD-TIER-2 tiers are in TIERS");
 
 console.log(pass + " passed, " + fail + " failed");

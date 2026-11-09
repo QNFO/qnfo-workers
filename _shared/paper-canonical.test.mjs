@@ -18,7 +18,17 @@ const again = (c, rec) => assert.equal(canonicalPaper(c.body, rec).body, c.body,
 test("the copy inlined in qnfo-research-exec (and its mirror) is this file", () => {
   for (const name of ["worker.js", "deployed-current.worker.js"]) {
     const worker = readFileSync(new URL("../qnfo-research-exec/" + name, import.meta.url), "utf8").replace(/\r\n/g, "\n");
-    assert.ok(worker.includes(src.trim().replace(/\r\n/g, "\n")), name + " carries a stale canonical formatter: run node _shared/inline-paper-canonical.mjs");
+    const want = src.trim().replace(/\r\n/g, "\n");
+    if (worker.includes(want)) continue;
+    // The mirror of an import-using worker is the built bundle (esbuild wraps arrows in __name(), drops comments),
+    // so it cannot hold the source verbatim: every regex and long string literal of the source must survive in it.
+    assert.ok(/^var __freeze = /.test(worker), name + " carries a stale canonical formatter: run node _shared/inline-paper-canonical.mjs");
+    const code = want.replace(/^\s*\/\/.*$/gm, "").replace(/\s\/\/ .*$/gm, "");
+    const strings = (code.match(/"(?:[^"\\\n]|\\.){12,}"/g) || []).filter((s) => !/[;{}]/.test(s));
+    const regexes = code.match(/(?<=[(=,:!&|?]\s*)\/(?![\/*])(?:[^\/\\\n[]|\\.|\[(?:[^\]\\\n]|\\.)*\])+\/[gimsuy]*/g) || [];
+    assert.ok(strings.length + regexes.length > 20, "the literal fingerprint is large enough to mean something");
+    const missing = [...new Set([...strings, ...regexes])].filter((lit) => !worker.includes(lit));
+    assert.deepEqual(missing, [], name + " (built bundle) is missing literals of the canonical formatter: rebuild the mirror");
   }
 });
 

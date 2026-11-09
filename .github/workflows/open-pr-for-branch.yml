@@ -11,7 +11,8 @@ permissions:
 jobs:
   open:
     timeout-minutes: 5
-    runs-on: ubuntu-latest
+    # RUNNER-PIN-2 (2026-11-04): pinned to ubuntu-24.04 because ubuntu-latest moves to Ubuntu 26 until 2026-11-19; unpin after a green trial run on ubuntu-26.04.
+    runs-on: ubuntu-24.04
     steps:
       - name: Open a pull request when none exists
         env:

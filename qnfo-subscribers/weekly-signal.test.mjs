@@ -12,6 +12,8 @@ const TOKEN = "synthetic-weekly-signal-authority";
 const ctx = { waitUntil() {} };
 const MIGRATION = readFileSync(new URL("../migrations/2026-11-05-weekly-signal-issues.sql", import.meta.url), "utf8");
 const NOW = Date.parse("2026-11-05T05:00:00Z"); // a Thursday; the next slot is Sunday 2026-11-08 16:00 UTC
+// Time-bomb guard: the review handler reads Date.now() against the Sunday 16:00 UTC slot, so the suite runs on the frozen week it was written for, never on the wall clock.
+Date.now = () => NOW + 2 * 36e5;
 const SEND_DATE = "2026-11-08";
 const today = () => new Date().toISOString().slice(0, 10);
 

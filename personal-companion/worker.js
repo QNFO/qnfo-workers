@@ -3732,7 +3732,7 @@ var __name22 = __name2;
 // line below (VERSION-LINE-NOTES-1, 2026-10-19). Its older trailing notes stay until length-lede.test.mjs stops pinning "LENGTH-LEDE-1" on that line.
 // VERSION-NOTES-MOVED-1: release notes live in the block below
 // W-META-1 (agent_issues 1002316/1002317/1002318): aiRunAttr records in_tok/out_tok/neurons per purpose.
-var VERSION = "1.47.4-codeagent";
+var VERSION = "1.47.6-codeagent";
 // 1.46.0 KERNEL-EVERYWHERE-1 (2026-11-06, owner directive "IMPLEMENT EVERYWHERE ACROSS ALL AI APPS AND SERVICES AND SURFACES", pillar personal): the travel planner CHAT_SYSTEM carries the DOCTRINE-1 kernel 8.2.1 reply recognitions (KERNEL-REPLY-4, scoped to the planner's one designed question): end on the plan or proposal, never a conditional offer or questionnaire; refusals and limits are dispositions with their reason; reversible steps are taken and reported in the same reply. prior 1.45.8-codeagent
 /* 1.44.14 COMPANION-LENGTH-HEADROOM-1 (issue 1000633, pillar personal; patch): repeated length failures alongside exhausted retry budgets expose too little headroom for model output variation. Length-only repairs now target 500 words below the unchanged ceiling while remaining inside each form's normal writer band. */
 /* 1.43.6 BP26-AI-ACT-ART50-1 and BP26-STRUCTURED-DATA-1 (2026-10-26, agent_issues 1000341 and 1000336, pillar core; patch): the visible AI-generated label of every reading.q08.org piece now has its machine-readable half. A piece page carries an Article JSON-LD block (headline, datePublished, url, an Organization as author, never an AI or invented persona, and creditText saying it was written by AI and that no human reviews pieces before they appear) and the index page a Blog block. Measured before: the reading pages carried the visible label and no JSON-LD at all. */
@@ -8028,11 +8028,11 @@ async function turnstileSelfTest(env) {
     var codes = ((j && j["error-codes"]) || []).map(String);
     var wrong = codes.indexOf("invalid-input-secret") >= 0 || codes.indexOf("missing-input-secret") >= 0;
     var testing = !!(j && j.metadata && j.metadata.result_with_testing_key);
-    var accepted = !!(j && j.success) && !wrong && !testing;
+    var accepted = !wrong && !testing && codes.indexOf("invalid-input-response") >= 0;
     var verdict = accepted ? "accepted" : wrong ? "rejected" : testing ? "testing-key" : "unknown";
     var text = "turnstile siteverify self-test (" + TURNSTILE_SELFTEST_WORKER + "): secret " + verdict + (accepted ? " by Cloudflare" : "") + " [" + codes.join(",").slice(0, 80) + "]";
     await db.prepare("INSERT OR IGNORE INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1, ?2, 'turnstile-selftest', ?3, ?4, ?5, ?6)")
-      .bind(id, now.toISOString(), text, JSON.stringify({ worker: TURNSTILE_SELFTEST_WORKER, secret: verdict, codes: codes.slice(0, 4), source: "selftest" }), TURNSTILE_SELFTEST_WORKER, (accepted || testing) ? "ok" : "error").run();
+      .bind(id, now.toISOString(), text, JSON.stringify({ worker: TURNSTILE_SELFTEST_WORKER, secret: verdict, codes: codes.slice(0, 4), source: "selftest" }), TURNSTILE_SELFTEST_WORKER, accepted ? "ok" : "error").run();
     return { ran: true, recorded: true, verdict: verdict };
   } catch (e) {
     turnstileSelfTestHour = "";

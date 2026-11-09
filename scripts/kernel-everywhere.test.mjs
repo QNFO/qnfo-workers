@@ -5,7 +5,7 @@
 // the repo while the DB still carries it, so the two cannot silently diverge.
 import { readFileSync } from "node:fs";
 
-const mig = readFileSync(new URL("../migrations/2026-11-06-kernel-everywhere.sql", import.meta.url), "utf8");
+const mig = readFileSync(new URL("../migrations/retired/2026-11-06-kernel-everywhere.sql.txt", import.meta.url), "utf8");
 const privacy = readFileSync(new URL("../migrations/2026-11-07-kernel-personal-privacy.sql", import.meta.url), "utf8");
 const personalApi = readFileSync(new URL("../personal-api/worker.js", import.meta.url), "utf8");
 const companion = readFileSync(new URL("../personal-companion/worker.js", import.meta.url), "utf8");

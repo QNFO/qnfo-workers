@@ -1391,17 +1391,13 @@ def steady_state_cadence(cls, verdict, cadence_h, transport=None):
 
 
 def escalation_status(c, verdict):
-    """STAMP-ESCALATE-1 (issue 9762): a contract whose attempt count reaches max_attempts on a failing verdict becomes 'escalated'.
+    """STAMP-ESCALATE-1 (issue 9762): the status for a stamp whose probe path asked for none (the runner-https path returns no status for a fail).
 
-    Returns 'escalated' or None. Standing detectors (fm-/belief-) never escalate in bulk: they stay active at their cadence."""
-    if verdict != "fail" or is_standing_detector(c.get("class")):
-        return None
+    One rule for every transport: verdict_next_status (attempts + 1 >= max_attempts AND as many fails in a row since the last pass; standing
+    detectors and liveness contracts exempt), so a single fail after many passes never escalates. Only a contract the consumer owns moves."""
     if c.get("status") not in (None, "active", "holding"):
         return None
-    max_att = max(1, int(c.get("max_attempts") or 3))
-    if int(c.get("attempts") or 0) + 1 >= max_att:
-        return "escalated"
-    return None
+    return verdict_next_status(c, {"verdict": verdict})
 
 
 def consume_one(c, trusted):
@@ -1477,10 +1473,6 @@ def consume_one(c, trusted):
             "escalate_to = CASE WHEN ? = 'escalated' THEN COALESCE(NULLIF(escalate_to, ''), ?) ELSE escalate_to END WHERE class = ?",
             [rec["verdict"], next_due_offset(cadence, steady_backoff), next_status, next_status, ESCALATE_TO_DEFAULT, cls],
         )
-        if next_status == "escalated":
-            # STAMP-ESCALATE-1: name who owns an escalated contract; a separate write so the stamp itself stays one statement
-            d1("UPDATE remediation_contracts SET escalate_to = COALESCE(escalate_to, 'fleet:remediation-consumer') "
-               "WHERE class = ? AND status = 'escalated'", [cls])
     except Exception as e:  # noqa: BLE001
         log("contract %s stamp failed: %s" % (cls, e))
     return rec, local

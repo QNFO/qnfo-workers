@@ -23,7 +23,7 @@ db.exec(`
 `);
 
 // Apply the reconciliation migration
-const migrationSQL = readFileSync('migrations/2026-11-07-kernel-everywhere-reconcile.sql', 'utf8');
+const migrationSQL = readFileSync('migrations/retired/2026-11-07-kernel-everywhere-reconcile.sql.txt', 'utf8');
 const statements = migrationSQL
   .split('\n')
   .filter(line => !line.trim().startsWith('--') && line.trim().length > 0)
