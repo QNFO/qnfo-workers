@@ -1,6 +1,6 @@
 // q08-prediction-markets: the paper-trading proving ground for q08's information edge (PM-CHARTER-1).
 // Paper money only. No wallet, no exchange key, no order ever leaves this worker: the only executor in this file writes D1 rows.
-var VERSION = "1.9.2";
+var VERSION = "1.9.3";
 
 // ---------- charter (the machine-readable form; GET /api/charter serves it with the live evidence) ----------
 export const CHARTER = {
@@ -456,13 +456,19 @@ async function init(env) {
   await db.prepare("INSERT OR IGNORE INTO pt_account (id,cash,start_cash,created_at) VALUES (1,?,?,?)").bind(CFG.START, CFG.START, new Date().toISOString()).run();
 }
 async function fetchMarkets() {
-  try {
-    const lo = new Date().toISOString(), hi = new Date(Date.now() + CFG.HORIZON_D * 86400000).toISOString();
-    const r = await fetch("https://gamma-api.polymarket.com/markets?active=true&closed=false&limit=200&order=volume24hr&ascending=false&end_date_min=" + encodeURIComponent(lo) + "&end_date_max=" + encodeURIComponent(hi), { headers: { accept: "application/json" }, cf: { cacheTtl: 60 } });
-    if (!r.ok) throw new Error("gamma " + r.status);
-    const ms = (await r.json()).map(parseMarket).filter(Boolean);
-    if (ms.length) return { markets: ms, source: "polymarket" };
-  } catch (e) { console.error("market feed failed, using the synthetic feed", String(e)); }
+  const lo = new Date().toISOString(), hi = new Date(Date.now() + CFG.HORIZON_D * 86400000).toISOString();
+  const base = "https://gamma-api.polymarket.com/markets?active=true&closed=false&limit=200&order=volume24hr&ascending=false";
+  // MARKETS-FEED-RETRY-1: gamma answers 5xx now and then; retry the dated query once, then the plain one (the horizon is re-applied below), before the synthetic feed.
+  const urls = [base + "&end_date_min=" + encodeURIComponent(lo) + "&end_date_max=" + encodeURIComponent(hi), base + "&end_date_min=" + encodeURIComponent(lo), base];
+  for (const u of urls) {
+    try {
+      const r = await fetch(u, { headers: { accept: "application/json" }, cf: { cacheTtl: 60 } });
+      if (!r.ok) throw new Error("gamma " + r.status);
+      const hiT = Date.parse(hi), ms = (await r.json()).map(parseMarket).filter(Boolean).filter((m) => !m.ends_at || Date.parse(m.ends_at) <= hiT);
+      if (ms.length) return { markets: ms, source: "polymarket" };
+    } catch (e) { console.warn("market feed attempt failed", String(e)); }
+  }
+  console.error("market feed failed, using the synthetic feed", "all gamma queries failed");
   return { markets: syntheticMarkets(), source: "synthetic" };
 }
 const openPositions = async (db) => (await db.prepare("SELECT * FROM pt_position WHERE closed_at IS NULL").all()).results;
