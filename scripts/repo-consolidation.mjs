@@ -39,7 +39,7 @@ export function makeApi(fetchImpl, token, allowed) {
     const m = /^\/repos\/([^/]+\/[^/?]+)/.exec(path);
     if (!m || !allowed.has(m[1])) throw new Error("path not allowlisted: " + path);
     if (!token) { calls.push({ method, path, status: 0, message: "no credential" }); return { status: 0, body: null, ok: false, message: "no credential" }; }
-    const init = { method, headers: { Authorization: "Bearer " + token, Accept: "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28", "User-Agent": "qnfo-repo-consolidation", "Content-Type": "application/json" } };
+    const init = { method, signal: AbortSignal.timeout(30000), headers: { Authorization: "Bearer " + token, Accept: "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28", "User-Agent": "qnfo-repo-consolidation", "Content-Type": "application/json" } };
     if (body !== undefined) init.body = JSON.stringify(body);
     let res, text = "";
     try { res = await fetchImpl(API + path, init); text = await res.text(); }
@@ -128,7 +128,7 @@ async function pagesProbe(api, repo, fetchImpl) {
   const p = await api.call("GET", "/repos/" + repo + "/pages");
   if (!p.ok) return { pages: p.status, message: p.message };
   let site = 0;
-  try { const r = await fetchImpl(p.body.html_url, { method: "GET", redirect: "follow" }); site = r.status; } catch (e) { site = 0; }
+  try { const r = await fetchImpl(p.body.html_url, { method: "GET", redirect: "follow", signal: AbortSignal.timeout(20000) }); site = r.status; } catch (e) { site = 0; }
   return { pages: p.status, build: p.body.status, url: p.body.html_url, site_status: site };
 }
 
