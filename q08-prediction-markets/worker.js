@@ -1,6 +1,6 @@
 // q08-prediction-markets: the one paper-trading prediction-market worker (PM-CONSOLIDATE-1).
 // Paper money only. No wallet, no exchange key, no order ever leaves this worker.
-var VERSION = "1.2.4";
+var VERSION = "1.2.5";
 const CFG = { START: 10000, POS_PCT: 0.10, EXPO_PCT: 0.30, STOP: 0.15, TAKE: 0.30, SLIP: 0.01, MIN_MOVE: 0.05, MIN_VOL: 5000, MAX_OPEN: 8 };
 
 // ---------- pure engine (tested in engine.test.mjs) ----------
@@ -177,6 +177,8 @@ export async function manualOrder(env, { slug, side, usd }) {
   try {
     const m = await db.prepare("SELECT * FROM pt_market WHERE slug=?").bind(slug).first();
     if (!m || m.closed) return { error: "unknown or closed market" };
+    // a fill is priced from the last tick's quote, so a quote older than 15 minutes is not tradable (PM-STALE-FILL-1)
+    if (!m.updated_at || Date.now() - Date.parse(m.updated_at) > 15 * 60 * 1000) return { error: "market price is stale, wait for the next tick" };
     const acct = await account(db), pos = await openPositions(db);
     const px = Object.fromEntries((await db.prepare("SELECT slug,yes FROM pt_market").all()).results.map((r) => [r.slug, r.yes]));
     const eq = equity(acct, pos, px);
