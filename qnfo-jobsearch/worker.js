@@ -9,7 +9,7 @@
 // JOBSEARCH-CV-1 (1.5.0): the CV is part of this worker (page /cv): a yes/no interview that builds the claim bank, review of unconfirmed claims, roles, achievements and publications edited in D1, a resume per job (summary, roles, selected work, education, skills) and a cover note, history and backup. The search is tied to that bank (evidence the owner can back up weighs more; what the CV lacks is shown as a gap), decided postings (rejected, applied, approved) never come back under another id, rejections carry a reason the search learns from, and a wider net: stretch matches outside the stated preferences, more boards and aggregators.
 // Routes: GET / (web UI) | GET /api | GET /api/matches | GET /api/matches/:id | GET /api/runs | GET /api/ledger | POST /api/run | POST /api/matches/:id/status | GET /health
 // Port of the jobsearch/ Python modules (tests: jobsearch/test_jobsearch.py, qnfo-jobsearch/worker.test.mjs).
-var VERSION = "1.15.1-codeagent";
+var VERSION = "1.16.2-codeagent";
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -411,7 +411,8 @@ const BOARDS = {
   ashby: ["openai", "cohere", "notion", "elevenlabs", "mollie", "mapbox", "perplexity", "snowflake", "faculty", "wayve", "cerebras", "anyscale", "modal", "fireworks", "redwoodresearch", "pinecone", "runway", "miro"],
   recruitee: ["bunq", "msf", "solvinity", "sweco"],   // sweco: transport, urban and water planning consultancy (probed 2026-11-05: 179 offers, Netherlands among them)
   smartrecruiters: ["oecd"],                           // JOBSEARCH-SOURCES-1 (JS-7): OECD policy research and statistics roles (probed 2026-11-05: 22 postings)
-  remotive: ["data", "product", "all-others", "q=research", "q=policy", "q=scientist", "q=autonomous", "q=ai safety", "q=program manager", "q=analyst", "q=ai governance", "q=ai policy", "q=simulation", "q=decision science"],   // JOBSEARCH-FIT-1: target-role queries
+  remotive: ["data", "product", "all-others", "q=research", "q=policy", "q=scientist", "q=autonomous", "q=ai safety", "q=program manager", "q=analyst",
+    "q=transportation", "q=forecasting", "q=simulation", "q=modelling", "q=evaluation", "q=systems", "q=agents", "q=geospatial", "q=ai governance", "q=ai policy", "q=decision science"],   // JOBSEARCH-DIRECTIONS-1: queries drawn from the record's own work (network models, travel forecasting, simulation, geospatial, evaluation), not from role titles
   muse: [],   // JOBSEARCH-MUSE-RETIRED-1 (issue 2562, 2026-11-09): all 8 Muse feeds answered HTTP 404 for 20 runs in a row, so /api/ops stayed degraded (503) and the traffic-health journey counted it as a 5xx; an empty list drops them from ACTIVE_FEEDS and the fetch loop (re-add the combinations when the endpoint answers again)
   jobicy: ["netherlands", "europe", "emea", "tag:research", "tag:data science", "tag:policy", "tag:machine learning"],
   remoteok: [true],
@@ -778,9 +779,11 @@ const MANAGE_RE = /\b(head of|director|manager|lead|chief|vp|vice president)\b/i
 const ABSOLUTE_EXCLUDE = ["intern", "junior", "entry", "graduate", "new grad", "apprentice", "trainee", "engineer", "architect", "counsel", "attorney", "lawyer", "paralegal", "legal", "marketing", "forward deployed", "deployment strategist",
   "sales", "account executive", "account manager", "business development", "recruit", "talent", "payroll", "accountant", "accounting", "treasury", "fp&a", "tax ", "facilities", "warehouse", "driver", "nurse", "technician",
   "customer success", "customer support", "customer service", "support specialist", "financial", "webinar", "solutions", "devops", "site reliability", "designer", "finance", "people partner", "hr ", "receptionist", "assistant",
-  "developer", "programmer", "member of technical staff", "technical staff", "mid level", "mid-level", "software", "full stack", "full-stack", "backend", "frontend", "front-end", "back-end", "mlops", "data entry",
   "stagiair", "stageplaats", "afstudeer", "assistent", "administratief", "secretaresse", "verpleegkundige", "chauffeur", "jurist", "juridisch", "advocaat", "controller", "salaris", "monteur", "schoonmaak", "beveiliger", "handhaver", "toezichthouder", "rechercheur", "boa ", "verpleegkundig", "stage "];   // the Dutch forms of the same noise (JOBSEARCH-NL-PUBLIC-SECTOR-1)
-const TITLE_EXCLUDE_SOFT = ["scientist"];
+const TITLE_EXCLUDE_SOFT = [];   // JOBSEARCH-CONTENT-FIRST-1 (owner 2026-11-09): no title word excludes a field any more
+// seniority words in a title are a level, not a field, and stay a hard filter; every other ABSOLUTE_EXCLUDE word now only matters when the posting text shows nothing of the record
+const LEVEL_EXCLUDE = new Set(["intern", "junior", "entry", "graduate", "new grad", "apprentice", "trainee", "stagiair", "stageplaats", "afstudeer", "stage "]);
+const CONTENT_MIN = 6;   // distinctive terms a posting must share with the record when its title says nothing
 const ENGINEERING_WORDS = ["engineer", "architect"];   // excluded unless the title is a research-engineering title and the posting shows evidence of the owner record
 const LOC_BAD_REMOTE = ["us only", "united states only", "us-only", "usa only", "canada only", "uk only", "india only", "latam", "apac only"];
 const HOME = ["amsterdam", "netherlands", "nederland", "rotterdam", "utrecht", "eindhoven", "the hague", "den haag", "delft", "leiden", "groningen", "haarlem", "almere", "amersfoort",
@@ -968,8 +971,6 @@ function codingLoad(desc) {
 }
 const RANK_RULES = "JOBSEARCH-FIT-1";   // part of prefs_hash: a new rule set retires pending matches the new rules no longer list, on the first run after deploy
 const CODING_DROP_AT = 4;   // four or more distinct hands-on-code asks: the role is a coding role whatever its title says
-// role families that are the owner's target (autonomous and AI systems research, AI governance and risk, systems modelling, research leadership)
-const TARGET_FAMILIES = new Set(["fam_autonomy", "fam_ai", "fam_sysmodel", "fam_research"]);
 /* JOBSEARCH-EXPLORE-1 (owner 2026-11-09: "My diverse experience doesn't fit neatly into keywords"). A posting whose title is in no role family used to be
    dropped before its text was read. Now, when the title is at least research- or systems-flavoured (EXPLORE_TITLE_RX is a wide net, not a verdict), the posting text is
    compared with the owner's own record (RECORD_TERMS: distinct words from the verified facts, skills, roles, summaries and publications, minus common business words).
@@ -997,52 +998,58 @@ function scoreJob(job, ctx = DEFAULT_CTX, mode = "rank") {
   const drop = (reason, soft) => { if (wide && soft) { stretch = true; pen += 25; flags.push("OUTSIDE YOUR PREFERENCES: " + reason); } else drops.push(reason); };
   const famOn = [...ctx.fam].filter((k) => has(title, FAMILIES[k]).length);
   const hits = ABSOLUTE_EXCLUDE.filter((x) => title.includes(x));
-  const hardHit = hits.some((x) => !ENGINEERING_WORDS.includes(x)), engHit = hits.length > 0 && !hardHit;
+  const levelHit = hits.some((x) => LEVEL_EXCLUDE.has(x)), fieldHit = hits.length > 0 && !levelHit;
   // most postings are dropped by their title alone; those return before the expensive reading of the posting text (the run scores about ten thousand postings)
-  const early = (reason) => ({ stretch: false, fit: 0, score: 0, tier: "C", clusters: [], unique: false, why: [], flags: [], drops: [reason], gate: "", locNote: "", families: [] });
+  let ov = { n: 0, terms: [] };
+  const early = (reason) => ({ stretch: false, fit: 0, score: 0, tier: "C", clusters: [], unique: false, why: [], flags: [], drops: [reason], gate: "", locNote: "", families: [], ovN: ov.n });
   let cl = null;
+  /* JOBSEARCH-CONTENT-FIRST-1 (owner 2026-11-09: "title keywords are a terrible way to represent my experience ... don't ever do that again"). The posting TEXT is read first and
+     is the evidence: the distinctive terms it shares with the owner's record (lens 1) and the evidence clusters in it (lens 2); the semantic lens (embeddings, run step) and the
+     model re-rank come after. A title never excludes a field or caps a score; it adds a small bonus when it happens to name a lane. Only a seniority word (intern, junior...) is a hard filter. */
   if (mode !== "analyze") {
-    if (hardHit || (engHit && !(wide && famOn.includes("fam_tech")))) return early("role family below target or not your lane");
-    if (engHit) { cl = clustersIn(desc, job.title); if (cl.size < 2) return early("role family below target or not your lane"); }
-  } else if (hits.length) drops.push("role family below target or not your lane");
+    if (levelHit) return early("below your level");
+    ov = exploreOverlap(desc, ctx.recordTerms || RECORD_TERMS);
+    if (fieldHit && ov.n < CONTENT_MIN) { cl = clustersIn(desc, "")   /* evidence comes from the posting text, never from the title */; if (cl.size < 2) return early("no sign of your record in the posting text"); }
+  } else if (levelHit) drops.push("below your level");
   const famOff = Object.keys(FAMILIES).filter((k) => !ctx.fam.has(k) && has(title, FAMILIES[k]).length);
   const medium = has(title, TITLE_MEDIUM);
-  const soft = TITLE_EXCLUDE_SOFT.some((x) => title.includes(x));
+  const soft = false;
   let explore = null;
-  if (mode !== "analyze" && !famOn.length && !famOff.length && !medium.length && !soft) {
-    const ov = EXPLORE_TITLE_RX.test(title) && desc.length > 300 ? exploreOverlap(desc, ctx.recordTerms || RECORD_TERMS) : { n: 0 };
-    if (ov.n < EXPLORE_MIN_TERMS) return early("title not in your role families");
-    explore = ov;
+  if (mode === "analyze") ov = exploreOverlap(desc, ctx.recordTerms || RECORD_TERMS);
+  if (!famOn.length && !famOff.length && !medium.length) {
+    if (mode !== "analyze" && ov.n < CONTENT_MIN) return early("no sign of your record in the posting text");
+    if (ov.n >= CONTENT_MIN) explore = ov;
   }
   if (soft && !famOn.length) drop("role family excluded by title");
   if (!famOn.length && famOff.length) drop("family switched off in your preferences: " + famOff[0].replace("fam_", ""), true);
   if (!famOn.length && !medium.length && !explore) drop("title not in your role families");
-  if (!cl) cl = clustersIn(desc, job.title);
+  if (!cl) cl = clustersIn(desc, "")   /* evidence comes from the posting text, never from the title */;
   const [gate, locNote] = locationGate(job.location, desc.slice(0, 3000), ctx);
   if (gate === "fail") drop(locNote);   // JOBSEARCH-FIT-1: a place the owner said no to is never shown, not even as a stretch (US roles filled the list while loc_us was No)
   if (gate === "check" && locNote === "location missing" && mode !== "analyze") drop("no location in the posting; it cannot be placed against your preferences");
   else if (gate === "check") { flags.push("LOCATION: " + locNote); pen += /^(Elsewhere|Europe)/.test(locNote) ? 15 : 10; }
-  if (!famOn.length && cl.size < 2 && !explore) drop("generic title and thin evidence in the posting");
+  // a title that names a lane still counts when the feed gives no text (some boards send none); once there is text, the text must show the record
+  if (cl.size + Math.floor(ov.n / 3) < 2 && (!famOn.length || desc.length >= 200)) drop("thin evidence of your record in the posting");   // evidence = clusters in the text + one per three shared record terms
+  if (famOn.length && !cl.size) pen += 15;
   const code = codingLoad(desc);
   if (ctx.a.fam_tech !== true) {
     if (code.n >= CODING_DROP_AT) drop("coding-heavy role: the posting asks for " + code.hits.slice(0, 3).join(", "));
     else if (code.n >= 2) { pen += 6 * code.n; flags.push("CODING: the posting asks for some hands-on code (" + code.hits.join(", ") + ")"); }
   }
-  if (famOn.length && !cl.size) pen += 15;
-  const tScore = famOn.length ? 40 : (medium.length >= 2 || medium.includes("research")) ? 20 : explore ? Math.min(30, 10 + 2 * explore.n) : 12;
+  const tScore = famOn.length ? 25 : (medium.length >= 2 || medium.includes("research")) ? 12 : 6;   // the title is a small bonus, never the gate
+  const cScore = ov.n >= 3 ? Math.min(30, 6 + 2 * ov.n) : 0;                                            // lens 1: distinctive terms shared with the record
   const eScore = Math.min(45, 9 * cl.size);
   const eOwned = ctx.owned ? Math.min(45, [...cl].reduce((sum, c) => sum + (ctx.owned.has(c) ? 9 : 4), 0)) : eScore;   // evidence the CV can back up counts in full, evidence it lacks counts less
   const uniqA = [...cl].some((c) => CORE.has(c)) && [...cl].some((c) => FRONTIER.has(c));
   const uniqB = [...cl].some((c) => CORE.has(c)) && [...cl].some((c) => DATA_SIDE.has(c));
   if (famOn.length) why.push("title in your lane: " + famOn.slice(0, 2).map((k) => k.replace("fam_", "")).join(", ")); else if (explore) why.push("matches your record beyond title keywords: " + explore.n + " shared terms (" + explore.terms.join(", ") + ")"); else why.push("generic title: " + medium.slice(0, 2).join(", "));
+  if (ov.n >= 3 && !explore) why.push("shares " + ov.n + " distinctive terms with your record (" + ov.terms.slice(0, 4).join(", ") + ")");
   why.push(cl.size ? "evidence in the posting: " + [...cl].sort().join(", ") : "no matching evidence in the posting text");
   const lacking = ctx.owned ? [...cl].filter((c) => !ctx.owned.has(c)) : [];
   if (lacking.length) why.push("not in your CV yet: " + lacking.sort().join(", "));
   if (uniqA) why.push("uncommon intersection: research-program or policy-research management + AI or research-integrity systems");
   else if (uniqB) why.push("uncommon intersection: public-policy or planning expertise + data and analytics");
-  let score = tScore + eOwned + (uniqA || uniqB ? 15 : 0);
-  const target = famOn.filter((k) => TARGET_FAMILIES.has(k));
-  if (target.length) { score += 10; why.push("target role for a senior systems researcher: " + target.map((k) => k.replace("fam_", "")).join(", ")); }
+  let score = tScore + cScore + eOwned + (uniqA || uniqB ? 15 : 0);
   const outcomeDelta = Math.max(-12, Math.min(12, scoreFeatures(famOn, cl).reduce((sum, feature) => {
     const weight = Number(ctx.outcomeWeights && ctx.outcomeWeights[feature]);
     return sum + (Number.isFinite(weight) ? weight : 0);
@@ -1069,27 +1076,30 @@ function scoreJob(job, ctx = DEFAULT_CTX, mode = "rank") {
   if (lang.length) flags.push("LANGUAGE: posting asks for " + [...new Set(lang)].sort().join(", ") + "; you list English only");
   const yrs = [...low.matchAll(/(\d{1,2})\+?\s*(?:or more )?years/g)].map((m) => +m[1]);
   if (yrs.length && Math.max(...yrs) > 22) flags.push(`YEARS: asks ${Math.max(...yrs)}+ years`);
-  if (!famOn.length) score = Math.min(score, explore ? 64 : 49);   // a generic title never outranks a title in your lane; an explore match (the posting text carries the record) may reach 64
+  // JOBSEARCH-CONTENT-FIRST-1: the old cap that kept a title outside the role families at 49 is gone; the posting text decides
   const fit = score;
   score -= pen;
-  const tier = stretch ? "C" : score >= 70 && cl.size ? "A" : score >= 35 ? "B" : "C";
-  return { stretch, fit, score, tier, clusters: [...cl].sort(), unique: uniqA || uniqB, why, flags, drops, gate, locNote, families: famOn, explore: !!explore };
+  const tier = stretch ? "C" : score >= 65 && cl.size ? "A" : score >= 35 ? "B" : "C";   // 70 before JOBSEARCH-CONTENT-FIRST-1; the title bonus fell by 15 and the content lens was added
+  return { stretch, fit, score, tier, clusters: [...cl].sort(), unique: uniqA || uniqB, why, flags, drops, gate, locNote, families: famOn, explore: !!explore, ovN: ov.n };
 }
 function evaluate(job, ctx = DEFAULT_CTX, wide = false) {
   const r = scoreJob(job, ctx, wide ? "wide" : "rank");
-  if (r.drops.length) return { status: "excluded", reason: r.drops[0] };
+  if (r.drops.length) return { status: "excluded", reason: r.drops[0], near: r.ovN || 0 };
   return { status: "ok", score: r.score, tier: r.tier, clusters: r.clusters, unique: r.unique, why: r.why, flags: r.flags, stretch: r.stretch };
 }
 // wide: tier C ("stretch": outside the stated preferences, or a thin fit) is kept when the score is at least 25, so the owner sees the whole range and decides
 function rank(jobs, ctx = DEFAULT_CTX, wide = false) {
-  const ok = [], excl = {};
+  const ok = [], excl = {}, near = [];
   for (const j of jobs) {
     const r = evaluate(j, ctx, wide);
     if (r.status === "ok" && (r.tier !== "C" || (wide && r.score >= 25))) ok.push({ ...j, match: r });
-    else { const k = (r.reason || "score below threshold").replace(/:.*/, ""); excl[k] = (excl[k] || 0) + 1; }
+    else {
+      const k = (r.reason || "score below threshold").replace(/:.*/, ""); excl[k] = (excl[k] || 0) + 1;
+      if (r.near >= 3 && r.near < CONTENT_MIN && near.length < 25) near.push(j);   // JOBSEARCH-SEMANTIC-1: a near miss on the words gets a second look by meaning
+    }
   }
   ok.sort((a, b) => b.match.score - a.match.score);
-  return [ok, excl];
+  return [ok, excl, near];
 }
 
 // ------------------------------------------------------------------ tailoring + verification (port of tailor.py)
@@ -1350,7 +1360,7 @@ async function collectAndRank(ctx, onlyGroups) {
       tasks.push(async () => { try { const jobs = await FETCHERS[kind](a); return jobs.length ? { feed, jobs, candidate: true } : { feed, candidate: true, quiet: true }; } catch (e) { return { feed, candidate: true, quiet: true }; } });
     }
   }
-  const kept = [], errors = [], excl = {}, feedResults = [];
+  const kept = [], errors = [], excl = {}, feedResults = [], nearAll = [];
   let fetched = 0;
   // each feed is ranked as soon as it is parsed so only passing jobs stay in memory
   await pool(tasks.map((t) => async () => {
@@ -1361,12 +1371,13 @@ async function collectAndRank(ctx, onlyGroups) {
     for (const jb of r.jobs) jb.company = DISPLAY[jb.company] || jb.company;
     fetched += r.jobs.length;
     feedResults.push({ feed: r.feed, ok: true, count: r.jobs.length });
-    const [ok, ex] = rank(r.jobs, ctx, true);
+    const [ok, ex, nr] = rank(r.jobs, ctx, true);
+    nearAll.push(...nr);
     for (const [k, v] of Object.entries(ex)) excl[k] = (excl[k] || 0) + v;
     kept.push(...ok);
   }), 6);
   kept.sort((a, b) => b.match.score - a.match.score);
-  return { kept, errors, excl, fetched, feeds: feedsList.length, feedResults, candidatesLive };
+  return { kept, errors, excl, fetched, feeds: feedsList.length, feedResults, near: nearAll.slice(0, 150), candidatesLive };
 }
 // JOBSEARCH-LLM-RERANK-1: reorder-only re-rank of the top passing postings.
 // The model may only reorder and add one sentence of reason per posting; it never writes resume or note text
@@ -1390,6 +1401,67 @@ function rerankMessages(top) {
   return [{ role: "system", content: RERANK_SYSTEM }, { role: "user", content: JSON.stringify(items) }];
 }
 // {order: [0-based indexes], reasons: {index: text}} or null when the answer is not a full permutation of 1..n
+/* JOBSEARCH-SEMANTIC-1 (owner 2026-11-09: "go in several different directions to find what my experience is"). Lens 3: the meaning of the posting against the meaning of the owner's own
+   verified facts, roles and summaries (Workers AI embeddings), independent of any shared word. It boosts a kept posting that is close to the record, and rescues a near miss on the
+   words (3 to 5 shared terms) that is close in meaning. No AI binding or a failed call leaves the lexical ranking untouched. Thresholds are the first reading of bge-base cosine
+   scores and are tuned from the owner's verdicts (jobsearch_calib). */
+const EMBED_MODEL = "@cf/baai/bge-base-en-v1.5", SEM_BOOST = 0.58, SEM_RESCUE = 0.64, SEM_BATCH = 40;
+function cosine(a, b) {
+  let d = 0, x = 0, y = 0;
+  for (let i = 0; i < a.length; i++) { d += a[i] * b[i]; x += a[i] * a[i]; y += b[i] * b[i]; }
+  return x && y ? d / Math.sqrt(x * y) : 0;
+}
+function bestSim(vec, recVecs) {
+  let best = { sim: -1, i: -1 };
+  for (let i = 0; i < recVecs.length; i++) { const c = cosine(vec, recVecs[i]); if (c > best.sim) best = { sim: c, i }; }
+  return best;
+}
+function recordPassages() {
+  const p = LEDGER.facts.map((f) => f.text), b = BANK;
+  for (const r of b.roles || []) p.push(r.title + " at " + r.org);
+  for (const sm of b.summaries || []) p.push(sm.text);
+  for (const pub of b.publications || []) p.push(pub.title);
+  return p.map((t) => String(t || "").slice(0, 400)).filter((t) => t.length > 20).slice(0, 90);
+}
+async function embedTexts(env, texts) {
+  const out = [];
+  for (let i = 0; i < texts.length; i += SEM_BATCH) {
+    const r = await env.AI.run(EMBED_MODEL, { text: texts.slice(i, i + SEM_BATCH) });
+    if (!r || !Array.isArray(r.data) || r.data.length !== Math.min(SEM_BATCH, texts.length - i)) throw new Error("embedding answer has the wrong shape");
+    out.push(...r.data);
+  }
+  return out;
+}
+let REC_EMB = { rev: -1, passages: [], vecs: [] };
+const postingText = (j) => String(j.title || "") + ". " + String(j.company || "") + ". " + String(j.desc || "").slice(0, 700);
+async function semanticLens(env, kept, near, ctx) {
+  if (!env.AI || typeof env.AI.run !== "function") return kept;
+  try {
+    if (REC_EMB.rev !== BANK_REV || !REC_EMB.vecs.length) { const passages = recordPassages(); REC_EMB = { rev: BANK_REV, passages, vecs: await embedTexts(env, passages) }; }
+    const cand = kept.slice(0, 120).concat(near.slice(0, 80));
+    if (!cand.length) return kept;
+    const vecs = await embedTexts(env, cand.map(postingText));
+    let boosted = 0, rescued = 0;
+    cand.forEach((j, i) => {
+      const { sim, i: pi } = bestSim(vecs[i], REC_EMB.vecs);
+      const line = REC_EMB.passages[pi] || "";
+      if (j.match) {
+        if (sim >= SEM_BOOST) { j.match.score += Math.min(12, Math.round((sim - SEM_BOOST) * 60)); j.match.why.push("close in meaning to your record (" + sim.toFixed(2) + "): " + line.slice(0, 80)); boosted++; }
+        return;
+      }
+      if (sim < SEM_RESCUE) return;
+      const [gate, locNote] = locationGate(j.location, String(j.desc || "").slice(0, 3000), ctx);
+      if (gate === "fail") return;
+      const flags = gate === "check" ? ["LOCATION: " + locNote] : [];
+      j.match = { status: "ok", score: Math.min(64, 40 + Math.round((sim - SEM_RESCUE) * 120)), tier: "B", clusters: [], unique: false, stretch: false, flags,
+        why: ["close in meaning to your record, not in words (" + sim.toFixed(2) + "): " + line.slice(0, 80)] };
+      kept.push(j); rescued++;
+    });
+    kept.sort((a, b) => b.match.score - a.match.score);
+    console.log(JSON.stringify({ worker: "qnfo-jobsearch", event: "semantic-lens", embedded: cand.length, boosted, rescued }));
+  } catch (e) { logErr("semantic-lens", e); }
+  return kept;
+}
 function parseRerank(text, n) {
   const s = String(text || ""), a = s.indexOf("{"), b = s.lastIndexOf("}");
   if (a < 0 || b <= a) return null;
@@ -1998,7 +2070,7 @@ async function run(env) {
     const ctx = await loadCtx(env);
     const prefsHash = await sha256hex(JSON.stringify([RANK_RULES, ctx.a, [...ctx.learned.boost].sort(), [...ctx.learned.block].sort(), [...OWNED].sort(), [...ctx.learned.coPen].sort(), [...ctx.learned.coDrop].sort()]));
     const prefsChanged = (await getMeta(env, "prefs_hash")) !== prefsHash;
-    let { kept, errors, excl, fetched, feeds, feedResults, candidatesLive } = await collectAndRank(ctx);
+    let { kept, errors, excl, fetched, feeds, feedResults, near, candidatesLive } = await collectAndRank(ctx);
     await setMeta(env, "candidates_live", JSON.stringify((candidatesLive || []).sort())).catch((e) => logErr("candidates-live", e));
     // what the owner already decided (rejected, applied, approved, got a reply) never comes back, under any id, board or location; and a role already pending under another id is not listed twice
     const decided = await decidedKeys(env);
@@ -2013,6 +2085,7 @@ async function run(env) {
       return true;
     });
     if (suppressed) excl["already decided or already listed"] = suppressed;
+    kept = await semanticLens(env, kept, near || [], ctx);   // JOBSEARCH-SEMANTIC-1: lens 3, meaning instead of words
     kept = await llmRerank(env, kept);   // reorder-only AI pass over the top 25, before the per-company cap
     kept = await judgeTop(env, kept);
     const per = {}, seen = new Set(), picked = [], pickedStretch = [];
@@ -2540,7 +2613,7 @@ const INDEX = {
   worker: WORKER, version: VERSION,
   routes: {
     "GET /": "web UI", "GET /api/matches?tier=A|B&status=&q=&limit=": "ranked matches without artifacts; default lists only undecided ones, status=mine lists your applications, status=all everything", "GET /api/matches/:id": "one match with resume_md and note_md",
-    "GET /api/runs": "recent pipeline runs", "GET /api/funnel": "applications to replies, interviews and offers by board kind and score band", "GET /api/ledger": "the claim ledger every output sentence must come from", "GET /api/ops": "operational self-report: the fm-jobsearch-* checks, feed health, counts", "GET /api/prefs": "the yes/no search survey with your answers; POST {answers:{id:true|false|null}} saves and re-runs the search", "POST /api/analyze": "{input: link or pasted posting text, title?, company?} -> fit, strengths, gaps, whether it would appear in your search, verified draft", "POST /api/feedback": "{title, company, verdict: like|dislike} teaches the search", "GET /api/outcomes": "funnel (matches, approved, applied, replies, interviews, offers), reply rate of applications older than 21 days, by tier", "POST /api/auth/request": "e-mail a 6-digit sign-in code to the owner", "POST /api/auth/verify": "{code} -> owner session (cookie jobs_session, 12 h)", "GET /api/auth/me": "signed-in state", "POST /api/auth/logout": "revoke the session", "POST /api/run": "trigger a run (10-minute cooldown)",
+    "GET /api/linkedin": "what to search on LinkedIn: boolean searches for the owner's target roles with LinkedIn, Google and Indeed links (JOBSEARCH-LINKEDIN-1)", "GET /api/runs": "recent pipeline runs", "GET /api/funnel": "applications to replies, interviews and offers by board kind and score band", "GET /api/ledger": "the claim ledger every output sentence must come from", "GET /api/ops": "operational self-report: the fm-jobsearch-* checks, feed health, counts", "GET /api/prefs": "the yes/no search survey with your answers; POST {answers:{id:true|false|null}} saves and re-runs the search", "POST /api/analyze": "{input: link or pasted posting text, title?, company?} -> fit, strengths, gaps, whether it would appear in your search, verified draft", "POST /api/feedback": "{title, company, verdict: like|dislike} teaches the search", "GET /api/outcomes": "funnel (matches, approved, applied, replies, interviews, offers), reply rate of applications older than 21 days, by tier", "POST /api/auth/request": "e-mail a 6-digit sign-in code to the owner", "POST /api/auth/verify": "{code} -> owner session (cookie jobs_session, 12 h)", "GET /api/auth/me": "signed-in state", "POST /api/auth/logout": "revoke the session", "POST /api/run": "trigger a run (10-minute cooldown)",
     "GET /api/referrals": "the best open matches with a referral kit link each", "GET /api/matches/:id/referral": "people-search links and a verified-facts message to ask someone you know for a referral (owner session)", "POST /api/matches/:id/stage": "record an interview stage {stage: recruiter_screen|hiring_manager|technical|take_home|panel|final|reference_check, note} (owner session)",
     "POST /api/matches/:id/status": "owner decision or outcome {status: approved|rejected|applied|replied|interview|offer|no_reply|pending_owner_approval}, logged as an event; needs an owner session or x-loop-token", "POST /api/answers": "draft free-response application answers {input, questions[]} from the verified record; pay, authorization and demographic questions come back owner_only", "POST /api/prep": "interview brief for a posting {input}: role summary, offer, gaps, STAR story picks, likely questions", "POST /api/prep/quiz": "feedback on one spoken answer {question, answer, role}", "POST /api/calibrate": "record your verdict {owner: qualified|stretch|not_qualified, title, company, rubric_fit, judge_fit}", "GET /api/calibration": "how often the rubric and the model reading agree with you", "GET /api/matches/:id/resume.pdf": "text PDF of the tailored resume (one column, selectable text)", "GET /health": "version", "GET /prep": "phone page: check fit with calibration, draft answers, interview brief and quiz", "GET /cv": "the CV page: interview, review, edit, resume per job, history", "GET /api/cv": "the CV bank, questions with answers, review queue (owner session)", "POST /api/cv/answer|fact|review|set|import": "edit the CV bank (owner session); GET /api/cv/export is the backup", "GET /api/cv/history": "resumes built for jobs", "GET /api/recall?match=": "prompted recall: yes/no/not sure questions about what a posting asks for and the CV cannot back yet (owner session); without match, the queue across open matches", "POST /api/recall/answer": "{key, answer: yes|no|unsure, role, depth: led|hands|team} -> a yes adds the shown sentence to the CV as a verified fact (owner session)",
   },
@@ -2756,7 +2829,7 @@ const handler = {
     return J({ error: "not found", see: "/api" }, 404);
   },
 };
-handler.__test = { linkedinSearches, LINKEDIN_SEARCHES, codingLoad, CANDIDATE_BOARDS, collectAndRank, scoreJob, exploreOverlap, recordTerms, diversifyRows, recallGaps, recallQuestion, recallAnswer, recallQueue, RECALL_SEED, loadCtx, referralKit, referralList, STAGES, judgeTop, buildResume, verify, headlineVerdict, outcomes, pdfOf, pdfClean, checkAnswer, jsonLoose, PROTECTED_Q, draftAnswers, prepBrief, quizFeedback, judgeJob, calibrate, calibration, followups, atsOf, keywordReport, docxOf, resumeHtml, plainOf, applyKit, matchKit, stripTags, postingTerms, evaluate, rank, buildResume, buildNote, verify, stripHtml, locationGate, has, LEDGER, dedupeKey, feedPrefix, makeCtx, scoreJob, scoreFeatures, featuresFromWhy, applicationSnapshot, parseApplicationSnapshot, outcomeScoreWeights, loadCtx, SURVEY, BOARDS, normKey, applyBank, BANK_SEED, QUESTIONS, TAG_TO_CLUSTERS, clustersOf, cvAnswer, cvFact, cvReview, cvSet, cvImport, mutateBank, loadBank, decidedKeys, FETCHERS, getBank: () => BANK, llmRerank, llmRerankRun, ensureResearchPubs, ensureAutonomyBrand, RESEARCH_PUBS, FAMILIES, CLUSTER_KW, headline, pubLine, parseRerank, reasonOk, rerankMessages, artifactsFor, titleCandidate, sitemapUrls, slugTitle, PUBLIC_SECTOR, opsReport };
+handler.__test = { linkedinSearches, LINKEDIN_SEARCHES, codingLoad, CANDIDATE_BOARDS, collectAndRank, cosine, bestSim, semanticLens, scoreJob, exploreOverlap, recordTerms, diversifyRows, recallGaps, recallQuestion, recallAnswer, recallQueue, RECALL_SEED, loadCtx, referralKit, referralList, STAGES, judgeTop, buildResume, verify, headlineVerdict, outcomes, pdfOf, pdfClean, checkAnswer, jsonLoose, PROTECTED_Q, draftAnswers, prepBrief, quizFeedback, judgeJob, calibrate, calibration, followups, atsOf, keywordReport, docxOf, resumeHtml, plainOf, applyKit, matchKit, stripTags, postingTerms, evaluate, rank, buildResume, buildNote, verify, stripHtml, locationGate, has, LEDGER, dedupeKey, feedPrefix, makeCtx, scoreJob, scoreFeatures, featuresFromWhy, applicationSnapshot, parseApplicationSnapshot, outcomeScoreWeights, loadCtx, SURVEY, BOARDS, normKey, applyBank, BANK_SEED, QUESTIONS, TAG_TO_CLUSTERS, clustersOf, cvAnswer, cvFact, cvReview, cvSet, cvImport, mutateBank, loadBank, decidedKeys, FETCHERS, getBank: () => BANK, llmRerank, llmRerankRun, ensureResearchPubs, ensureAutonomyBrand, RESEARCH_PUBS, FAMILIES, CLUSTER_KW, headline, pubLine, parseRerank, reasonOk, rerankMessages, artifactsFor, titleCandidate, sitemapUrls, slugTitle, PUBLIC_SECTOR, opsReport };
 export default handler;
 
 // ------------------------------------------------------------------ client script shared by both pages (JOBSEARCH-APPLY-1): kit handling and the Fill application bookmark

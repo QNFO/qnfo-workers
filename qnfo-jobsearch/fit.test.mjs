@@ -17,7 +17,7 @@ ok(!light.drops.length && light.flags.some((f) => /^CODING/.test(f)), "a little 
 for (const t of ["Senior AI Governance Lead", "Head of AI Risk and Assurance", "Principal Researcher, Autonomous Systems", "Lead, Simulation and Network Modelling", "Research Program Manager, AI", "Senior Decision Scientist"]) {
   const r = wide(job(t, "Lead research on how AI systems and autonomous systems behave and fail; governance, oversight, audit and evaluation; simulation models, network models and decision support for government; research program management and stakeholders."));
   ok(!r.drops.length && r.tier === "A", `target role is tier A: ${t} (${r.score}, ${r.drops.join("; ")})`);
-  ok(r.why.some((w) => /^target role for a senior systems researcher/.test(w)), "the target boost is explained: " + t);
+  ok(r.families.includes("fam_autonomy") || r.families.includes("fam_ai") || r.families.includes("fam_sysmodel") || r.families.includes("fam_research"), "the title is read as a target lane: " + t);
 }
 // places the owner said no to never appear, not even as a stretch
 ok(wide(job("Senior AI Governance Lead", "AI governance policy research oversight audit", "Mountain View, CA, USA")).drops.length, "US on-site is dropped when the owner said No to the US");

@@ -184,13 +184,13 @@ globalThis.fetch = async (u) => {
   ok(ops2.rerank.binding === false, "ops says when the binding is missing");
   // the same run through the AI binding (the first way), counted under the worker's name
   db.exec("CREATE TABLE IF NOT EXISTS ai_call_counters (day TEXT, worker TEXT, purpose TEXT, model TEXT, calls INTEGER, errors INTEGER, in_chars INTEGER, ms INTEGER, in_tok INTEGER, out_tok INTEGER, neurons REAL, PRIMARY KEY (day, worker, purpose, model))");
-  const aiRuns = [];
-  const env3 = { JOBS_DB: D1, LOOP_TOKEN: "t", AI: { run: async (model, input) => { aiRuns.push(model); return { choices: [{ message: { content: JSON.stringify({ order: [1, 2, 3] }) } }], usage: { prompt_tokens: 900, completion_tokens: 120 } }; } } };
+  const aiRuns = []; let embedCalls = 0;
+  const env3 = { JOBS_DB: D1, LOOP_TOKEN: "t", AI: { run: async (model, input) => { aiRuns.push(model); if (/bge/.test(model)) { embedCalls++; return { data: input.text.map(() => (embedCalls === 1 ? [1, 0] : [0, 1])) }; } return { choices: [{ message: { content: JSON.stringify({ order: [1, 2, 3] }) } }], usage: { prompt_tokens: 900, completion_tokens: 120 } }; } } };
   const pending3 = []; await w.scheduled({}, env3, { waitUntil: (p) => pending3.push(p) }); await Promise.all(pending3);
-  ok(aiRuns.length === 4 && aiRuns.every((m) => m === "@cf/zai-org/glm-5.3-flash"), "the scheduled run asks the AI binding once to rerank and once per judged posting", aiRuns);
+  ok(aiRuns.filter((m) => /glm/.test(m)).length === 4 && aiRuns.filter((m) => /bge/.test(m)).length >= 2, "the scheduled run asks the AI binding for the semantic lens (record, then postings), once to rerank and once per judged posting", aiRuns);
   const via = db.prepare("SELECT v FROM jobsearch_meta WHERE k='rerank_via'").get();
   ok(via && via.v === "ai" && db.prepare("SELECT v FROM jobsearch_meta WHERE k='rerank_status'").get().v === "ok", "the status and the way are recorded", via);
-  const metered = db.prepare("SELECT worker, calls, in_tok FROM ai_call_counters WHERE worker = 'qnfo-jobsearch'").get();
+  const metered = db.prepare("SELECT worker, calls, in_tok FROM ai_call_counters WHERE worker = 'qnfo-jobsearch' AND model LIKE '%glm%'").get();
   ok(metered && metered.calls === 4 && metered.in_tok === 3600, "the AI spend is counted under qnfo-jobsearch", metered);
 }
 // ---- JOBSEARCH-RESEARCH-PORTFOLIO-1: the three QNFO papers are added to the owner's bank once, additively, and are the owner's afterwards
