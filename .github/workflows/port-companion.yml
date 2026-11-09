@@ -14,16 +14,20 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
       - name: Merge the KV copy
+        continue-on-error: true
+        id: merge
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: python3 scripts/port_companion_from_kv.py
       - name: Syntax check
+        if: steps.merge.outcome == 'success'
         run: node --check personal-api/worker.js
       - name: Commit the port
         run: |
           git config user.name "port-companion"
           git config user.email "noreply@qnfo.org"
-          git add personal-api/worker.js personal-api/deployed-current.worker.js
+          git add personal-api/port-result.txt
+          if [ "${{ steps.merge.outcome }}" = success ]; then git add personal-api/worker.js personal-api/deployed-current.worker.js; fi
           git commit -m "personal-api: port live companion 1.23.2 from KV (COMPANION-REGRESSION-1) [skip ci]" || echo nothing
           git push origin HEAD
