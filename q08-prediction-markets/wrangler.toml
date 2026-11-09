@@ -18,3 +18,15 @@ database_id = "5f43fb60-01cf-4d1f-842e-1b634f6ccc81"
 
 [triggers]
 crons = ["*/5 * * * *"]
+
+# PM-SIGNALS-1: short-term news-driven probability estimates go through the fleet AI router, never a per-worker key
+# (INTERNAL-CALLER-PROPS-1 #1703: qnfo-ai authenticates this binding by ctx.props.caller; installed by the canonical deploy).
+[[services]]
+binding = "QNFO_AI"
+service = "qnfo-ai"
+environment = "production"
+props = { caller = "q08-prediction-markets" }
+
+[vars]
+# strategies that may open paper positions; "momentum,fade" are the older price-only strategies and stay off
+STRATEGIES = "signal"

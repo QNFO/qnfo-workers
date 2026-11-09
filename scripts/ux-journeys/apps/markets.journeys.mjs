@@ -6,6 +6,7 @@ export const journeys = [
     async run(u) {
       await u.open("/");
       await u.see("Simulated money only");
+      await u.see("Predictions");
       await u.expect(async () => /Equity \$/.test((await u.page.locator("#s").innerText()) || ""), "the account line shows no equity on " + u.page.url());
       await u.tap("Run tick now", { wait: 1500 });
       await u.see("Open positions");
