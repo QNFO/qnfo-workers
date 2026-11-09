@@ -321,4 +321,10 @@ assert.ok(G.one("SELECT COUNT(*) AS n FROM kg_tombstone WHERE kind = 'edge' AND 
   assert.ok(/min ago/.test(t.skipped), "inside the interval the run is skipped");
   assert.ok(reads <= 5 && writes === 0, "and it reads a handful of rows and writes nothing (reads " + reads + ", writes " + writes + ")");
 }
+// PAPER-DRIFT-1 (issue 9767): Paper node count against living-paper rows
+{
+  const nodes = new Map([["paper:a", { id: "paper:a", label: "Paper", status: null }], ["paper:b", { id: "paper:b", label: "Paper", status: null }], ["paper:c", { id: "paper:c", label: "Paper", status: "stale" }], ["note-1", { id: "note-1", label: "Note", status: null }]]);
+  assert.deepEqual(K.paperCountDrift({ nodes, lp: { papers: [{ slug: "a" }] } }), { paper_nodes: 2, papers_rows: 1, paper_count_drift: 1 });
+  assert.equal(K.paperCountDrift({ nodes, lp: null }).paper_count_drift, null, "no living read, no drift claim");
+}
 console.log("kg_curate suite ok");

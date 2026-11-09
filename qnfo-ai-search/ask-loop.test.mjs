@@ -86,7 +86,7 @@ const { default: worker } = await import(pathToFileURL(join(dir, "w.mjs")).href)
 const waits = [];
 const ctx = { waitUntil: (p) => waits.push(p) };
 async function call(path, body, ip) {
-  const r = await worker.fetch(new Request("https://ask.qwav.tech" + path, { method: body ? "POST" : "GET", headers: { "content-type": "application/json", "CF-Connecting-IP": ip || "9.9.9.9" }, body: body ? JSON.stringify(body) : undefined }), env, ctx);
+  const r = await worker.fetch(new Request("https://ask.qwav.org" + path, { method: body ? "POST" : "GET", headers: { "content-type": "application/json", "CF-Connecting-IP": ip || "9.9.9.9" }, body: body ? JSON.stringify(body) : undefined }), env, ctx);
   const t = await r.text();
   await Promise.allSettled(waits.splice(0));
   return { status: r.status, text: t, json: () => JSON.parse(t) };
