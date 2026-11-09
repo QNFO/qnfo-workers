@@ -80,7 +80,7 @@ function infraManifestRoute(url, env) {
 }
 __name(infraManifestRoute, "infraManifestRoute");
 __name2(infraManifestRoute, "infraManifestRoute");
-var VERSION = "1.17.3-codeagent";
+var VERSION = "1.17.4-codeagent";
 // D1-RESULT-CAP-1 (#9794, DATA-SPINE-W0-1): D1 refuses a result payload over 50 MB. d1ReadAll runs a read; a statement that fails with a result-size
 // error is retried once as LIMIT/OFFSET pages over the same statement, and a payload at or over D1_RESULT_NEAR_BYTES is logged either way as a
 // cloud_ops_events row of kind d1_result_cap_near (fail-soft, never blocks the read).
@@ -2331,8 +2331,8 @@ async function cronGridLog(db, worker, expr, startMs, outcome, note) {
     // CRON-FAULT-1: a missing or drifted cron_fire_log schema made every INSERT throw here, and the catch swallowed it,
     // so no run was ever recorded and cron-watch saw the worker as silent. Ensure the table exists before the write.
     await db.prepare("CREATE TABLE IF NOT EXISTS cron_fire_log (cron_name TEXT, task_id TEXT, cron_expr TEXT, fired_at TEXT, fired_epoch_ms INTEGER, outcome TEXT, source TEXT, note TEXT)").run();
-    await db.prepare("INSERT INTO cron_fire_log (cron_name, task_id, cron_expr, fired_at, fired_epoch_ms, outcome, source, note) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)")
-      .bind(worker + "|" + expr, worker, expr, new Date(startMs).toISOString(), startMs, outcome, "worker:" + worker, String(note || "").slice(0, 500)).run();
+    await db.prepare("INSERT INTO cron_fire_log (cron_name, task_id, cron_expr, fired_at, fired_epoch_ms, outcome, source) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)")
+      .bind(worker + "|" + expr, worker, expr, new Date(startMs).toISOString(), startMs, outcome, "worker:" + worker).run();
   } catch (e) { console.error(JSON.stringify({ worker: worker, where: "cron-grid-log", error: String(e && e.message || e).slice(0, 200) })); }
 }
 async function cronGridDue(db, cfg, nowMs) {
