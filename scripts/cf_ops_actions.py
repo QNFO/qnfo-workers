@@ -27,6 +27,10 @@ ACTIONS
                          mapping the index to the repo directory of the retired worker that owned it) and that
                          directory carries a RETIRED or FOLDED marker. Added for #272, where the index
                          qnfo-calibration was recreated for the folded qnfo-fleet-calibrator.
+  delete-pages-project NAME
+                         DELETE a Pages project. Refused unless cf_estate.classify_pages gives NAME the verdict
+                         retire-candidate (fresh list, fresh repo scan) and it has no custom domain; a verified R2 backup
+                         (qnfo-backups/pages-retired/NAME.json) is read back before the DELETE (QNFO.INFRA.PAGE #1).
   d1-restore-drill       BP26-D1-DISCIPLINE-1: a real Time Travel restore drill on a throwaway scratch database (created, written,
                          bookmarked, mutated, restored to the bookmark, verified, deleted), plus a read-only bookmark lookup on qnfo-audit.
                          Writes one qnfo-audit.d1_restore_drills row (outcome pass or fail). Touches no production data.
@@ -623,6 +627,66 @@ def delete_vectorize_index(name: str, acct: str, token: str) -> int:
     ok = bool(j.get("success")) and st2 in (404, 410)
     emit({"action": "delete-vectorize-index", "index": name, "marker": marker, "http": st, "ok": ok,
           "verify_http": st2, "errors": j.get("errors")})
+    return 0 if ok else 1
+
+
+PAGES_RETIRED_PREFIX = "pages-retired/"
+
+
+def delete_pages_project(name: str, acct: str, token: str, root: str = ".") -> int:
+    """QNFO.INFRA.PAGE #1 (agent_issues 1001933): DELETE a Pages project only while scripts/cf_estate.py classify_pages gives it the verdict
+    retire-candidate on a fresh Pages list and a fresh repo scan, it has no custom domain, and a verified backup of its latest deployment
+    (metadata plus the size and SHA-256 of its served root page; the Pages API lists no files) sits in R2 qnfo-backups/pages-retired/NAME.json."""
+    act = "delete-pages-project"
+    if not NAME_RE.match(name or ""):
+        emit({"action": act, "project": name, "ok": False, "refused": "not a plain project name"})
+        return 3
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import cf_estate  # noqa: E402  (the verdict function is the single source of truth)
+    path = f"/accounts/{acct}/pages/projects"
+    st, j = call("GET", path + "?per_page=100", token)
+    if st != 200 or j.get("success") is False:
+        emit({"action": act, "project": name, "ok": False, "refused": "Pages list unreadable", "http": st})
+        return 3
+    listed = [p for p in (j.get("result") or []) if p.get("name") == name]
+    if not listed:
+        emit({"action": act, "project": name, "ok": True, "already_absent": True})
+        return 0
+    p = listed[0]
+    domains = p.get("domains") or []
+    custom = [d for d in domains if not d.endswith(".pages.dev")]
+    if custom:
+        emit({"action": act, "project": name, "ok": False, "refused": "project has a custom domain: " + ", ".join(custom)})
+        return 3
+    proj = {"name": name, "domains": domains, "created_on": p.get("created_on"),
+            "latest_deploy": (p.get("latest_deployment") or {}).get("created_on"), "source": bool(p.get("source"))}
+    refs = cf_estate.scan_pages_refs(root, [name])
+    row = cf_estate.classify_pages([proj], set(), {}, cf_estate.workflows_text(root), refs)[0]
+    if row["verdict"] != "retire-candidate":
+        emit({"action": act, "project": name, "ok": False, "refused": "verdict is " + row["verdict"] + ", not retire-candidate", "why": row["why"]})
+        return 3
+    dep = p.get("latest_deployment") or {}
+    page = {}
+    purl = dep.get("url") or f"https://{name}.pages.dev/"
+    try:
+        with urllib.request.urlopen(purl, timeout=30) as r:
+            body = r.read()
+        page = {"url": purl, "http": r.status, "bytes": len(body), "sha256": hashlib.sha256(body).hexdigest()}
+    except Exception as e:  # a dead deployment URL is recorded, not fatal: the metadata is the record
+        page = {"url": purl, "error": str(e)[:160]}
+    manifest = {"project": name, "retired_at": iso(0), "verdict": row, "latest_deployment": {k: dep.get(k) for k in ("id", "url", "created_on", "environment", "deployment_trigger", "build_config", "stages", "aliases")},
+                "served_root_page": page, "project_meta": {k: p.get(k) for k in ("id", "created_on", "production_branch", "subdomain", "source")}}
+    text = json.dumps(manifest, sort_keys=True, indent=1, default=str)
+    key = PAGES_RETIRED_PREFIX + name + ".json"
+    put = r2_put_text(acct, token, D1_BACKUP_BUCKET, key, text)
+    gst, back = r2_get_text(acct, token, D1_BACKUP_BUCKET, key) if put in (200, 201) else (put, "")
+    if not (gst == 200 and back == text):
+        emit({"action": act, "project": name, "ok": False, "refused": "backup not verified before the delete", "put_http": put, "get_http": gst})
+        return 1
+    dst, dj = call("DELETE", f"{path}/{name}", token)
+    st2, _ = call("GET", f"{path}/{name}", token)
+    ok = dst in (200, 204) and bool(dj.get("success", True)) and st2 in (404, 410)
+    emit({"action": act, "project": name, "deleted": ok, "ok": ok, "http": dst, "verify_http": st2, "backup": {"bucket": D1_BACKUP_BUCKET, "key": key, "bytes": len(text)}, "errors": dj.get("errors")})
     return 0 if ok else 1
 
 
@@ -2164,7 +2228,7 @@ def gen_activitypub_key(worker: str, acct: str, token: str, keygen=_rsa_keypair,
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("action", choices=["blocker-redteam", "d1-backup", "unbind-d1", "delete-d1", "unbind-service", "worker-history", "kv-secret-scan", "ops-intake-probe", "report", "r2-get", "delete-worker", "delete-vectorize-index", "gateway-logs", "ai-neurons", "gateway-cost", "gateway-routes", "gateway-auto-probe", "access-probe", "access-ensure-cloudflare", "zaraz-remove-tool", "zaraz-get", "zaraz-set-ga4", "gtg-tag", "spare-domain-canon", "gen-activitypub-key", "d1-restore-drill", "kill-switch-drill", "edge-rules", "secrets-inventory", "obs-sampling"])
+    ap.add_argument("action", choices=["blocker-redteam", "d1-backup", "unbind-d1", "delete-d1", "unbind-service", "worker-history", "kv-secret-scan", "ops-intake-probe", "report", "r2-get", "delete-worker", "delete-vectorize-index", "delete-pages-project", "gateway-logs", "ai-neurons", "gateway-cost", "gateway-routes", "gateway-auto-probe", "access-probe", "access-ensure-cloudflare", "zaraz-remove-tool", "zaraz-get", "zaraz-set-ga4", "gtg-tag", "spare-domain-canon", "gen-activitypub-key", "d1-restore-drill", "kill-switch-drill", "edge-rules", "secrets-inventory", "obs-sampling"])
     ap.add_argument("--target", default="")
     ap.add_argument("--model", default="")
     ap.add_argument("--gateway", default="default")
@@ -2195,6 +2259,11 @@ def main() -> int:
             print("::error::delete-vectorize-index needs --target")
             return 2
         return delete_vectorize_index(a.target, acct, token)
+    if a.action == "delete-pages-project":
+        if not a.target:
+            print("::error::delete-pages-project needs --target")
+            return 2
+        return delete_pages_project(a.target, acct, token)
     if a.action == "kill-switch-drill":
         return kill_switch_drill(acct, token)
     if a.action == "edge-rules":

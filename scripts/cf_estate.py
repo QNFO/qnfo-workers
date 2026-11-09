@@ -669,6 +669,68 @@ def compare_d1(cur: dict, base: dict) -> list:
     return out
 
 
+# D1-REPORT-STORE-1 (agent_issues 1001936): each d1-query-report is kept in R2 so the next one can be compared with it. This is the one write cf_estate.py makes,
+# and r2_save_report refuses any key outside R2_REPORT_PREFIX.
+R2_BUCKET = "qnfo-backups"
+R2_REPORT_PREFIX = "d1-query-report/"
+
+
+def r2_request(method: str, path: str, token: str, data: bytes | None = None, timeout: int = 60) -> tuple[int, bytes]:
+    req = urllib.request.Request(API + path, data=data, method=method,
+                                 headers={"Authorization": "Bearer " + token, "Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            return r.status, r.read()
+    except urllib.error.HTTPError as e:
+        return e.code, b""
+    except Exception:  # DNS failure, timeout: status 0, never raised
+        return 0, b""
+
+
+def report_key(db: str, now: float | None = None) -> str:
+    stamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime(now if now is not None else time.time()))
+    return "%s%s/%s.json" % (R2_REPORT_PREFIX, re.sub(r"[^A-Za-z0-9._-]", "_", db), stamp)
+
+
+def r2_object_path(acct: str, key: str) -> str:
+    return "/accounts/%s/r2/buckets/%s/objects/%s" % (acct, R2_BUCKET, urllib.parse.quote(key, safe="/"))
+
+
+def r2_save_report(acct: str, token: str, key: str, payload: dict) -> tuple[bool, str]:
+    if not key.startswith(R2_REPORT_PREFIX) or ".." in key:
+        return False, "refused: key outside " + R2_REPORT_PREFIX
+    st, _ = r2_request("PUT", r2_object_path(acct, key), token, json.dumps(payload, sort_keys=True, default=str).encode())
+    return st in (200, 201), "HTTP %s" % st
+
+
+def newest_baseline_r2(acct: str, token: str, db: str, hours: float, tries: int = 5) -> dict | None:
+    """The newest earlier report of the same database and window length, or None. No baseline yet is not an error; an unreadable list is noted."""
+    prefix = "%s%s/" % (R2_REPORT_PREFIX, re.sub(r"[^A-Za-z0-9._-]", "_", db))
+    st, raw = r2_request("GET", "/accounts/%s/r2/buckets/%s/objects?prefix=%s&per_page=1000" % (acct, R2_BUCKET, urllib.parse.quote(prefix, safe="")), token)
+    if st != 200:
+        print("baseline-r2: list HTTP %s, no baseline used" % st)  # a note, not an error: a missing baseline never fails the report
+        return None
+    try:
+        res = json.loads(raw.decode() or "{}").get("result") or []
+    except ValueError:
+        return None
+    if isinstance(res, dict):
+        res = next((v for v in res.values() if isinstance(v, list)), [])
+    keys = sorted((o.get("key") if isinstance(o, dict) else str(o) for o in res), reverse=True)
+    for k in [k for k in keys if k and k.startswith(prefix) and k.endswith(".json")][:tries]:
+        gst, body = r2_request("GET", r2_object_path(acct, k), token)
+        if gst != 200:
+            continue
+        try:
+            doc = json.loads(body.decode())
+        except ValueError:
+            continue
+        if float((doc.get("d1") or {}).get("hours") or 0) == float(hours):
+            doc["_baseline_key"] = k
+            return doc
+    return None
+
+
 D1_QUERY = ("query($acct:String!,$since:Time!,$until:Time!,$db:String!){viewer{accounts(filter:{accountTag:$acct}){"
             "d1QueriesAdaptiveGroups(limit:%d,filter:{datetime_geq:$since,datetime_leq:$until,databaseId:$db},orderBy:[%s]){"
             "count sum{queryDurationMs rowsRead rowsWritten} dimensions{query}}}}}")
@@ -825,6 +887,8 @@ def main(argv: list | None = None) -> int:
     ap.add_argument("--input")
     ap.add_argument("--dump")
     ap.add_argument("--baseline")
+    ap.add_argument("--baseline-r2", action="store_true", help="d1-query-report: compare with the newest earlier stored report of the same database and hours")
+    ap.add_argument("--save", action="store_true", help="d1-query-report: write the RESULT_JSON to R2 qnfo-backups/d1-query-report/DB/UTC-timestamp.json")
     ap.add_argument("--hours", type=float, default=6.0)
     ap.add_argument("--db", default="qnfo-audit")
     ap.add_argument("--root", default=ROOT)
@@ -854,6 +918,16 @@ def main(argv: list | None = None) -> int:
     if a.dump:
         json.dump(data, open(a.dump, "w", encoding="utf-8"))
     baseline = json.load(open(a.baseline, encoding="utf-8")) if a.baseline else None
+    r2_token, r2_acct = os.environ.get("CLOUDFLARE_API_TOKEN", "").strip(), os.environ.get("CLOUDFLARE_ACCOUNT_ID", "").strip()
+    if (a.save or a.baseline_r2) and a.action != "d1-query-report":
+        print("::error::--save and --baseline-r2 belong to d1-query-report")
+        return 2
+    if (a.save or a.baseline_r2) and not (r2_token and r2_acct):
+        print("::error::--save and --baseline-r2 need CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID")
+        return 2
+    if a.baseline_r2 and baseline is None:
+        baseline = newest_baseline_r2(r2_acct, r2_token, a.db, a.hours)
+        print("baseline: " + (baseline["_baseline_key"] if baseline else "none stored yet"))
     rep = {"worker-inventory": run_workers, "pages-inventory": run_pages, "dns-drift": run_dns,
            "d1-query-report": lambda d, r: run_d1(d, r, baseline), "r2-inventory": run_r2}[a.action](data, a.root)
     md = render(a.action, rep, errors)
@@ -865,6 +939,12 @@ def main(argv: list | None = None) -> int:
     key = {"worker-inventory": "workers", "pages-inventory": "pages", "dns-drift": "dns", "d1-query-report": "d1", "r2-inventory": "r2"}[a.action]
     slim = {k: v for k, v in rep.items() if k != "rows"} if a.action in ("worker-inventory",) else rep
     print("RESULT_JSON=" + json.dumps({"action": a.action, "errors": errors, key: slim}, sort_keys=True, default=str)[:60000])
+    if a.save:
+        rkey = report_key(a.db)
+        saved, how = r2_save_report(r2_acct, r2_token, rkey, {"action": a.action, "errors": errors, key: slim})
+        print("saved: %s %s" % (rkey if saved else "NOT SAVED", how))
+        if not saved:
+            return 3
     if errors and not any(e.startswith(("d1QueriesAdaptiveGroups", "r2OperationsAdaptiveGroups")) for e in errors):
         return 3
     return 1 if a.strict and a.action == "dns-drift" and rep["hard"] else 0

@@ -19,7 +19,13 @@ for (const a of actions) ok(wf.includes("- " + a), "the workflow offers " + a);
 ok(/workflow_dispatch/.test(wf) && !/^\s+(push|pull_request|schedule):/m.test(wf), "dispatch only: no push, pull_request or schedule trigger (a report must not add a PR check or a run storm)");
 ok(/permissions:\s*\n\s+contents: read/.test(wf), "the workflow token is read-only");
 const writes = [...script.matchAll(/api\("(PUT|PATCH|DELETE)"/g)];
-ok(writes.length === 0, "cf_estate.py has no PUT, PATCH or DELETE call: it never writes to Cloudflare", writes.map((w) => w[0]));
+ok(writes.length === 0, "cf_estate.py has no PUT, PATCH or DELETE call through api(): it never writes to Cloudflare", writes.map((w) => w[0]));
+// D1-REPORT-STORE-1: the one write is the report save to R2, through r2_request, and only under the d1-query-report/ prefix.
+const r2w = [...script.matchAll(/r2_request\("(PUT|PATCH|DELETE)"/g)];
+ok(r2w.length === 1 && r2w[0][1] === "PUT", "exactly one r2_request write, a PUT (the report save)", r2w.map((w) => w[0]));
+ok(/R2_REPORT_PREFIX = "d1-query-report\/"/.test(script) && /if not key\.startswith\(R2_REPORT_PREFIX\)/.test(script), "the save refuses any key outside d1-query-report/");
+ok(/"--save"/.test(script) && /"--baseline-r2"/.test(script), "script offers --save and --baseline-r2");
+ok(/--save/.test(wf) && /--baseline-r2/.test(wf), "the cf-estate workflow passes --save and --baseline-r2 for d1-query-report");
 const posts = [...script.matchAll(/api\("POST", ([^,]+),/g)].map((m) => m[1]);
 ok(posts.length === 2 && posts.some((p) => p.includes("graphql")) && posts.some((p) => p.includes("/query")), "the only POSTs are the GraphQL read and the D1 read query", posts);
 console.log(`${pass} passed, ${fail} failed`);
