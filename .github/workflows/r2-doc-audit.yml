@@ -32,7 +32,7 @@ jobs:
   run:
     # RUNNER-PIN-2 (2026-10-20, WORKFLOW-FAILURE-AUDIT-1): ubuntu-latest becomes Ubuntu 26 by 2026-11-19 (a notice on every job meanwhile); pinned to ubuntu-24.04 until an ubuntu-26.04 trial run is green.
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 30
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -52,7 +52,8 @@ jobs:
         run: |
           set -uo pipefail
           node scripts/r2_fetch_texts.mjs keys.jsonl > texts.json
-          node scripts/r2_doc_audit.mjs --keys keys.jsonl --texts texts.json --src-dir . --emit out > rows.jsonl
+          node scripts/r2_indexed_keys.mjs > indexed.json
+          node scripts/r2_doc_audit.mjs --keys keys.jsonl --texts texts.json --indexed indexed.json --retired docs/retired-r2-documents.txt --src-dir . --emit out > rows.jsonl
           wc -l out/issues.jsonl
           echo "orphans $(wc -l < out/issues.jsonl)" >> "$GITHUB_STEP_SUMMARY"
 

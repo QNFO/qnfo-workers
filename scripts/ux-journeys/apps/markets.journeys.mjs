@@ -19,5 +19,13 @@ export const journeys = [
       await u.see("Order size");
       await u.page.getByRole("button", { name: "Buy YES" }).first().waitFor({ state: "visible", timeout: 15000 }).catch(() => { throw new Error("no Buy YES button on " + u.page.url()); });
       await u.screen("order-form");
+    } },
+  { id: "whitepaper", title: "Read the white paper on a phone and reach the live evidence", modes: ["live"],
+    async run(u) {
+      await u.open("/whitepaper");
+      await u.see("Where Do LLM Forecasters Have an Edge Over Prediction Markets?");
+      await u.see("What this paper does not claim");
+      await u.see("References");
+      await u.screen("whitepaper");
     } }
 ];

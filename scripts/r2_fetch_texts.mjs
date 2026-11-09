@@ -8,13 +8,20 @@ if (!file || !tok || !acct) { console.error("r2_fetch_texts: keys file, CLOUDFLA
 const keys = readFileSync(file, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l))
   .filter((k) => /\.(md|txt)$/i.test(k.key) && (k.size ?? 0) < 300_000).slice(0, Number(max));
 const texts = {}; let failed = 0;
-for (const k of keys) {
-  try {
-    const r = await fetch(`https://api.cloudflare.com/client/v4/accounts/${acct}/r2/buckets/${k.bucket}/objects/${encodeURIComponent(k.key)}`, { headers: { authorization: `Bearer ${tok}` } });
-    if (!r.ok) { failed++; continue; }
-    texts[k.key] = await r.text();
-  } catch { failed++; }
+// bounded concurrency: 400 sequential GETs took 4.5 minutes (issue 8958)
+const CONC = Number(process.env.FETCH_CONCURRENCY || 12);
+let next = 0;
+async function worker() {
+  while (next < keys.length) {
+    const k = keys[next++];
+    try {
+      const r = await fetch(`https://api.cloudflare.com/client/v4/accounts/${acct}/r2/buckets/${k.bucket}/objects/${encodeURIComponent(k.key)}`, { headers: { authorization: `Bearer ${tok}` } });
+      if (!r.ok) { failed++; continue; }
+      texts[k.key] = await r.text();
+    } catch { failed++; }
+  }
 }
+await Promise.all(Array.from({ length: CONC }, worker));
 // owner_docs rows in the audit D1 (key, body_md) count as document text too (issue 8765)
 let ownerDocs = 0;
 try {

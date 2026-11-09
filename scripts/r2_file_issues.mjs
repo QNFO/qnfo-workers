@@ -30,15 +30,22 @@ export async function insertRoadmap(rows, { fetchImpl = fetch, tok = process.env
 if (import.meta.url === `file://${process.argv[1]}`) {
   const [file, cap = "25", roadmapFile] = process.argv.slice(2);
   const items = readFileSync(file, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l));
-  const open = new Set(JSON.parse(execFileSync("gh", ["issue", "list", "--state", "open", "--limit", "1000", "--json", "title"], { encoding: "utf8" })).map((i) => i.title));
-  let made = 0, skipped = 0;
+  const openIssues = JSON.parse(execFileSync("gh", ["issue", "list", "--state", "open", "--limit", "1000", "--json", "title,number,body"], { encoding: "utf8" }));
+  const open = new Map(openIssues.map((i) => [i.title, i]));
+  let made = 0, skipped = 0, updated = 0;
   for (const it of items) {
-    if (open.has(it.title)) { skipped++; continue; }
+    const ex = open.get(it.title);
+    if (ex) {
+      // a group issue's checklist shrinks as documents are implemented or retired: keep the body current
+      if ((ex.body || "").trim() !== it.body.trim()) { execFileSync("gh", ["issue", "edit", String(ex.number), "--body", it.body], { stdio: "inherit" }); updated++; }
+      else skipped++;
+      continue;
+    }
     if (made >= Number(cap)) break;
     execFileSync("gh", ["issue", "create", "--title", it.title, "--body", it.body, ...it.labels.flatMap((l) => ["--label", l])], { stdio: "inherit" });
     made++;
   }
-  const out = { orphans: items.length, filed: made, already_open: skipped, deferred: Math.max(0, items.length - made - skipped) };
+  const out = { orphans: items.length, filed: made, updated, already_open: skipped, deferred: Math.max(0, items.length - made - skipped) };
   if (roadmapFile && existsSync(roadmapFile)) {
     const rows = readFileSync(roadmapFile, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l));
     out.roadmap = await insertRoadmap(rows);
