@@ -26,6 +26,6 @@ qnfo-code-orchestrator/edit-repair-hints.test.mjs | 2026-11-16 | #6598 | still r
 qnfo-code-orchestrator/folded-target-at-read.test.mjs | 2026-11-16 | #6598 | still red; renewed by the main-suites fix (PR 9933) so deploy-gate stays an honest signal; each needs its own fix
 qnfo-fleet-control/ensure-live-path.test.mjs | 2026-11-16 | #6598 | still red; renewed by the main-suites fix (PR 9933) so deploy-gate stays an honest signal; each needs its own fix
 qnfo-fleet-control/portfolio-archive.test.mjs | 2026-11-16 | #6598 | still red; renewed by the main-suites fix (PR 9933) so deploy-gate stays an honest signal; each needs its own fix
-qnfo-lifecycle/paper-learn.test.mjs | 2026-11-10 | #6659 | pre-existing failure outside the ci-status-only change in the failing main run
+qnfo-lifecycle/paper-learn.test.mjs | 2026-11-16 | #6659 | pre-existing failure outside the ci-status-only change in the failing main run
 scripts/bp26-producers.test.mjs | 2026-11-16 | #6598 | still red; renewed by the main-suites fix (PR 9933) so deploy-gate stays an honest signal; each needs its own fix
 scripts/close-channel-guard.test.mjs | 2026-11-16 | #6598 | still red; renewed by the main-suites fix (PR 9933) so deploy-gate stays an honest signal; each needs its own fix
