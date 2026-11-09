@@ -180,9 +180,11 @@ class ShortScene(Scene):
         return g
 
     def beat_cta(self, b):
-        a = T(b["title"], 56).move_to(UP * 3.2)
+        import textwrap
+        q = len(b["title"]) > 30  # a closing question wraps over up to four lines and pushes the box down
+        a = T(textwrap.fill(b["title"], 22) if q else b["title"], 50 if q else 56).move_to(UP * (2.8 if q else 3.2))
         u = T(b["url"], 46, C1, maxw=6.6)
-        box = RoundedRectangle(corner_radius=0.3, width=max(7.0, u.width + 0.8), height=1.5, color=C1, fill_color=C1, fill_opacity=0.18, stroke_width=4).move_to(UP * 1.2)
+        box = RoundedRectangle(corner_radius=0.3, width=max(7.0, u.width + 0.8), height=1.5, color=C1, fill_color=C1, fill_opacity=0.18, stroke_width=4).move_to(DOWN * 0.9 if q else UP * 1.2)
         u.move_to(box)
         sub = T(b["sub"], 34, SOFT, bold=False).next_to(box, DOWN, buff=0.5)
         g = VGroup(a, box, u, sub)

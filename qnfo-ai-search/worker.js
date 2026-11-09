@@ -36,7 +36,7 @@
 //   LIMITS    public AI use is capped per visitor (hashed IP, hourly) and globally (daily); over a cap, or with the
 //             fleet's 30-day AI spend at SPEND_CAP_TOTAL_USD, the answer is sources-only (no model call).
 
-var VERSION = "2.19.4-codeagent";
+var VERSION = "2.19.6-codeagent";
 // 2.19.0 KERNEL-EVERYWHERE-1 (2026-11-06, owner directive "IMPLEMENT EVERYWHERE ACROSS ALL AI APPS AND SERVICES AND SURFACES", pillar reach): the Ask writer SYSTEM prompt carries the DOCTRINE-1 kernel 8.2.1 reply recognitions (KERNEL-REPLY-4): the answer body ends on the result; the designed FOLLOWUPS block remains the only question shape; no conditional offers or menus; ambiguity gets a stated assumption; limits are dispositions with their reason. prior 2.18.2-codeagent
 // 2.13.0 CROSS-LINK-1 (2026-11-04, pillar reach; minor: the Ask page links QWAV and q08 in its nav and footer and carries a Keep exploring strip to the paper library, QWAV, q08 and the idea threads). Prediction: ask.qwav.org visitors click through to another surface; revert: restore 2.12.17. // 2.12.17 earlier history follows: 
 
@@ -259,6 +259,19 @@ function params(c) {
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
 var __AI_ATTR_RATES = { "@cf/zai-org/glm-5.3": [127273, 400000], "@cf/zai-org/glm-5.3-flash": [13636, 45455], "@cf/nvidia/nemotron-3-120b-a12b": [45455, 136364], "@cf/moonshotai/kimi-k2.6": [86364, 363636], "@cf/moonshotai/kimi-k2.7-code": [86364, 363636], "@cf/openai/gpt-oss-120b": [31818, 68182], "@cf/openai/gpt-oss-20b": [18182, 27273], "@cf/deepseek-ai/deepseek-v4-pro-0813": [120000, 360000], "@cf/deepseek-ai/deepseek-v4-flash-0731": [40000, 120000], "@cf/meta/llama-3.3-70b-instruct-fp8-fast": [26668, 204805], "@cf/qwen/qwen3-30b-a3b-fp8": [4625, 30475], "@cf/qwen/qwen3.8-27b": [40909, 290909], "@cf/baai/bge-base-en-v1.5": [6058, 0], "@cf/baai/bge-small-en-v1.5": [1841, 0], "@cf/baai/bge-large-en-v1.5": [18582, 0] };
+// AI-METER-STREAM-1 (2026-11-09, agent_issues 1002126): a streamed reply carries no usage object, so __aiAttrEnv books the input share only (out_tok 0).
+// Once ask() has read the stream to its end, this books the output estimate (chars / 4 tokens at the model's output rate) as one counter row,
+// purpose 'binding-stream' (calls 0, so the call count is not doubled). Fail-soft; returns the output tokens booked.
+async function __aiStreamOutBook(env, worker, model, text) {
+  try {
+    var db = env && env.QNFO_AUDIT, chars = String(text || "").length;
+    if (!db || !chars) return 0;
+    var r = __AI_ATTR_RATES[String(model)] || [0, 0], outTok = Math.ceil(chars / 4), neurons = outTok * r[1] / 1e6;
+    await db.prepare("INSERT INTO ai_call_counters (day, worker, purpose, model, calls, errors, in_chars, ms, in_tok, out_tok, neurons) VALUES (?1,?2,'binding-stream',?3,0,0,0,0,0,?4,?5) ON CONFLICT(day, worker, purpose, model) DO UPDATE SET out_tok=out_tok+excluded.out_tok, neurons=neurons+excluded.neurons")
+      .bind(new Date().toISOString().slice(0, 10), worker, String(model).slice(0, 120), outTok, neurons).run();
+    return outTok;
+  } catch (e) { console.error(JSON.stringify({ worker: "qnfo-ai-search", where: "__aiStreamOutBook", error: String(e && e.message || e) })); return 0; }
+}
 function __aiAttrEnv(env, worker, aiKey, dbKey) {
   try {
     if (!env || env.__aiAttr) return env;
@@ -2429,6 +2442,7 @@ async function ask(request, env, ctx) {
             text += piece;
           }
         }
+        await __aiStreamOutBook(env, "qnfo-ai-search", model, text); // AI-METER-STREAM-1
         var tin = Number(usage && (usage.prompt_tokens || usage.input_tokens)) || Math.ceil(JSON.stringify(msgs).length / 3.5);
         var tout = Number(usage && (usage.completion_tokens || usage.output_tokens)) || Math.ceil(text.length / 3.5);
         return { text: stripThink(text), in_tok: tin, out_tok: tout, model: model };

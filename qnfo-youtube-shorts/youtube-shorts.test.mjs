@@ -323,3 +323,29 @@ test("YT-ART-FIX-1: the FLUX request has only schema-allowed fields", () => {
   assert.deepEqual(Object.keys(r).sort(), ["prompt", "steps"]);
   assert.ok(!("width" in r) && !("height" in r));
 });
+
+// YT-ENGAGE-1 (0.11.0): YouTube Studio feedback, 0 comments in 30 Shorts
+import { ctaBeat as ctaQ, scriptIssues as siQ, buildMetadata as bmQ, parseRetentionReport as prQ, directorPrompt as dpQ } from "./worker.js";
+test("YT-ENGAGE-1: the Short ends on the director's debate question, not a citation", () => {
+  const c = ctaQ("s", "A Paper Title", "Is the future already written, or does the universe decide as it goes?");
+  assert.ok(c.narr.startsWith("Is the future") && /comments/.test(c.narr) && !/paper called|linked below/i.test(c.narr));
+  assert.equal(c.title, "Is the future already written, or does the universe decide as it goes?");
+  assert.ok(/called/.test(ctaQ("s", "A Paper Title").narr), "no question: old closing");
+  assert.ok(/called/.test(ctaQ("s", "A Paper Title", "not a question").narr));
+});
+test("YT-ENGAGE-1: script audit enforces length, a short first sentence and no early jargon", () => {
+  assert.ok(siQ("word ".repeat(100) + "end.").some((x) => /over 95/.test(x)));
+  assert.ok(siQ("One two three four five six seven eight nine ten eleven twelve thirteen. Next.").some((x) => /first sentence/.test(x)));
+  assert.ok(siQ("Anyons braid. A plain fact.").some((x) => /jargon/.test(x)));
+  assert.deepEqual(siQ("Two numbers explain physics. That is odd. It is a model."), []);
+});
+test("YT-ENGAGE-1: prompt asks for a 25-40 second script, a question field and an everyday comparison first", () => {
+  const p = dpQ();
+  for (const k of ["25-40 second", "\"question\"", "BEFORE any academic term", "first 1.5 seconds"]) assert.ok(p.includes(k), k);
+});
+test("YT-ENGAGE-1: description leads with the question; analytics report carries likes, comments, shares", () => {
+  const m = bmQ({ title: "T", short: "A fact is here. More." }, "slug", "T", 30, "Which is it?");
+  assert.ok(m.description.startsWith("Which is it?"));
+  const r = prQ({ columnHeaders: [{ name: "video" }, { name: "views" }, { name: "likes" }, { name: "comments" }, { name: "averageViewPercentage" }], rows: [["v1", 5, 2, 1, 64.2]] });
+  assert.deepEqual(r.v1, { views: 5, likes: 2, comments: 1, avg_view_pct: 64.2 });
+});
