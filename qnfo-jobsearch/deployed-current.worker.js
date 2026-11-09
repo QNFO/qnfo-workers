@@ -9,7 +9,7 @@
 // JOBSEARCH-CV-1 (1.5.0): the CV is part of this worker (page /cv): a yes/no interview that builds the claim bank, review of unconfirmed claims, roles, achievements and publications edited in D1, a resume per job (summary, roles, selected work, education, skills) and a cover note, history and backup. The search is tied to that bank (evidence the owner can back up weighs more; what the CV lacks is shown as a gap), decided postings (rejected, applied, approved) never come back under another id, rejections carry a reason the search learns from, and a wider net: stretch matches outside the stated preferences, more boards and aggregators.
 // Routes: GET / (web UI) | GET /api | GET /api/matches | GET /api/matches/:id | GET /api/runs | GET /api/ledger | POST /api/run | POST /api/matches/:id/status | GET /health
 // Port of the jobsearch/ Python modules (tests: jobsearch/test_jobsearch.py, qnfo-jobsearch/worker.test.mjs).
-var VERSION = "1.12.0-codeagent";
+var VERSION = "1.12.1-codeagent";
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -2391,7 +2391,7 @@ const handler = {
       if (!STAGES.includes(body.stage)) return J({ error: "stage must be one of " + STAGES.join("|") }, 400);
       const id = decodeURIComponent(sg[1]);
       if (!(await env.JOBS_DB.prepare("SELECT 1 AS x FROM jobsearch_matches WHERE id=?").bind(id).first())) return J({ error: "not found" }, 404);
-      await env.JOBS_DB.prepare("INSERT INTO jobsearch_events (match_id, event, ts, note) VALUES (?1,?2,?3,?4)").bind(id, "stage:" + body.stage, new Date().toISOString(), String(body.note || "").slice(0, 300)).run();
+      await env.JOBS_DB.prepare("INSERT INTO jobsearch_events (match_id, event, ts, note) SELECT ?1,?2,?3,?4 WHERE NOT EXISTS (SELECT 1 FROM jobsearch_events WHERE match_id=?1 AND event=?2)").bind(id, "stage:" + body.stage, new Date().toISOString(), String(body.note || "").slice(0, 300)).run();   // JOBSEARCH-STAGE-ONCE-1: a double tap or a retry records a stage once
       return J({ ok: true, id, stage: body.stage });
     }
     let mm = p.match(/^\/api\/matches\/(.+?)(\/status)?$/);

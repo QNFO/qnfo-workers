@@ -144,3 +144,13 @@ console.log(`jobs-judge-pdf (with page): ${pass} checks passed`);
   ok(st.by_stage.panel === 1 && st.by_stage.final === 0, "stage events are counted per stage in the funnel: " + JSON.stringify(st.by_stage));
   ok(T.STAGES.includes("recruiter_screen") && T.STAGES.length === 7, "seven interview stages");
 }
+
+// JOBSEARCH-STAGE-ONCE-1: the same stage twice is one event
+{
+  const ins = "INSERT INTO jobsearch_events (match_id, event, ts, note) SELECT ?1,?2,?3,?4 WHERE NOT EXISTS (SELECT 1 FROM jobsearch_events WHERE match_id=?1 AND event=?2)";
+  const src = readFileSync(join(here, "worker.js"), "utf8");
+  ok(src.includes(ins), "the stage route inserts only when the stage is not recorded yet");
+  const d2 = new DatabaseSync(":memory:"); d2.exec("CREATE TABLE jobsearch_events (id INTEGER PRIMARY KEY AUTOINCREMENT, match_id TEXT NOT NULL, event TEXT NOT NULL, ts TEXT NOT NULL, note TEXT)");
+  for (let i = 0; i < 2; i++) d2.prepare(ins).run("m", "stage:final", "t", "");
+  ok(d2.prepare("SELECT COUNT(*) c FROM jobsearch_events").get().c === 1, "two submits make one row");
+}
