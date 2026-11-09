@@ -3744,6 +3744,15 @@ async function fyEnsure(env) {
   await env.PERSONAL.prepare("CREATE INDEX IF NOT EXISTS cmp_feed_date ON cmp_feed (date, state)").run();
   await env.PERSONAL.prepare("CREATE TABLE IF NOT EXISTS cmp_feed_meta (k TEXT PRIMARY KEY, v TEXT)").run();
 }
+// COMPANION-OPS-SEC-1: every admin action the Ask takes is logged, and at most 12 run in a day.
+async function opsGuard(env, action, detail) {
+  await env.PERSONAL.prepare("CREATE TABLE IF NOT EXISTS cmp_ops_log (ts TEXT NOT NULL, action TEXT NOT NULL, detail TEXT)").run();
+  const since = new Date(Date.now() - 864e5).toISOString();
+  const n = await one(env.PERSONAL, "SELECT COUNT(*) AS n FROM cmp_ops_log WHERE ts > ?", since).catch(() => null);
+  if (n && n.n >= 12) return { ok: false, error: "daily limit of 12 admin actions reached; try again tomorrow" };
+  await env.PERSONAL.prepare("INSERT INTO cmp_ops_log (ts, action, detail) VALUES (?, ?, ?)").bind(new Date().toISOString(), action, String(detail || "").slice(0, 300)).run();
+  return { ok: true };
+}
 async function fyDue(env) {
   await fyEnsure(env);
   const m = await one(env.PERSONAL, "SELECT v FROM cmp_feed_meta WHERE k = 'built'").catch(() => null);
@@ -3949,6 +3958,8 @@ async function companionTick(env, deps, opts) {
   out.processed = (await processInbox(env, deps, 5)).length;
   try { if (await fyDue(env)) out.feed = await fyBuild(env, deps, { days: 5 }); } catch (e) { out.feed_error = String(e && e.message || e).slice(0, 120); }
   try { out.loops = await opsLoops(env); } catch (e) { out.loops_error = String(e && e.message || e).slice(0, 120); }
+  // COMPANION-OBS-1: the last tick result is kept so Ask status can show it.
+  try { await fyEnsure(env); await env.PERSONAL.prepare("INSERT INTO cmp_feed_meta (k, v) VALUES ('last_tick', ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v").bind(JSON.stringify({ at: now, feed: out.feed || null, feed_error: out.feed_error || null, loops: out.loops || null, loops_error: out.loops_error || null }).slice(0, 2000)).run(); } catch (e) { /* observability must not break the tick */ }
   const exp = await env.PERSONAL.prepare("UPDATE companion_nudges SET state = 'expired', closed_at = ? WHERE kind LIKE 'cmp-%' AND state IN ('sent','shown') AND due_at IS NOT NULL AND due_at < ?").bind(now, now).run();
   out.expired = exp.meta ? exp.meta.changes : 0;
   const cfg0 = await loadCfg(env);
@@ -4368,6 +4379,7 @@ function companionTools(deps) {
     // COMPANION-OPS-1: the owner is signed in, so the Ask runs the system too: add a source, refresh the feed, read system status, file a request with the fleet.
     cmp_source_add: T("Companion ops: add a venue, bookshop or community calendar page for the For you feed to read. Needs the page address; find it with web_search first. The page is fetched and checked for dated listings in the next 14 days; a page with none is switched off and the result says so.", { name: { type: "string", required: true }, url: { type: "string", required: true }, kind: { type: "string", required: false } }, async (env, a) => {
       if (!deps.liveSourceAdd || !deps.fetchPage || !deps.excerpt) return { ok: false, error: "source tools are not wired" };
+      const g1 = await opsGuard(env, "cmp_source_add", (a && a.url) || ""); if (!g1.ok) return g1;
       const add = await deps.liveSourceAdd(env, { name: a && a.name, url: a && a.url, kind: a && a.kind });
       if (!add || !add.ok) return add || { ok: false, error: "not added" };
       let days = 0, chars = 0, err = "";
@@ -4400,6 +4412,7 @@ function companionTools(deps) {
     cmp_ops_issue: T("Companion ops: file a request, bug or new feature with the fleet so it gets built (an issue the code agents pick up). Use when Rowan wants something the system cannot do yet.", { title: { type: "string", required: true }, detail: { type: "string", required: true }, priority: { type: "string", required: false }, path: { type: "string", required: false } }, async (env, a) => {
       if (!env.AUDIT) return { ok: false, error: "the fleet is not reachable from here" };
       const title = s(a && a.title, 140), detail = s(a && a.detail, 3000);
+      const g2 = await opsGuard(env, "cmp_ops_issue", title); if (!g2.ok) return g2;
       if (!title || !detail) return { ok: false, error: "title and detail are required" };
       const pri = ["high", "medium", "low"].indexOf(String(a && a.priority)) >= 0 ? a.priority : "medium";
       const day = await localDay(env, nowIso());
@@ -5254,7 +5267,7 @@ window.addEventListener('online',flushQueue);document.addEventListener('visibili
 flushQueue();showPending();
 </script></body></html>`;
 
-return Object.freeze({ COMPANION_VERSION, TZ, CONTEXTS, ENERGY, NUDGE_KINDS, LADDER_KINDS, DDL, TASK_COLUMNS, ensureSchema, nowIso, FRESH_DUE_SQL, rid, esc, tzOffsetMinutes, localParts, dayKey, OFFLINE_MAX_AGE_MS, clientStamp, inQuiet, FSRS_W, RETENTION, MAX_INTERVAL_DAYS, retrievability, intervalDays, fsrsSchedule, CLARIFY_SYSTEM, contextFor, heuristicClarify, parseClarify, crisisSignal, FALLBACK_CRISIS_LINES, crisisText, SAFETY_PLAN_FIELDS, normalizeSafetyPlan, saveSafetyPlan, ACTIVITY_CATEGORIES, SEED_ACTIVITIES, helpScores, pickActivity, AI_USD_PER_1K_NEURONS, aiUseSummary, aiUse, focusOptions, logActivity, whatHelps, activityBank, addActivity, WHO5_ITEMS, WHO5_SCALE, who5Score, who5Read, recordWho5, who5Status, setPause, fallbackReply, EMAIL_MODES, saveSettings, LOGIN_TO, SESSION_COOKIE, SESSION_MS, maskedLoginTo, sessionFor, sendLoginCode, verifyLoginCode, isPaused, NEVER_RETIRE, retiredFrom, DISCREET_KINDS, discreetPayload, pruneMedia, TEXTS, pickLru, energyFor, chooseAction, receptiveHours, addDays, mondayOf, weekWindow, weekText, weekLookback, weekSeen, planNudge, b64u, unb64u, makeVapidKeys, vapidAuthHeader, encryptPayload, sendPush, pushAll, loadCfg, dayStartIso, COUNTRY_TZ, CITY_TZ, MULTI_TZ_COUNTRIES, countryCode, placeTz, stayAt, effectiveTz, localDay, EVENT_DEFAULT_MIN, eventMs, normalizeEvents, clearEventCache, loadEvents, afterEventText, GP_DAYS, gpSummaryBuild, gpSummary, sleepFromTimestamps, sleepWindow, moodStats, MIND_URL, readingLane, retiredKinds, daysSinceSocial, unansweredStreak, gatherState, remember, recall, contextSnapshot, recordMood, moodReply, addAction, upsertProject, actionDone, addJournal, addCard, reviewCard, answerNudge, MAX_CAPTURE_BYTES, transcribe, describeImage, describeImages, capture, shortClarify, clarify, dueFromWords, processItem, processInbox, pushPayloadFor, companionTick, agenda, FB_KINDS, fbKey, tasteTokens, tasteModel, tasteScore, applyTaste, loadFeedback, recordFeedback, tasteSummary, today, tasteFilterToday, dashboard, PRIVACY_TABLES, privacy, exportAll, deleteData, PERSONA, untrusted, checkInAnswer, chatFollowUp, chatContext, noteRiskInChat, companionTools, TOOL_APPENDIX_LINE, TICK_MS, doKeys, doEnsure, doTick, SELF_CHECKS, selfCheckState, selfCheck, sendToFleet, doAlarm, doFetch, handleTranscription, handleCompanion, MANIFEST, ICON_SVG, SW_JS, OFFLINE_JS, GUIDE_HTML, PAGE_HTML });
+return Object.freeze({ COMPANION_VERSION, TZ, CONTEXTS, ENERGY, NUDGE_KINDS, LADDER_KINDS, DDL, TASK_COLUMNS, ensureSchema, nowIso, FRESH_DUE_SQL, rid, esc, tzOffsetMinutes, localParts, dayKey, OFFLINE_MAX_AGE_MS, clientStamp, inQuiet, FSRS_W, RETENTION, MAX_INTERVAL_DAYS, retrievability, intervalDays, fsrsSchedule, CLARIFY_SYSTEM, contextFor, heuristicClarify, parseClarify, crisisSignal, FALLBACK_CRISIS_LINES, crisisText, SAFETY_PLAN_FIELDS, normalizeSafetyPlan, saveSafetyPlan, ACTIVITY_CATEGORIES, SEED_ACTIVITIES, helpScores, pickActivity, AI_USD_PER_1K_NEURONS, aiUseSummary, aiUse, focusOptions, logActivity, whatHelps, activityBank, addActivity, WHO5_ITEMS, WHO5_SCALE, who5Score, who5Read, recordWho5, who5Status, setPause, fallbackReply, EMAIL_MODES, saveSettings, LOGIN_TO, SESSION_COOKIE, SESSION_MS, maskedLoginTo, sessionFor, sendLoginCode, verifyLoginCode, isPaused, NEVER_RETIRE, retiredFrom, DISCREET_KINDS, discreetPayload, pruneMedia, TEXTS, pickLru, energyFor, chooseAction, receptiveHours, addDays, mondayOf, weekWindow, weekText, weekLookback, weekSeen, planNudge, b64u, unb64u, makeVapidKeys, vapidAuthHeader, encryptPayload, sendPush, pushAll, loadCfg, dayStartIso, COUNTRY_TZ, CITY_TZ, MULTI_TZ_COUNTRIES, countryCode, placeTz, stayAt, effectiveTz, localDay, EVENT_DEFAULT_MIN, eventMs, normalizeEvents, clearEventCache, loadEvents, afterEventText, GP_DAYS, gpSummaryBuild, gpSummary, sleepFromTimestamps, sleepWindow, moodStats, MIND_URL, readingLane, retiredKinds, daysSinceSocial, unansweredStreak, gatherState, remember, recall, contextSnapshot, recordMood, moodReply, addAction, upsertProject, actionDone, addJournal, addCard, reviewCard, answerNudge, MAX_CAPTURE_BYTES, transcribe, describeImage, describeImages, capture, shortClarify, clarify, dueFromWords, processItem, processInbox, pushPayloadFor, companionTick, agenda, FB_KINDS, fbKey, tasteTokens, tasteModel, tasteScore, applyTaste, loadFeedback, recordFeedback, tasteSummary, tripCard, today, tasteFilterToday, dashboard, PRIVACY_TABLES, privacy, exportAll, deleteData, PERSONA, untrusted, checkInAnswer, chatFollowUp, chatContext, noteRiskInChat, companionTools, TOOL_APPENDIX_LINE, TICK_MS, doKeys, doEnsure, doTick, SELF_CHECKS, selfCheckState, selfCheck, sendToFleet, doAlarm, doFetch, handleTranscription, handleCompanion, MANIFEST, ICON_SVG, SW_JS, OFFLINE_JS, GUIDE_HTML, PAGE_HTML });
 })();
 // COMPANION-INLINE-END
 var CMP_DEPS = {
