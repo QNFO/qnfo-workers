@@ -7839,6 +7839,34 @@ function pfHygiene(r, tier, nowMs) {
   return flags;
 }
 // Pure: org repositories + WBS rows -> the portfolio's measured state. No I/O.
+// RES-NUMBER-DRIFT-1 (issue 9768): WBS RES numbers in repository labels against program_registry. Lists a RES number carried by two
+// project rows, a repository whose name, description or topics name a RES number other than the one its registry row carries
+// (RES.030 vs RES.031), and the next free number. Pure: no reads, no writes.
+function pfResNumberDrift(wbsRows, repos) {
+  var re = /RES[.\-_ ]?(\d{1,3})(?!\d)/gi;
+  function nums(text) { var out = [], m; re.lastIndex = 0; while ((m = re.exec(String(text || "")))) { var n = parseInt(m[1], 10); if (out.indexOf(n) < 0) out.push(n); } return out; }
+  var byNum = {}, max = 0, byRepo = {};
+  (wbsRows || []).forEach(function(w) {
+    if (!w || !w.wbs_code) return;
+    var ns = nums(w.wbs_code);
+    if (!ns.length) return;
+    var n = ns[0];
+    if (n > max) max = n;
+    if (String(w.level || "project") === "project" || /^project$/i.test(String(w.level))) (byNum[n] = byNum[n] || []).push(w.wbs_code);
+    var key = String(w.github_repo || "").replace(/^QNFO\//, "");
+    if (key) (byRepo[key] = byRepo[key] || []).push(n);
+  });
+  var duplicates = Object.keys(byNum).filter(function(n) { return byNum[n].length > 1; }).map(function(n) { return { res: parseInt(n, 10), codes: byNum[n] }; });
+  var mismatches = [];
+  (repos || []).forEach(function(r) {
+    var reg = byRepo[r.name];
+    if (!reg || !reg.length) return;
+    var label = nums([r.name, r.description, (r.topics || []).join(" ")].join(" "));
+    label.forEach(function(n) { if (reg.indexOf(n) < 0) mismatches.push({ repo: r.name, label_res: n, registry_res: reg }); });
+  });
+  var next = String(max + 1); while (next.length < 3) next = "0" + next;
+  return { duplicates: duplicates, mismatches: mismatches, next_free: "RES." + next, count: duplicates.length + mismatches.length };
+}
 function pfEvaluate(repos, wbsRows, nowIso) {
   var nowMs = Date.parse(nowIso || new Date().toISOString());
   var wbsByRepo = {}, codeKnown = {};
@@ -7885,7 +7913,7 @@ function pfEvaluate(repos, wbsRows, nowIso) {
     graded: graded.length, hygiene_score: graded.length ? Math.round(100 * clean / graded.length) / 100 : null,
     dormant: dormant.map(function(r) { return r.name; }), unlinked_research: unlinked.map(function(r) { return r.name; }),
     archive_candidates: candidates.map(function(r) { return r.name; }), wbs_linked: Object.keys(linkedWbs).length, wbs_total: (wbsRows || []).length,
-    standards: pfStandardsSummary(rows)
+    standards: pfStandardsSummary(rows), res_number_drift: pfResNumberDrift(wbsRows, repos)
   };
 }
 function pfCell(s) { return String(s === null || s === void 0 ? "" : s).replace(/\\/g, "\\\\").replace(/\|/g, "\\|").replace(/\r?\n/g, " "); }
@@ -8142,28 +8170,6 @@ async function pfWbs(env) {
     return { ok: true, rows: (r && r.results) || [], note: "ok" };
   } catch (e) { return { ok: false, rows: [], note: "program_registry read failed: " + String(e && e.message || e).slice(0, 80) }; }
 }
-// RES-NUMBER-DRIFT-1 (DOC-ITEMS-REMAINDER-2, 2026-07 RES.030 vs RES.031): a RES code shared by two rows, a repository claimed by two RES codes, or a
-// repository whose name carries a RES number the registry gives to another repository; and the next free RES number.
-function pfResDrift(rows) {
-  var byCode = {}, byRepo = {}, max = 0, dup = [], shared = [], label = [];
-  (rows || []).forEach(function(r) {
-    var m = /^RES\.(\d+)/i.exec(String(r.wbs_code || ""));
-    if (!m) return;
-    var code = "RES." + m[1], n = parseInt(m[1], 10);
-    if (n > max) max = n;
-    byCode[code] = (byCode[code] || 0) + 1;
-    var repo = String(r.github_repo || "").toLowerCase();
-    if (repo) (byRepo[repo] = byRepo[repo] || {})[code] = 1;
-  });
-  Object.keys(byCode).forEach(function(c) { if (byCode[c] > 1) dup.push(c); });
-  Object.keys(byRepo).forEach(function(rp) {
-    var codes = Object.keys(byRepo[rp]);
-    if (codes.length > 1) shared.push(rp + ": " + codes.sort().join(", "));
-    var lm = /res[._-]?0*(\d+)/i.exec(rp.split("/").pop());
-    if (lm && !byRepo[rp]["RES." + ("000" + lm[1]).slice(-3)] && codes.length) label.push(rp + " is labelled RES." + ("000" + lm[1]).slice(-3) + " but registered as " + codes.join(", "));
-  });
-  return { res_number_drift: dup.length + shared.length + label.length, duplicate_codes: dup, repos_with_many_codes: shared, label_mismatch: label, next_free: "RES." + ("000" + (max + 1)).slice(-3) };
-}
 async function pfUpsert(env, ev) {
   var now = ev.ts, stmts = [];
   ev.rows.forEach(function(r) {
@@ -8297,7 +8303,6 @@ async function portfolioSync(env, force) {
   }
   var wbs = await pfWbs(env);
   var ev = pfEvaluate(org.repos, wbs.rows, new Date().toISOString());
-  var resDrift = pfResDrift(wbs.rows);
   await pfUpsert(env, ev);
   // PORTFOLIO-HYGIENE-1: fix what is deterministic before the surfaces are rendered, so the day's documents also list
   // what was done. The register rows and flags still describe the organisation as read at the top of this run; the
@@ -8322,7 +8327,7 @@ async function portfolioSync(env, force) {
   actions = actions.filter(function(a) { return a.status !== "unchanged"; });
   ev.actions = actions;
   try { await env.AUDIT.prepare("INSERT INTO portfolio_sync_runs (ts, repos, hygiene, status, note, writes) VALUES (?1, ?2, ?3, ?4, ?5, ?6)").bind(ev.ts, ev.total, ev.hygiene_score, status, "kernel " + VERSION + "; wbs:" + wbs.note + "; dormant " + ev.dormant.length + "; unlinked " + ev.unlinked_research.length + "; actions " + actions.length + " (" + done + " committed)", JSON.stringify(writes).slice(0, 1500)).run(); } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:portfolioSync:caught", error: String(e && e.message) })); }
-  return { ok: true, status: status, ts: ev.ts, repos: ev.total, tiers: ev.tiers, hygiene: ev.hygiene_score, standards: ev.standards, wbs: wbs.note, res_number_drift: resDrift, writes: writes, actions: actions, ms: Date.now() - t0 };
+  return { ok: true, status: status, res_number_drift: ev.res_number_drift, ts: ev.ts, repos: ev.total, tiers: ev.tiers, hygiene: ev.hygiene_score, standards: ev.standards, wbs: wbs.note, writes: writes, actions: actions, ms: Date.now() - t0 };
 }
 // PARTIAL-RETRY-1: a run that left a surface unwritten (partial) is retried on the next hourly tick, not after 20h;
 // a fully written run (ok) holds for PF_STALE_H. The writes are idempotent (unchanged content is a no-op), so an
