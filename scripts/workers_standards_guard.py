@@ -429,7 +429,7 @@ def worker_budget_violations(base, changed_paths, hard_cap=WORKER_HARD_CAP):
         "worker-budget-net-zero", 1,
         "tracked active Workers=%d, hard cap=%d; %d new Worker(s) require %d same-change RETIRED/FOLDED marker(s) for existing Workers (live-consumer proof is still required)"
         % (len(active_workers), hard_cap, len(new_workers), required),
-        "wrangler.toml",
+        sorted(new_workers)[0],
     )]
 
 def spof_gate(base):
@@ -452,7 +452,7 @@ def main():
         else: print("WORKERS-STANDARDS-GUARD-1: note: no merge base with %s (shallow history); diffing against its tip, which is exact only when HEAD is the merge of the change into it" % base)
         names = [n for n in git("diff", "--name-only", base).split("\n") if n]
         allow = load_allowlist()
-        viol = [("scripts/workers_standards_guard.py", *v) for v in worker_budget_violations(base, names)]
+        viol = [("%s/wrangler.toml" % v[3], v[0], v[1], v[2], v[3]) for v in worker_budget_violations(base, names)]  # WORKER-BUDGET-PATH-1: stamped with the offending Worker's own path so an exception names one Worker
         for n in names:
             d = n.split("/")[0]
             if os.path.exists(os.path.join(d, "RETIRED")) or os.path.exists(os.path.join(d, "FOLDED")): continue
