@@ -464,7 +464,7 @@ async function fetchMarkets() {
     try {
       const r = await fetch(u, { headers: { accept: "application/json" }, cf: { cacheTtl: 60 } });
       if (!r.ok) throw new Error("gamma " + r.status);
-      const ms = (await r.json()).map(parseMarket).filter(Boolean);
+      const hiT = Date.parse(hi), ms = (await r.json()).map(parseMarket).filter(Boolean).filter((m) => !m.ends_at || Date.parse(m.ends_at) <= hiT);
       if (ms.length) return { markets: ms, source: "polymarket" };
     } catch (e) { console.warn("market feed attempt failed", String(e)); }
   }
