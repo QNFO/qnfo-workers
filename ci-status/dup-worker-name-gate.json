@@ -1,6 +1,6 @@
 {
-  "configs_scanned": 104,
-  "distinct_worker_names": 104,
+  "configs_scanned": 106,
+  "distinct_worker_names": 106,
   "duplicates": {},
   "gate": "DUP-WORKER-NAME-GATE-1",
   "issue": 1384,
