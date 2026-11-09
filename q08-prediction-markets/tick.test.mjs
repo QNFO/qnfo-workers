@@ -13,7 +13,7 @@ const soon = (d) => new Date(Date.now() + d * 86400000).toISOString();
 const feed = (markets) => ({ source: "polymarket", markets });
 const mk = (slug, yes, x = {}) => ({ slug, title: "Will " + slug + " happen?", yes, vol24: 50000, move: 0, closed: 0, ends_at: soon(5), sports: 0, ...x });
 const news = async () => [1, 2, 3, 4].map((i) => ({ title: "h" + i, domain: "x.com", date: "20261109", src: "gdelt" }));
-const said = (ps) => (m, n, model) => Promise.resolve(JSON.stringify({ p: ps[model] ?? 0.5, confidence: "medium", why: "Three outlets report it (" + model + ")." }));
+const said = (ps) => (m, n, model, opts = {}) => Promise.resolve(JSON.stringify({ p: opts.ask === "no" ? 1 - (ps[model] ?? 0.5) : ps[model] ?? 0.5, confidence: "medium", why: "Three outlets report it (" + model + ")." }));
 const deps = (ps) => ({ news, ask: said(ps), models: Object.keys(ps) });
 const agree80 = deps({ a: 0.78, b: 0.8, c: 0.82 });
 const get = async (env, path) => (await worker.fetch(new Request("https://x" + path), env)).json();
@@ -258,4 +258,35 @@ test("the charter reports the proof split by confidence once a level has enough 
   await tick(env, feed([mk("seed", 0.5)]), deps({ a: 0.5, b: 0.5, c: 0.5 }));
   const c = await get(env, "/api/charter");
   assert.ok(c.evaluation && "by_confidence" in c.evaluation);
+});
+
+// ---- issue 9107: consistency and fake-date probes ----
+const probeAsk = (script) => (m, n, model, opts = {}) => Promise.resolve(JSON.stringify({ p: opts.ask === "no" ? script.no : opts.daysBack ? script.fake : script.yes, confidence: "medium", why: "Three outlets report it (" + model + ")." }));
+const sampledSlug = (() => { for (let i = 0; i < 500; i++) { const s = "vote" + i; if (probeSampledFor(s)) return s; } })();
+function probeSampledFor(s) { let h = 2166136261; for (const c of s) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619) >>> 0; } return h % 100 < 20; }
+const unsampledSlug = (() => { for (let i = 0; i < 500; i++) { const s = "plain" + i; if (!probeSampledFor(s)) return s; } })();
+const pd = (script, slug) => ({ news, models: ["a", "b", "c"], ask: probeAsk(script) });
+test("a probed market whose NO wording does not complement YES is recorded inconsistent and not traded", async () => {
+  const env = { TRADES_DB: fakeD1() };
+  const r = await tick(env, feed([mk(sampledSlug, 0.55)]), pd({ yes: 0.8, no: 0.6, fake: 0.8 }));
+  assert.equal(r.opened, 0);
+  const row = env.TRADES_DB._raw.prepare("SELECT confidence, traded, probe FROM pt_estimate WHERE slug=?").get(sampledSlug);
+  assert.equal(row.confidence, "inconsistent"); assert.equal(row.traded, 0); assert.equal(JSON.parse(row.probe).complement.ok, false);
+  const c = await get(env, "/api/charter");
+  assert.equal(c.probes.n, 1); assert.equal(c.probes.inconsistent, 1); assert.equal(c.probes.inconsistent_share, 1);
+});
+test("a probed market whose answer moves with the stated date excludes that model, and a consistent one trades", async () => {
+  const env = { TRADES_DB: fakeD1() };
+  const r = await tick(env, feed([mk(sampledSlug, 0.55)]), pd({ yes: 0.8, no: 0.2, fake: 0.4 }));
+  const row = env.TRADES_DB._raw.prepare("SELECT models, probe, traded FROM pt_estimate WHERE slug=?").get(sampledSlug);
+  assert.equal(JSON.parse(row.models).length, 2, "the model that looked ahead is out of the ensemble"); assert.equal(JSON.parse(row.probe).fake.ok, false);
+  const ok = { TRADES_DB: fakeD1() };
+  const r2 = await tick(ok, feed([mk(sampledSlug, 0.55)]), pd({ yes: 0.8, no: 0.2, fake: 0.78 }));
+  assert.equal(r2.opened, 1); assert.equal(JSON.parse(ok.TRADES_DB._raw.prepare("SELECT probe FROM pt_estimate WHERE slug=?").get(sampledSlug).probe).fake.ok, true);
+});
+test("an unsampled market is never probed, so the extra calls stay within the sample", async () => {
+  const env = { TRADES_DB: fakeD1() }; let calls = 0;
+  const ask = (m, n, model, opts) => { calls++; return probeAsk({ yes: 0.8, no: 0.2, fake: 0.8 })(m, n, model, opts); };
+  await tick(env, feed([mk(unsampledSlug, 0.55)]), { news, models: ["a", "b", "c"], ask });
+  assert.equal(calls, 3); assert.equal(env.TRADES_DB._raw.prepare("SELECT probe FROM pt_estimate WHERE slug=?").get(unsampledSlug).probe, null);
 });

@@ -7,7 +7,7 @@
 1. **There is no demonstrated general edge.** In the sources reviewed for this paper, language-model forecasters at best match the aggregate of a human forecasting crowd, and they trail the best human forecasters. None of the studies compares them with liquid market prices after trading costs, and I found no peer-reviewed evidence of a profit from doing so.
 2. **An edge is plausible only in specific places.** The evidence points to six hypotheses (section 3): combining a model with the crowd, structural mispricing between related contracts, systematic crowd biases such as the favourite-longshot bias, breadth across many low-attention markets, speed on thin or newly listed markets, and domains where the model's sources lead the crowd.
 3. **Most published comparisons cannot tell us whether an edge is real.** Leakage of future information, human forecasts in training data, metric choices and small samples all inflate or obscure results (section 4).
-4. **So the Q08 program is built to prove or refute an edge on paper, not to assume one.** Fourteen recommendations follow from the evidence (section 6). Eleven are implemented in the open-source worker `q08-prediction-markets` (version 1.7), and three are filed as tracked issues or recorded on the live-trading decision item. Real money stays out of reach of the code until a pre-registered gate passes (section 7).
+4. **So the Q08 program is built to prove or refute an edge on paper, not to assume one.** Fourteen recommendations follow from the evidence (section 6). Twelve are implemented in the open-source worker `q08-prediction-markets` (version 1.7), and two are filed as tracked issues or recorded on the live-trading decision item. Real money stays out of reach of the code until a pre-registered gate passes (section 7).
 
 *What this paper does not claim:* that Q08 has an edge. It claims that the question is testable, describes the test, and publishes the result as it accrues at `/api/charter` and `/api/track-record`.
 
@@ -80,7 +80,7 @@ A forecast is not a profit. Takers pay the spread and sometimes a fee, and the K
 | R10 | Report log loss as well as Brier score | section 4 | Implemented |
 | R11 | Skip wide-spread markets | section 5 | Implemented |
 | R12 | Test structural arbitrage separately from forecasting skill | H2, [5] | Filed as issue 9106: it needs each event's full outcome list |
-| R13 | Run consistency and fake-date probes on the model | [9][10] | Filed as issue 9107 |
+| R13 | Run consistency and fake-date probes on the model | [9][10] | Implemented: on a hashed 20 percent sample of markets one member is also asked for the NO wording (the two answers must sum to 1 within 0.15 or the estimate is recorded as inconsistent and not traded) and re-run with today moved back 30 days (a move above 0.2 drops that model from the ensemble for the market); the failure rates are `probes` in the charter |
 | R14 | Maker-style execution for any live phase | section 5 | Recorded on the live-trading decision item (issue 8960); not built |
 
 ## 7. Pre-registered test and stopping rules
