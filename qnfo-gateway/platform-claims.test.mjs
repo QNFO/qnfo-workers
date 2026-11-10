@@ -15,7 +15,8 @@ ok(src.includes('if (p === "/platform") return handlePlatform(env, false);'), "/
 ok(src.includes('if (p === "/api/platform-claims") return handlePlatform(env, true);'), "/api/platform-claims is routed");
 const esc = (t) => (t ? String(t).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;") : "");
 const qdsPage = (o, body) => "<title>" + o.title + "</title>" + (o.jsonld || "") + body;
-const mod = new Function("esc", "qdsPage", src.slice(a, b) + "\nreturn { handlePlatform, reset: function(){ PLATFORM_CACHE = { at: 0, data: null }; } };")(esc, qdsPage);
+const health = () => new Response(JSON.stringify({ worker: "qnfo-gateway" }), { headers: { "Content-Type": "application/json" } });
+const mod = new Function("esc", "qdsPage", "health", src.slice(a, b) + "\nreturn { handlePlatform, ultrastableRoute, reset: function(){ PLATFORM_CACHE = { at: 0, data: null }; } };")(esc, qdsPage, health);
 
 function envWith(rows, answers) {
   return { AUDIT: { prepare(sql) {
@@ -82,6 +83,18 @@ ok(!nh.includes("Directed by") && !nh.includes('"creator"'), "credit_visible 0 r
 mod.reset();
 const xj = await (await mod.handlePlatform(envProfile([{ key: "creator_url", value: "javascript:alert(1)" }]), true)).json();
 ok(xj.directed_by.url === "https://rwnq8.github.io/", "a non-https link falls back to the default");
+
+// ULTRASTABLE-DOMAIN-1: ultrastable.io serves the claims page; .app, .net and www answer 301 to it; other paths go to qnfo.org.
+ok(src.includes("const us = ultrastableRoute(host, p, u);"), "the host router consults ultrastableRoute");
+const R = (h, path) => { const x = new URL("https://" + h + path); return mod.ultrastableRoute(h, x.pathname, x); };
+ok(R("qnfo.org", "/") === null, "other hosts are untouched");
+ok(R("ultrastable.io", "/") === "page" && R("ultrastable.io", "/api/platform-claims") === "json", "the home serves the page and its JSON");
+ok(R("ultrastable.app", "/x?y=1").headers.get("Location") === "https://ultrastable.io/x?y=1" && R("www.ultrastable.net", "/").status === 301, "aliases answer 301 to ultrastable.io");
+ok(R("ultrastable.io", "/papers").headers.get("Location") === "https://qnfo.org/papers", "unknown paths on the home go to qnfo.org");
+ok(R("ultrastable.app", "/health").status === 200, "every alias answers /health directly for the route probe");
+mod.reset();
+const uh = await (await mod.handlePlatform(envProfile([{ key: "home_url", value: "https://ultrastable.io" }]), false)).text();
+ok(uh.includes('"url":"https://ultrastable.io"'), "the schema url follows product_profile.home_url");
 
 console.log(pass + " passed, " + fail + " failed");
 if (fail) process.exit(1);

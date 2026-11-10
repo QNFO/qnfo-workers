@@ -63,6 +63,14 @@ for _h in SPARE_TARGET:
     HOSTS.append((_h[4:] if _h.startswith("www.") else _h, _h))
     SERVICE_BY_HOST[_h] = "qnfo-lifecycle"
 DNS_CREATE = set(SPARE_TARGET)
+# ULTRASTABLE-DOMAIN-1 (2026-11-10): the owner bought ultrastable.io, .app and .net for the platform (zones created 07:52-07:53Z, no
+# address records). qnfo-gateway 3.66+ serves ultrastable.io (the live claims page) and answers 301 from the aliases, so every host goes
+# to the gateway, gets a proxied AAAA 100:: when it has no address record, and waits for the gateway version that renders it.
+ULTRASTABLE_HOSTS = [("ultrastable.io", "ultrastable.io"), ("ultrastable.io", "www.ultrastable.io"), ("ultrastable.app", "ultrastable.app"),
+                     ("ultrastable.app", "www.ultrastable.app"), ("ultrastable.net", "ultrastable.net"), ("ultrastable.net", "www.ultrastable.net")]
+ULTRASTABLE_MIN = (3, 66)
+HOSTS.extend(ULTRASTABLE_HOSTS)
+DNS_CREATE |= {h for _, h in ULTRASTABLE_HOSTS}
 # SPARE-DOMAINS-ORDER-1 (2026-10-09, agent_issues 2077): the run of 2026-10-09 09:43Z spent its whole 15 minutes on qwav.org and
 # www.qwav.org (proxy, detach the Pages binding, 42 failed /health reads each, roll back) and never reached the nine spare
 # hosts behind them, which are the ones still broken (ipatent.me and empoweringchange.today fail TLS). The two qwav.org hosts
@@ -149,21 +157,21 @@ def get_json(url, timeout=20):
         return resp.status, json.loads(resp.read().decode(errors="replace") or "{}")
 
 
-def version_ok(v):
+def version_ok(v, minimum=None):
     try:
         parts = [int(x) for x in v.split("-")[0].split(".")[:2]]
-        return tuple(parts) >= MIN_VERSION
+        return tuple(parts) >= (minimum or MIN_VERSION)
     except Exception:
         return False
 
 
-def wait_gateway():
+def wait_gateway(minimum=None):
     for i in range(1, 41):
         try:
             st, j = get_json(ORIGIN_HEALTH)
             v = str(j.get("version") or "")
             RESULT["gateway_version"] = v
-            if st == 200 and j.get("worker") == SERVICE and version_ok(v):
+            if st == 200 and j.get("worker") == SERVICE and version_ok(v, minimum):
                 print("gateway ready: %s" % v)
                 return True
             print("wait %d: %s version %s" % (i, j.get("worker"), v))
@@ -255,7 +263,7 @@ def attach(zone_name, host, zones):
             return False
     if not addr and host in DNS_CREATE:
         st, cj = req("POST", "/zones/%s/dns_records" % zone, {"type": "AAAA", "name": host, "content": "100::", "proxied": True, "ttl": 1,
-                                                               "comment": "SPARE-DOMAINS-1: originless record for the qnfo-lifecycle redirect"})
+                                                               "comment": ("ULTRASTABLE-DOMAIN-1: originless record for qnfo-gateway" if service_for(host) == SERVICE else "SPARE-DOMAINS-1: originless record for the qnfo-lifecycle redirect")})
         if st in (200, 201) and cj.get("success"):
             h.update(dns_created=(cj.get("result") or {}).get("id"))
             print("dns created: %s AAAA 100:: proxied (%s)" % (host, h["dns_created"]))
@@ -363,11 +371,19 @@ def main():
     zones = {}
     ok = True
     lifecycle_ready = None
+    ultrastable_ready = None
     for zone_name, host in HOSTS:
         if host in ("qwav.org", "www.qwav.org") and recently_failed(host):
             RESULT["hosts"][host] = {"zone": zone_name, "route_id": None, "status": "skipped", "detail": "failed verification and rolled back within 48h (SPARE-DOMAINS-ORDER-1); see agent_issues QWAV-ORG-GATEWAY-VERIFY-1"}
             ok = False
             continue
+        if (zone_name, host) in ULTRASTABLE_HOSTS:
+            if ultrastable_ready is None:
+                ultrastable_ready = wait_gateway(ULTRASTABLE_MIN)
+            if not ultrastable_ready:
+                RESULT["hosts"][host] = {"zone": zone_name, "route_id": None, "status": "skipped", "detail": "qnfo-gateway below 3.66 (ULTRASTABLE-DOMAIN-1 handler)"}
+                ok = False
+                continue
         if host in SPARE_TARGET:
             if lifecycle_ready is None:
                 lifecycle_ready = wait_lifecycle()

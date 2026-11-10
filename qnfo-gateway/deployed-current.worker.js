@@ -165,7 +165,7 @@ function formatPaper(source, record) {
 }
 // PAPER-FORMAT-2:END
 // 3.48.7 PAPER-REVISION-QUALITY-1 (2026-11-03, pillar reach): recover split revision titles and record abstracts at public rendering, and reject cached refusals from both summary surfaces.
-var VERSION="3.65.0-codeagent";
+var VERSION="3.66.0-codeagent";
 /* 3.54.2 SEO-404-PATHS-1 follow-up: the paper page script no longer requests /api/paper-context/undefined when the page data block is missing (first path recorded in seo_404_paths). */ /* 3.54.0 SEO-404-PATHS-1 and INDEXNOW-BACKOFF-1 (merged): see the two notes below. GET /api/seo/crawl also returns notFound, the top 50 crawler 404 paths of the window, so the dashboard UX auditor reads them from the open route. INDEXNOW-BACKOFF-1: an IndexNow endpoint that failed its last 6 logged runs is tried once per 3 hours and a 429 is not retried. */ /* SEO-404-PATHS-1 (2026-11-04, pillar reach): a crawler request that answers 404 records its path in living-paper seo_404_paths (day, host, path, n; 500 paths a day, 14 days kept). seo_crawl_log counted 1,875 crawler 404s on 2026-11-02 (qnfo.org, every bot, kind other) and kept no path to fix. */ // 3.52.0 QWAV-DEMOS-1 (2026-11-04, pillar reach; minor: the QWAV page lists the ten interactive demos that only the retired Pages site linked, with a Demos nav item, a hero action and a footer link; the page is now the whole of qwav.org through a qwav.org/* route, so unknown paths redirect home instead of answering 200). Revert: restore 3.51.0. // 3.51.0 earlier history follows: // 3.51.0 CROSS-LINK-1 (2026-11-04, pillar reach; minor: every QDS page gains a family bar linking QNFO, QWAV and q08, a Keep exploring module (newest and random papers from the open API, the three family sites, topic chips) and a family line in the footer; QDS 1.1.0; visible ask links use ask.qwav.org per DOMAIN-PLANE-1). Prediction: pages per session on qwav.org and qnfo.org rise and clicks between the three sites become non-zero. Revert: restore 3.50.0. // 3.50.0 earlier history follows: // 3.50.0 PAPER-CITATION-ALIASES-1 (#5577, pillar research; minor): expose the documented /papers/<slug>/cite.* routes alongside the existing API exports. /* main 3.53.1 */ // 3.53.1 PAPER-TTFB-1 (2026-11-04, pillar reach; patch): a paper page whose plain summary kept failing the readability gate ran two model generations inside every request (17 to 44 s to first byte for a-minimal-generative-grammar-of-coordination..., 1.2 s for its neighbours); the fill now runs after the response and once per PLAIN_RETRY_MS per paper per colo. Revert: restore 3.53.0. // 3.53.0 earlier history follows: // 3.53.0 CROSS-LINK-2 (2026-11-04, pillar reach; minor: papers.qnfo.org index and paper pages, rendered by lpDoc, gain the family bar and a Keep exploring strip linking QWAV, Ask, ideas and q08, so the pages a search lands on lead to the rest of the family). Revert: restore 3.52.0. // 3.52.0 earlier history follows: // 3.52.0 QWAV-DEMOS-1 (2026-11-04, pillar reach; minor: the QWAV page lists the ten interactive demos that only the retired Pages site linked, with a Demos nav item, a hero action and a footer link; the page is now the whole of qwav.org through a qwav.org/* route, so unknown paths redirect home instead of answering 200). Revert: restore 3.51.0. // 3.51.0 earlier history follows: // 3.51.0 CROSS-LINK-1 (2026-11-04, pillar reach; minor: every QDS page gains a family bar linking QNFO, QWAV and q08, a Keep exploring module (newest and random papers from the open API, the three family sites, topic chips) and a family line in the footer; QDS 1.1.0; visible ask links use ask.qwav.org per DOMAIN-PLANE-1). Prediction: pages per session on qwav.org and qnfo.org rise and clicks between the three sites become non-zero. Revert: restore 3.50.0. // 3.50.0 earlier history follows: // 3.50.0 PAPER-CITATION-ALIASES-1 (#5577, pillar research; minor): expose the documented /papers/<slug>/cite.* routes alongside the existing API exports.
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
@@ -3701,10 +3701,23 @@ function platformJsonLd(pf) {
   if (pf.credit_visible !== "0") {
     var person = { "@type": "Person", "@id": "https://qnfo.org/#person", name: pf.creator_name, url: pf.creator_url, jobTitle: "Systems researcher", sameAs: pf.creator_same_as };
     app.creator = { "@id": "https://qnfo.org/#person" }; app.author = { "@id": "https://qnfo.org/#person" };
-    if (typeof identityJsonLd === "function") return identityJsonLd("https://qnfo.org/platform", { person: { url: pf.creator_url, sameAs: [pf.creator_url].concat(pf.creator_same_as) }, nodes: [app] });
+    if (typeof identityJsonLd === "function") return identityJsonLd(pf.home_url, { person: { url: pf.creator_url, sameAs: [pf.creator_url].concat(pf.creator_same_as) }, nodes: [app] });
     return '<script type="application/ld+json">' + JSON.stringify({ "@context": "https://schema.org", "@graph": [person, app] }).replace(/</g, "\\u003c") + "<\/script>";
   }
   return '<script type="application/ld+json">' + JSON.stringify(Object.assign({ "@context": "https://schema.org" }, app)).replace(/</g, "\\u003c") + "<\/script>";
+}
+var ULTRASTABLE_HOME = "ultrastable.io";
+var ULTRASTABLE_ALIASES = ["www.ultrastable.io", "ultrastable.app", "www.ultrastable.app", "ultrastable.net", "www.ultrastable.net"];
+function ultrastableRoute(host, p, u) {
+  if (host !== ULTRASTABLE_HOME && ULTRASTABLE_ALIASES.indexOf(host) < 0) return null;
+  if (p === "/health") return health();
+  if (host !== ULTRASTABLE_HOME) return new Response(null, { status: 301, headers: { Location: "https://" + ULTRASTABLE_HOME + p + (u.search || "") } });
+  if (p === "/" || p === "/platform") return "page";
+  if (p === "/api/platform-claims") return "json";
+  if (p === "/robots.txt") return new Response("User-agent: *\nAllow: /\nSitemap: https://" + ULTRASTABLE_HOME + "/sitemap.xml\n", { headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "public, max-age=3600" } });
+  if (p === "/sitemap.xml") return new Response('<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>https://' + ULTRASTABLE_HOME + '/</loc><changefreq>daily</changefreq></url></urlset>\n', { headers: { "Content-Type": "application/xml; charset=utf-8", "Cache-Control": "public, max-age=3600" } });
+  if (p === "/qds.css" || p === "/qds.js" || p === "/qds-consent.js") return null;
+  return new Response(null, { status: 301, headers: { Location: "https://qnfo.org" + p + (u.search || "") } });
 }
 async function handlePlatform(env, asJson) {
   var d = await platformClaims(env);
@@ -3724,7 +3737,7 @@ async function handlePlatform(env, asJson) {
     (pf.credit_visible === "0" ? "" : '<h2>Who directs it</h2><p>' + esc(pf.creator_name) + ' is a ' + esc(pf.creator_title) + '. Rowan sets the platform\u2019s operating rules and evaluates what it does; coding agents write the code. Work and record: <a href="' + esc(pf.creator_url) + '" rel="author">' + esc(pf.creator_url.replace(/^https:\/\//, "").replace(/\/$/, "")) + '</a>' + pf.creator_same_as.map(function(u) { return ', <a href="' + esc(u) + '">' + esc(u.replace(/^https:\/\/(www\.)?/, "")) + '</a>'; }).join("") + '.</p>') +
     '<h2>Where it falls short</h2><p>One installation (QNFO). Hundreds of issues are open against a target of zero. The prediction match rate is scored by the system itself. The core still shares a database with QNFO\u2019s research applications. The full list, the evidence and the spin-off plan are on the <a href="https://github.com/QNFO/qnfo-workers/blob/main/docs/PRODUCT-ULTRASTABLE.md">product page</a>.</p>' +
     '<p class="q-small">Machine-readable: <a href="/api/platform-claims">/api/platform-claims</a>.</p></div></article></div>';
-  return new Response(qdsPage({ title: "Ultrastable \u2014 the platform QNFO runs on", description: "Ultrastable, the self-governing development platform behind QNFO, with every claim checked live against the fleet's own records.", canonical: "https://qnfo.org/platform", jsonld: platformJsonLd(pf), active: "about" }, body), { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "public, max-age=300" } });
+  return new Response(qdsPage({ title: "Ultrastable \u2014 the platform QNFO runs on", description: "Ultrastable, the self-governing development platform behind QNFO, with every claim checked live against the fleet's own records.", canonical: pf.home_url, jsonld: platformJsonLd(pf), active: "about" }, body), { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "public, max-age=300" } });
 }
 
 async function handleAbout(env) {
@@ -8823,6 +8836,10 @@ var gateway_worker_default = {
     if (p === "/qds.css") return qdsAsset("css");
     if (p === "/qds.js") return qdsAsset("js");
     if (p === "/qds-consent.js") return qdsAsset("consent");
+    // ULTRASTABLE-DOMAIN-1 (2026-11-10): ultrastable.io is the product's own home (zone bought by the owner 2026-11-10; .app and .net
+    // answer 301 to it). It serves the live claims page at /, its JSON, the health probe and the design assets; any other path goes to
+    // qnfo.org, so the shared header and footer links keep working. Routed by scripts/attach-surface-routes.py (ULTRASTABLE_HOSTS).
+    { const us = ultrastableRoute(host, p, u); if (us === "page") return handlePlatform(env, false); if (us === "json") return handlePlatform(env, true); if (us) return us; }
     // ARCHIVE-ON-GATEWAY-1 and QWAV-ON-GATEWAY-1: hosts that were undeployable Pages projects.
     if (host === "archive.qnfo.org" || host === "qwav.org" || host === "www.qwav.org" || host === "qwav.tech" || host === "www.qwav.tech") {
       if (host.indexOf("www.") === 0) return new Response(null, { status: 301, headers: { Location: "https://" + host.slice(4) + p + u.search } });
