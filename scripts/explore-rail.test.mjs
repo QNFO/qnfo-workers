@@ -44,6 +44,12 @@ const bare = erInject("<html><body><p>x</p></body></html>", "https://ideas.qnfo.
 ok(/<\/aside><\/body>/.test(bare), "no footer: rail goes before </body>");
 ok(erInject("<html><body>no close", "https://ideas.qnfo.org/", 1) === "<html><body>no close", "malformed page untouched");
 
+// ULTRASTABLE-FOOTER-1: every rail, full or compact, carries the platform line and its links.
+ok(/data-ultrastable-footer/.test(out) && /QNFO runs on Ultrastable/.test(out) && /href="https:\/\/ultrastable\.io\/proof\?/.test(out), "full rail names Ultrastable and links its proof");
+ok(count(erInject(qds0(), "https://qnfo.org/", 1), /data-ultrastable-footer/g) === 1, "compact rail carries the Ultrastable footer too");
+function qds0() { return '<html><body><main><section class="q-explore">x</section></main><footer>f</footer></body></html>'; }
+ok(count(out, /class="er-plat"/g) === 1 && count(out, /<li><a href="https:\/\/(ultrastable\.io|qnfo\.org|fleet|papers|ask|archive|qwav)/g) >= 8, "eight cross-product links in the footer strip");
+
 // Variety without chaos: same page+day is stable, different pages/days change the window.
 const sets = new Set();
 for (let d = 0; d < 12; d++) for (const p of ["/a", "/b", "/c"]) sets.add([...erInject(page, "https://qnfo.org" + p, d).matchAll(/class="er-card" href="https:\/\/([^/]+)/g)].map((m) => m[1]).join(","));
@@ -69,7 +75,7 @@ ok(/min-height:44px/.test(ER_CSS) && /focus-visible/.test(ER_CSS) && /prefers-re
 const html = (b, init) => new Response(b, { status: 200, headers: { "Content-Type": "text/html; charset=utf-8" }, ...init });
 const req = (u, o) => new Request(u, o);
 const r1 = await erWithRail(html(page), req("https://qnfo.org/x"));
-ok(r1.headers.get("X-Explore-Rail") === "1.0.0" && /data-explore-rail/.test(await r1.text()), "wrapper decorates a document");
+ok(r1.headers.get("X-Explore-Rail") === "1.1.0" && /data-explore-rail/.test(await r1.text()), "wrapper decorates a document");
 ok(!/data-explore-rail/.test(await (await erWithRail(html(page), req("https://qnfo.org/x", { method: "POST" }))).text()), "POST untouched");
 ok(!/data-explore-rail/.test(await (await erWithRail(html(page, { status: 404 }), req("https://qnfo.org/x"))).text()), "404 untouched");
 ok(!/data-explore-rail/.test(await (await erWithRail(new Response(page, { headers: { "Content-Type": "application/json" } }), req("https://qnfo.org/x"))).text()), "non-HTML untouched");
