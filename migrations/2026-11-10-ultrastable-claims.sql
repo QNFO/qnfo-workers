@@ -1,13 +1,10 @@
 -- ULTRASTABLE-CLAIMS-1 (owner, 2026-11-10: "Always practice what you preach and implement in code always. The system shall always function as the system describes itself.")
 -- (1) product_claims: each claim the Ultrastable product page makes is a row with a read-only probe. qnfo.org/platform (qnfo-gateway 3.64.0) runs the probes live;
 --     the same probes are remediation contracts claim-ultrastable-<id>, run hourly, so a claim that stops being true fails its contract and is escalated like any failure mode.
--- (2) owner_asks_product_au is recreated so a changed answer is carried too (review-gate finding on PR 10156: the open-issue dedup matched any answer of the same kind,
---     so a second, different answer filed nothing). The dedup now matches the exact answer.
 -- PREDICTION: remediation_verifications for class LIKE 'claim-ultrastable-%' pass share >= 0.85 within 48 h. Falsifier: a failing claim is a claim the page must drop or the fleet must fix.
 -- APPLY-BY: ci
 -- DB: qnfo-audit
 -- Rollback: UPDATE remediation_contracts SET status = 'retired' WHERE class LIKE 'claim-ultrastable-%'; DROP TABLE IF EXISTS product_claims
--- BACKUP: owner_asks
 -- CAUSE-MAPPED: registers no metric.
 -- spof-review: probes are single SELECTs over existing tables; qnfo-gateway refuses any probe_sql that is not one SELECT and shows a read failure as its own state.
 
@@ -24,17 +21,3 @@ INSERT OR REPLACE INTO product_claims (id, product, sort, claim, probe_sql, evid
 INSERT OR IGNORE INTO remediation_contracts (class, issue_id, precondition, action, verify_probe, verify_transport, max_attempts, escalate_to, expected_cadence_h, status, module, next_due_at)
 SELECT 'claim-ultrastable-' || id, NULL, 'ULTRASTABLE-CLAIMS-1', 'product claim check: ' || claim, probe_sql, 'd1-query', 3, 'qnfo-fleet-control', 1, 'active', 'failure-mode', datetime('now')
 FROM product_claims WHERE product = 'ultrastable';
-
-DROP TRIGGER IF EXISTS owner_asks_product_au;
-CREATE TRIGGER IF NOT EXISTS owner_asks_product_au AFTER UPDATE OF answer ON owner_asks
-WHEN NEW.kind LIKE 'product-%' AND NEW.answer IS NOT NULL AND NEW.answer != 'unsure' AND (OLD.answer IS NULL OR OLD.answer != NEW.answer)
-BEGIN
-  INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at)
-  SELECT 'PRODUCT-ANSWER-1: ' || NEW.kind || ' answered "' || COALESCE(NEW.answer_label, NEW.answer) || '"',
-    'The owner answered a prompted-recall question on fleet.qnfo.org/focus (owner_asks ' || NEW.id || '): ' || NEW.question || ' Answer: ' || COALESCE(NEW.answer_label, NEW.answer) || '.' || char(10) ||
-    'Apply it, marked "confirmed by owner, ' || substr(COALESCE(NEW.answered_at, strftime('%Y-%m-%dT%H:%M:%SZ','now')), 1, 10) || '": rwnq8/resume docs/BRAND.md section 9 (product-name, product-buyer, product-model, product-design-credit, product-prior-sales), docs/PRODUCT-ULTRASTABLE.md here (product-name, product-buyer, product-model), and for product-design-credit the CV and site wording (rwnq8/resume RESUME.md, rwnq8/rwnq8.github.io index.html). A "no" removes the claim it asked about.' || char(10) ||
-    'code-task: repo=qnfo-workers path=docs/PRODUCT-ULTRASTABLE.md' || char(10) ||
-    'code-probe: {"paths": ["docs/PRODUCT-ULTRASTABLE.md"], "contains": "owner_asks ' || NEW.id || '"}',
-    'owner-asks:product', 'roadmap', 'high', 'open', CAST(strftime('%s','now') AS INTEGER) * 1000, CAST(strftime('%s','now') AS INTEGER) * 1000
-  WHERE NOT EXISTS (SELECT 1 FROM agent_issues WHERE title = 'PRODUCT-ANSWER-1: ' || NEW.kind || ' answered "' || COALESCE(NEW.answer_label, NEW.answer) || '"' AND status = 'open');
-END;
