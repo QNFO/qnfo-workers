@@ -23,6 +23,14 @@
       "contains": [
         "\"items\""
       ]
+    },
+    {
+      "url": "https://qnfo.org/platform",
+      "status": 200,
+      "contains": [
+        "Ultrastable",
+        "claims pass their live check"
+      ]
     }
   ],
   "d1": [

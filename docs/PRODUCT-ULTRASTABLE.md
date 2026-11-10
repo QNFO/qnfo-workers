@@ -1,6 +1,6 @@
 # Ultrastable: the self-governing development platform QNFO runs on
 
-Status: proposed 2026-11-10 (owner question: "what is this actual product called that we might be able to sell ... and how do we spin that off so QNFO and the Quniverse are powered by this product?"). Code that holds this design: `product/boundary.json` and `scripts/product_boundary.mjs` (ULTRASTABLE-BOUNDARY-1); owner questions and owner-only steps: `migrations/2026-11-10-ultrastable-product.sql`. Personal-brand wording: `rwnq8/resume` `docs/BRAND.md` section 9.
+Status: proposed 2026-11-10 (owner question: "what is this actual product called that we might be able to sell ... and how do we spin that off so QNFO and the Quniverse are powered by this product?"). Code that holds this design: `product/boundary.json` and `scripts/product_boundary.mjs` (ULTRASTABLE-BOUNDARY-1); owner questions and owner-only steps: `migrations/2026-11-10-ultrastable-product.sql`; live claim probes: `migrations/2026-11-10-ultrastable-claims.sql`. Personal-brand wording: `rwnq8/resume` `docs/BRAND.md` section 9.
 
 ## 1. What the product is
 
@@ -24,6 +24,8 @@ Category: **self-governing development platform** (a kind of autonomous developm
 Context: Anthropic reported in November 2026 that its models author more than 80% of the code merged into its own codebase, that full autonomous self-improvement has not been reached, and that human control gets harder as it approaches (AI Lounge, 2026-11-03, citing the Anthropic Institute). The open question across the field is oversight of software that steers itself. Ultrastable is a working answer that can be inspected: its decisions, predictions, failures and trust are tables, not claims. Surveys of self-evolving coding agents (Zhou et al., arXiv 2608.03392) list reversibility, feedback reliability and evaluation beyond short benchmarks as open problems; those are the three things the platform records.
 
 ## 3. Differentiators, with evidence (measured 2026-11-10)
+
+The system must work the way this page says it does (owner, 2026-11-10). Every claim below that can be read from the fleet's records has a probe in `qnfo-audit.product_claims` (ULTRASTABLE-CLAIMS-1). [qnfo.org/platform](https://qnfo.org/platform) runs the probes live; the `claim-ultrastable-*` remediation contracts run them hourly and escalate a failure like any failure mode. `scripts/product-boundary.test.mjs` fails if the claim ids in `product/boundary.json` and the probe rows drift apart. A claim that stops passing is fixed or removed from this page.
 
 1. **It originates its own work.** Metrics breach, a trigger files an issue with a `code-task:` line, the code loop opens and merges the pull request. 6,604 issues have passed through the ledger (`qnfo-audit.agent_issues`); 624 merged pull requests in QNFO/qnfo-workers were opened by the code loop (titles `code-task:`).
 2. **It uses any coding agent as an executor.** The code loop runs on open models through Cloudflare Workers AI; GitHub Copilot merged 416 pull requests; interactive sessions the rest, all coordinated through one work-claim ledger (`qnfo-deploy-guard`). 3,880 merged pull requests since the repository opened on 2026-08-10, 1,245 of them in the last seven days.

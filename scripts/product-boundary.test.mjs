@@ -32,3 +32,10 @@ test("an unclassified worker and a retired worker are reported", () => {
   assert.ok(r.violations.some((v) => v.includes("unclassified live worker: beta")));
   assert.ok(r.violations.some((v) => v.includes("classified worker is not live: gone")));
 });
+
+test("ULTRASTABLE-CLAIMS-1: every listed claim has a probe row in the migration, and every row is listed", () => {
+  const sql = readFileSync(join(root, manifest.claims.migration), "utf8");
+  const rows = [...sql.matchAll(/INSERT OR REPLACE INTO product_claims \(id, product, sort, claim, probe_sql, evidence_note\) VALUES \('([^']+)', 'ultrastable'/g)].map((m) => m[1]);
+  assert.deepEqual([...rows].sort(), [...manifest.claims.ids].sort());
+  assert.match(sql, /'claim-ultrastable-' \|\| id/);
+});
