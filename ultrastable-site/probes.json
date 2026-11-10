@@ -1,0 +1,9 @@
+{
+  "_note": "DEPLOY-PROBES-1: what must still work after ultrastable-site deploys.",
+  "mode": "revert",
+  "health": "https://ultrastable-site.q08.workers.dev/health",
+  "http": [
+    { "url": "https://ultrastable-site.q08.workers.dev/health", "contains": ["\"worker\":\"ultrastable-site\"", "\"ok\":true"] },
+    { "url": "https://ultrastable-site.q08.workers.dev/pilot", "contains": ["Join the pilot", "Email the pilot team"] }
+  ]
+}

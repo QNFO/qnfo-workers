@@ -62,3 +62,12 @@ Owner-only steps (domain, trademark clearance, GitHub organisation, incorporatio
 ## 7. Name check (2026-11-10, partial)
 
 Ultrastable: no software trademark found in a web search; the .ai and .dev hosts answer (likely registered); the GitHub name was not checkable from the session. Homeostat (the alternative): a GitHub user of that name exists. A formal USPTO knockout search and the domain purchase are the owner's card.
+
+## 8. Launch positioning and domains (2026-11-10)
+
+Domains bought 2026-11-10 (Cloudflare zones, active): `ultrastable.io` (canonical site), `ultrastable.app` (301 to `/pilot`, reserved for the product console), `ultrastable.net` (301 to `/proof`). Served by `ultrastable-site` (ULTRASTABLE-SITE-1).
+
+Market read (web search 2026-11-10; vendor blogs, so indicative): cloud coding agents (Devin, Codex cloud, Factory, Copilot agent) are priced and sold as executors a person assigns work to, and governance is now a standard buying criterion for them (RBAC, audit logs, sandboxing). A second crowd sells control planes and gateways for coding agents (Fiddler with Lumeus, OpenHands Agent Control Plane, Coder, Bifrost): cost, access and audit. One analyst brief puts agent governance at roughly USD 1.0-1.5 billion in 2026 with cross-vendor governance immature. The searches found nothing on automatic revert of agent-made changes or on a system choosing its own work, which is where Ultrastable differs.
+
+Position: **the self-governing layer around the coding agents a team already uses** - not another agent, not only a gateway. Wedge: a design-partner pilot (three teams, one repository each), buyer is an engineering lead running many services or a team that owes auditors an account of what its agents did. Proof is the live claims page, which is also the main sales asset. Measure: pilot emails to `pilot@ultrastable.io`, `/proof` visits from outside the fleet, claims passing.
+

@@ -171,6 +171,10 @@
       "class": "personal",
       "role": "guard for the personal companion",
       "review": true
+    },
+    "ultrastable-site": {
+      "class": "core",
+      "role": "public presence of the product: ultrastable.io, with .app and .net redirects, live proof read from the platform claims"
     }
   },
   "core_scripts": [

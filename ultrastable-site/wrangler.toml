@@ -1,0 +1,23 @@
+# charter-pillar: reach
+# ultrastable-site (ULTRASTABLE-SITE-1, owner 2026-11-10: three new domains to launch the Ultrastable pilot): the public presence of the
+# self-governing development platform. ultrastable.io is canonical; ultrastable.app redirects to /pilot and ultrastable.net to /proof.
+# Net-zero: it replaces the qnfo.org/platform page as the product's address (that page stays as the claims source); no same-class worker remains.
+# No secrets, no bindings: live proof is read from the public https://qnfo.org/api/platform-claims.
+name = "ultrastable-site"
+main = "worker.js"
+compatibility_date = "2026-11-04"
+
+routes = [
+  { pattern = "ultrastable.io", custom_domain = true },
+  { pattern = "www.ultrastable.io", custom_domain = true },
+  { pattern = "ultrastable.app", custom_domain = true },
+  { pattern = "ultrastable.net", custom_domain = true }
+]
+
+[observability]
+enabled = true
+head_sampling_rate = 1
+
+[observability.logs]
+enabled = true
+invocation_logs = false

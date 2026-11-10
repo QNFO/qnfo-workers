@@ -64,6 +64,7 @@ const ADOPTERS = [
   { dir: "personal-companion", path: "/travel", host: "travel.q08.org", env: () => ({ PERSONAL: d1Stub(), AUDIT: d1Stub(), COMPANION_KEY: "k" }) },
   { dir: "q08-prediction-markets", path: "/whitepaper", env: () => ({}) },
   { dir: "qnfo-fleet-dashboard", path: "/", env: () => ({}) },
+  { dir: "ultrastable-site", path: "/", env: () => ({}) },
   { dir: "qnfo-fleet-dashboard", path: "/focus", env: () => ({ AUDIT: d1Stub() }) }
 ];
 for (const a of ADOPTERS) {
