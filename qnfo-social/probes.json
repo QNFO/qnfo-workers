@@ -9,5 +9,13 @@
         "\"worker\":\"qnfo-social\""
       ]
     }
+  ],
+  "d1": [
+    {
+      "binding": "DB",
+      "explain": [
+        "SELECT id FROM social_threads WHERE slug = 'ultrastable-2026-w46' LIMIT 1"
+      ]
+    }
   ]
 }
