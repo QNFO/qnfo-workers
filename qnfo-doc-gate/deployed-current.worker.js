@@ -1,5 +1,5 @@
 // WORKER-SOURCE-IN-REPO-1 (issue 9713): tracked copy of the deployed script (fetched through the Cloudflare API on 2026-11-09), plus /health.
-var VERSION = "1.0.4-codeagent";
+var VERSION = "1.0.5-codeagent";
 const SCOPES=[["AUDIT","handoffs/"],["AUDIT","audits/"],["AUDIT","closeouts/"],["AUDIT","fleet-consolidation/"],["AUDIT","audit/"],["AUDIT","install-dir-cleanup/"],["PALIMPSEST","docs/"],["QNFO","governance/"]];
 const CUTOFF="2026-11-06T18:00:00.000Z";
 const MAX_LISTED=50;
@@ -27,7 +27,7 @@ async function extractItems(env){
   await q(env,"CREATE TABLE IF NOT EXISTS doc_action_items (id INTEGER PRIMARY KEY AUTOINCREMENT, bucket TEXT, key TEXT, section TEXT, line TEXT, created_at TEXT DEFAULT (datetime('now')))");
   const docs=await q(env,"SELECT bucket,key,size FROM doc_audit WHERE items_scanned IS NULL AND lower(key) LIKE '%.md' ORDER BY size DESC LIMIT 6");
   let filed=0;
-  const hd=/^#{1,6}\s*(.*)$/;
+  const hd=/^\s*#{1,6}\s*(.*)$/;
   const want=/(open|remaining|deferred|todo|to-do|next step|blocker|blocked|follow[- ]?up|not done|pending|unresolved|failure|failed|incomplete)/i;
   for(const d of docs){
     let text="";
