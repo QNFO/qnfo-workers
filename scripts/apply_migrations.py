@@ -1249,12 +1249,15 @@ def tick_compile_error(acct, token, db_id):
     SQLite compiles every AFTER INSERT trigger body, and the views they read, when the INSERT is prepared, so one missing column in a view the tick
     triggers read fails every tick insert even though no trigger was created or changed (a CREATE OR REPLACE of the view is enough). A table that
     does not exist (another database) or an error of another class is not a verdict."""
-    try:
-        d1(acct, token, db_id, "INSERT INTO fleet_tick (source) SELECT 'migration-canary' WHERE 0")
-    except Exception as e:  # noqa: BLE001
-        msg = str(e)
-        if TRIGGER_COMPILE_ERR.search(msg) and "no such table: main.fleet_tick" not in msg and "no such table: fleet_tick" not in msg:
-            return msg[:200]
+    # TICK-INSERT-CANARY-1 (2026-11-10): fleet_tick_heavy wedged the same way (output_quality_heavy_tick, error 7500) with no probe on it, so
+    # both tick tables are probed; a table that does not exist in this database is skipped.
+    for table in ("fleet_tick", "fleet_tick_heavy"):
+        try:
+            d1(acct, token, db_id, "INSERT INTO " + table + " (source) SELECT 'migration-canary' WHERE 0")
+        except Exception as e:  # noqa: BLE001
+            msg = str(e)
+            if TRIGGER_COMPILE_ERR.search(msg) and "no such table: main." + table not in msg and "no such table: " + table not in msg:
+                return msg[:200]
     return None
 
 
