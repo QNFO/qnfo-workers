@@ -165,7 +165,7 @@ function formatPaper(source, record) {
 }
 // PAPER-FORMAT-2:END
 // 3.48.7 PAPER-REVISION-QUALITY-1 (2026-11-03, pillar reach): recover split revision titles and record abstracts at public rendering, and reject cached refusals from both summary surfaces.
-var VERSION="3.69.0-codeagent";
+var VERSION="3.69.1-codeagent";
 /* 3.54.2 SEO-404-PATHS-1 follow-up: the paper page script no longer requests /api/paper-context/undefined when the page data block is missing (first path recorded in seo_404_paths). */ /* 3.54.0 SEO-404-PATHS-1 and INDEXNOW-BACKOFF-1 (merged): see the two notes below. GET /api/seo/crawl also returns notFound, the top 50 crawler 404 paths of the window, so the dashboard UX auditor reads them from the open route. INDEXNOW-BACKOFF-1: an IndexNow endpoint that failed its last 6 logged runs is tried once per 3 hours and a 429 is not retried. */ /* SEO-404-PATHS-1 (2026-11-04, pillar reach): a crawler request that answers 404 records its path in living-paper seo_404_paths (day, host, path, n; 500 paths a day, 14 days kept). seo_crawl_log counted 1,875 crawler 404s on 2026-11-02 (qnfo.org, every bot, kind other) and kept no path to fix. */ // 3.52.0 QWAV-DEMOS-1 (2026-11-04, pillar reach; minor: the QWAV page lists the ten interactive demos that only the retired Pages site linked, with a Demos nav item, a hero action and a footer link; the page is now the whole of qwav.org through a qwav.org/* route, so unknown paths redirect home instead of answering 200). Revert: restore 3.51.0. // 3.51.0 earlier history follows: // 3.51.0 CROSS-LINK-1 (2026-11-04, pillar reach; minor: every QDS page gains a family bar linking QNFO, QWAV and q08, a Keep exploring module (newest and random papers from the open API, the three family sites, topic chips) and a family line in the footer; QDS 1.1.0; visible ask links use ask.qwav.org per DOMAIN-PLANE-1). Prediction: pages per session on qwav.org and qnfo.org rise and clicks between the three sites become non-zero. Revert: restore 3.50.0. // 3.50.0 earlier history follows: // 3.50.0 PAPER-CITATION-ALIASES-1 (#5577, pillar research; minor): expose the documented /papers/<slug>/cite.* routes alongside the existing API exports. /* main 3.53.1 */ // 3.53.1 PAPER-TTFB-1 (2026-11-04, pillar reach; patch): a paper page whose plain summary kept failing the readability gate ran two model generations inside every request (17 to 44 s to first byte for a-minimal-generative-grammar-of-coordination..., 1.2 s for its neighbours); the fill now runs after the response and once per PLAIN_RETRY_MS per paper per colo. Revert: restore 3.53.0. // 3.53.0 earlier history follows: // 3.53.0 CROSS-LINK-2 (2026-11-04, pillar reach; minor: papers.qnfo.org index and paper pages, rendered by lpDoc, gain the family bar and a Keep exploring strip linking QWAV, Ask, ideas and q08, so the pages a search lands on lead to the rest of the family). Revert: restore 3.52.0. // 3.52.0 earlier history follows: // 3.52.0 QWAV-DEMOS-1 (2026-11-04, pillar reach; minor: the QWAV page lists the ten interactive demos that only the retired Pages site linked, with a Demos nav item, a hero action and a footer link; the page is now the whole of qwav.org through a qwav.org/* route, so unknown paths redirect home instead of answering 200). Revert: restore 3.51.0. // 3.51.0 earlier history follows: // 3.51.0 CROSS-LINK-1 (2026-11-04, pillar reach; minor: every QDS page gains a family bar linking QNFO, QWAV and q08, a Keep exploring module (newest and random papers from the open API, the three family sites, topic chips) and a family line in the footer; QDS 1.1.0; visible ask links use ask.qwav.org per DOMAIN-PLANE-1). Prediction: pages per session on qwav.org and qnfo.org rise and clicks between the three sites become non-zero. Revert: restore 3.50.0. // 3.50.0 earlier history follows: // 3.50.0 PAPER-CITATION-ALIASES-1 (#5577, pillar research; minor): expose the documented /papers/<slug>/cite.* routes alongside the existing API exports.
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
@@ -2890,7 +2890,7 @@ async function paperAuditStatus(env, slug) {
 function paperAuditHtml(paper) {
   var a = paper._audit, p = paper._prov || provOf(null);
   var counts = a ? Number(a.open || 0) + " open findings; " + Number(a.answered || 0) + " answered findings." : "Finding counts are temporarily unavailable.";
-  return '<section data-audit-status aria-label="Paper audit status"><p>' + counts + ' ' + esc(provLabel(p).credit) + '</p><p><a href="https://qnfo.org/data/ai-science-failures">Read the audit record</a> &middot; <button type="button" onclick="document.getElementById(\'rep-d\')?.showModal()">Report a problem</button></p></section>';
+  return '<section data-audit-status aria-label="Paper audit status"><p>' + counts + ' ' + esc(provLabel(p).credit) + '</p><p><a href="https://papers.qnfo.org/data/ai-science-failures">Read the audit record</a> &middot; <button type="button" onclick="document.getElementById(\'rep-d\')?.showModal()">Report a problem</button></p></section>';
 }
 function provVisibleHtml(p) {
   var l = provLabel(p);
@@ -3759,8 +3759,9 @@ async function handlePlatform(env, asJson) {
   var rowsHtml = d.claims.map(function(c) {
     return '<tr><td><strong style="color:var(' + (c.pass ? "--q-ok" : "--q-bad") + ')">' + (c.pass ? "Pass" : "Fail") + '</strong></td><td>' + esc(c.claim) + (c.detail ? '<br><span class="q-small">' + esc(c.detail) + '</span>' : "") + '</td></tr>';
   }).join("");
-  var body = '<section class="q-hero" style="padding-bottom:16px"><div class="q-wrap"><p class="q-eyebrow">The platform</p><h1 class="q-display" style="max-width:20ch">' + esc(pf.name.charAt(0).toUpperCase() + pf.name.slice(1)) + ': the platform QNFO runs on</h1>' +
+  var body = '<section class="q-hero" style="padding-bottom:16px"><div class="q-wrap"><p class="q-eyebrow">QNFO, powered by Ultrastable</p><h1 class="q-display" style="max-width:20ch">' + esc(pf.name.charAt(0).toUpperCase() + pf.name.slice(1)) + ': the platform QNFO runs on</h1>' +
     '<p class="q-lede">A self-governing development platform (working name). It finds its own work in its metrics and failures, hands each change to a coding agent, proves the change live with a probe and an automatic revert, and scores its decisions against the predictions it logged first. QNFO is its first customer.</p>' +
+    '<p class="q-lede">What you are looking at: QNFO is a research publisher whose papers, audits and operations are run by this platform, so QNFO is the test of whether it works. Ultrastable itself is being spun out as its own product at <a href="https://ultrastable.io/">ultrastable.io</a>; the checks below are the same ones shown at <a href="https://ultrastable.io/proof">ultrastable.io/proof</a>.</p>' +
     '<p class="q-meta">' + status + '</p>' + credit + '</div></section>' +
     '<div class="q-wrap"><article class="q-article"><div class="q-prose"><h2>What it claims, checked live</h2><p>Each line is a claim from the product page. The check behind it runs against the fleet\u2019s own database on every visit (cached five minutes) and hourly as a contract that opens an issue when it fails.</p>' +
     '<div class="q-table-wrap"><table class="q-table"><thead><tr><th>Check</th><th>Claim and what the check saw</th></tr></thead><tbody>' + (rowsHtml || '<tr><td colspan="2">No claims are registered yet.</td></tr>') + '</tbody></table></div>' +
@@ -4238,6 +4239,7 @@ async function handleSitemap(env, sitemapHost) {
         { loc: "https://qnfo.org/", priority: "1.0" },
         { loc: "https://qnfo.org/papers", priority: "0.9" },
         { loc: "https://qnfo.org/about", priority: "0.8" },
+        { loc: "https://qnfo.org/platform", priority: "0.8" },
         { loc: "https://qnfo.org/work-with-me", priority: "0.8" },
         { loc: "https://qnfo.org/subscribe", priority: "0.6" },
         { loc: "https://qnfo.org/graph", priority: "0.7" },
@@ -9020,6 +9022,7 @@ var gateway_worker_default = {
       if (p === "/graph") return new Response(null, { status: 302, headers: { Location: "https://graph-api.qnfo.org/stats" } });
       if (p === "/ipatent" || p === "/ipatent/") return new Response(null, { status: 301, headers: { Location: "https://ipatent.qnfo.org/" } });
       if (p === "/about") return handleAbout(env);
+      if (p === "/proof") return new Response(null, { status: 301, headers: { Location: "https://ultrastable.io/proof", "Cache-Control": "public, max-age=3600" } });
       if (p === "/platform") return handlePlatform(env, false);
       if (p === "/api/platform-claims") return handlePlatform(env, true);
       if (p === "/work-with-me") return handleWorkWithMe();
