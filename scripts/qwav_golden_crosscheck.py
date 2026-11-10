@@ -52,8 +52,8 @@ PUBLISHED_DEMOS = [
     {"repo": "qwav-demo-hardware-visualizer", "artifact": "A5", "covered": True, "quantum_values": False},
     {"repo": "qwav-demo-bt-qec", "artifact": "-", "covered": True, "quantum_values": False},
     {"repo": "qwav-demo-monna-map-perspective", "artifact": "-", "covered": True, "quantum_values": False},
-    {"repo": "qwav-demos", "artifact": "-", "covered": False, "quantum_values": None,
-     "note": "consolidation (2026-08-04): monna-map-perspective/index.html is byte-identical to the replayed page (git blob eaaf7a8a); convergence-explorer, error-confinement-demo, qpna-playground and hardware-visualizer are older, smaller pages and were not read"},
+    {"repo": "qwav-demos", "artifact": "-", "covered": True, "quantum_values": False,
+     "note": "consolidation (2026-08-04): monna-map-perspective/index.html is byte-identical to the replayed page (git blob eaaf7a8a) and wraps that already covered demo; convergence-explorer, error-confinement-demo, qpna-playground and hardware-visualizer are older, smaller pages now replayed (scripts/qwav_page_replay.mjs) and cross-checked here; none computes a quantum state or dynamics"},
 ]
 
 
