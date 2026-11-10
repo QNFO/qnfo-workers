@@ -10,47 +10,168 @@
     "personal": "The owner's private plane (DOMAIN-PLANE-1, q08.org). Never part of the product, never copied into it."
   },
   "workers": {
-    "qnfo-fleet-control":       { "class": "core", "role": "kernel: the 10-minute tick, metric triggers, loop watch, trust ledger refresh, remediation contracts", "entangled": "charter, portfolio and research-specific steps live in the same 1.4 MB file" },
-    "qnfo-code-orchestrator":   { "class": "core", "role": "code loop: issue with a code-task line to a planned, tested, merged pull request on open models" },
-    "qnfo-deploy-guard":        { "class": "core", "role": "work claims and the secret lease shared by every agent lane" },
-    "qnfo-ops":                 { "class": "core", "role": "canonical deploy (/ops/deploy) with lock, ledger and bindings; the server-side ops agent" },
-    "qnfo-ai":                  { "class": "core", "role": "model router with capability gates, fallbacks and soft budget routing" },
-    "qnfo-ai-calibration":      { "class": "core", "role": "calibrates and stress-tests every routed model endpoint" },
-    "qnfo-ai-yield":            { "class": "core", "role": "AI cost yield measurement" },
-    "qnfo-waste-agent":         { "class": "core", "role": "finds and removes spend that produces nothing" },
-    "qnfo-memory-mcp":          { "class": "core", "role": "fleet code and topology graph (blast radius) and the knowledge graph" },
-    "qnfo-observability":       { "class": "core", "role": "makes the fleet observable to itself (trace ingest into D1)" },
-    "qnfo-cloud-ops":           { "class": "core", "role": "task runner for D1 workflows, owner-step watch and probe cadence" },
-    "qnfo-github-steward":      { "class": "core", "role": "mirrors the issue ledger to GitHub and keeps issue hygiene" },
-    "qnfo-intent-orchestrator": { "class": "core", "role": "turns a request from any client into an issue the loops act on" },
-    "qnfo-tools-mcp":           { "class": "core", "role": "MCP tool server for agent clients" },
-    "qnfo-agents":              { "class": "core", "role": "Cloudflare Agents SDK runtime reachable from the console" },
-    "qnfo-containers-pilot":    { "class": "core", "role": "container executor for Python and workspace jobs" },
-    "qnfo-doc-gate":            { "class": "core", "role": "gate that keeps documents tied to code", "review": true },
-    "qnfo-infra":               { "class": "core", "role": "shared infrastructure routes", "review": true },
-    "qnfo-fleet-dashboard":     { "class": "core", "role": "operator console (fleet.qnfo.org): queue, decisions, prompted-recall questions, owner tasks", "entangled": "research pages and the private owner documents are served from the same worker" },
-
-    "qnfo-research-exec":       { "class": "app", "role": "autonomous research pipeline: ground, draft, referee, revise, publish" },
-    "idea-hub":                 { "class": "app", "role": "research idea intake and scoring" },
-    "radar-hub":                { "class": "app", "role": "research radars" },
-    "qnfo-pdf":                 { "class": "app", "role": "paper PDFs" },
-    "qnfo-ipatent":             { "class": "app", "role": "ipatent research surface" },
-    "qnfo-gateway":             { "class": "app", "role": "qnfo.org and papers.qnfo.org, the home of record" },
-    "qnfo-ai-search":           { "class": "app", "role": "ask the library" },
-    "qnfo-social":              { "class": "app", "role": "outreach posts" },
-    "qnfo-email":               { "class": "app", "role": "inbound and outbound mail" },
-    "qnfo-subscribers":         { "class": "app", "role": "paper subscriptions" },
-    "qnfo-lifecycle":           { "class": "app", "role": "reader lifecycle mail", "review": true },
-    "qnfo-youtube-shorts":      { "class": "app", "role": "research shorts" },
-
-    "personal-api":             { "class": "personal", "role": "personal companion API (me.q08.org)" },
-    "personal-companion":       { "class": "personal", "role": "personal companion" },
-    "personal-watch":           { "class": "personal", "role": "personal watch" },
-    "q08-mind":                 { "class": "personal", "role": "personal notes" },
-    "q08-prediction-markets":   { "class": "personal", "role": "personal markets view" },
-    "q08-signal-engine":        { "class": "personal", "role": "personal signals" },
-    "qnfo-jobsearch":           { "class": "personal", "role": "the owner's job search (jobs.q08.org)" },
-    "qnfo-companion-guard":     { "class": "personal", "role": "guard for the personal companion", "review": true }
+    "qnfo-fleet-control": {
+      "class": "core",
+      "role": "kernel: the 10-minute tick, metric triggers, loop watch, trust ledger refresh, remediation contracts",
+      "entangled": "charter, portfolio and research-specific steps live in the same 1.4 MB file"
+    },
+    "qnfo-code-orchestrator": {
+      "class": "core",
+      "role": "code loop: issue with a code-task line to a planned, tested, merged pull request on open models"
+    },
+    "qnfo-deploy-guard": {
+      "class": "core",
+      "role": "work claims and the secret lease shared by every agent lane"
+    },
+    "qnfo-ops": {
+      "class": "core",
+      "role": "canonical deploy (/ops/deploy) with lock, ledger and bindings; the server-side ops agent"
+    },
+    "qnfo-ai": {
+      "class": "core",
+      "role": "model router with capability gates, fallbacks and soft budget routing"
+    },
+    "qnfo-ai-calibration": {
+      "class": "core",
+      "role": "calibrates and stress-tests every routed model endpoint"
+    },
+    "qnfo-ai-yield": {
+      "class": "core",
+      "role": "AI cost yield measurement"
+    },
+    "qnfo-waste-agent": {
+      "class": "core",
+      "role": "finds and removes spend that produces nothing"
+    },
+    "qnfo-memory-mcp": {
+      "class": "core",
+      "role": "fleet code and topology graph (blast radius) and the knowledge graph"
+    },
+    "qnfo-observability": {
+      "class": "core",
+      "role": "makes the fleet observable to itself (trace ingest into D1)"
+    },
+    "qnfo-cloud-ops": {
+      "class": "core",
+      "role": "task runner for D1 workflows, owner-step watch and probe cadence"
+    },
+    "qnfo-github-steward": {
+      "class": "core",
+      "role": "mirrors the issue ledger to GitHub and keeps issue hygiene"
+    },
+    "qnfo-intent-orchestrator": {
+      "class": "core",
+      "role": "turns a request from any client into an issue the loops act on"
+    },
+    "qnfo-tools-mcp": {
+      "class": "core",
+      "role": "MCP tool server for agent clients"
+    },
+    "qnfo-agents": {
+      "class": "core",
+      "role": "Cloudflare Agents SDK runtime reachable from the console"
+    },
+    "qnfo-containers-pilot": {
+      "class": "core",
+      "role": "container executor for Python and workspace jobs"
+    },
+    "qnfo-doc-gate": {
+      "class": "core",
+      "role": "gate that keeps documents tied to code",
+      "review": true
+    },
+    "qnfo-infra": {
+      "class": "core",
+      "role": "shared infrastructure routes",
+      "review": true
+    },
+    "qnfo-fleet-dashboard": {
+      "class": "core",
+      "role": "operator console (fleet.qnfo.org): queue, decisions, prompted-recall questions, owner tasks",
+      "entangled": "research pages and the private owner documents are served from the same worker"
+    },
+    "qnfo-research-exec": {
+      "class": "app",
+      "role": "autonomous research pipeline: ground, draft, referee, revise, publish"
+    },
+    "idea-hub": {
+      "class": "app",
+      "role": "research idea intake and scoring"
+    },
+    "radar-hub": {
+      "class": "app",
+      "role": "research radars"
+    },
+    "qnfo-pdf": {
+      "class": "app",
+      "role": "paper PDFs"
+    },
+    "qnfo-ipatent": {
+      "class": "app",
+      "role": "ipatent research surface"
+    },
+    "qnfo-gateway": {
+      "class": "app",
+      "role": "qnfo.org and papers.qnfo.org, the home of record"
+    },
+    "qnfo-ai-search": {
+      "class": "app",
+      "role": "ask the library"
+    },
+    "qnfo-social": {
+      "class": "app",
+      "role": "outreach posts"
+    },
+    "qnfo-email": {
+      "class": "app",
+      "role": "inbound and outbound mail"
+    },
+    "qnfo-subscribers": {
+      "class": "app",
+      "role": "paper subscriptions"
+    },
+    "qnfo-lifecycle": {
+      "class": "app",
+      "role": "reader lifecycle mail",
+      "review": true
+    },
+    "qnfo-youtube-shorts": {
+      "class": "app",
+      "role": "research shorts"
+    },
+    "personal-api": {
+      "class": "personal",
+      "role": "personal companion API (me.q08.org)"
+    },
+    "personal-companion": {
+      "class": "personal",
+      "role": "personal companion"
+    },
+    "personal-watch": {
+      "class": "personal",
+      "role": "personal watch"
+    },
+    "q08-mind": {
+      "class": "personal",
+      "role": "personal notes"
+    },
+    "q08-prediction-markets": {
+      "class": "personal",
+      "role": "personal markets view"
+    },
+    "q08-signal-engine": {
+      "class": "personal",
+      "role": "personal signals"
+    },
+    "qnfo-jobsearch": {
+      "class": "personal",
+      "role": "the owner's job search (jobs.q08.org)"
+    },
+    "qnfo-companion-guard": {
+      "class": "personal",
+      "role": "guard for the personal companion",
+      "review": true
+    }
   },
   "core_scripts": [
     "scripts/canary_revert.py",
@@ -74,17 +195,69 @@
     ".github/workflows/copilot-pr-lifecycle.yml"
   ],
   "core_tables": [
-    "agent_issues", "issue_triage", "issue_lifecycle", "remediation_contracts", "work_claims",
-    "metric_registry", "analytics_metric_triggers", "tick_runs", "trust_ledger", "decision_log",
-    "decision_predictions", "decision_outcomes", "failure_modes", "spof_registry", "belief_registry",
-    "blocker_redteam", "capability_ledger", "doctrine_proposals", "false_stop_register",
-    "control_registry", "owner_asks", "human_actions"
+    "agent_issues",
+    "issue_triage",
+    "issue_lifecycle",
+    "remediation_contracts",
+    "work_claims",
+    "metric_registry",
+    "analytics_metric_triggers",
+    "tick_runs",
+    "trust_ledger",
+    "decision_log",
+    "decision_predictions",
+    "decision_outcomes",
+    "failure_modes",
+    "spof_registry",
+    "belief_registry",
+    "blocker_redteam",
+    "capability_ledger",
+    "doctrine_proposals",
+    "false_stop_register",
+    "control_registry",
+    "owner_asks",
+    "human_actions"
   ],
   "phases": [
-    { "id": "P0", "what": "This manifest and its check: every live worker is classified, so new code lands on one side.", "state": "done" },
-    { "id": "P1", "what": "A short default policy pack (the agreement every agent lane reads) extracted from CLAUDE.md and the doctrine; QNFO keeps its owner directives as an overlay.", "state": "open" },
-    { "id": "P2", "what": "Core tables move from qnfo-audit into their own D1 database; QNFO tables stay. The kernel reads core tables only.", "state": "open" },
-    { "id": "P3", "what": "Tenant settings (account, repository, hosts, model ladder, owner contact) read from configuration instead of constants.", "state": "open" },
-    { "id": "P4", "what": "A second installation on a repository outside qnfo-workers proves the core runs without QNFO's applications.", "state": "open" }
-  ]
+    {
+      "id": "P0",
+      "what": "This manifest and its check: every live worker is classified, so new code lands on one side.",
+      "state": "done"
+    },
+    {
+      "id": "P1",
+      "what": "A short default policy pack (the agreement every agent lane reads) extracted from CLAUDE.md and the doctrine; QNFO keeps its owner directives as an overlay.",
+      "state": "open"
+    },
+    {
+      "id": "P2",
+      "what": "Core tables move from qnfo-audit into their own D1 database; QNFO tables stay. The kernel reads core tables only.",
+      "state": "open"
+    },
+    {
+      "id": "P3",
+      "what": "Tenant settings (account, repository, hosts, model ladder, owner contact) read from configuration instead of constants.",
+      "state": "open"
+    },
+    {
+      "id": "P4",
+      "what": "A second installation on a repository outside qnfo-workers proves the core runs without QNFO's applications.",
+      "state": "open"
+    }
+  ],
+  "claims": {
+    "page": "https://qnfo.org/platform",
+    "api": "https://qnfo.org/api/platform-claims",
+    "migration": "migrations/2026-11-10-ultrastable-claims.sql",
+    "ids": [
+      "own-work",
+      "predictions-scored",
+      "tick-running",
+      "trust-ledger",
+      "failure-detectors",
+      "no-silent-drop",
+      "decisions-logged"
+    ],
+    "rule": "ULTRASTABLE-CLAIMS-1: every claim the product page makes has a probe in product_claims; the page runs it live and a contract runs it hourly."
+  }
 }
