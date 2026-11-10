@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """PUSH-GATE-1: run a worker's suites, the narrative guard and the mirror check; exit 1 on any failure.
 Usage: python3 scripts/pre_push_check.py <worker> [--skip-guard]"""
+# COMPANION-LOCAL-CLEAN-1: added session closeout step comment
+
 import glob
 import os
 import subprocess
