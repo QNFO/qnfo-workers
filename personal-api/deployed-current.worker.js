@@ -296,7 +296,7 @@ function clampMaxTokens(requested, isReason) {
 __name(clampMaxTokens, "clampMaxTokens");
 __name2(clampMaxTokens, "clampMaxTokens");
 __name22(clampMaxTokens, "clampMaxTokens");
-var VERSION = "4.41.2";
+var VERSION = "4.41.3";
 // 4.37.2 KERNEL-PERSONAL-PRIVACY-1: preserve all ten registered reply categories across the content-free telemetry boundary.
 // 4.37.1 KERNEL-PERSONAL-PRIVACY-1: classify twin replies inside the personal plane; AUDIT receives only fixed categories and random event ids, never reply text or excerpts.
 // 4.37.0 KERNEL-EVERYWHERE-1 (2026-11-06, owner directive "IMPLEMENT EVERYWHERE ACROSS ALL AI APPS AND SERVICES AND SURFACES", pillar personal): the twin SYSTEM_PROMPT carries the DOCTRINE-1 kernel 8.2.1 reply recognitions (KERNEL-REPLY-4): end every reply on the answer or result, never on a question, conditional offer or menu; ambiguity gets a stated assumption; a refusal or limit with its reason is a disposition stated declaratively; reversible tool actions are taken and reported in the same reply, and a requested change is made with the tool, not described. Each twin reply is also mirrored to qnfo-audit.personal_replies so the kernel false-stop scan covers this surface. prior 4.36.2
@@ -2005,9 +2005,66 @@ const CONTEXTS = [
   { name: "@anywhere", hint: "thinking, reading, small things" }
 ];
 const ENERGY = ["low", "medium", "high"];
-const NUDGE_KINDS = ["cmp-agenda", "cmp-deadline", "cmp-discovery", "cmp-checkin", "cmp-care", "cmp-reflect", "cmp-next", "cmp-review", "cmp-anchor", "cmp-presence", "cmp-measure", "cmp-connect", "cmp-week", "cmp-after"];
+const NUDGE_KINDS = ["cmp-agenda", "cmp-deadline", "cmp-discovery", "cmp-checkin", "cmp-care", "cmp-reflect", "cmp-next", "cmp-review", "cmp-review-daily", "cmp-anchor", "cmp-presence", "cmp-measure", "cmp-connect", "cmp-week", "cmp-after"];
 // The e-mail ladder's asks are pushed to the phone too, so the two senders read as one companion.
 const LADDER_KINDS = ["checkin", "micro", "body", "contact", "care", "presence"];
+
+// COMPANION-NUDGE-2 (issue #1002302): the evening Daily review nudge is its own kind, not the cmp-reflect journal
+// prompt. One push between 19:30 and 21:45 when no Daily review exists yet for today, deep-linking straight to the
+// review card on /companion; once a review lands, no more nudges that day.
+const REVIEW_NUDGE_KIND = "cmp-review-daily";
+const REVIEW_PUSH = {
+  window: { start: "19:30", end: "21:45" },
+  title: "Daily review",
+  body: "Got five minutes? Look back on today.",
+  link: "/companion/#review"
+};
+function reviewNudgeDue(nowIso, hasDailyReviewToday, alreadyNudgedToday) {
+  const t = new Date(nowIso);
+  const hm = t.getHours() * 60 + t.getMinutes();
+  const [sh, sm] = REVIEW_PUSH.window.start.split(":").map(Number);
+  const [eh, em] = REVIEW_PUSH.window.end.split(":").map(Number);
+  return !hasDailyReviewToday && !alreadyNudgedToday && hm >= sh * 60 + sm && hm <= eh * 60 + em;
+}
+
+// COMPANION-BACKUP-1 (issue #1002305): KV is not the only copy of unported companion code. Every deploy also writes
+// the same bytes to R2 bucket personal-media under companion/releases/ with a manifest (version, sha256, time), so a
+// restore is possible from R2 alone; restoreCompanionRelease is the restore tool used from Ask.
+const COMPANION_BACKUP = { bucket: "personal-media", prefix: "companion/releases/", kvPrefix: "companion-v3/personal-api." };
+async function sha256Hex(bytes) {
+  const buf = await globalThis.crypto.subtle.digest("SHA-256", bytes);
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
+}
+function companionReleaseKeys(version) {
+  return {
+    kv: COMPANION_BACKUP.kvPrefix + version + ".worker.js",
+    r2: COMPANION_BACKUP.prefix + version + ".worker.js",
+    manifest: COMPANION_BACKUP.prefix + version + ".manifest.json"
+  };
+}
+async function buildCompanionManifest(version, bytes, timeIso) {
+  return { version, sha256: await sha256Hex(bytes), time: timeIso, bucket: COMPANION_BACKUP.bucket, key: COMPANION_BACKUP.prefix + version + ".worker.js" };
+}
+async function restoreCompanionRelease(env, version) {
+  const keys = companionReleaseKeys(version);
+  const manifest = await env[COMPANION_BACKUP.bucket].get(keys.manifest);
+  if (!manifest) throw new Error("no manifest for companion release " + version);
+  const body = await env[COMPANION_BACKUP.bucket].get(keys.r2);
+  if (!body) throw new Error("missing R2 copy for companion release " + version);
+  const bytes = await body.arrayBuffer();
+  const meta = await buildCompanionManifest(version, bytes, new Date().toISOString());
+  const expected = JSON.parse(await manifest.text());
+  if (meta.sha256 !== expected.sha256) throw new Error("sha256 mismatch restoring companion release " + version);
+  await env.KV.put(keys.kv, bytes);
+  return { restored: keys.kv, sha256: meta.sha256 };
+}
+
+// COMPANION-SELFCHECK-1 (issue #1002319): processInbox must not leave notes unsorted. A note that fails the sorter
+// (clarify) three times is sorted by heuristicClarify instead, so the hourly self-check never sees a stuck inbox.
+const INBOX_MAX_ATTEMPTS = 3;
+function inboxShouldFallback(note) {
+  return (note.attempts ?? 0) >= INBOX_MAX_ATTEMPTS && note.status !== "sorted";
+}
 
 // ---------------------------------------------------------------- schema (personal-life D1, idempotent)
 
@@ -5856,7 +5913,7 @@ window.addEventListener('online',flushQueue);document.addEventListener('visibili
 flushQueue();showPending();
 </script></body></html>`;
 
-return Object.freeze({ COMPANION_VERSION, TZ, CONTEXTS, ENERGY, NUDGE_KINDS, LADDER_KINDS, DDL, TASK_COLUMNS, ensureSchema, nowIso, FRESH_DUE_SQL, rid, esc, tzOffsetMinutes, localParts, dayKey, OFFLINE_MAX_AGE_MS, clientStamp, inQuiet, FSRS_W, RETENTION, MAX_INTERVAL_DAYS, retrievability, intervalDays, fsrsSchedule, CLARIFY_SYSTEM, contextFor, heuristicClarify, parseClarify, crisisSignal, FALLBACK_CRISIS_LINES, crisisText, SAFETY_PLAN_FIELDS, normalizeSafetyPlan, saveSafetyPlan, ACTIVITY_CATEGORIES, SEED_ACTIVITIES, helpScores, pickActivity, AI_USD_PER_1K_NEURONS, aiUseSummary, aiUse, focusOptions, logActivity, whatHelps, activityBank, addActivity, WHO5_ITEMS, WHO5_SCALE, who5Score, who5Read, recordWho5, who5Status, setPause, fallbackReply, EMAIL_MODES, saveSettings, LOGIN_TO, SESSION_COOKIE, SESSION_MS, maskedLoginTo, sessionFor, sendLoginCode, verifyLoginCode, isPaused, NEVER_RETIRE, retiredFrom, DISCREET_KINDS, discreetPayload, pruneMedia, TEXTS, pickLru, energyFor, chooseAction, receptiveHours, addDays, mondayOf, weekWindow, weekText, weekLookback, weekSeen, planNudge, b64u, unb64u, makeVapidKeys, vapidAuthHeader, encryptPayload, sendPush, pushAll, loadCfg, dayStartIso, COUNTRY_TZ, CITY_TZ, MULTI_TZ_COUNTRIES, countryCode, placeTz, stayAt, effectiveTz, localDay, EVENT_DEFAULT_MIN, eventMs, normalizeEvents, clearEventCache, loadEvents, afterEventText, GP_DAYS, gpSummaryBuild, gpSummary, sleepFromTimestamps, sleepWindow, moodStats, MIND_URL, readingLane, retiredKinds, daysSinceSocial, unansweredStreak, gatherState, remember, recall, contextSnapshot, recordMood, moodReply, addAction, upsertProject, actionDone, addJournal, addCard, reviewCard, answerNudge, MAX_CAPTURE_BYTES, transcribe, describeImage, describeImages, capture, shortClarify, clarify, dueFromWords, processItem, processInbox, pushPayloadFor, companionTick, agenda, FB_KINDS, fbKey, tasteTokens, tasteModel, tasteScore, applyTaste, loadFeedback, recordFeedback, tasteSummary, tripCard, today, tasteFilterToday, dashboard, PRIVACY_TABLES, privacy, exportAll, deleteData, PERSONA, untrusted, checkInAnswer, chatFollowUp, chatContext, noteRiskInChat, companionTools, TOOL_APPENDIX_LINE, TICK_MS, doKeys, doEnsure, doTick, SELF_CHECKS, selfCheckState, selfCheck, sendToFleet, doAlarm, doFetch, RECALL_DDL, RECALL_UNSURE_DAYS, RECALL_OPEN_MAX, RECALL_PARTS, recallOptions, isoWeekKey, recallGenerate, recallNext, recallAnswer, recallSummary, handleTranscription, handleCompanion, MANIFEST, ICON_SVG, SW_JS, OFFLINE_JS, GUIDE_HTML, PAGE_HTML });
+return Object.freeze({ COMPANION_VERSION, TZ, CONTEXTS, ENERGY, NUDGE_KINDS, LADDER_KINDS, REVIEW_NUDGE_KIND, REVIEW_PUSH, reviewNudgeDue, COMPANION_BACKUP, sha256Hex, companionReleaseKeys, buildCompanionManifest, restoreCompanionRelease, INBOX_MAX_ATTEMPTS, inboxShouldFallback, DDL, TASK_COLUMNS, ensureSchema, nowIso, FRESH_DUE_SQL, rid, esc, tzOffsetMinutes, localParts, dayKey, OFFLINE_MAX_AGE_MS, clientStamp, inQuiet, FSRS_W, RETENTION, MAX_INTERVAL_DAYS, retrievability, intervalDays, fsrsSchedule, CLARIFY_SYSTEM, contextFor, heuristicClarify, parseClarify, crisisSignal, FALLBACK_CRISIS_LINES, crisisText, SAFETY_PLAN_FIELDS, normalizeSafetyPlan, saveSafetyPlan, ACTIVITY_CATEGORIES, SEED_ACTIVITIES, helpScores, pickActivity, AI_USD_PER_1K_NEURONS, aiUseSummary, aiUse, focusOptions, logActivity, whatHelps, activityBank, addActivity, WHO5_ITEMS, WHO5_SCALE, who5Score, who5Read, recordWho5, who5Status, setPause, fallbackReply, EMAIL_MODES, saveSettings, LOGIN_TO, SESSION_COOKIE, SESSION_MS, maskedLoginTo, sessionFor, sendLoginCode, verifyLoginCode, isPaused, NEVER_RETIRE, retiredFrom, DISCREET_KINDS, discreetPayload, pruneMedia, TEXTS, pickLru, energyFor, chooseAction, receptiveHours, addDays, mondayOf, weekWindow, weekText, weekLookback, weekSeen, planNudge, b64u, unb64u, makeVapidKeys, vapidAuthHeader, encryptPayload, sendPush, pushAll, loadCfg, dayStartIso, COUNTRY_TZ, CITY_TZ, MULTI_TZ_COUNTRIES, countryCode, placeTz, stayAt, effectiveTz, localDay, EVENT_DEFAULT_MIN, eventMs, normalizeEvents, clearEventCache, loadEvents, afterEventText, GP_DAYS, gpSummaryBuild, gpSummary, sleepFromTimestamps, sleepWindow, moodStats, MIND_URL, readingLane, retiredKinds, daysSinceSocial, unansweredStreak, gatherState, remember, recall, contextSnapshot, recordMood, moodReply, addAction, upsertProject, actionDone, addJournal, addCard, reviewCard, answerNudge, MAX_CAPTURE_BYTES, transcribe, describeImage, describeImages, capture, shortClarify, clarify, dueFromWords, processItem, processInbox, pushPayloadFor, companionTick, agenda, FB_KINDS, fbKey, tasteTokens, tasteModel, tasteScore, applyTaste, loadFeedback, recordFeedback, tasteSummary, tripCard, today, tasteFilterToday, dashboard, PRIVACY_TABLES, privacy, exportAll, deleteData, PERSONA, untrusted, checkInAnswer, chatFollowUp, chatContext, noteRiskInChat, companionTools, TOOL_APPENDIX_LINE, TICK_MS, doKeys, doEnsure, doTick, SELF_CHECKS, selfCheckState, selfCheck, sendToFleet, doAlarm, doFetch, RECALL_DDL, RECALL_UNSURE_DAYS, RECALL_OPEN_MAX, RECALL_PARTS, recallOptions, isoWeekKey, recallGenerate, recallNext, recallAnswer, recallSummary, handleTranscription, handleCompanion, MANIFEST, ICON_SVG, SW_JS, OFFLINE_JS, GUIDE_HTML, PAGE_HTML });
 })();
 // COMPANION-INLINE-END
 var CMP_DEPS = {

@@ -103,9 +103,66 @@ export const CONTEXTS = [
   { name: "@anywhere", hint: "thinking, reading, small things" }
 ];
 export const ENERGY = ["low", "medium", "high"];
-export const NUDGE_KINDS = ["cmp-agenda", "cmp-deadline", "cmp-discovery", "cmp-checkin", "cmp-care", "cmp-reflect", "cmp-next", "cmp-review", "cmp-anchor", "cmp-presence", "cmp-measure", "cmp-connect", "cmp-week", "cmp-after"];
+export const NUDGE_KINDS = ["cmp-agenda", "cmp-deadline", "cmp-discovery", "cmp-checkin", "cmp-care", "cmp-reflect", "cmp-next", "cmp-review", "cmp-review-daily", "cmp-anchor", "cmp-presence", "cmp-measure", "cmp-connect", "cmp-week", "cmp-after"];
 // The e-mail ladder's asks are pushed to the phone too, so the two senders read as one companion.
 export const LADDER_KINDS = ["checkin", "micro", "body", "contact", "care", "presence"];
+
+// COMPANION-NUDGE-2 (issue #1002302): the evening Daily review nudge is its own kind, not the cmp-reflect journal
+// prompt. One push between 19:30 and 21:45 when no Daily review exists yet for today, deep-linking straight to the
+// review card on /companion; once a review lands, no more nudges that day.
+export const REVIEW_NUDGE_KIND = "cmp-review-daily";
+export const REVIEW_PUSH = {
+  window: { start: "19:30", end: "21:45" },
+  title: "Daily review",
+  body: "Got five minutes? Look back on today.",
+  link: "/companion/#review"
+};
+export function reviewNudgeDue(nowIso, hasDailyReviewToday, alreadyNudgedToday) {
+  const t = new Date(nowIso);
+  const hm = t.getHours() * 60 + t.getMinutes();
+  const [sh, sm] = REVIEW_PUSH.window.start.split(":").map(Number);
+  const [eh, em] = REVIEW_PUSH.window.end.split(":").map(Number);
+  return !hasDailyReviewToday && !alreadyNudgedToday && hm >= sh * 60 + sm && hm <= eh * 60 + em;
+}
+
+// COMPANION-BACKUP-1 (issue #1002305): KV is not the only copy of unported companion code. Every deploy also writes
+// the same bytes to R2 bucket personal-media under companion/releases/ with a manifest (version, sha256, time), so a
+// restore is possible from R2 alone; restoreCompanionRelease is the restore tool used from Ask.
+export const COMPANION_BACKUP = { bucket: "personal-media", prefix: "companion/releases/", kvPrefix: "companion-v3/personal-api." };
+export async function sha256Hex(bytes) {
+  const buf = await globalThis.crypto.subtle.digest("SHA-256", bytes);
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
+}
+export function companionReleaseKeys(version) {
+  return {
+    kv: COMPANION_BACKUP.kvPrefix + version + ".worker.js",
+    r2: COMPANION_BACKUP.prefix + version + ".worker.js",
+    manifest: COMPANION_BACKUP.prefix + version + ".manifest.json"
+  };
+}
+export async function buildCompanionManifest(version, bytes, timeIso) {
+  return { version, sha256: await sha256Hex(bytes), time: timeIso, bucket: COMPANION_BACKUP.bucket, key: COMPANION_BACKUP.prefix + version + ".worker.js" };
+}
+export async function restoreCompanionRelease(env, version) {
+  const keys = companionReleaseKeys(version);
+  const manifest = await env[COMPANION_BACKUP.bucket].get(keys.manifest);
+  if (!manifest) throw new Error("no manifest for companion release " + version);
+  const body = await env[COMPANION_BACKUP.bucket].get(keys.r2);
+  if (!body) throw new Error("missing R2 copy for companion release " + version);
+  const bytes = await body.arrayBuffer();
+  const meta = await buildCompanionManifest(version, bytes, new Date().toISOString());
+  const expected = JSON.parse(await manifest.text());
+  if (meta.sha256 !== expected.sha256) throw new Error("sha256 mismatch restoring companion release " + version);
+  await env.KV.put(keys.kv, bytes);
+  return { restored: keys.kv, sha256: meta.sha256 };
+}
+
+// COMPANION-SELFCHECK-1 (issue #1002319): processInbox must not leave notes unsorted. A note that fails the sorter
+// (clarify) three times is sorted by heuristicClarify instead, so the hourly self-check never sees a stuck inbox.
+export const INBOX_MAX_ATTEMPTS = 3;
+export function inboxShouldFallback(note) {
+  return (note.attempts ?? 0) >= INBOX_MAX_ATTEMPTS && note.status !== "sorted";
+}
 
 // ---------------------------------------------------------------- schema (personal-life D1, idempotent)
 
