@@ -39,3 +39,9 @@ test("ULTRASTABLE-CLAIMS-1: every listed claim has a probe row in the migration,
   assert.deepEqual([...rows].sort(), [...manifest.claims.ids].sort());
   assert.match(sql, /'claim-ultrastable-' \|\| id/);
 });
+
+test("ULTRASTABLE-CLAIMS-1: every claim probe, as stored, passes the remediation consumer's read-only guard", async () => {
+  const { spawnSync } = await import("node:child_process");
+  const r = spawnSync("python3", [join(root, "scripts", "product_claims_probe_guard_test.py")], { encoding: "utf8" });
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+});

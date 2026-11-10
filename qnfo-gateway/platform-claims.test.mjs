@@ -39,6 +39,17 @@ ok(j.claims[0].pass === true && j.claims[0].detail === "7 things", "a passing cl
 ok(j.claims[1].pass === false, "an observed value that differs from expected fails");
 ok(j.claims[2].pass === false && /single SELECT/.test(j.claims[2].detail), "a probe that is not a SELECT never runs");
 
+// A semicolon inside a string literal (a detail such as "7 scored; all time 3") is part of one SELECT and runs (live defect 2026-11-10: 4 of 7 claims refused).
+mod.reset();
+const semiRows = [
+  { id: "d", claim: "Claim D", probe_sql: "SELECT 'ok' AS expected, 'ok' AS observed, '7 scored; all time 3' AS detail", evidence_note: "w" },
+  { id: "e", claim: "Claim E", probe_sql: "SELECT 1; DELETE FROM agent_issues", evidence_note: "v" },
+];
+const semiAnswers = { [semiRows[0].probe_sql]: { expected: "ok", observed: "ok", detail: "7 scored; all time 3" } };
+const sj = await (await mod.handlePlatform(envWith(semiRows, semiAnswers), true)).json();
+ok(sj.claims[0].pass === true, "a semicolon inside a quoted string does not refuse the probe");
+ok(sj.claims[1].pass === false && /single SELECT/.test(sj.claims[1].detail), "a second statement after a semicolon is refused");
+
 mod.reset();
 const html = await (await mod.handlePlatform(envWith(rows, answers), false)).text();
 ok(html.includes("1 of 3 claims pass their live check"), "the status sentence counts passing claims");
