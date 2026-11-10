@@ -21,6 +21,13 @@
         "Research focus",
         "Where attention goes now"
       ]
+    },
+    {
+      "url": "https://fleet.qnfo.org/touch",
+      "contains": [
+        "<h1>Touchpoints</h1>",
+        "Touches, 7 days"
+      ]
     }
   ]
 }

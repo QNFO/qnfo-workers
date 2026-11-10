@@ -16,7 +16,7 @@
 // social_learner_posts, ops_config social_learner_enabled / social_learner_pending, metric_registry). AI: env.AI.
 
 // 0.19.1 LEARNER-ARMS-PROBE-SCOPE-1: persist policy-exclusion reasons so issue 2722 measures only eligible paper-linked learner rows.
-var VERSION = "0.26.0-codeagent";
+var VERSION = "0.27.0-codeagent";
 /* 0.21.15 PROBE-UA-BOT-1 (2026-11-04, pillar reach; patch: a fix; READER-YIELD-1): probeLink and httpStatus fetch every tagged link before a post goes out with the user agents Mozilla/5.0 (qnfo-social link-probe) and (qnfo-social link-gate), which the gateway UTM_BOT_RE does not match, so each probe was counted in utm_clicks as a human click (ua_class human). Of 210 tagged Bluesky roll-up paper-posts 178 got no Bluesky-channel click in 72 hours, 27 got exactly 4, and 52 clicks landed the day before the posts existed. Both probes now send a user agent that ends in "; bot", which UTM_BOT_RE matches, so the fleet stops counting its own link checks as readers. Prediction: utm_clicks_human for a paper on the day before its post reads 0 and outreach_human_clicks_7d falls; the real clicks stay. qnfo-social/probe-ua.test.mjs. */ /* 0.21.3: use actual Bluesky post times for the 72h engagement metric (#1465, agent_issues 2022, pillar reach). */ /* 0.21.2 CROSSPOST-CAP-1 (2026-10-28, pillar reach; patch: a fix; agent_issues 1000610): the Bluesky cross-post (bufferPost) now applies the same weekly cap and spacing as the channel drain (windowHold, crossPostHold); it ignored both. */ /* 0.21.1 channel-marker */ /* 0.21.1 ART50-CHANNEL-DRAIN-MARKER-1 (2026-10-28, pillars reach and security, cluster D; patch): the channel drain posted to X, LinkedIn, Mastodon and Substack Notes without the AI marker (only Bluesky and the cross-post path used withAutomationMarker); it now marks the text, and the stored 200-character preview keeps the marker so ai_label_coverage can read it. Prediction: ai_label_coverage social row rises from 0 of 42 as marked posts replace unmarked ones in the 14-day window. prior 0.21.0 */ /* 0.21.0 BP26-AI-ACT-ART50-1 (2026-10-28, pillars reach and security, agent_issues 1000341): the post marker now says what Article 50 asks, " [AI-generated]" (it was " [automated]", which names no AI and which the BP26 collector bp26_web.py does not read as an AI marker: 0 of 42 posts of 14 days carried one), and it is never skipped: a post with no room for it is fitted to the limit minus the marker (URLs kept, prose shortened) instead of going out unlabelled. withAutomationMarker, qnfo-social/automation-marker.test.mjs. */ /* 0.20.0 BP26-SOCIAL-AUTOMATION-1 (2026-10-26, pillar reach, agent_issues 1000340): every automated post ends with a short automation marker (" [automated]") until the owner turns on the platform automated-account labels (owner card bp26-social-bot-labels, whose default is exactly this marker). It is appended at the three posting choke points (postText for Bluesky, mastodonCreate, bufferCreate for LinkedIn, X, Substack and the roll-up note) only when it fits the platform limit this worker already fits to, so no post is cut or refused for it; a post at the limit goes out unchanged. withAutomationMarker, qnfo-social/automation-marker.test.mjs. */ /* 0.19.4 LEARNER-ARMS-3 (2026-10-26, pillar reach, agent_issues 2722): the attention learner files a Bluesky roll-up post under the time it was posted, not the time its paper was announced. A roll-up row (dissemination_tracker mode rollup:bluesky) keeps the posted_at of the Substack roll-up that announced the paper and the Bluesky thread carries it days later, so 152 learner rows were anchored on 2026-10-14 although they went out between 10-14 and 10-25, and the 72 hour reward window opened before the post existed: 135 posts read no-data although every one of them has utm human clicks inside its real window (Bluesky is the channel with the most human clicks, 496 in 7 days). The row's posted_at is now the time inside its record key (a Bluesky TID: 13 base32-sortable characters whose first 11 hold microseconds since the epoch) when that is later than the tracker's value (blueskyTidMs, learnerPostedAtOf), the slot follows it, and a roll-up thread post is filed with n_posts 2 so the reply that is the next post of the same thread is not counted as engagement. migrations/2026-10-26-learner-anchor-repair.sql files the rows already stored under the right time. qnfo-social/learner-anchor.test.mjs. */ /* 0.19.3 SOCIAL-ENGAGEMENT-COVERAGE-1 (2026-10-26, pillar reach; guard metric attention_channels_stopped): collectEngagement measures every Bluesky post of the last 60 days. It built its list from social_threads (LIMIT 100) and then dissemination_tracker and stopped at 100 URIs, so each 07:00 run measured the newest 100 thread posts and none of the 203 dissemination posts (194 posted since 2026-10-14 had no social_engagements row), and the attention scorecard counted them as items with zero engagements. The list is now both sources deduplicated, posts without a snapshot first, then newest, up to 400 URIs (planEngagementUris); a URI the AppView omits gets no row; 429 waits and attempts are capped; the rows are written in batches of 400; the result reports candidates, never_measured, skipped_by_cap and omitted. 0.19.2 LINK-SLASH-CANON-1 (2026-10-26, pillar reach): probeLink follows a redirect that only adds or drops the trailing slash of the same URL (one hop, same origin and query) and judges the page it lands on. qnfo-gateway SEO-INDEX-1 (2026-10-25) answers /papers/<slug>/ with a 308 to /papers/<slug>; every dissemination_tracker pages_url ends in a slash, so every probe read 'misrouted': the last Buffer post (Substack, X) left at 2026-10-25 08:31Z, the LinkedIn, Mastodon and X drains held link-misrouted, both roll-ups held no-live-links, and retractDeadLinks overwrote post_text_snippet of 203 posted rows with a MISROUTED note (it no longer overwrites a posted row's text: PRESERVE-POSTED-TEXT-1). A redirect to another path or host stays misrouted (NEVER-RETIRE-ON-REDIRECT-1); a 404/410 on the landing page is gone; the marker check still applies. qnfo-social/link-slash-canon.test.mjs. */ /* 0.19.1-no-registrar */ /* 0.19.0-no-registrar NO-REGISTRAR-1 (2026-10-21): the Mastodon field filter matches the dead DOI prefix, not the registrar name */ /* 0.18.1 BSKY-CREATE-SESSION-COUNT-1 (2026-10-19, pillar reach, agent_issues 100191, residual of 2937): every com.atproto.server.createSession call, ok or refused, adds 1 to metric_history metric bsky_create_session_24h for the UTC day, so the 300-a-day account budget is measured; a failed count is logged and never blocks the post. */ /* 0.18.0 LEARNER-ARMS-2 (2026-10-19, pillar reach, agent_issues 2722): the attention learner learns from the posts it files. 50 of 61 learner rows read not-arm on 2026-10-17 and 124 of 137 on 2026-10-19 because learnerTopicOf named a topic for three keyword lists only and the channel-drain insert stored a null link slug. A post that links a paper now takes the paper's own shelf (living-paper paper_category, read through the new LIVING_PAPER binding; energy, ai-epistemics and ai-operations keep the arm names energy, epistemics and operations; qec, physics, mathematics, logic, synthesis and assessment are arms too) and the generic arm research when the paper has no shelf row or the binding is unreadable; q08, pillar 4 (ultrametric, adelic, p-adic, autaxic, topos), roll-up posts and posts with no paper link stay not-arm. The channel drain stores the paper slug as link_slug (parsed from the posted text, else the known paper slug). learnerVisits joins the utm ledger on the gateway's own campaign key (lower case, 64 characters) and on the row's slug, the campaign the post was tagged with, so a curated thread whose slug differs from its paper slug and a slug longer than 64 characters read their clicks. migrations/2026-10-19-learner-arms-backfill.sql re-files the recoverable not-arm rows. */ /* 0.17.1 SOCIAL-PAUSE-STALE-UNTIL-1 (2026-10-19, pillar reach, agent_issues 2818): social_paused_until ends a pause only when it was written with that pause (a stale until from an earlier episode is ignored and the pause holds), a pause whose expiry clear fails still holds, and every pause read logs one pause-read line (value, until, write times, result). The 2026-10-17 14:30Z drains posted without a SOCIAL-PAUSE-1 line while the flag read 1 (Workers Logs); the expiry path had no test. */ // 0.17.0 CRON-GRID-1 (owner directive 2026-10-19, pillar autonomy): one hourly :30 trigger. The 06:00 scan runs on the 06:30 fire and is retried hourly (at most 3 times) when it fails; the 07:00 alert digest and engagement run on the 07:30 fire, never retried (they send the owner a digest). Every fire is logged to cron_fire_log for CRON-WATCH-1. // 0.16.12 INTEG-MASTODON-VERIFY-1 (2026-10-19, pillar reach, agent_issues 2925, code task ct_im2925): the profile sync that 0.16.10-codeagent added as a top-level block (process.env, a fetch in global scope) could never run on a Worker; it is now mastodonProfileSync(env) on the daily engagement step, idempotent, with a read-back of the verified fields and a test (mastodon-profile.test.mjs). // 0.16.6 BSKY-SESSION-REUSE-1 (2026-10-18): one Bluesky session per isolate for 30 minutes instead of one createSession per step (createSession is limited to 30 per 5 min and 300 a day per account). 0.16.5 THREAD-CLOSE-1 (2026-10-18): a queued curated thread every Buffer channel has carried is marked posted after each drain (thread 153 sat queued 16 days after all three channels posted it); 0.16.0 PAPER-ROLLUP-1 (2026-10-14, pillar reach; owner directive "substack swapped for mastodon on buffer. update expectations and post/outreach schedule accordingly and implement full-throated/full-throttle publication and dissemination pipelines....clear out backlogs and queues now and forever...100% server-side and 100% automatically"): every published paper is disseminated, none is suppressed for volume. drainRollup runs every hourly tick (cron 30 * * * *, was every 2 h): a Substack Note lists every queued paper (up to ROLLUP_SUBSTACK_MAX, oldest first, each link probed and tagged utm_source=substack with the paper as campaign) and marks it posted (mode rollup); a Bluesky thread then carries up to ROLLUP_BSKY_MAX of those papers, one post each, inside the Bluesky gate (default 21 a week, spaced), each paper recording its own post id so RETRACT-DEAD-LINKS-1 still works. The single-paper Buffer drain reads posted and queued papers of 30 days, so LinkedIn, Mastodon (direct) and X keep taking the newest paper they have not carried; Substack takes roll-ups only. The gate counts a roll-up thread as one post. retractDeadLinks re-checks at most RETRACT_MAX posts of 30 days a run. // 0.15.0 0.15.0 OUTREACH-ACCELERATE-1 (2026-10-14, pillar reach; owner directive "Accelerate all social media and all external outreach, communication, and promotion. All available channels shall be fully utilized as appropriate and effective, including email, Buffer, Mastodon, Bluesky, Substack, and all other channels."): Bluesky defaults to 14 posts a week (2 a day) and the Buffer channels to LinkedIn 7 (queue or drafts, ToS 3.1 unchanged), Mastodon 14, X 14 and Substack Notes 14 (clamp 0..21); the attention share now steers between a floor and the cap (pipeline_flags social_share_floor, default 0.5) instead of cutting a channel to one post a week on a thin sample; Bluesky posts are spaced (at most one per 2-hourly run, at least 7 days / cap minus 1 h apart) so the higher cap never bursts; SUBSTACK-CHANNEL-1: a Substack channel connected in Buffer (Notes; API supported on the free plan) is drained and cross-posted like LinkedIn (whole thread, subscribe line, utm_source substack); MASTODON-DIRECT-1: with MASTODON_TOKEN set, Mastodon posts go straight to the instance API (MASTODON_HOST, default mstdn.science) instead of Buffer, which frees a Buffer channel slot, and their counts are read from the public status API at 07:00. // 0.14.3 LOG-NOISE-1 (2026-10-14, pillar core, found by FLEET-JOURNEYS-2 and the Cloudflare Observability Issues ingest): the three ensure*Schema ALTERs no longer log their expected "duplicate column" answer as an error.
 
 
@@ -4112,8 +4112,582 @@ async function socialScheduled(event, env) {
     let ru;
     try { ru = await drainRollup(env); } catch (e) { ru = { error: String(e && e.message || e).slice(0, 200) }; }
     await recordSocialRun(env, 'rollup', rollupRunStatus(ru), ru);
+    // TOUCHPOINTS-1: follow, like and prune inside the daily caps; reply drafts wait for one tap on fleet.qnfo.org/touch.
+    let tp;
+    try { tp = await touchTick(env); } catch (e) { tp = { error: String(e && e.message || e).slice(0, 200) }; }
+    await recordSocialRun(env, 'touchpoints', tp && !tp.error ? 'ok' : 'error', tp || { error: 'no result' });
     await retractDeadLinks(env);
     await restoreMisdeleted(env);
+}
+
+// ==== TOUCHPOINTS-1 (0.27.0, owner directive 2026-11-10, pillar reach) ====
+// Owner: "Make sure I'm following people that matter who can promote me who actually pay attention to their followers ... I don't want stale anything ... Autonomous systems."
+// The engine keeps a scored model of people (touch_targets) and a ledger of every touch (touch_actions). Each score is evidence read from the platform: relevance (their bio and
+// their own recent posts against the autonomous-systems lenses), activity (days since their last post, posts in 30 days), attentiveness (the share of their recent posts that are
+// replies to other people, and how many of their followers they follow back) and reach (follower count, with a sweet spot: an account of a million followers does not notice one).
+// Follows and likes run automatically on Bluesky and Mastodon inside low daily caps (TOUCH_CAPS), spaced through the day; stale (no post in 120 days) and quantum-only follows are
+// pruned unless they follow back or the owner knows them. Anything written in the owner's name (a reply) is a draft until he approves it with one tap on fleet.qnfo.org/touch;
+// LinkedIn and X have no write path, so they get a short daily tap list. Outcomes (follow-back, reply) are read back and credit the discovery query that found the person.
+var TOUCH_LENSES = {
+  oversight: /\b(ai (governance|policy|oversight|accountability|regulation|audit(?:ing)?)|oversight|accountab\w*|auditab\w*|governance of ai|responsible ai|ai act|nist ai|ai risk)\b/i,
+  evals: /\b(evals?|evaluations?|benchmark\w*|red[- ]?team\w*|ai safety|alignment|interpretab\w*|failure modes?|model behaviou?r|safety research)\b/i,
+  agents: /\b(ai agents?|agentic|autonomous (ai|agents?|systems?)|multi[- ]agent|llm agents?|agent (frameworks?|platforms?|orchestration)|autonomy|self[- ]improving)\b/i,
+  devplatform: /\b(autonomous (software|development|coding)|ai (coding|software engineering)|coding agents?|devtools?|developer platforms?|code generation|swe[- ]bench)\b/i,
+  systems: /\b(systems (thinking|research|science|theory|engineering)|cybernetics?|complex(ity| systems)|control theory|feedback loops?|socio-?technical|resilien\w*)\b/i
+};
+var TOUCH_QUANTUM_RE = /\b(quantum|qubits?|qec|fault[- ]tolerant|superconducting|photonic|ion trap|annealing)\b/i;
+var TOUCH_QUERIES = ['AI oversight', 'AI governance', 'AI agents evaluation', 'AI safety research', 'autonomous agents', 'agentic systems', 'multi-agent systems', 'AI evals', 'AI accountability', 'coding agents', 'systems thinking', 'cybernetics'];
+var TOUCH_CAPS = { follow: 5, like: 8, unfollow: 10, reply_draft: 2, reply_post: 3, tap: 3 };
+var TOUCH_PER_HOUR = { follow: 2, like: 2, unfollow: 4 };
+var TOUCH_FOLLOW_MIN = 55, TOUCH_LIKE_MIN = 50, TOUCH_REPLY_MIN = 65;
+var TOUCH_STALE_DAYS = 120, TOUCH_INACTIVE_DAYS = 60, TOUCH_SCORE_BATCH = 40, TOUCH_QUERIES_PER_DAY = 3;
+var TOUCH_REPLY_MODEL = '@cf/zai-org/glm-5.3-flash';
+var DAY_MS = 864e5;
+
+function touchStrip(html) {
+  return String(html == null ? '' : html).replace(/<br\s*\/?>/gi, ' ').replace(/<\/p>/gi, ' ').replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/\s+/g, ' ').trim();
+}
+// relevance: how many of the five lenses the text hits (two lenses or more count fully); the owner's topic answer weighs one lens 1.5x.
+function touchRelevance(text, weights) {
+  const t = String(text || ''), w = weights || {};
+  const topics = Object.keys(TOUCH_LENSES).filter(function(k) { return TOUCH_LENSES[k].test(t); });
+  let s = 0;
+  topics.forEach(function(k) { s += (w[k] || 1); });
+  const quantumOnly = TOUCH_QUANTUM_RE.test(t) && topics.length === 0;
+  return { relevance: Math.min(1, s / 2), topics: topics, quantum_only: quantumOnly };
+}
+function touchActivity(lastPostMs, posts30, nowMs) {
+  if (!lastPostMs) return 0;
+  const d = (nowMs - lastPostMs) / DAY_MS;
+  const rec = d <= 7 ? 1 : d >= TOUCH_INACTIVE_DAYS ? 0 : 1 - (d - 7) / (TOUCH_INACTIVE_DAYS - 7);
+  return Math.round((0.6 * rec + 0.4 * Math.min(1, (posts30 || 0) / 8)) * 1000) / 1000;
+}
+// attentiveness: people who answer other people notice a new follower; a 40% reply share counts fully. The follow-back ratio adds a little.
+function touchAttentiveness(replyShare, followers, following) {
+  const rs = Math.min(1, (Number(replyShare) || 0) / 0.4);
+  const fr = followers > 0 ? Math.min(1, (Number(following) || 0) / followers / 0.3) : 0;
+  return Math.round((0.75 * rs + 0.25 * fr) * 1000) / 1000;
+}
+function touchReach(followers) {
+  const f = Number(followers) || 0;
+  if (f < 100) return 0;
+  const l = Math.log10(f);
+  if (l < 3.3) return Math.round((l - 2) / 1.3 * 1000) / 1000;      // 100 .. 2000 rises to 1
+  if (l <= 4.7) return 1;                                            // 2000 .. 50000
+  return Math.max(0.4, Math.round((1 - (l - 4.7) / 1.3 * 0.6) * 1000) / 1000); // falls to 0.4 at 1M
+}
+function touchScore(p, nowMs) {
+  const rel = Number(p.relevance) || 0;
+  const last = p.last_post_at ? Date.parse(p.last_post_at) : 0;
+  if (rel < 0.5 || p.quantum_only) return 0;
+  if (!last || (nowMs - last) / DAY_MS > TOUCH_INACTIVE_DAYS) return 0;
+  return Math.round(100 * (0.40 * rel + 0.20 * (Number(p.activity) || 0) + 0.25 * (Number(p.attentiveness) || 0) + 0.15 * (Number(p.reach) || 0)));
+}
+// a repository is stale after a year without a push (or archived: qnfo-fleet-dashboard stores no push date for one); a person after 120 days without a post
+function touchIsStale(row, nowMs) {
+  if (row.quantum_only) return true;
+  const last = row.last_post_at ? Date.parse(row.last_post_at) : 0;
+  const days = row.platform === 'github-repo' ? 365 : TOUCH_STALE_DAYS;
+  return !!row.scored_at && (!last || (nowMs - last) / DAY_MS > days);
+}
+// GitHub rows carry their raw evidence (written by qnfo-fleet-dashboard, which holds the GitHub token) and wait here for a score, so one model scores every platform.
+// For a repository, posts_30d is the issues closed in 30 days and reply_share the closed share: a maintainer who answers issues notices a new star.
+async function touchScoreStored(env, opts) {
+  const db = env.DB, nowMs = opts.nowMs, weights = await touchWeights(db);
+  const rows = await touchAll(db, "SELECT * FROM touch_targets WHERE platform IN ('github','github-repo') AND scored_at IS NULL AND bio IS NOT NULL LIMIT 200", []);
+  for (const t of rows) {
+    const rel = touchRelevance(t.bio, weights);
+    const lastMs = t.last_post_at ? Date.parse(t.last_post_at) : 0;
+    const p = { relevance: rel.relevance, quantum_only: rel.quantum_only, last_post_at: t.last_post_at, activity: touchActivity(lastMs, t.posts_30d, nowMs),
+      attentiveness: touchAttentiveness(t.reply_share, t.followers, t.platform === 'github-repo' ? 0 : t.following), reach: touchReach(t.followers) };
+    if (t.platform === 'github-repo') p.attentiveness = Math.round(Math.min(1, (Number(t.reply_share) || 0) / 0.6) * 1000) / 1000;
+    const score = touchScore(p, nowMs);
+    await touchRun(db, "UPDATE touch_targets SET relevance = ?2, activity = ?3, attentiveness = ?4, reach = ?5, score = ?6, topics = ?7, quantum_only = ?8, scored_at = ?9 WHERE id = ?1",
+      [t.id, p.relevance, p.activity, p.attentiveness, p.reach, score, rel.topics.join(','), rel.quantum_only ? 1 : 0, new Date(nowMs).toISOString()]);
+  }
+  return { scored: rows.length };
+}
+function touchDay(nowMs) { return new Date(nowMs).toISOString().slice(0, 10); }
+function touchCrossLinks(text) {
+  const t = String(text || ''), out = {};
+  const x = t.match(/(?:https?:\/\/)?(?:www\.)?(?:x|twitter)\.com\/([A-Za-z0-9_]{1,15})\b/);
+  if (x && !/^(home|intent|share|search|i)$/i.test(x[1])) out.x = x[1];
+  const li = t.match(/(?:https?:\/\/)?(?:[a-z]{2,3}\.)?linkedin\.com\/in\/([A-Za-z0-9_-]{3,100})/i);
+  if (li) out.linkedin = li[1];
+  return out;
+}
+// The reply prompt: one short, specific reply to the person's own post, in plain words, from a systems researcher. Never claims a credential, never pitches.
+function touchReplyPrompt(target, postText) {
+  return 'You write a short reply (at most 220 characters) to a social media post, from Rowan, an autonomous AI systems researcher and founder of Ultrastable, an autonomous development platform. ' +
+    'Reply to the substance of the post: agree or add one concrete observation or one specific question about how such systems behave, fail or are governed. ' +
+    'No flattery, no hashtags, no links, no self-promotion, no emoji, no claims of credentials or results. Plain sentences. If the post gives nothing to add to, reply with exactly SKIP.\n\n' +
+    'Author: ' + String(target.name || target.handle || '').slice(0, 80) + '\nPost: ' + String(postText || '').slice(0, 1200) + '\n\nReply:';
+}
+function touchCleanReply(s) {
+  let t = String(s || '').replace(/^["'\s]+|["'\s]+$/g, '').replace(/\s+/g, ' ').trim();
+  if (!t || /^skip\b/i.test(t) || /https?:\/\/|#\w/.test(t) || /\b(as an ai|language model|claude)\b/i.test(t)) return null;
+  if (Array.from(t).length > 240) return null;
+  return t;
+}
+
+// ---- platform adapters (f = fetch; injectable for tests) ----
+function touchBsky(env, s, f) {
+  const H = { Authorization: 'Bearer ' + s.accessJwt, 'User-Agent': 'Mozilla/5.0 (qnfo-social touchpoints; bot)' };
+  const get = async function(nsid, q) {
+    const r = await f(BSKY + '/' + nsid + '?' + new URLSearchParams(q).toString(), { headers: H });
+    if (!r.ok) throw new Error(nsid + ' ' + r.status);
+    return r.json();
+  };
+  const post = async function(nsid, body) {
+    const r = await f(BSKY + '/' + nsid, { method: 'POST', headers: Object.assign({ 'Content-Type': 'application/json' }, H), body: JSON.stringify(body) });
+    if (!r.ok) { const e = new Error(nsid + ' ' + r.status); e.status = r.status; throw e; }
+    return r.json().catch(function() { return {}; });
+  };
+  const norm = function(a) {
+    return { id: a.did, handle: a.handle, name: a.displayName || a.handle, bio: a.description || '', url: 'https://bsky.app/profile/' + a.handle,
+      followers: a.followersCount, following: a.followsCount, follow_ref: a.viewer && a.viewer.following || null, followed_by: a.viewer && a.viewer.followedBy ? 1 : 0 };
+  };
+  return {
+    platform: 'bluesky',
+    async following() {
+      const out = []; let cursor = '';
+      for (let i = 0; i < 10; i++) {
+        const q = { actor: s.did, limit: '100' }; if (cursor) q.cursor = cursor;
+        const j = await get('app.bsky.graph.getFollows', q);
+        (j.follows || []).forEach(function(a) { out.push(norm(a)); });
+        if (!j.cursor || !(j.follows || []).length) break; cursor = j.cursor;
+      }
+      return out;
+    },
+    async profiles(ids) {
+      const out = [];
+      for (let i = 0; i < ids.length; i += 25) {
+        const q = new URLSearchParams(); ids.slice(i, i + 25).forEach(function(d) { q.append('actors', d); });
+        const r = await f(BSKY + '/app.bsky.actor.getProfiles?' + q.toString(), { headers: H });
+        if (!r.ok) throw new Error('getProfiles ' + r.status);
+        ((await r.json()).profiles || []).forEach(function(a) { out.push(norm(a)); });
+      }
+      return out;
+    },
+    async recent(id) {
+      const j = await get('app.bsky.feed.getAuthorFeed', { actor: id, limit: '30', filter: 'posts_with_replies' });
+      return (j.feed || []).filter(function(it) { return !it.reason && it.post && it.post.author && it.post.author.did === id; }).map(function(it) {
+        const p = it.post, rec = p.record || {};
+        return { id: p.uri, cid: p.cid, uri: p.uri, text: rec.text || '', at: rec.createdAt || p.indexedAt, is_reply: !!rec.reply, root: rec.reply ? rec.reply.root : null,
+          url: 'https://bsky.app/profile/' + p.author.handle + '/post/' + String(p.uri).split('/').pop() };
+      });
+    },
+    async search(q) { const j = await get('app.bsky.actor.searchActors', { q: q, limit: '25' }); return (j.actors || []).map(norm); },
+    async follow(t) { const r = await post('com.atproto.repo.createRecord', { repo: s.did, collection: 'app.bsky.graph.follow', record: { $type: 'app.bsky.graph.follow', subject: t.ext_id, createdAt: new Date().toISOString() } }); return r.uri || null; },
+    async unfollow(t) {
+      if (!t.follow_ref) throw new Error('no follow record');
+      await post('com.atproto.repo.deleteRecord', { repo: s.did, collection: 'app.bsky.graph.follow', rkey: String(t.follow_ref).split('/').pop() });
+    },
+    async like(p) { await post('com.atproto.repo.createRecord', { repo: s.did, collection: 'app.bsky.feed.like', record: { $type: 'app.bsky.feed.like', subject: { uri: p.uri, cid: p.cid }, createdAt: new Date().toISOString() } }); },
+    async reply(p, text) {
+      const parent = { uri: p.uri, cid: p.cid };
+      const r = await postText(s, text, { root: p.root || parent, parent: parent }, {});
+      return r && r.uri || null;
+    },
+    async notifications() {
+      const j = await get('app.bsky.notification.listNotifications', { limit: '50' });
+      return (j.notifications || []).map(function(n) { return { from: n.author && n.author.handle, reason: n.reason, at: n.indexedAt }; });
+    }
+  };
+}
+function touchMastodon(env, f) {
+  const host = 'https://' + mastodonHost(env);
+  const H = { Authorization: 'Bearer ' + env.MASTODON_TOKEN, 'User-Agent': 'qnfo-social/' + VERSION + ' touchpoints; bot' };
+  const get = async function(path) {
+    const r = await f(host + path, { headers: H });
+    if (!r.ok) throw new Error('GET ' + path.split('?')[0] + ' ' + r.status);
+    return r.json();
+  };
+  const post = async function(path, body) {
+    const r = await f(host + path, { method: 'POST', headers: body ? Object.assign({ 'Content-Type': 'application/x-www-form-urlencoded' }, H) : H, body: body ? new URLSearchParams(body).toString() : undefined });
+    if (!r.ok) { const e = new Error('POST ' + path + ' ' + r.status); e.status = r.status; throw e; }
+    return r.json().catch(function() { return {}; });
+  };
+  const norm = function(a) {
+    return { id: a.id, handle: a.acct, name: a.display_name || a.acct, bio: touchStrip(a.note) + ' ' + (a.fields || []).map(function(x) { return touchStrip(x.value); }).join(' '),
+      url: a.url, followers: a.followers_count, following: a.following_count, last_post_at: a.last_status_at || null };
+  };
+  let me = null;
+  const self = async function() { if (!me) me = await get('/api/v1/accounts/verify_credentials'); return me; };
+  return {
+    platform: 'mastodon',
+    async following() {
+      const m = await self(), out = [];
+      let path = '/api/v1/accounts/' + m.id + '/following?limit=80';
+      for (let i = 0; i < 8 && path; i++) {
+        const r = await f(host + path, { headers: H });
+        if (!r.ok) throw new Error('following ' + r.status);
+        (await r.json()).forEach(function(a) { out.push(norm(a)); });
+        const link = r.headers && r.headers.get ? String(r.headers.get('link') || '') : '';
+        const nx = link.match(/<([^>]+)>;\s*rel="next"/);
+        path = nx ? nx[1].replace(host, '') : null;
+      }
+      if (out.length) {
+        const rel = await this.relationships(out.map(function(a) { return a.id; }));
+        out.forEach(function(a) { a.followed_by = rel[a.id] ? 1 : 0; });
+      }
+      return out;
+    },
+    async relationships(ids) {
+      const map = {};
+      for (let i = 0; i < ids.length; i += 40) {
+        const q = ids.slice(i, i + 40).map(function(x) { return 'id[]=' + encodeURIComponent(x); }).join('&');
+        (await get('/api/v1/accounts/relationships?' + q)).forEach(function(r) { map[r.id] = !!r.followed_by; });
+      }
+      return map;
+    },
+    async profiles(ids) { const out = []; for (const id of ids.slice(0, 40)) out.push(norm(await get('/api/v1/accounts/' + encodeURIComponent(id)))); return out; },
+    async recent(id) {
+      return (await get('/api/v1/accounts/' + encodeURIComponent(id) + '/statuses?limit=30&exclude_reblogs=true')).map(function(st) {
+        return { id: st.id, uri: st.uri, text: touchStrip(st.content), at: st.created_at, is_reply: !!st.in_reply_to_id, url: st.url };
+      });
+    },
+    async search(q) { const j = await get('/api/v2/search?type=accounts&limit=20&q=' + encodeURIComponent(q)); return (j.accounts || []).map(norm); },
+    async follow(t) { await post('/api/v1/accounts/' + encodeURIComponent(t.ext_id) + '/follow'); return null; },
+    async unfollow(t) { await post('/api/v1/accounts/' + encodeURIComponent(t.ext_id) + '/unfollow'); },
+    async like(p) { await post('/api/v1/statuses/' + encodeURIComponent(p.id) + '/favourite'); },
+    async reply(p, text) { const r = await post('/api/v1/statuses', { status: text, in_reply_to_id: p.id }); return r.url || r.uri || null; },
+    async notifications() {
+      return (await get('/api/v1/notifications?limit=40&types[]=follow&types[]=mention&types[]=favourite')).map(function(n) { return { from: n.account && n.account.acct, reason: n.type === 'mention' ? 'reply' : n.type === 'favourite' ? 'like' : n.type, at: n.created_at }; });
+    }
+  };
+}
+
+// ---- D1 helpers ----
+async function touchAll(db, sql, args) { const st = db.prepare(sql); const r = await (args && args.length ? st.bind.apply(st, args) : st).all(); return r.results || []; }
+async function touchRun(db, sql, args) { const st = db.prepare(sql); return (args && args.length ? st.bind.apply(st, args) : st).run(); }
+async function touchCount(db, platform, kind, day, sinceIso) {
+  const r = await touchAll(db, "SELECT COUNT(*) AS n FROM touch_actions WHERE platform = ?1 AND kind = ?2 AND day = ?3 AND status IN ('done','approved','proposed') AND (?4 = '' OR created_at >= ?4)", [platform, kind, day, sinceIso || '']);
+  return Number(r[0] && r[0].n || 0);
+}
+async function touchRoom(db, platform, kind, nowMs) {
+  const day = touchDay(nowMs);
+  const dayLeft = (TOUCH_CAPS[kind] || 0) - await touchCount(db, platform, kind, day, '');
+  const ph = TOUCH_PER_HOUR[kind];
+  if (!ph) return Math.max(0, dayLeft);
+  const hourLeft = ph - await touchCount(db, platform, kind, day, new Date(nowMs - 3600e3).toISOString());
+  return Math.max(0, Math.min(dayLeft, hourLeft));
+}
+async function touchLog(db, a, nowMs) {
+  await touchRun(db, "INSERT INTO touch_actions (platform, target, kind, mode, status, text, url, subject, grounding, note, day, created_at, done_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13)",
+    [a.platform, a.target, a.kind, a.mode || 'auto', a.status, a.text || null, a.url || null, a.subject || null, a.grounding || null, a.note || null, touchDay(nowMs), new Date(nowMs).toISOString(), a.status === 'done' ? new Date(nowMs).toISOString() : null]);
+}
+async function touchUpsert(db, platform, p, state, source, nowMs) {
+  await touchRun(db, "INSERT INTO touch_targets (platform, handle, ext_id, name, bio, url, followers, following, last_post_at, follow_ref, followed_by, state, source, created_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14) " +
+    "ON CONFLICT(platform, handle) DO UPDATE SET ext_id = COALESCE(excluded.ext_id, ext_id), name = COALESCE(excluded.name, name), bio = COALESCE(excluded.bio, bio), url = COALESCE(excluded.url, url), " +
+    "followers = COALESCE(excluded.followers, followers), following = COALESCE(excluded.following, following), last_post_at = COALESCE(excluded.last_post_at, last_post_at), " +
+    "follow_ref = CASE WHEN ?12 = 'followed' THEN COALESCE(excluded.follow_ref, follow_ref) ELSE follow_ref END, followed_by = CASE WHEN ?12 = 'followed' THEN excluded.followed_by ELSE followed_by END, " +
+    "state = CASE WHEN ?12 = 'followed' AND state IN ('candidate','dismissed') THEN 'followed' ELSE state END",
+    [platform, String(p.handle || '').slice(0, 200), p.id ? String(p.id) : null, String(p.name || '').slice(0, 200), String(p.bio || '').slice(0, 1000), p.url || null,
+     p.followers == null ? null : Number(p.followers), p.following == null ? null : Number(p.following), p.last_post_at || null, p.follow_ref || null, p.followed_by ? 1 : 0, state, source, new Date(nowMs).toISOString()]);
+}
+async function touchWeights(db) {
+  const w = {};
+  try {
+    const r = await touchAll(db, "SELECT answer FROM owner_asks WHERE kind = 'touch-topic' AND answered_at IS NOT NULL ORDER BY answered_at DESC LIMIT 1", []);
+    const a = r[0] && r[0].answer;
+    if (a === 'oversight') w.oversight = 1.5; else if (a === 'evals') w.evals = 1.5; else if (a === 'devplatform') { w.devplatform = 1.5; w.agents = 1.5; } else if (a === 'systems') w.systems = 1.5;
+  } catch (e) { /* no answer yet: equal weights */ }
+  return w;
+}
+// Discovery order learns: queries whose finds reciprocated most go first; untried queries next, so each gets a trial.
+async function touchQueryOrder(db, platform, nowMs) {
+  let stats = [];
+  try {
+    stats = await touchAll(db, "SELECT t.source, COUNT(*) AS n, SUM(CASE WHEN a.outcome IN ('followed-back','replied','liked-back') THEN 1 ELSE 0 END) AS won FROM touch_actions a JOIN touch_targets t ON t.platform = a.platform AND t.handle = a.target WHERE a.platform = ?1 AND a.kind = 'follow' AND a.status = 'done' AND a.outcome IS NOT NULL GROUP BY t.source", [platform]);
+  } catch (e) { stats = []; }
+  const by = {}; stats.forEach(function(s) { by[s.source] = (Number(s.won) + 1) / (Number(s.n) + 2); });
+  const day = Math.floor(nowMs / DAY_MS);
+  return TOUCH_QUERIES.map(function(q, i) { return { q: q, r: by['search:' + q] == null ? 0.5 + ((i + day) % TOUCH_QUERIES.length) / 1000 : by['search:' + q] }; })
+    .sort(function(a, b) { return b.r - a.r; }).map(function(x) { return x.q; });
+}
+
+// Refresh: the account's follows, discovery, then score the oldest-scored rows with their own recent posts. Once a UTC day per platform.
+async function touchRefresh(env, ad, opts) {
+  const db = env.DB, nowMs = opts.nowMs, out = { following: 0, discovered: 0, scored: 0 };
+  const done = await touchAll(db, "SELECT COUNT(*) AS n FROM touch_targets WHERE platform = ?1 AND scored_at >= ?2", [ad.platform, touchDay(nowMs)]);
+  if (!opts.force && Number(done[0] && done[0].n || 0) >= 1) return { skipped: 'refreshed today' };
+  const fol = await ad.following();
+  for (const p of fol) await touchUpsert(db, ad.platform, p, 'followed', 'following', nowMs);
+  out.following = fol.length;
+  // a row marked followed that the account no longer follows becomes a candidate again (unfollowed by hand)
+  if (fol.length) {
+    const have = {}; fol.forEach(function(p) { have[p.handle] = 1; });
+    const rows = await touchAll(db, "SELECT handle FROM touch_targets WHERE platform = ?1 AND state = 'followed'", [ad.platform]);
+    for (const r of rows) if (!have[r.handle]) await touchRun(db, "UPDATE touch_targets SET state = 'candidate', follow_ref = NULL WHERE platform = ?1 AND handle = ?2", [ad.platform, r.handle]);
+  }
+  const qs = (await touchQueryOrder(db, ad.platform, nowMs)).slice(0, TOUCH_QUERIES_PER_DAY);
+  for (const q of qs) {
+    let found = [];
+    try { found = await ad.search(q); } catch (e) { out.search_error = String(e.message || e).slice(0, 120); continue; }
+    for (const p of found) { await touchUpsert(db, ad.platform, p, 'candidate', 'search:' + q, nowMs); out.discovered++; }
+  }
+  const weights = await touchWeights(db);
+  const batch = await touchAll(db, "SELECT * FROM touch_targets WHERE platform = ?1 AND state IN ('candidate','followed') ORDER BY CASE WHEN scored_at IS NULL THEN 0 ELSE 1 END, scored_at LIMIT ?2", [ad.platform, TOUCH_SCORE_BATCH]);
+  for (const t of batch) {
+    let posts = [];
+    try { posts = await ad.recent(t.ext_id || t.handle); } catch (e) { posts = null; }
+    if (posts === null) continue;
+    const own = posts.filter(function(p) { return p.at; });
+    const times = own.map(function(p) { return Date.parse(p.at); }).filter(function(x) { return x > 0; });
+    const lastMs = times.length ? Math.max.apply(null, times) : (t.last_post_at ? Date.parse(t.last_post_at) : 0);
+    const posts30 = times.filter(function(x) { return nowMs - x <= 30 * DAY_MS; }).length;
+    const replyShare = own.length ? own.filter(function(p) { return p.is_reply; }).length / own.length : 0;
+    const rel = touchRelevance(String(t.bio || '') + ' ' + own.map(function(p) { return p.text; }).join(' '), weights);
+    const p = { relevance: rel.relevance, quantum_only: rel.quantum_only, last_post_at: lastMs ? new Date(lastMs).toISOString() : null,
+      activity: touchActivity(lastMs, posts30, nowMs), attentiveness: touchAttentiveness(replyShare, t.followers, t.following), reach: touchReach(t.followers) };
+    const score = touchScore(p, nowMs);
+    const ev = { topics: rel.topics, posts_30d: posts30, reply_share: Math.round(replyShare * 100) / 100, followers: t.followers, following: t.following, last_post_at: p.last_post_at, source: t.source,
+      cross: touchCrossLinks(t.bio), top_post: null };
+    const fresh = own.filter(function(x) { return !x.is_reply && nowMs - Date.parse(x.at) <= 7 * DAY_MS && touchRelevance(x.text, weights).relevance > 0; })
+      .sort(function(a, b) { return Date.parse(b.at) - Date.parse(a.at); })[0];
+    if (fresh) ev.top_post = { id: fresh.id, cid: fresh.cid || null, uri: fresh.uri, root: fresh.root || null, url: fresh.url, at: fresh.at, text: String(fresh.text).slice(0, 600) };
+    await touchRun(db, "UPDATE touch_targets SET last_post_at = ?3, posts_30d = ?4, reply_share = ?5, relevance = ?6, activity = ?7, attentiveness = ?8, reach = ?9, score = ?10, topics = ?11, quantum_only = ?12, evidence_json = ?13, scored_at = ?14 WHERE platform = ?1 AND handle = ?2",
+      [ad.platform, t.handle, p.last_post_at, posts30, ev.reply_share, p.relevance, p.activity, p.attentiveness, p.reach, score, rel.topics.join(','), rel.quantum_only ? 1 : 0, JSON.stringify(ev).slice(0, 4000), new Date(nowMs).toISOString()]);
+    out.scored++;
+  }
+  return out;
+}
+
+// Prune: stale or quantum-only follows, never a mutual follow and never someone the owner knows.
+async function touchPrune(env, ad, opts) {
+  const db = env.DB, nowMs = opts.nowMs;
+  let room = await touchRoom(db, ad.platform, 'unfollow', nowMs), n = 0;
+  if (!room) return { unfollowed: 0, room: 0 };
+  const rows = await touchAll(db, "SELECT * FROM touch_targets WHERE platform = ?1 AND state = 'followed' AND known = 0 AND followed_by = 0 AND scored_at IS NOT NULL ORDER BY quantum_only DESC, last_post_at LIMIT 50", [ad.platform]);
+  for (const t of rows) {
+    if (!room) break;
+    if (!touchIsStale(t, nowMs)) continue;
+    const why = t.quantum_only ? 'quantum-only account (2026-11-10 pivot)' : 'no post in ' + TOUCH_STALE_DAYS + ' days (last ' + String(t.last_post_at || 'never').slice(0, 10) + ')';
+    try {
+      await ad.unfollow(t);
+      await touchRun(db, "UPDATE touch_targets SET state = 'pruned', pruned_at = ?3, follow_ref = NULL WHERE platform = ?1 AND handle = ?2", [ad.platform, t.handle, new Date(nowMs).toISOString()]);
+      await touchLog(db, { platform: ad.platform, target: t.handle, kind: 'unfollow', status: 'done', url: t.url, note: why }, nowMs);
+      n++; room--;
+    } catch (e) {
+      await touchLog(db, { platform: ad.platform, target: t.handle, kind: 'unfollow', status: e.status === 401 || e.status === 403 ? 'refused' : 'failed', url: t.url, note: why + '; ' + String(e.message || e).slice(0, 120) }, nowMs);
+      if (e.status === 401 || e.status === 403) break;
+    }
+  }
+  return { unfollowed: n };
+}
+async function touchFollow(env, ad, opts) {
+  const db = env.DB, nowMs = opts.nowMs;
+  let room = await touchRoom(db, ad.platform, 'follow', nowMs), n = 0;
+  if (!room) return { followed: 0 };
+  const rows = await touchAll(db, "SELECT * FROM touch_targets WHERE platform = ?1 AND state = 'candidate' AND pruned_at IS NULL AND score >= ?2 ORDER BY score DESC LIMIT ?3", [ad.platform, TOUCH_FOLLOW_MIN, room]);
+  for (const t of rows) {
+    try {
+      const ref = await ad.follow(t);
+      await touchRun(db, "UPDATE touch_targets SET state = 'followed', followed_at = ?3, follow_ref = COALESCE(?4, follow_ref) WHERE platform = ?1 AND handle = ?2", [ad.platform, t.handle, new Date(nowMs).toISOString(), ref]);
+      await touchLog(db, { platform: ad.platform, target: t.handle, kind: 'follow', status: 'done', url: t.url, note: 'score ' + t.score + ' (' + (t.topics || '') + ')' }, nowMs);
+      n++;
+    } catch (e) {
+      await touchLog(db, { platform: ad.platform, target: t.handle, kind: 'follow', status: e.status === 401 || e.status === 403 ? 'refused' : 'failed', url: t.url, note: String(e.message || e).slice(0, 160) }, nowMs);
+      if (e.status === 401 || e.status === 403) break;
+    }
+  }
+  return { followed: n };
+}
+function touchTopPost(t) { try { const ev = JSON.parse(t.evidence_json || '{}'); return ev.top_post || null; } catch (e) { return null; } }
+async function touchLike(env, ad, opts) {
+  const db = env.DB, nowMs = opts.nowMs;
+  let room = await touchRoom(db, ad.platform, 'like', nowMs), n = 0;
+  if (!room) return { liked: 0 };
+  const rows = await touchAll(db, "SELECT t.* FROM touch_targets t WHERE t.platform = ?1 AND t.state = 'followed' AND t.score >= ?2 AND t.evidence_json LIKE '%\"top_post\":{%' ORDER BY t.score DESC LIMIT 40", [ad.platform, TOUCH_LIKE_MIN]);
+  for (const t of rows) {
+    if (!room) break;
+    const p = touchTopPost(t);
+    if (!p || nowMs - Date.parse(p.at) > 7 * DAY_MS) continue;
+    const seen = await touchAll(db, "SELECT 1 FROM touch_actions WHERE platform = ?1 AND kind = 'like' AND subject = ?2 LIMIT 1", [ad.platform, p.uri || p.id]);
+    if (seen.length) continue;
+    try {
+      await ad.like(p);
+      await touchLog(db, { platform: ad.platform, target: t.handle, kind: 'like', status: 'done', url: p.url, subject: p.uri || p.id }, nowMs);
+      n++; room--;
+    } catch (e) {
+      await touchLog(db, { platform: ad.platform, target: t.handle, kind: 'like', status: e.status === 401 || e.status === 403 ? 'refused' : 'failed', url: p.url, subject: p.uri || p.id, note: String(e.message || e).slice(0, 160) }, nowMs);
+      if (e.status === 401 || e.status === 403) break;
+    }
+  }
+  return { liked: n };
+}
+// Replies post automatically only once the owner has approved at least 20 drafts in 30 days and skipped at most 1 in 10 (trust earned), and never while ops_config touch_reply_auto is off.
+async function touchReplyAuto(db) {
+  try {
+    const f = await touchAll(db, "SELECT value FROM ops_config WHERE key = 'touch_reply_auto'", []);
+    if (f[0] && String(f[0].value) === 'off') return false;
+  } catch (e) { /* no ops_config row: judge by the record */ }
+  const r = await touchAll(db, "SELECT SUM(CASE WHEN status IN ('approved','done') THEN 1 ELSE 0 END) AS ok_n, SUM(CASE WHEN status = 'skipped' THEN 1 ELSE 0 END) AS skip_n FROM touch_actions WHERE kind = 'reply' AND mode = 'approve' AND decided_at >= ?1", [new Date(Date.now() - 30 * DAY_MS).toISOString()]);
+  const okN = Number(r[0] && r[0].ok_n || 0), skipN = Number(r[0] && r[0].skip_n || 0);
+  return okN >= 20 && skipN / Math.max(1, okN + skipN) <= 0.1;
+}
+async function touchDraftReplies(env, ad, opts) {
+  const db = env.DB, nowMs = opts.nowMs, day = touchDay(nowMs);
+  if (!env.AI) return { drafted: 0, skipped: 'no AI binding' };
+  let room = TOUCH_CAPS.reply_draft - await touchCount(db, ad.platform, 'reply', day, ''), n = 0;
+  if (room <= 0) return { drafted: 0 };
+  const auto = await touchReplyAuto(db);
+  const rows = await touchAll(db, "SELECT t.* FROM touch_targets t WHERE t.platform = ?1 AND t.state = 'followed' AND (t.score >= ?2 OR t.known = 1) AND t.evidence_json LIKE '%\"top_post\":{%' AND NOT EXISTS (SELECT 1 FROM touch_actions a WHERE a.platform = t.platform AND a.target = t.handle AND a.kind = 'reply' AND a.created_at >= ?3) ORDER BY t.known DESC, t.score DESC LIMIT 6",
+    [ad.platform, TOUCH_REPLY_MIN, new Date(nowMs - 14 * DAY_MS).toISOString()]);
+  for (const t of rows) {
+    if (room <= 0) break;
+    const p = touchTopPost(t);
+    if (!p || nowMs - Date.parse(p.at) > 3 * DAY_MS) continue;
+    let txt = null;
+    try {
+      const ai = await aiRunAttr(env, 'qnfo-social', 'touch-reply', TOUCH_REPLY_MODEL, { messages: [{ role: 'user', content: touchReplyPrompt(t, p.text) }], max_tokens: 200, reasoning_effort: 'none' });
+      txt = touchCleanReply(ai && (ai.response || (ai.choices && ai.choices[0] && ai.choices[0].message && ai.choices[0].message.content)));
+    } catch (e) { txt = null; }
+    if (!txt) continue;
+    await touchLog(db, { platform: ad.platform, target: t.handle, kind: 'reply', mode: 'approve', status: auto ? 'approved' : 'proposed', text: txt, url: p.url, subject: JSON.stringify({ id: p.id, cid: p.cid, uri: p.uri, root: p.root }), grounding: p.text, note: auto ? 'trust earned: auto-approved' : 'waiting for one tap' }, nowMs);
+    n++; room--;
+  }
+  return { drafted: n, auto: auto };
+}
+async function touchPostApproved(env, ad, opts) {
+  const db = env.DB, nowMs = opts.nowMs, day = touchDay(nowMs);
+  const posted = await touchAll(db, "SELECT COUNT(*) AS n FROM touch_actions WHERE platform = ?1 AND kind = 'reply' AND status = 'done' AND substr(done_at, 1, 10) = ?2", [ad.platform, day]);
+  let room = TOUCH_CAPS.reply_post - Number(posted[0] && posted[0].n || 0), n = 0;
+  const rows = await touchAll(db, "SELECT * FROM touch_actions WHERE platform = ?1 AND kind = 'reply' AND status = 'approved' ORDER BY id LIMIT 5", [ad.platform]);
+  for (const a of rows) {
+    if (room <= 0) break;
+    let subj = null; try { subj = JSON.parse(a.subject || 'null'); } catch (e) { subj = null; }
+    if (!subj) { await touchRun(db, "UPDATE touch_actions SET status = 'failed', note = 'no subject post' WHERE id = ?1", [a.id]); continue; }
+    try {
+      const url = await ad.reply(subj, a.text);
+      await touchRun(db, "UPDATE touch_actions SET status = 'done', done_at = ?2, note = ?3 WHERE id = ?1", [a.id, new Date(nowMs).toISOString(), 'posted ' + String(url || '').slice(0, 200)]);
+      n++; room--;
+    } catch (e) {
+      await touchRun(db, "UPDATE touch_actions SET status = ?2, note = ?3 WHERE id = ?1", [a.id, e.status === 401 || e.status === 403 ? 'refused' : 'failed', String(e.message || e).slice(0, 200)]);
+    }
+  }
+  return { posted: n };
+}
+// Outcomes: a follow-back read from the follows refresh, and replies, likes and follows read from the account's notifications.
+async function touchOutcomes(env, ad, opts) {
+  const db = env.DB, nowMs = opts.nowMs, iso = new Date(nowMs).toISOString();
+  let marked = 0;
+  try {
+    const notes = await ad.notifications();
+    for (const n of notes) {
+      if (!n.from) continue;
+      const oc = n.reason === 'follow' ? 'followed-back' : n.reason === 'reply' || n.reason === 'mention' || n.reason === 'quote' ? 'replied' : n.reason === 'like' ? 'liked-back' : null;
+      if (!oc) continue;
+      const r = await touchRun(db, "UPDATE touch_actions SET outcome = ?3, outcome_at = ?4 WHERE platform = ?1 AND target = ?2 AND status = 'done' AND kind IN ('follow','like','reply') AND outcome IS NULL AND done_at <= ?4 AND done_at >= ?5",
+        [ad.platform, n.from, oc, n.at || iso, new Date(nowMs - 30 * DAY_MS).toISOString()]);
+      marked += Number(r && r.meta && r.meta.changes || 0);
+    }
+  } catch (e) { /* notifications unreadable: the follow-back pass below still runs */ }
+  const fb = await touchRun(db, "UPDATE touch_actions SET outcome = 'followed-back', outcome_at = ?2 WHERE platform = ?1 AND kind = 'follow' AND status = 'done' AND outcome IS NULL AND target IN (SELECT handle FROM touch_targets WHERE platform = ?1 AND followed_by = 1)", [ad.platform, iso]);
+  const none = await touchRun(db, "UPDATE touch_actions SET outcome = 'none', outcome_at = ?2 WHERE platform = ?1 AND kind IN ('follow','reply') AND status = 'done' AND outcome IS NULL AND done_at < ?3", [ad.platform, iso, new Date(nowMs - 30 * DAY_MS).toISOString()]);
+  return { marked: marked + Number(fb && fb.meta && fb.meta.changes || 0), expired: Number(none && none.meta && none.meta.changes || 0) };
+}
+// LinkedIn and X have no write path the fleet may use: a target whose bio links one becomes a tap item (open the profile, follow, and like or comment on the post shown).
+async function touchTapList(env, opts) {
+  const db = env.DB, nowMs = opts.nowMs, day = touchDay(nowMs), out = {};
+  for (const plat of ['x', 'linkedin']) {
+    let room = TOUCH_CAPS.tap - await touchCount(db, plat, 'tap-follow', day, ''), n = 0;
+    if (room <= 0) { out[plat] = 0; continue; }
+    const rows = await touchAll(db, "SELECT * FROM touch_targets WHERE platform IN ('bluesky','mastodon') AND state IN ('candidate','followed') AND score >= ?1 AND evidence_json LIKE ?2 ORDER BY known DESC, score DESC LIMIT 30", [TOUCH_FOLLOW_MIN, '%"' + plat + '":"%']);
+    for (const t of rows) {
+      if (room <= 0) break;
+      let ev = {}; try { ev = JSON.parse(t.evidence_json || '{}'); } catch (e) { ev = {}; }
+      const h = ev.cross && ev.cross[plat];
+      if (!h) continue;
+      const seen = await touchAll(db, "SELECT 1 FROM touch_actions WHERE platform = ?1 AND target = ?2 AND kind = 'tap-follow' LIMIT 1", [plat, h]);
+      if (seen.length) continue;
+      const url = plat === 'x' ? 'https://x.com/' + h : 'https://www.linkedin.com/in/' + h + '/recent-activity/all/';
+      const tp = ev.top_post;
+      await touchLog(db, { platform: plat, target: h, kind: 'tap-follow', mode: 'tap', status: 'proposed', url: url, subject: t.platform + ':' + t.handle,
+        grounding: tp ? tp.text : null, text: null,
+        note: String(t.name || t.handle) + ', score ' + t.score + ' on ' + t.platform + ' (' + (t.topics || '') + '). Follow, then like or comment on their latest post about it.' }, nowMs);
+      n++; room--;
+    }
+    out[plat] = n;
+  }
+  return out;
+}
+// Prompted recall: ask, two at a time, whether the owner already knows the top people. A yes makes them known (never pruned, replies first).
+async function touchKnownAsks(env, opts) {
+  const db = env.DB;
+  const ans = await touchAll(db, "SELECT ref, answer FROM owner_asks WHERE kind = 'touch-known' AND answered_at IS NOT NULL AND answer IN ('talked','knowof')", []);
+  for (const a of ans) {
+    const i = String(a.ref).indexOf(':');
+    if (i > 0) await touchRun(db, "UPDATE touch_targets SET known = 1 WHERE platform = ?1 AND handle = ?2", [a.ref.slice(0, i), a.ref.slice(i + 1)]);
+  }
+  const open = await touchAll(db, "SELECT COUNT(*) AS n FROM owner_asks WHERE kind = 'touch-known' AND answered_at IS NULL", []);
+  let room = 2 - Number(open[0] && open[0].n || 0), n = 0;
+  if (room <= 0) return { asked: 0, known_set: ans.length };
+  const top = await touchAll(db, "SELECT t.platform, t.handle, t.name, t.bio, t.topics FROM touch_targets t WHERE t.platform IN ('bluesky','mastodon') AND t.score >= ?1 AND t.known = 0 AND NOT EXISTS (SELECT 1 FROM owner_asks o WHERE o.kind = 'touch-known' AND o.ref = t.platform || ':' || t.handle) ORDER BY t.score DESC LIMIT ?2", [TOUCH_REPLY_MIN, room]);
+  for (const t of top) {
+    const name = String(t.name || t.handle).slice(0, 60);
+    await touchRun(db, "INSERT OR IGNORE INTO owner_asks (plane, kind, ref, question, cue, options_json, priority) VALUES ('reach', 'touch-known', ?1, ?2, ?3, ?4, 3)",
+      [t.platform + ':' + t.handle, 'Do you already know ' + name + ' (' + t.handle + ' on ' + (t.platform === 'bluesky' ? 'Bluesky' : 'Mastodon') + ')?', String(t.bio || '').slice(0, 160) || null,
+       JSON.stringify([{ key: 'talked', label: 'Yes, we have talked' }, { key: 'knowof', label: 'I know their work' }, { key: 'no', label: 'No' }, { key: 'unsure', label: 'Not sure' }])]);
+    n++;
+  }
+  return { asked: n, known_set: ans.length };
+}
+// The three numbers that prove the engine works, written to metric_registry and metric_history once an hour.
+async function touchMetrics(env, opts) {
+  const db = env.DB, nowMs = opts.nowMs, day = touchDay(nowMs), iso = new Date(nowMs).toISOString();
+  const a = await touchAll(db, "SELECT COUNT(*) AS n FROM touch_actions WHERE status = 'done' AND kind IN ('follow','like','reply','star','gh-follow','tap-follow') AND done_at >= ?1", [new Date(nowMs - 7 * DAY_MS).toISOString()]);
+  const r = await touchAll(db, "SELECT COUNT(*) AS n, SUM(CASE WHEN outcome IN ('followed-back','replied') THEN 1 ELSE 0 END) AS won FROM touch_actions WHERE kind IN ('follow','gh-follow') AND status = 'done' AND done_at <= ?1 AND done_at >= ?2", [new Date(nowMs - 3 * DAY_MS).toISOString(), new Date(nowMs - 30 * DAY_MS).toISOString()]);
+  const st = await touchAll(db, "SELECT * FROM touch_targets WHERE state = 'followed' AND known = 0 AND followed_by = 0 AND scored_at IS NOT NULL", []);
+  const vals = {
+    touchpoints_7d: Number(a[0] && a[0].n || 0),
+    touch_reciprocation_30d: Number(r[0] && r[0].n || 0) >= 10 ? Math.round(Number(r[0].won || 0) / Number(r[0].n) * 1000) / 1000 : null,
+    touch_stale_follows: st.filter(function(t) { return touchIsStale(t, nowMs); }).length
+  };
+  const meets = { touchpoints_7d: vals.touchpoints_7d >= 20, touch_reciprocation_30d: vals.touch_reciprocation_30d == null ? null : vals.touch_reciprocation_30d >= 0.15, touch_stale_follows: vals.touch_stale_follows <= 10 };
+  const targets = { touchpoints_7d: '>= 20', touch_reciprocation_30d: '>= 0.15', touch_stale_follows: '<= 10' };
+  for (const k of Object.keys(vals)) {
+    await touchRun(db, "UPDATE metric_registry SET last_value = ?2, last_refreshed = ?3, state = CASE WHEN ?2 IS NULL THEN 'UNMEASURED' ELSE 'MEASURED' END WHERE metric = ?1", [k, vals[k] == null ? null : String(vals[k]), iso]).catch(function() { return null; });
+    if (vals[k] != null) await touchRun(db, "INSERT INTO metric_history (metric, day, value, meets, target, ts) VALUES (?1,?2,?3,?4,?5,?6) ON CONFLICT(metric, day) DO UPDATE SET value = excluded.value, meets = excluded.meets, ts = excluded.ts", [k, day, vals[k], meets[k] ? 1 : 0, targets[k], iso]).catch(function() { return null; });
+  }
+  return vals;
+}
+function touchAdapters(env, s, f) {
+  const out = [];
+  if (s) out.push(touchBsky(env, s, f));
+  if (env.MASTODON_TOKEN) out.push(touchMastodon(env, f));
+  return out;
+}
+async function touchTick(env, opts) {
+  const o = Object.assign({ nowMs: Date.now(), fetch: fetch }, opts || {});
+  const out = { version: VERSION, platforms: {} };
+  try {
+    const acct = await touchAll(env.DB, "SELECT answer FROM owner_asks WHERE kind = 'touch-account' AND answered_at IS NOT NULL ORDER BY answered_at DESC LIMIT 1", []);
+    if (acct[0] && acct[0].answer === 'personal') return { skipped: 'owner wants a personal account; the QNFO accounts are not used for touchpoints' };
+  } catch (e) { /* no answer yet: the stated default (the QNFO accounts) is in effect */ }
+  let s = null;
+  if (o.session) s = o.session;
+  else if (env.BSKY_HANDLE && env.BSKY_APP_PASS) { try { s = await session(env); } catch (e) { out.platforms.bluesky = { error: String(e.message || e).slice(0, 120) }; } }
+  for (const ad of (o.adapters || touchAdapters(env, s, o.fetch))) {
+    const r = {};
+    for (const step of [['refresh', touchRefresh], ['outcomes', touchOutcomes], ['prune', touchPrune], ['follow', touchFollow], ['like', touchLike], ['draft', touchDraftReplies], ['post', touchPostApproved]]) {
+      try { r[step[0]] = await step[1](env, ad, o); } catch (e) { r[step[0]] = { error: String(e.message || e).slice(0, 160) }; }
+    }
+    out.platforms[ad.platform] = r;
+  }
+  try { out.github_scored = await touchScoreStored(env, o); } catch (e) { out.github_scored = { error: String(e.message || e).slice(0, 160) }; }
+  try { out.tap = await touchTapList(env, o); } catch (e) { out.tap = { error: String(e.message || e).slice(0, 160) }; }
+  try { out.asks = await touchKnownAsks(env, o); } catch (e) { out.asks = { error: String(e.message || e).slice(0, 160) }; }
+  try { out.metrics = await touchMetrics(env, o); } catch (e) { out.metrics = { error: String(e.message || e).slice(0, 160) }; }
+  return out;
+}
+async function touchReport(env) {
+  const db = env.DB;
+  const targets = await touchAll(db, "SELECT platform, state, COUNT(*) AS n, ROUND(AVG(score),1) AS avg_score FROM touch_targets GROUP BY platform, state", []);
+  const actions = await touchAll(db, "SELECT platform, kind, status, COUNT(*) AS n FROM touch_actions WHERE created_at >= ?1 GROUP BY platform, kind, status", [new Date(Date.now() - 7 * DAY_MS).toISOString()]);
+  const top = await touchAll(db, "SELECT platform, handle, name, score, topics, state, known, followed_by, reply_share, posts_30d, followers FROM touch_targets WHERE score > 0 ORDER BY score DESC LIMIT 25", []);
+  return { ok: true, version: VERSION, schema_version: 'touchpoints/v1', caps: TOUCH_CAPS, follow_min: TOUCH_FOLLOW_MIN, targets: targets, actions_7d: actions, top: top };
 }
 
 export default {
@@ -4144,8 +4718,14 @@ export default {
     const p = url.pathname, m = request.method;
     const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Ops-Key' };
     if (m === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
-    if (p === '/health') return new Response(JSON.stringify({ ok: true, worker: 'qnfo-social', version: VERSION, capabilities: ["bluesky-posting", "short-video-posts", "linkedin-via-buffer", "dissemination-drain", "engagement-collection", "profile-sync", "buffer-channel-audit", "distribution-learner", "channel-drain", "attention-share"], limitations: ["every route except /health and GET /learner needs the social token", "posting, the dissemination drain, profile sync and the audits run only on its hourly :30 cron; the 06:00 scan and the 07:00 engagement run on the :30 fire after their slot (CRON-GRID-1)", "LinkedIn is reached only through the Buffer queue, never LinkedIn's API; pipeline_flags.linkedin_mode 'draft' keeps those posts as drafts", "the channel drain posts to LinkedIn, Mastodon and X inside their own weekly caps (3, 2, 2; pipeline_flags.social_channel_caps) spread over the week, never the same slug twice in 30 days on one channel; Bluesky keeps its own cap", "the profile sync never overwrites a bio the owner edited", "the distribution learner only chooses which queued post goes next and in which slot, inside the weekly cap and content gates; ops_config social_learner_enabled=0 turns it off", "ATTENTION-SHARE-1: ops_config attention_channel_share (qnfo-fleet-dashboard scorecard, daily) scales each channel cap down to its attention share, never above the owner cap; a share older than 3 days reads as 1", "UTM-VISITS-1: a learner post's visits are the gateway's tagged loads for its slug and channel (reach_signals source utm, clicks_human) when its window has any, else the bot-filtered RUM lift", "LEARNER-CHANNEL-ARM-1: the learner's channel arm only orders the Buffer channels and reports an allocation; it never changes a cap or a share"], handle: env.BSKY_HANDLE }), { headers: { 'Content-Type': 'application/json', ...cors } });
+    if (p === '/health') return new Response(JSON.stringify({ ok: true, worker: 'qnfo-social', version: VERSION, capabilities: ["bluesky-posting", "touchpoints", "short-video-posts", "linkedin-via-buffer", "dissemination-drain", "engagement-collection", "profile-sync", "buffer-channel-audit", "distribution-learner", "channel-drain", "attention-share"], limitations: ["every route except /health and GET /learner needs the social token", "posting, the dissemination drain, profile sync and the audits run only on its hourly :30 cron; the 06:00 scan and the 07:00 engagement run on the :30 fire after their slot (CRON-GRID-1)", "LinkedIn is reached only through the Buffer queue, never LinkedIn's API; pipeline_flags.linkedin_mode 'draft' keeps those posts as drafts", "the channel drain posts to LinkedIn, Mastodon and X inside their own weekly caps (3, 2, 2; pipeline_flags.social_channel_caps) spread over the week, never the same slug twice in 30 days on one channel; Bluesky keeps its own cap", "the profile sync never overwrites a bio the owner edited", "the distribution learner only chooses which queued post goes next and in which slot, inside the weekly cap and content gates; ops_config social_learner_enabled=0 turns it off", "ATTENTION-SHARE-1: ops_config attention_channel_share (qnfo-fleet-dashboard scorecard, daily) scales each channel cap down to its attention share, never above the owner cap; a share older than 3 days reads as 1", "UTM-VISITS-1: a learner post's visits are the gateway's tagged loads for its slug and channel (reach_signals source utm, clicks_human) when its window has any, else the bot-filtered RUM lift", "LEARNER-CHANNEL-ARM-1: the learner's channel arm only orders the Buffer channels and reports an allocation; it never changes a cap or a share"], handle: env.BSKY_HANDLE }), { headers: { 'Content-Type': 'application/json', ...cors } });
     // SOCIAL-DISTRIBUTION-LEARNER-1 (OPEN-ACCESS-1): the learner's posterior, next decision and recent rewards, read-only.
+    // TOUCHPOINTS-1 (OPEN-ACCESS-1): the target model and the week's touches, read-only.
+    if (p === '/touchpoints' && m === 'GET') {
+      let body;
+      try { body = await touchReport(env); } catch (e) { body = { error: 'touchpoints unavailable: ' + String(e && e.message || e).slice(0, 120) }; }
+      return new Response(JSON.stringify(body), { status: body.error ? 500 : 200, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=120', ...cors } });
+    }
     if (p === '/learner' && m === 'GET') {
       let body;
       try { body = await learnerReport(env); } catch (e) { console.error('learner report failed', e); body = { error: 'learner report unavailable' }; }
@@ -4158,6 +4738,7 @@ export default {
         return new Response(JSON.stringify({ ok: true, ...r }), { headers: { 'Content-Type': 'application/json', ...cors } });
       }
       const json = function(obj, status) { return new Response(JSON.stringify(obj), { status: status || 200, headers: { 'Content-Type': 'application/json', ...cors } }); };
+      if (p === '/touchpoints/run' && m === 'POST') return json(await touchTick(env));
       if (p === '/engagement' && m === 'POST') {
         return json({ ok: true, engagement: await collectEngagement(env) });
       }
@@ -4412,6 +4993,7 @@ async function aiRunAttr(env, worker, purpose, model, input, opts) {
   }
 }
 // end aiRunAttr
+export { touchTick, touchReport, touchScoreStored, touchRelevance, touchActivity, touchAttentiveness, touchReach, touchScore, touchIsStale, touchCrossLinks, touchCleanReply, touchReplyPrompt, touchRefresh, touchPrune, touchFollow, touchLike, touchDraftReplies, touchPostApproved, touchOutcomes, touchTapList, touchKnownAsks, touchMetrics, touchQueryOrder, touchBsky, touchMastodon, TOUCH_CAPS, TOUCH_QUERIES, TOUCH_FOLLOW_MIN };
 export { ultrastableEnqueue, ultrastableThread, ultrastableWeekSlug, shortsBufferText, shortsLinkedInText, soWhatPrompt, soWhatGate, soWhatSentence, SOWHAT_MAX_CHARS, drainShorts, shortsText, planEngagementUris, BSKY_ENGAGEMENT_MAX_URIS, mastodonWantedFields, mastodonProfileSync, drainRollup, rollupNoteText, rollupSubstack, rollupBluesky, rollupRunStatus, ROLLUP_SUBSTACK_MAX, ROLLUP_BSKY_MAX, mastodonCreate, mastodonDirectStats, channelCreate, findChannel, blueskySpacing, CHANNEL_ORDER, collectBufferStats, bufferStatsPlan, bufferRefusedFields, bufferStatsQuery, bufferGqlBounded, BUFFER_STATS_PER_CHANNEL, BUFFER_STATS_CHANNELS, readTextCapped, probeLink, proseUnits, splitForThread, fitWhole, threadPlan, postThread, pickBufferText, collectReplies, replyRowsOf, replyWordCount, threadGroundingIssues, groundingProblems, composePrompt, repairPrompt, buildFacets, truncateSafe, applyLink, findDoi, byteLen, extractUrls, utmHost, sentPostsJson, utmTag, utmTagText,fitKeepUrls, tagAndFit, tagFacets, postText, postUriValue, weeklyCap, socialGate, drainQueue, drainDissemination, repairMojibake, contentGate, markPosted, routeGate, collectEngagement, blueskyUriOf, bufferPost, windowHold, crossPostHold, syncProfile, PROFILE_DESCRIPTION, bufferChannelAudit, linkedinMode, recordSocialRun, profileRunStatus, drainRunStatus, engagementRunStatus, autoScan,
   drainChannels, channelsRunStatus, channelText, channelCaps, channelWindow, channelCarried, pickChannelRow, CHANNEL_WEEKLY_CAP, CHANNEL_PLATFORM, CHANNEL_MAX_CHARS, AUTOMATION_MARKER, MARKER_MAX_CHARS, withAutomationMarker, bufferCreate, CHANNEL_REPEAT_DAYS, SUBSCRIBE_LINE,
   learnerClassify, learnerClassifyChannel, learnerCategories, learnerHintsFor, learnerUtmCampaign, learnerDiscover, blueskyTidMs, learnerPostedAtOf, LEARNER_TOPICS, LEARNER_CATEGORY_TOPIC, LEARNER_GENERIC_TOPIC, learnerIsQuestion, learnerTopicOf, learnerSlotOf, learnerBeta, learnerPrior, learnerPosterior, learnerChoose, learnerPBest,
