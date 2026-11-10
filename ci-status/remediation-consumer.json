@@ -1,8 +1,8 @@
 {
  "ok": false,
- "error": "no parseable consumer output: Extra data: line 2 column 1 (char 460)",
+ "error": "no parseable consumer output: Extra data: line 2 column 1 (char 451)",
  "marker": "REMEDIATION-CONSUMER-1",
- "head": "ca2c3a6b9f2bce88753e7e1a96efabcdca20d2bf",
+ "head": "ba7dd94d505fd608b8b5c973079800d320d4a3ea",
  "job_status": "success",
- "ts": "2026-11-10T19:46:43Z"
+ "ts": "2026-11-10T20:28:15Z"
 }
