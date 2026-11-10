@@ -3735,7 +3735,7 @@ var __name22 = __name2;
 // line below (VERSION-LINE-NOTES-1, 2026-10-19). Its older trailing notes stay until length-lede.test.mjs stops pinning "LENGTH-LEDE-1" on that line.
 // VERSION-NOTES-MOVED-1: release notes live in the block below
 // W-META-1 (agent_issues 1002316/1002317/1002318): aiRunAttr records in_tok/out_tok/neurons per purpose.
-var VERSION = "1.48.1-codeagent";
+var VERSION = "1.48.2-codeagent";
 // 1.46.0 KERNEL-EVERYWHERE-1 (2026-11-06, owner directive "IMPLEMENT EVERYWHERE ACROSS ALL AI APPS AND SERVICES AND SURFACES", pillar personal): the travel planner CHAT_SYSTEM carries the DOCTRINE-1 kernel 8.2.1 reply recognitions (KERNEL-REPLY-4, scoped to the planner's one designed question): end on the plan or proposal, never a conditional offer or questionnaire; refusals and limits are dispositions with their reason; reversible steps are taken and reported in the same reply. prior 1.45.8-codeagent
 /* 1.44.14 COMPANION-LENGTH-HEADROOM-1 (issue 1000633, pillar personal; patch): repeated length failures alongside exhausted retry budgets expose too little headroom for model output variation. Length-only repairs now target 500 words below the unchanged ceiling while remaining inside each form's normal writer band. */
 /* 1.43.6 BP26-AI-ACT-ART50-1 and BP26-STRUCTURED-DATA-1 (2026-10-26, agent_issues 1000341 and 1000336, pillar core; patch): the visible AI-generated label of every reading.q08.org piece now has its machine-readable half. A piece page carries an Article JSON-LD block (headline, datePublished, url, an Organization as author, never an AI or invented persona, and creditText saying it was written by AI and that no human reviews pieces before they appear) and the index page a Blog block. Measured before: the reading pages carried the visible label and no JSON-LD at all. */
@@ -8113,11 +8113,12 @@ async function writeBalanceMetrics(env, now) {
   try {
     var since = new Date(now - 7 * 864e5).toISOString();
     var a = await env.PERSONAL.prepare("SELECT COUNT(*) AS n, SUM(CASE WHEN balance_score IS NOT NULL THEN 1 ELSE 0 END) AS scored FROM (SELECT balance_score FROM companion_audits WHERE verdict = 'pass' ORDER BY checked_at DESC LIMIT 5)").first();
-    var h = await env.PERSONAL.prepare("SELECT COUNT(*) AS held FROM companion_runs WHERE status = 'rejected' AND run_at >= ?1 AND detail LIKE 'fact-check balance:%'").bind(since).first();
+    var h = await env.PERSONAL.prepare("SELECT COUNT(*) AS held FROM companion_runs WHERE status = 'rejected' AND run_at >= ?1 AND (detail LIKE 'fact-check balance:%' OR detail LIKE 'factcheck balance:%')").bind(since).first();
     var passes = Number(a && a.n) || 0, scored = Number(a && a.scored) || 0, held = Number(h && h.held) || 0;
     var scoredShare = passes ? Math.round(1000 * scored / passes) / 1000 : null;
     var recent = await env.PERSONAL.prepare("SELECT COUNT(*) AS n FROM companion_audits WHERE verdict = 'pass' AND balance_score IS NOT NULL AND checked_at >= ?1").bind(since).first();
-    var holdShare = Number(recent && recent.n) + held ? Math.round(1000 * held / (Number(recent && recent.n) + held)) / 1000 : null;
+    var holdDenom = Number(recent && recent.n) + held;
+    var holdShare = holdDenom ? Math.round(1000 * held / holdDenom) / 1000 : null;
     var stamp = new Date(now).toISOString();
     var put = "UPDATE metric_registry SET last_value = ?2, last_refreshed = ?3, state = 'MEASURED' WHERE metric = ?1";
     await env.AUDIT.prepare(put).bind("companion_balance_scored_share_last5", scoredShare == null ? null : String(scoredShare), stamp).run();
