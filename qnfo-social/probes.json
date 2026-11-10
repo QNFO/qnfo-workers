@@ -12,9 +12,10 @@
   ],
   "d1": [
     {
-      "db": "qnfo-audit",
-      "sql": "SELECT id FROM social_threads WHERE slug = 'ultrastable-2026-w46'",
-      "note": "ULTRASTABLE-POSTS-1: the weekly dedupe read compiles"
+      "binding": "DB",
+      "explain": [
+        "SELECT id FROM social_threads WHERE slug = 'ultrastable-2026-w46' LIMIT 1"
+      ]
     }
   ]
 }
