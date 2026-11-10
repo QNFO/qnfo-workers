@@ -31,6 +31,14 @@
         "Ultrastable",
         "claims pass their live check"
       ]
+    },
+    {
+      "url": "https://papers.qnfo.org/papers/cross-model-llm-convergence-as-a-bayesian-gate-check-for-fringe-physics-claims",
+      "status": 200,
+      "contains": [
+        "qnfo.github.io/paper-demo-llm-convergence-gate",
+        "Try it yourself"
+      ]
     }
   ],
   "d1": [
