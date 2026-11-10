@@ -157,6 +157,11 @@ Each repo keeps a roadmap issue ("Roadmap: next 5 features") with at most 5 item
 - A finding or lesson lands as a change to a worker, prompt, scorer, probe, metric or test in the same PR, never as prose; a document is never a deliverable (NO-STANDALONE-DOCS-1).
 - `scripts/agents-md-rules.test.mjs` fails a PR that removes this section or the loop rules above it.
 
+## Draft PR for every issue, build it, merge it (ISSUE-DRAFT-BUILD-MERGE-1, owner directive 2026-11-10)
+- Owner, verbatim: "The system shall always create draft PRs for all new issues, then shall always build code and always merge all PRs created to main production; automatically, now and always in future work."
+- Every new issue gets a draft PR at once (DRAFT-PR-PER-ISSUE-1, qnfo-github-steward). A session or loop then builds the code in that PR, marks it ready and merges it to main on green checks (MERGE-ALL-AUTO-1); a handoff-shell PR that holds only `docs/handoff` is a start, never the finish, and the issue stays open until code lands (CODE-CHANGE-REQUIRED-1).
+- It moves no limit: the harness's permission checks, the secret lock, live work claims, `HOLD:` comments and required checks keep their precedence. `ops_config OWNER_DIRECTIVE_2026_11_10_ISSUE_DRAFT_BUILD_MERGE_1` records it (migrations/2026-11-10-issue-draft-build-merge.sql).
+
 ## Merge every code change automatically (MERGE-ALL-AUTO-1, owner directive 2026-11-09)
 - Owner, verbatim: "You shall always merge all code changes automatically. Update all system/fleet instructions and merge all open PRs immediately." It binds every session, loop and code agent.
 - A pull request is merged the moment its required checks are green and GitHub accepts the merge; a session does it itself (mark ready, merge, verify the deploy) and never asks. A red check is fixed in the same turn and the pull request is merged then; a merge conflict is resolved by merging main in. At each session start and close-out, list the open pull requests and merge or fix every one.
