@@ -266,7 +266,7 @@ def gql_query(kind, acc, since, until):
         return ('query { viewer { accounts(filter: { accountTag: "%s" }) { aiGatewayRequestsAdaptiveGroups(limit: 5000, filter: { datetime_geq: "%s", datetime_leq: "%s" }) '
                 '{ count dimensions { provider gateway model cached } } } } }' % (acc, since, until))
     return ('query { viewer { accounts(filter: { accountTag: "%s" }) { aiInferenceAdaptiveGroups(limit: 2000, filter: { datetime_geq: "%s", datetime_leq: "%s" }) '
-            '{ count dimensions { modelId } } } } }' % (acc, since, until))
+            '{ count dimensions { route modelId gateway } } } } }' % (acc, since, until))
 
 
 def _groups(resp, name):
