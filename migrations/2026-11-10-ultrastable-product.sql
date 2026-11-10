@@ -3,14 +3,13 @@
 -- Design: docs/PRODUCT-ULTRASTABLE.md; split: product/boundary.json, checked by scripts/product_boundary.mjs (ULTRASTABLE-BOUNDARY-1).
 -- WHAT THIS ADDS:
 --  (1) five prompted-recall questions on fleet.qnfo.org/focus (owner_asks, plane fleet, kind product-*), two to four options plus Not sure, no typing.
---  (2) owner_asks_product_au: an answer files one agent_issues row (PRODUCT-ANSWER-1) that carries it into the record it changes (rwnq8/resume docs/BRAND.md
---      section 9, docs/PRODUCT-ULTRASTABLE.md), so an answer is never inert. v_product_decisions reads the answers.
+--  (2) v_product_answers_unfiled and a #P0 roadmap issue: an answer is carried into the record by a sweep (a trigger on agent_issues nests too deep for D1). v_product_decisions reads the answers.
 --  (3) four owner cards for the steps only the owner can take (domain purchase, trademark knockout, GitHub organisation, entity), each IDENTITY-BOUND with its default.
 --  (4) ROADMAP-1 issues for spin-off phases P1 to P4 (product/boundary.json phases), each with a doer and a closing probe.
 -- PREDICTION: owner_asks with kind LIKE 'product-%' answered >= 3 within 7 d. Falsifier: 0 answers in 7 days means the questions are not where the owner looks.
 -- APPLY-BY: ci
 -- DB: qnfo-audit
--- Rollback: DROP TRIGGER IF EXISTS owner_asks_product_au; DROP VIEW IF EXISTS v_product_decisions; UPDATE human_actions SET status = 'dismissed', resolution = 'rolled back' WHERE slug LIKE 'ultrastable-%' AND status = 'open'
+-- Rollback: DROP VIEW IF EXISTS v_product_answers_unfiled; DROP VIEW IF EXISTS v_product_decisions; UPDATE human_actions SET status = 'dismissed', resolution = 'rolled back' WHERE slug LIKE 'ultrastable-%' AND status = 'open'
 -- Rollback note: owner_asks rows stay as the record of what was asked and answered.
 -- CAUSE-MAPPED: registers no metric.
 -- spof-review: the trigger fires only on an owner_asks answer of a product-* kind and inserts one agent_issues row guarded by NOT EXISTS; a failure fails only that tap.
@@ -42,18 +41,20 @@ INSERT OR IGNORE INTO owner_asks (plane, kind, ref, question, cue, options_json,
  '[{"key":"yes","label":"Yes, paying users"},{"key":"pilot","label":"Free users or a pilot only"},{"key":"no","label":"No users"},{"key":"unsure","label":"Not sure"}]',
  3, strftime('%Y-%m-%dT%H:%M:%SZ','now'));
 
-CREATE TRIGGER IF NOT EXISTS owner_asks_product_au AFTER UPDATE OF answer ON owner_asks
-WHEN NEW.kind LIKE 'product-%' AND NEW.answer IS NOT NULL AND NEW.answer != 'unsure' AND (OLD.answer IS NULL OR OLD.answer != NEW.answer)
-BEGIN
-  INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at)
-  SELECT 'PRODUCT-ANSWER-1: ' || NEW.kind || ' answered "' || COALESCE(NEW.answer_label, NEW.answer) || '"',
-    'The owner answered a prompted-recall question on fleet.qnfo.org/focus (owner_asks ' || NEW.id || '): ' || NEW.question || ' Answer: ' || COALESCE(NEW.answer_label, NEW.answer) || '.' || char(10) ||
-    'Apply it, marked "confirmed by owner, ' || substr(COALESCE(NEW.answered_at, strftime('%Y-%m-%dT%H:%M:%SZ','now')), 1, 10) || '": rwnq8/resume docs/BRAND.md section 9 (product-name, product-buyer, product-model, product-design-credit, product-prior-sales), docs/PRODUCT-ULTRASTABLE.md here (product-name, product-buyer, product-model), and for product-design-credit the CV and site wording (rwnq8/resume RESUME.md, rwnq8/rwnq8.github.io index.html). A "no" removes the claim it asked about.' || char(10) ||
-    'code-task: repo=qnfo-workers path=docs/PRODUCT-ULTRASTABLE.md' || char(10) ||
-    'code-probe: {"paths": ["docs/PRODUCT-ULTRASTABLE.md"], "contains": "owner_asks ' || NEW.id || '"}',
-    'owner-asks:product', 'roadmap', 'high', 'open', CAST(strftime('%s','now') AS INTEGER) * 1000, CAST(strftime('%s','now') AS INTEGER) * 1000
-  WHERE NOT EXISTS (SELECT 1 FROM agent_issues WHERE title LIKE 'PRODUCT-ANSWER-1: ' || NEW.kind || ' answered%' AND status = 'open');
-END;
+-- AGENT-ISSUES-TRIGGER-DEPTH-1: a trigger on owner_asks that inserts into agent_issues nests past D1's limit (MIGRATION-APPLY-FAILED-1, 2026-11-10), so an answer is carried
+-- into the record by a sweep: v_product_answers_unfiled lists answered product-* asks with no open PRODUCT-ANSWER-1 issue, and the ROADMAP-1 issue below builds the sweep.
+CREATE VIEW IF NOT EXISTS v_product_answers_unfiled AS
+SELECT o.id, o.kind, o.question, COALESCE(o.answer_label, o.answer) AS answer, o.answered_at FROM owner_asks o
+WHERE o.kind LIKE 'product-%' AND o.answer IS NOT NULL AND o.answer != 'unsure'
+  AND NOT EXISTS (SELECT 1 FROM agent_issues i WHERE i.title LIKE 'PRODUCT-ANSWER-1: ' || o.kind || ' answered%');
+
+INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at)
+SELECT 'ROADMAP-1: ULTRASTABLE #P0: file a PRODUCT-ANSWER-1 issue for each row of v_product_answers_unfiled',
+  'Charter pillar: autonomy. An answered product-* question must change the record (rwnq8/resume docs/BRAND.md section 9, docs/PRODUCT-ULTRASTABLE.md). A trigger cannot do it (D1 trigger depth); add an hourly step to scripts/remediation_consumer.py that reads v_product_answers_unfiled and inserts one PRODUCT-ANSWER-1 issue per row, with a code-task line for docs/PRODUCT-ULTRASTABLE.md. Test in scripts/. Closing probe: the step exists.' || char(10) ||
+  'code-task: repo=qnfo-workers path=scripts/remediation_consumer.py' || char(10) ||
+  'code-probe: {"paths": ["scripts/remediation_consumer.py"], "contains": "v_product_answers_unfiled"}',
+  'claude-session', 'roadmap', 'high', 'open', CAST(strftime('%s','now') AS INTEGER) * 1000, CAST(strftime('%s','now') AS INTEGER) * 1000
+WHERE NOT EXISTS (SELECT 1 FROM agent_issues WHERE title LIKE 'ROADMAP-1: ULTRASTABLE #P0:%');
 
 CREATE VIEW IF NOT EXISTS v_product_decisions AS
 SELECT kind, ref, question, answer, answer_label, answered_at, answered_via FROM owner_asks WHERE kind LIKE 'product-%' ORDER BY priority, id;
