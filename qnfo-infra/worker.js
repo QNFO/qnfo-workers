@@ -19,6 +19,9 @@ __name2(infraSecret, "infraSecret");
 // QNFO.OPS #1 (issue 1000696, ROADMAP-1): cheaper-model ladder (COST-ROUTING-STACK-1) mapping each expensive
 // Workers AI model to its cheaper rung for non-critical calls; critical calls keep the original model.
 var AI_COST_LADDER = {
+  // Map the high‑cost Workers AI model to a cheaper rung for non‑critical calls.
+  // This reduces spend while preserving model fidelity for critical workloads.
+  "@cf/workers-ai": "@cf/meta/llama-3.1-8b-instruct",
   "@cf/meta/llama-3.3-70b-instruct-fp8-fast": "@cf/meta/llama-3.1-8b-instruct",
   "@cf/openai/gpt-oss-120b": "@cf/openai/gpt-oss-20b",
   "@cf/nvidia/nemotron-3-120b-a12b": "@cf/meta/llama-3.1-8b-instruct",
@@ -81,7 +84,7 @@ function infraManifestRoute(url, env) {
 }
 __name(infraManifestRoute, "infraManifestRoute");
 __name2(infraManifestRoute, "infraManifestRoute");
-var VERSION = "1.17.6-codeagent";
+var VERSION = "1.17.7-codeagent";
 // D1-RESULT-CAP-1 (#9794, DATA-SPINE-W0-1): D1 refuses a result payload over 50 MB. d1ReadAll runs a read; a statement that fails with a result-size
 // error is retried once as LIMIT/OFFSET pages over the same statement, and a payload at or over D1_RESULT_NEAR_BYTES is logged either way as a
 // cloud_ops_events row of kind d1_result_cap_near (fail-soft, never blocks the read).
