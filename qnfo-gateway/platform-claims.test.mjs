@@ -14,7 +14,7 @@ ok(a > 0 && b > a, "platform code sits before handleAbout");
 ok(src.includes('if (p === "/platform") return handlePlatform(env, false);'), "/platform is routed");
 ok(src.includes('if (p === "/api/platform-claims") return handlePlatform(env, true);'), "/api/platform-claims is routed");
 const esc = (t) => (t ? String(t).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;") : "");
-const qdsPage = (o, body) => "<title>" + o.title + "</title>" + body;
+const qdsPage = (o, body) => "<title>" + o.title + "</title>" + (o.jsonld || "") + body;
 const mod = new Function("esc", "qdsPage", src.slice(a, b) + "\nreturn { handlePlatform, reset: function(){ PLATFORM_CACHE = { at: 0, data: null }; } };")(esc, qdsPage);
 
 function envWith(rows, answers) {
@@ -60,6 +60,28 @@ mod.reset();
 const broken = { AUDIT: { prepare() { return { all: async () => { throw new Error("no such table: product_claims"); } }; } } };
 const bh = await (await mod.handlePlatform(broken, false)).text();
 ok(bh.includes("could not be read just now"), "an unreadable table says what happens next");
+
+// ULTRASTABLE-CREATOR-LINK-1: the credit, the author schema and the name come from product_profile; an owner "no" removes the credit.
+function envProfile(profile) {
+  return { AUDIT: { prepare(sql) { return {
+    all: async () => ({ results: /product_profile/.test(sql) ? profile : rows.slice(0, 1) }),
+    first: async () => answers["SELECT 1"],
+  }; } } };
+}
+mod.reset();
+const ch = await (await mod.handlePlatform(envProfile([]), false)).text();
+ok(ch.includes('Directed by <a href="https://rwnq8.github.io/" rel="author">Rowan Brad Quni-Gudzinas</a>'), "the default credit names Rowan and links the personal site");
+ok(ch.includes('"@type":"SoftwareApplication"') && ch.includes('"creator":{"@id":"https://qnfo.org/#person"}'), "the page carries a SoftwareApplication with Rowan as creator");
+ok(ch.includes("orcid.org/0009-0002-4317-5604"), "the credit carries the sameAs links");
+mod.reset();
+const cj = await (await mod.handlePlatform(envProfile([{ key: "name", value: "Homeostat" }, { key: "creator_role", value: "Designed and directed by" }]), true)).json();
+ok(cj.product === "Homeostat" && cj.directed_by && cj.directed_by.role === "Designed and directed by", "an answered profile row changes the name and the credit");
+mod.reset();
+const nh = await (await mod.handlePlatform(envProfile([{ key: "credit_visible", value: "0" }, { key: "creator_url", value: "javascript:alert(1)" }]), false)).text();
+ok(!nh.includes("Directed by") && !nh.includes('"creator"'), "credit_visible 0 removes the credit and the creator");
+mod.reset();
+const xj = await (await mod.handlePlatform(envProfile([{ key: "creator_url", value: "javascript:alert(1)" }]), true)).json();
+ok(xj.directed_by.url === "https://rwnq8.github.io/", "a non-https link falls back to the default");
 
 console.log(pass + " passed, " + fail + " failed");
 if (fail) process.exit(1);

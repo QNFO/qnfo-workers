@@ -165,7 +165,7 @@ function formatPaper(source, record) {
 }
 // PAPER-FORMAT-2:END
 // 3.48.7 PAPER-REVISION-QUALITY-1 (2026-11-03, pillar reach): recover split revision titles and record abstracts at public rendering, and reject cached refusals from both summary surfaces.
-var VERSION="3.64.1-codeagent";
+var VERSION="3.65.0-codeagent";
 /* 3.54.2 SEO-404-PATHS-1 follow-up: the paper page script no longer requests /api/paper-context/undefined when the page data block is missing (first path recorded in seo_404_paths). */ /* 3.54.0 SEO-404-PATHS-1 and INDEXNOW-BACKOFF-1 (merged): see the two notes below. GET /api/seo/crawl also returns notFound, the top 50 crawler 404 paths of the window, so the dashboard UX auditor reads them from the open route. INDEXNOW-BACKOFF-1: an IndexNow endpoint that failed its last 6 logged runs is tried once per 3 hours and a 429 is not retried. */ /* SEO-404-PATHS-1 (2026-11-04, pillar reach): a crawler request that answers 404 records its path in living-paper seo_404_paths (day, host, path, n; 500 paths a day, 14 days kept). seo_crawl_log counted 1,875 crawler 404s on 2026-11-02 (qnfo.org, every bot, kind other) and kept no path to fix. */ // 3.52.0 QWAV-DEMOS-1 (2026-11-04, pillar reach; minor: the QWAV page lists the ten interactive demos that only the retired Pages site linked, with a Demos nav item, a hero action and a footer link; the page is now the whole of qwav.org through a qwav.org/* route, so unknown paths redirect home instead of answering 200). Revert: restore 3.51.0. // 3.51.0 earlier history follows: // 3.51.0 CROSS-LINK-1 (2026-11-04, pillar reach; minor: every QDS page gains a family bar linking QNFO, QWAV and q08, a Keep exploring module (newest and random papers from the open API, the three family sites, topic chips) and a family line in the footer; QDS 1.1.0; visible ask links use ask.qwav.org per DOMAIN-PLANE-1). Prediction: pages per session on qwav.org and qnfo.org rise and clicks between the three sites become non-zero. Revert: restore 3.50.0. // 3.50.0 earlier history follows: // 3.50.0 PAPER-CITATION-ALIASES-1 (#5577, pillar research; minor): expose the documented /papers/<slug>/cite.* routes alongside the existing API exports. /* main 3.53.1 */ // 3.53.1 PAPER-TTFB-1 (2026-11-04, pillar reach; patch): a paper page whose plain summary kept failing the readability gate ran two model generations inside every request (17 to 44 s to first byte for a-minimal-generative-grammar-of-coordination..., 1.2 s for its neighbours); the fill now runs after the response and once per PLAIN_RETRY_MS per paper per colo. Revert: restore 3.53.0. // 3.53.0 earlier history follows: // 3.53.0 CROSS-LINK-2 (2026-11-04, pillar reach; minor: papers.qnfo.org index and paper pages, rendered by lpDoc, gain the family bar and a Keep exploring strip linking QWAV, Ask, ideas and q08, so the pages a search lands on lead to the rest of the family). Revert: restore 3.52.0. // 3.52.0 earlier history follows: // 3.52.0 QWAV-DEMOS-1 (2026-11-04, pillar reach; minor: the QWAV page lists the ten interactive demos that only the retired Pages site linked, with a Demos nav item, a hero action and a footer link; the page is now the whole of qwav.org through a qwav.org/* route, so unknown paths redirect home instead of answering 200). Revert: restore 3.51.0. // 3.51.0 earlier history follows: // 3.51.0 CROSS-LINK-1 (2026-11-04, pillar reach; minor: every QDS page gains a family bar linking QNFO, QWAV and q08, a Keep exploring module (newest and random papers from the open API, the three family sites, topic chips) and a family line in the footer; QDS 1.1.0; visible ask links use ask.qwav.org per DOMAIN-PLANE-1). Prediction: pages per session on qwav.org and qnfo.org rise and clicks between the three sites become non-zero. Revert: restore 3.50.0. // 3.50.0 earlier history follows: // 3.50.0 PAPER-CITATION-ALIASES-1 (#5577, pillar research; minor): expose the documented /papers/<slug>/cite.* routes alongside the existing API exports.
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
@@ -3659,6 +3659,19 @@ __name2222222222(handleHub, "handleHub");
 // makes is a row in qnfo-audit.product_claims with a read-only probe. /platform runs each probe live and shows pass or fail; the same probes run
 // hourly as remediation contracts (claim-ultrastable-*), so a claim that stops being true files its own issue. Design: docs/PRODUCT-ULTRASTABLE.md.
 var PLATFORM_CACHE = { at: 0, data: null };
+// ULTRASTABLE-CREATOR-LINK-1 (2026-11-10): the platform's public identity and who directs it come from qnfo-audit.product_profile, so an owner answer on
+// fleet.qnfo.org/focus (trigger owner_asks_product_profile_au) changes the page without a deploy. These defaults hold when the table cannot be read.
+var PLATFORM_PROFILE_DEFAULT = { name: "Ultrastable", home_url: "https://qnfo.org/platform", repo_url: "https://github.com/QNFO/qnfo-workers", creator_name: "Rowan Brad Quni-Gudzinas", creator_role: "Directed by", creator_title: "systems researcher studying autonomous AI systems", creator_url: "https://rwnq8.github.io/", creator_same_as: "https://orcid.org/0009-0002-4317-5604 https://github.com/rwnq8 https://www.linkedin.com/in/rowan-quni https://qnfo.org/about", credit_visible: "1" };
+async function platformProfile(env) {
+  var p = Object.assign({}, PLATFORM_PROFILE_DEFAULT);
+  try {
+    var rows = (await env.AUDIT.prepare("SELECT key, value FROM product_profile WHERE product = 'ultrastable'").all()).results || [];
+    rows.forEach(function(r) { if (r && r.key && r.value != null && Object.prototype.hasOwnProperty.call(PLATFORM_PROFILE_DEFAULT, r.key)) p[r.key] = String(r.value); });
+  } catch (e) { console.error(JSON.stringify({ event: "platform-profile-read-failed", error: String(e && e.message || e) })); }
+  ["home_url", "repo_url", "creator_url"].forEach(function(k) { if (!/^https:\/\//.test(p[k])) p[k] = PLATFORM_PROFILE_DEFAULT[k]; });
+  p.creator_same_as = String(p.creator_same_as).split(/\s+/).filter(function(u) { return /^https:\/\//.test(u); });
+  return p;
+}
 async function platformClaims(env) {
   var now = Date.now();
   if (PLATFORM_CACHE.data && now - PLATFORM_CACHE.at < 300000) return PLATFORM_CACHE.data;
@@ -3677,25 +3690,41 @@ async function platformClaims(env) {
       out.claims.push(res);
     }
   } catch (e) { out.error = "claims table unavailable: " + String(e && e.message || e).slice(0, 160); }
+  out.profile = await platformProfile(env);
   PLATFORM_CACHE = { at: now, data: out };
   return out;
+}
+function platformJsonLd(pf) {
+  var app = { "@type": "SoftwareApplication", "@id": "https://qnfo.org/platform#app", name: pf.name, url: pf.home_url, applicationCategory: "DeveloperApplication", operatingSystem: "Cloudflare Workers",
+    description: "A self-governing development platform: it finds its own work, ships each change through coding agents, proves it live with an automatic revert, and scores its decisions against logged predictions.",
+    codeRepository: pf.repo_url, publisher: { "@id": "https://qnfo.org/#org" } };
+  if (pf.credit_visible !== "0") {
+    var person = { "@type": "Person", "@id": "https://qnfo.org/#person", name: pf.creator_name, url: pf.creator_url, jobTitle: "Systems researcher", sameAs: pf.creator_same_as };
+    app.creator = { "@id": "https://qnfo.org/#person" }; app.author = { "@id": "https://qnfo.org/#person" };
+    if (typeof identityJsonLd === "function") return identityJsonLd("https://qnfo.org/platform", { person: { url: pf.creator_url, sameAs: [pf.creator_url].concat(pf.creator_same_as) }, nodes: [app] });
+    return '<script type="application/ld+json">' + JSON.stringify({ "@context": "https://schema.org", "@graph": [person, app] }).replace(/</g, "\\u003c") + "<\/script>";
+  }
+  return '<script type="application/ld+json">' + JSON.stringify(Object.assign({ "@context": "https://schema.org" }, app)).replace(/</g, "\\u003c") + "<\/script>";
 }
 async function handlePlatform(env, asJson) {
   var d = await platformClaims(env);
   var ok = d.claims.filter(function(c) { return c.pass; }).length, n = d.claims.length;
-  if (asJson) return new Response(JSON.stringify({ product: "Ultrastable", passing: ok, total: n, checked_at: d.checked_at, error: d.error, claims: d.claims }), { headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "public, max-age=300", "Access-Control-Allow-Origin": "*" } });
+  var pf = d.profile || Object.assign({}, PLATFORM_PROFILE_DEFAULT, { creator_same_as: PLATFORM_PROFILE_DEFAULT.creator_same_as.split(" ") });
+  var credit = pf.credit_visible === "0" ? "" : '<p class="q-meta">' + esc(pf.creator_role) + ' <a href="' + esc(pf.creator_url) + '" rel="author">' + esc(pf.creator_name) + '</a>, ' + esc(pf.creator_title) + '.</p>';
+  if (asJson) return new Response(JSON.stringify({ product: pf.name, home_url: pf.home_url, repo_url: pf.repo_url, directed_by: pf.credit_visible === "0" ? null : { role: pf.creator_role, name: pf.creator_name, title: pf.creator_title, url: pf.creator_url, same_as: pf.creator_same_as }, passing: ok, total: n, checked_at: d.checked_at, error: d.error, claims: d.claims }), { headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "public, max-age=300", "Access-Control-Allow-Origin": "*" } });
   var status = d.error ? "The live checks could not be read just now; the page tries again in five minutes." : (n === 0 ? "No claims are registered yet." : ok + " of " + n + " claims pass their live check right now (checked " + esc(d.checked_at.slice(0, 16).replace("T", " ")) + " UTC, and hourly by the fleet).");
   var rowsHtml = d.claims.map(function(c) {
     return '<tr><td><strong style="color:var(' + (c.pass ? "--q-ok" : "--q-bad") + ')">' + (c.pass ? "Pass" : "Fail") + '</strong></td><td>' + esc(c.claim) + (c.detail ? '<br><span class="q-small">' + esc(c.detail) + '</span>' : "") + '</td></tr>';
   }).join("");
-  var body = '<section class="q-hero" style="padding-bottom:16px"><div class="q-wrap"><p class="q-eyebrow">The platform</p><h1 class="q-display" style="max-width:20ch">Ultrastable: the platform QNFO runs on</h1>' +
+  var body = '<section class="q-hero" style="padding-bottom:16px"><div class="q-wrap"><p class="q-eyebrow">The platform</p><h1 class="q-display" style="max-width:20ch">' + esc(pf.name.charAt(0).toUpperCase() + pf.name.slice(1)) + ': the platform QNFO runs on</h1>' +
     '<p class="q-lede">A self-governing development platform (working name). It finds its own work in its metrics and failures, hands each change to a coding agent, proves the change live with a probe and an automatic revert, and scores its decisions against the predictions it logged first. QNFO is its first customer.</p>' +
-    '<p class="q-meta">' + status + '</p></div></section>' +
+    '<p class="q-meta">' + status + '</p>' + credit + '</div></section>' +
     '<div class="q-wrap"><article class="q-article"><div class="q-prose"><h2>What it claims, checked live</h2><p>Each line is a claim from the product page. The check behind it runs against the fleet\u2019s own database on every visit (cached five minutes) and hourly as a contract that opens an issue when it fails.</p>' +
     '<div class="q-table-wrap"><table class="q-table"><thead><tr><th>Check</th><th>Claim and what the check saw</th></tr></thead><tbody>' + (rowsHtml || '<tr><td colspan="2">No claims are registered yet.</td></tr>') + '</tbody></table></div>' +
+    (pf.credit_visible === "0" ? "" : '<h2>Who directs it</h2><p>' + esc(pf.creator_name) + ' is a ' + esc(pf.creator_title) + '. Rowan sets the platform\u2019s operating rules and evaluates what it does; coding agents write the code. Work and record: <a href="' + esc(pf.creator_url) + '" rel="author">' + esc(pf.creator_url.replace(/^https:\/\//, "").replace(/\/$/, "")) + '</a>' + pf.creator_same_as.map(function(u) { return ', <a href="' + esc(u) + '">' + esc(u.replace(/^https:\/\/(www\.)?/, "")) + '</a>'; }).join("") + '.</p>') +
     '<h2>Where it falls short</h2><p>One installation (QNFO). Hundreds of issues are open against a target of zero. The prediction match rate is scored by the system itself. The core still shares a database with QNFO\u2019s research applications. The full list, the evidence and the spin-off plan are on the <a href="https://github.com/QNFO/qnfo-workers/blob/main/docs/PRODUCT-ULTRASTABLE.md">product page</a>.</p>' +
     '<p class="q-small">Machine-readable: <a href="/api/platform-claims">/api/platform-claims</a>.</p></div></article></div>';
-  return new Response(qdsPage({ title: "Ultrastable \u2014 the platform QNFO runs on", description: "Ultrastable, the self-governing development platform behind QNFO, with every claim checked live against the fleet's own records.", canonical: "https://qnfo.org/platform", active: "about" }, body), { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "public, max-age=300" } });
+  return new Response(qdsPage({ title: "Ultrastable \u2014 the platform QNFO runs on", description: "Ultrastable, the self-governing development platform behind QNFO, with every claim checked live against the fleet's own records.", canonical: "https://qnfo.org/platform", jsonld: platformJsonLd(pf), active: "about" }, body), { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "public, max-age=300" } });
 }
 
 async function handleAbout(env) {

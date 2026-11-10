@@ -259,5 +259,13 @@
       "decisions-logged"
     ],
     "rule": "ULTRASTABLE-CLAIMS-1: every claim the product page makes has a probe in product_claims; the page runs it live and a contract runs it hourly."
+  },
+  "creator": {
+    "name": "Rowan Brad Quni-Gudzinas",
+    "role": "directs (\"designed and directs\" on a yes to owner_asks product-design-credit)",
+    "title": "systems researcher studying autonomous AI systems",
+    "url": "https://rwnq8.github.io/",
+    "source": "qnfo-audit.product_profile (migrations/2026-11-10-ultrastable-profile.sql); qnfo.org/platform renders it",
+    "rule": "ULTRASTABLE-CREATOR-LINK-1: the platform page credits its director and links the personal brand; the personal surfaces link back to qnfo.org/platform."
   }
 }
