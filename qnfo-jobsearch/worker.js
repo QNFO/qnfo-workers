@@ -9,7 +9,7 @@
 // JOBSEARCH-CV-1 (1.5.0): the CV is part of this worker (page /cv): a yes/no interview that builds the claim bank, review of unconfirmed claims, roles, achievements and publications edited in D1, a resume per job (summary, roles, selected work, education, skills) and a cover note, history and backup. The search is tied to that bank (evidence the owner can back up weighs more; what the CV lacks is shown as a gap), decided postings (rejected, applied, approved) never come back under another id, rejections carry a reason the search learns from, and a wider net: stretch matches outside the stated preferences, more boards and aggregators.
 // Routes: GET / (web UI) | GET /api | GET /api/matches | GET /api/matches/:id | GET /api/runs | GET /api/ledger | POST /api/run | POST /api/matches/:id/status | GET /health
 // Port of the jobsearch/ Python modules (tests: jobsearch/test_jobsearch.py, qnfo-jobsearch/worker.test.mjs).
-var VERSION = "1.19.0-codeagent";
+var VERSION = "1.21.0-codeagent";
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -1129,13 +1129,83 @@ const REFERRAL_ASK = "Would you be open to a short chat about the team, or to pa
 const STATIC_BASE = [REFERRAL_ASK, "Hello,", "Best regards,", "## Experience highlights", "## Credentials", "## Experience", "## Earlier roles", "## Selected work", "## Education", "## Certifications", "## Skills", "**Other experience**"];
 const endYr = (r) => (/present/i.test(r.end) ? 9999 : parseInt(r.end, 10) || 0);
 const byRecency = (a, b) => endYr(b) - endYr(a) || (parseInt(b.start, 10) || 0) - (parseInt(a.start, 10) || 0);
-const rolePeriod = (r) => (r.start === r.end ? r.start : `${r.start} to ${r.end}`);
+const rolePeriod = (r) => (r.start === r.end ? String(r.start) : `${r.start}\u2013${/^present$/i.test(String(r.end)) ? "Present" : r.end}`);   // JOBSEARCH-COPY-1: an en dash between years, as in a typeset CV
 const roleHead = (r) => `**${r.title}**, ${r.org}${r.location ? ", " + r.location : ""} | ${rolePeriod(r)}`;
 const roleLite = (r) => `${r.title}, ${r.org} (${rolePeriod(r)})`;
 const pubLine = (p) => `${p.title} (${p.year})` + (p.doi ? `, https://doi.org/${p.doi}` : p.url ? `, ${p.url}` : "");
 let BANK = BANK_SEED, BANK_REV = 0, OWNED = null, FACTS = {}, P = LEDGER.person, STATIC = new Set(), LEDGER_LOW = "", LEDGER_SKILLS = "";
 const HEADS = Object.fromEntries(LEDGER.headlines.map((h) => [h.id, h]));
+// ------------------------------------------------------------------ JOBSEARCH-COPY-1 (owner directive 2026-11-10)
+// Owner: the resume and the recall questions must read as professionally written and typeset (grammar, capitalization, punctuation), never as autofill.
+// polishProse is the one place that rule lives. It is deterministic and idempotent and runs on the CV bank whenever the bank loads, so the bank, the resume,
+// verify() and the note all see the same text. copyLint is the check that proves it on real output (copy.test.mjs; applyKit reports copy_issues).
+const PROSE_CASE = { sql: "SQL", api: "API", apis: "APIs", gis: "GIS", kpi: "KPI", kpis: "KPIs", okr: "OKR", okrs: "OKRs", ml: "ML", ai: "AI", llm: "LLM", llms: "LLMs", nlp: "NLP", etl: "ETL", ux: "UX", ui: "UI", aws: "AWS", gcp: "GCP", gdpr: "GDPR", wcag: "WCAG", csv: "CSV", json: "JSON", html: "HTML", css: "CSS", pdf: "PDF", saas: "SaaS", roi: "ROI", pmp: "PMP", aicp: "AICP", fhwa: "FHWA", nhts: "NHTS", aarp: "AARP", doi: "DOI", dois: "DOIs", qnfo: "QNFO", github: "GitHub", cloudflare: "Cloudflare", javascript: "JavaScript", typescript: "TypeScript", python: "Python", matlab: "MATLAB", spss: "SPSS", sas: "SAS", stata: "Stata", git: "Git", arcgis: "ArcGIS", qgis: "QGIS", pytorch: "PyTorch", tensorflow: "TensorFlow", numpy: "NumPy", postgresql: "PostgreSQL", mysql: "MySQL", powerpoint: "PowerPoint", tableau: "Tableau", databricks: "Databricks", snowflake: "Snowflake", salesforce: "Salesforce", kubernetes: "Kubernetes", docker: "Docker", terraform: "Terraform", hadoop: "Hadoop", airflow: "Airflow", jira: "Jira" };
+// a tool name shown on its own (a button, a skill) can be cased more freely than a word inside a sentence ("excel" is also a verb)
+const TOOL_CASE = { ...PROSE_CASE, excel: "Excel", looker: "Looker", scala: "Scala", dbt: "dbt", pandas: "pandas", "scikit-learn": "scikit-learn", "power bi": "Power BI", "c++": "C++", java: "Java", react: "React", spark: "Spark", agile: "Agile", scrum: "Scrum", "six sigma": "Six Sigma", prince2: "PRINCE2" };
+const toolCase = (name) => {
+  const n = String(name || "").trim(), lc = n.toLowerCase();
+  if (TOOL_CASE[lc]) return TOOL_CASE[lc];
+  if (/[A-Z]/.test(n.slice(1))) return n;   // already cased by the owner (iManage, GraphQL)
+  return n.length <= 4 && !/\s/.test(n) ? n.toUpperCase() : n.replace(/\b[a-z]/g, (c) => c.toUpperCase());
+};
+const POLISH_ABBR = /(?:^|[\s(])(?:e\.g|i\.e|vs|etc|approx|inc|ltd|dr|mr|ms|mrs|st|fig|al|no)\.$|(?:^|[\s(])(?:[A-Za-z]\.){1,}$/i;
+function polishProse(s, opt) {
+  const sentence = !opt || opt.sentence !== false;
+  let t = String(s == null ? "" : s).replace(/[   ]/g, " ").replace(/\s+/g, " ").trim();
+  if (!t) return t;
+  const keep = [];
+  t = t.replace(/(?:https?:\/\/|www\.)\S+|\b[\w.+-]+@[\w-]+\.[\w.-]+|\b10\.\d{4,9}\/\S+/g, (m) => { const core = m.replace(/[.,;:)\]]+$/, ""); keep.push(core); return "\u0001" + (keep.length - 1) + "\u0002" + m.slice(core.length); });
+  t = t.replace(/\s+([,.;:!?])/g, "$1").replace(/([,;:])(?=[A-Za-z])/g, "$1 ").replace(/([a-z])\.(?=[A-Z][a-z])/g, "$1. ");
+  t = t.replace(/([,;:])\1+/g, "$1").replace(/(?<!\.)\.\.(?!\.)/g, ".").replace(/\.{4,}/g, "...");
+  t = t.replace(/(^|[\s(\[{–—-])"/g, "$1“").replace(/"/g, "”").replace(/(^|[\s(\[{])'(?=\w)/g, "$1‘").replace(/'/g, "’");
+  t = t.replace(/\b((?:19|20)\d{2})\s*[-–—]\s*((?:19|20)\d{2}|present|current)\b/gi, (m, a, b) => a + "–" + (/^\d/.test(b) ? b : "Present"));
+  t = t.replace(/ --? /g, " – ").replace(/(?<![\d\-.\/])(\d{1,3}(?:,\d{3})*)-(\d{1,3}(?:,\d{3})*)(?![\d\-\/])/g, "$1–$2");
+  t = t.replace(/[A-Za-z][A-Za-z0-9]*/g, (w) => {
+    const lc = w.toLowerCase(), c = PROSE_CASE[lc];
+    return c && w !== c && (w === lc || w === lc[0].toUpperCase() + lc.slice(1) || w === w.toUpperCase()) ? c : w;
+  });
+  t = t.replace(/\b([Aa])n? (AI|APIs?|ML|LLMs?|NLP|ETL|HTML|FHWA|OKRs?|ROI|AICP|AWS|SQL|NHTS|AARP)\b/g, (m, a, w) => a + "n " + w)
+    .replace(/\b([Aa])n? (GIS|KPIs?|CSV|JSON|DOIs?|GDPR|UX|UI|CSS|PDF|QNFO|SaaS|SAS|SPSS|MATLAB|GCP|WCAG)\b/g, (m, a, w) => a + " " + w)
+    .replace(/\b([Aa])n ([b-df-gj-np-tv-z][a-z]*)/g, (m, a, w) => a + " " + w)
+    .replace(/\b([Aa]) ([aeiou][a-z]*)/g, (m, a, w) => (/^(?:uni|use|usa|usi|uti|ura|eur|one|once|ubi)/.test(w) ? m : a + "n " + w));
+  t = t.replace(/(^|[.!?]["”)]?\s+)([a-z])/g, (m, pre, ch, off) => {
+    if (off > 0 && /^\./.test(pre) && POLISH_ABBR.test(t.slice(0, off + 1))) return m;
+    return pre + ch.toUpperCase();
+  });
+  if (/^[a-z]/.test(t) && !/^[a-z]+[A-Z]/.test(t) && !/^(?:dbt|pandas|npm|iOS)\b/.test(t)) t = t[0].toUpperCase() + t.slice(1);
+  if (sentence && t.split(" ").length >= 4) { if (/[A-Za-z0-9%)]$/.test(t)) t += "."; else if (/[A-Za-z0-9]\u201d$/.test(t)) t = t.slice(0, -1) + ".\u201d"; }
+  return t.replace(/\u0001(\d+)\u0002/g, (m, i) => keep[+i]);
+}
+function polishBank(b) {
+  for (const f of b.facts || []) { f.text = polishProse(f.text); if (f.pitch) f.pitch = polishProse(f.pitch); }
+  for (const x of b.summaries || []) x.text = polishProse(x.text);
+  b.education = (b.education || []).map((e) => polishProse(e, { sentence: false }));
+  b.certifications = (b.certifications || []).map((e) => polishProse(e, { sentence: false }));
+  for (const k of b.skills || []) k.name = toolCase(k.name);
+  return b;
+}
+// The deterministic check behind polishProse: what a careful editor would flag on the finished resume text (tags stripped or not).
+function copyLint(md) {
+  const out = []; let sec = "";
+  String(md || "").replace(/ <!--.*?-->$/gm, "").split("\n").forEach((raw, i) => {
+    const l = raw.trimEnd(), n = i + 1;
+    if (!l.trim()) return;
+    if (/^#{1,3} /.test(l)) { sec = l.replace(/^#+ /, ""); return; }
+    const body = l.replace(/^- /, "").replace(/\*\*/g, "").replace(/(?:https?:\/\/|www\.)\S+|\b[\w.+-]+@[\w-]+\.[\w.-]+|\b10\.\d{4,9}\/\S+/g, "URL");
+    const prose = sec === "" || sec === "Experience" || sec === "Other experience";
+    if (/  /.test(body)) out.push(`L${n}: double space`);
+    if (/\s[,.;:!?]/.test(body) || /[a-z],[A-Za-z]/.test(body)) out.push(`L${n}: comma or period spacing: ${body.slice(0, 50)}`);
+    if (/["']/.test(body)) out.push(`L${n}: straight quote: ${body.slice(0, 50)}`);
+    if (/\b(?:19|20)\d{2}\s*-\s*(?:(?:19|20)\d{2}|present)\b/i.test(body)) out.push(`L${n}: hyphen in a year range`);
+    if (!/^[A-Z0-9•"“(\[#]/.test(body) && !/^(?:dbt|pandas|iManage|eBay)\b/.test(body)) out.push(`L${n}: line starts lowercase: ${body.slice(0, 40)}`);
+    if (prose && !l.startsWith("**") && body.split(/\s+/).length >= 5 && /^- /.test(l) && !/[.!?)]$/.test(body)) out.push(`L${n}: bullet has no closing period: ${body.slice(0, 50)}`);
+    for (const w of body.match(/[A-Za-z][A-Za-z0-9]*/g) || []) { const c = PROSE_CASE[w.toLowerCase()]; if (c && w !== c && w === w.toLowerCase()) out.push(`L${n}: "${w}" should be ${c}`); }
+    if (/\ba (?!(?:uni|use|usa|usi|uti|ura|eur|one|once|ubi))[aeiou][a-z]+/.test(body) || /\ba (?:AI|APIs?|ML|LLMs?|NLP|ETL|HTML|FHWA|OKRs?|ROI|AICP|AWS|SQL|NHTS|AARP)\b/.test(body)) out.push(`L${n}: a/an: ${body.slice(0, 50)}`);
+  });
+  return out;
+}
 function applyBank(b, rev) {
+  polishBank(b);
   BANK = b; BANK_REV = rev || 0;
   const roles = Object.fromEntries((b.roles || []).map((r) => [r.id, r]));
   const rec = (f) => (roles[f.role] ? endYr(roles[f.role]) : 0);
@@ -1802,11 +1872,14 @@ async function calibration(env) {
 }
 // JOBSEARCH-PDF-1: a text PDF written directly (one column, real selectable text, standard Helvetica, no images, tables or text boxes), the layout ATS parsers read reliably.
 const HELV = [278, 278, 355, 556, 556, 889, 667, 191, 333, 333, 389, 584, 278, 333, 278, 278, 556, 556, 556, 556, 556, 556, 556, 556, 556, 556, 278, 278, 584, 584, 584, 556, 1015, 667, 667, 722, 722, 667, 611, 778, 722, 278, 500, 667, 556, 833, 722, 778, 667, 778, 722, 667, 611, 722, 667, 944, 667, 667, 611, 278, 278, 278, 469, 556, 333, 556, 556, 500, 556, 556, 278, 556, 556, 222, 222, 500, 222, 833, 556, 556, 556, 556, 333, 500, 278, 556, 500, 722, 500, 500, 500, 334, 260, 334, 584];
+// JOBSEARCH-COPY-1: the standard fonts are WinAnsi-encoded, so curly quotes, en and em dashes, bullets and the ellipsis keep their real glyphs (code points 0x85-0x97).
+const WIN1252 = { "\u2018": "\x91", "\u2019": "\x92", "\u201c": "\x93", "\u201d": "\x94", "\u2022": "\x95", "\u2013": "\x96", "\u2014": "\x97", "\u2026": "\x85" };
+const HELV_X = { "\x91": 222, "\x92": 222, "\x93": 333, "\x94": 333, "\x95": 350, "\x96": 556, "\x97": 1000, "\x85": 1000 };
 function pdfClean(s) {
-  return String(s || "").replace(/[‘’]/g, "'").replace(/[“”]/g, '"').replace(/[–—]/g, "-").replace(/•/g, "-").replace(/ /g, " ").replace(/…/g, "...")
+  return String(s || "").replace(/[\u2018\u2019\u201c\u201d\u2022\u2013\u2014\u2026]/g, (c) => WIN1252[c]).replace(/\u00a0/g, " ")
     .replace(/[^\x00-\xff]/g, (c) => { const d = c.normalize("NFD").replace(/[̀-ͯ]/g, ""); return /^[\x20-\x7e]+$/.test(d) ? d : "?"; });
 }
-const pdfW = (s, size, bold) => { let w = 0; for (const ch of s) { const c = ch.charCodeAt(0); w += (c >= 32 && c <= 126 ? HELV[c - 32] : 556); } return (w * size * (bold ? 1.06 : 1)) / 1000; };
+const pdfW = (s, size, bold) => { let w = 0; for (const ch of s) { const c = ch.charCodeAt(0); w += (HELV_X[ch] || (c >= 32 && c <= 126 ? HELV[c - 32] : 556)); } return (w * size * (bold ? 1.06 : 1)) / 1000; };
 function pdfWrap(text, size, bold, width) {
   const out = []; let line = "";
   for (const word of text.split(/\s+/).filter(Boolean)) {
@@ -1825,14 +1898,17 @@ function pdfOf(md, title) {
   const text = (s, x, size, bold) => { cur().push(`BT /${bold ? "F2" : "F1"} ${size} Tf ${x.toFixed(2)} ${y.toFixed(2)} Td (${esc(s)}) Tj ET`); };
   for (const raw of plainOfKeepBold(md).split("\n")) {
     const l = pdfClean(raw.trimEnd()).replace(/\*\*/g, "");
-    if (!l.trim()) { y -= 4; continue; }
+    if (!l.trim()) { y -= 6; continue; }
     if (l.startsWith("# ")) { need(30); y -= 20; text(l.slice(2), M, 20, true); y -= 6; continue; }
-    if (l.startsWith("## ")) { need(30); y -= 10; text(l.slice(3).toUpperCase(), M, 11, true); y -= 4; cur().push(`0.5 w ${M} ${(y).toFixed(2)} m ${(W - M).toFixed(2)} ${y.toFixed(2)} l S`); y -= 10; continue; }
+    if (l.startsWith("## ")) { need(64); y -= 16; text(l.slice(3).toUpperCase(), M, 11, true); y -= 4; cur().push(`0.5 w ${M} ${(y).toFixed(2)} m ${(W - M).toFixed(2)} ${y.toFixed(2)} l S`); y -= 3; continue; }
     const bullet = l.startsWith("- "), body = bullet ? l.slice(2) : l, indent = bullet ? 14 : 0, size = 10, lead = 13;
     const strong = !bullet && /^\*\*/.test(raw.trim());   // a role line is set in bold
-    const lines = pdfWrap(body, size, strong, TW - indent);
-    need(lead * Math.min(lines.length, 2));
-    lines.forEach((ln, i) => { need(lead); y -= lead; if (bullet && i === 0) text("-", M + 2, size, false); text(ln, M + indent, size, strong); });
+    // JOBSEARCH-COPY-1: a role line sets its dates flush right so they never wrap onto a line of their own; the left part wraps in the width that is left
+    const pm = strong ? body.match(/^(.*) \| (\d{4}(?:\x96(?:\d{4}|Present))?)$/) : null, left = pm ? pm[1] : body, pw = pm ? pdfW(pm[2], size, true) : 0;
+    const lines = pdfWrap(left, size, strong, TW - indent - (pm ? pw + 14 : 0));
+    if (strong) y -= 6;
+    need(lead * Math.min(lines.length, 2) + (strong ? lead * 3 : 0));   // a role line never ends a page on its own: it keeps at least three lines with it
+    lines.forEach((ln, i) => { need(lead); y -= lead; if (bullet && i === 0) text("\x95", M + 2, size, false); text(ln, M + indent, size, strong); if (pm && i === 0) text(pm[2], W - M - pw, size, true); });
   }
   const objs = [], add = (s) => { objs.push(s); return objs.length; };
   const catalog = add(""), pagesObj = add(""), f1 = add("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>"), f2 = add("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>");
@@ -1934,7 +2010,7 @@ function resumeHtml(md, title) {
     else out.push("<p>" + mdInline(l) + "</p>");
   }
   if (inList) out.push("</ul>");
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)}</title><style>@page{margin:18mm}body{font:11pt/1.4 Arial,Helvetica,sans-serif;color:#000;max-width:760px;margin:24px auto;padding:0 16px}h1{font-size:20pt;margin:0 0 4px}h2{font-size:11pt;text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid #000;margin:16px 0 6px;padding-bottom:2px}p{margin:3px 0}ul{margin:3px 0 8px;padding-left:18px}li{margin:2px 0}.np{margin-bottom:12px}@media print{.np{display:none}}</style></head><body><div class="np"><button onclick="print()">Save as PDF</button></div>${out.join("\n")}</body></html>`;
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)}</title><style>@page{margin:18mm}body{font:11pt/1.4 Arial,Helvetica,sans-serif;color:#000;max-width:760px;margin:24px auto;padding:0 16px;text-wrap:pretty;hyphens:manual;font-kerning:normal}h1{font-size:20pt;margin:0 0 4px}h2{font-size:11pt;text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid #000;margin:16px 0 6px;padding-bottom:2px}p{margin:3px 0;orphans:3;widows:3}h1,h2{break-after:avoid}ul{margin:3px 0 8px;padding-left:18px}li{margin:2px 0;break-inside:avoid;orphans:3;widows:3}.np{margin-bottom:12px}@media print{.np{display:none}}</style></head><body><div class="np"><button onclick="print()">Save as PDF</button></div>${out.join("\n")}</body></html>`;
 }
 const plainOfKeepBold = (md) => String(md || "").replace(/ <!--.*?-->$/gm, "");
 const crcTable = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
@@ -1992,7 +2068,7 @@ function applyKit(job, resumeMd, noteMd, flags) {
   return {
     id: job.id || "", title: job.title, company: job.company, ats: a.ats, apply_url: a.apply_url, can_fill: a.fill,
     fields: { first_name: parts[0], last_name: parts[parts.length - 1], full_name: P.name, email: P.email, location: P.location, linkedin: (P.links || {}).linkedin || "", website: (P.links || {}).site || "" },
-    resume_file: `${fileSlug(P.name)}_Resume_${fileSlug(job.company)}.docx`, resume_docx_b64: b64(docx), resume_pdf_file: `${fileSlug(P.name)}_Resume_${fileSlug(job.company)}.pdf`, resume_pdf_b64: b64(pdfOf(resumeMd, `${P.name}: resume for ${job.company}`)), note: plainOf(noteMd),
+    copy_issues: copyLint(resumeMd), resume_file: `${fileSlug(P.name)}_Resume_${fileSlug(job.company)}.docx`, resume_docx_b64: b64(docx), resume_pdf_file: `${fileSlug(P.name)}_Resume_${fileSlug(job.company)}.pdf`, resume_pdf_b64: b64(pdfOf(resumeMd, `${P.name}: resume for ${job.company}`)), note: plainOf(noteMd),
     left_for_you: ["work authorization and sponsorship", "salary expectations", "demographic and equal-opportunity questions", "any question about a skill your CV does not back"].concat((flags || []).filter((f) => /^(AUTH|LANGUAGE|DEGREE|YEARS)/.test(f))),
   };
 }
@@ -2386,9 +2462,41 @@ const RECALL_SEED = [
   { id: "feedback_loops", what: "systems with feedback loops, where measured results automatically change what the system does next", cue: "Metrics that re-rank work, self-tuning limits, a model re-run after new counts arrive.", roles: ["R01", "R08"], tags: ["llm", "numerics"] },
   { id: "explain_models", what: "explaining technical models to non-technical decision makers (agency leaders, legislators or executives)", cue: "Briefings for FHWA leadership, AARP policy staff, client executives at Deloitte.", roles: ["R08", "R05", "R07"], tags: ["writing", "policy"] },
 ];
-const RECALL_DEPTHS = [["led", "I led it", "Led work on "], ["hands", "I did it hands-on", "Hands-on work on "], ["team", "I was on the team", "Contributed to team work on "]];
-const RECALL_CASE = { "power bi": "Power BI", dbt: "dbt", "scikit-learn": "scikit-learn", pytorch: "PyTorch", tensorflow: "TensorFlow", javascript: "JavaScript", typescript: "TypeScript", github: "GitHub", postgresql: "PostgreSQL", mysql: "MySQL", arcgis: "ArcGIS", qgis: "QGIS" };
-const recallShow = (term, kind) => (kind !== "tool" ? term : RECALL_CASE[term] || (term.length <= 4 && !/\s/.test(term) ? term.toUpperCase() : term.replace(/\b[a-z]/g, (c) => c.toUpperCase())));
+const RECALL_DEPTHS = [["led", "I led it"], ["hands", "I did it hands-on"], ["team", "I was on the team"]];
+// JOBSEARCH-COPY-1: every sentence the owner can tap onto a resume is built from a grammatical frame and a noun phrase, never from a raw keyword.
+const RECALL_FRAMES = {
+  seed: { led: (l) => `Led work on ${l}.`, hands: (l) => `Hands-on experience with ${l}.`, team: (l) => `Contributed to team work on ${l}.` },
+  tool: { led: (l) => `Led projects that used ${l}.`, hands: (l) => `Hands-on experience with ${l}.`, team: (l) => `Contributed to team projects that used ${l}.` },
+  entity: { led: (l) => `Led work with ${l}.`, hands: (l) => `Hands-on experience working with ${l}.`, team: (l) => `Contributed to team projects with ${l}.` },
+  topic: { led: (l) => `Led efforts in ${l}.`, hands: (l) => `Hands-on experience with ${l}.`, team: (l) => `Contributed to team projects involving ${l}.` },
+};
+const SEED_LABEL = { network_model: "transportation network models", simulation: "system simulation", forecasting: "forecasting that informs public investment and policy decisions", optimization: "optimization and routing problems", decision_data: "data products for decision makers", ml_models: "predictive and machine-learning models", model_validation: "model validation against observed data", agent_fleet: "fleets of autonomous AI agents", agent_guardrails: "guardrails for autonomous AI systems", llm_evaluation: "large language model evaluation", human_in_loop: "human-in-the-loop workflows", feedback_loops: "feedback-driven systems", explain_models: "technical briefings for non-technical decision makers" };
+// software the owner can have "used"; every other vocabulary term is work or a method and needs a noun phrase in TOPIC_LABEL (a term without one is never asked)
+const SOFTWARE = new Set(["python", "sql", "excel", "tableau", "power bi", "looker", "dbt", "airflow", "spark", "hadoop", "aws", "azure", "gcp", "docker", "kubernetes", "terraform", "java", "javascript", "typescript", "react", "c++", "scala", "matlab", "sas", "stata", "spss", "arcgis", "qgis", "git", "jira", "salesforce", "snowflake", "databricks", "pytorch", "tensorflow", "scikit-learn", "pandas", "numpy"]);
+const TOPIC_LABEL = {
+  "research program": "research program management", "research portfolio": "research portfolio management", "research operations": "research operations", "research management": "research management", "program management": "program management", "programme management": "program management", "project management": "project management", "research strategy": "research strategy", "head of research": "leading a research function", "research lead": "leading research teams", grant: "grant programs", wetenschappelijk: "scientific research", onderzoek: "research",
+  "federal government": "federal government agencies", "federal agenc": "federal agencies", "government agenc": "government agencies", "public sector": "public-sector clients", "public administration": "public administration", government: "government agencies", ministry: "government ministries", municipal: "municipal governments", "european commission": "European Commission programs", rijksoverheid: "Dutch national government agencies", ministerie: "Dutch government ministries", gemeente: "Dutch municipal governments", provincie: "Dutch provincial governments", waterschap: "Dutch water authorities", overheid: "Dutch public-sector organizations",
+  transportation: "transportation planning", "travel demand": "travel demand modeling", mobility: "mobility planning", transit: "public transit planning", forecasting: "forecasting", traffic: "traffic analysis", infrastructure: "infrastructure planning", mobiliteit: "mobility planning", verkeersmodel: "traffic modeling", vervoersmodel: "transport modeling", "verkeer en vervoer": "traffic and transport planning",
+  "urban planning": "urban planning", "regional planning": "regional planning", "land use": "land-use planning", "spatial planning": "spatial planning", "urban development": "urban development", "city planning": "city planning", "smart city": "smart-city projects", "ruimtelijke ordening": "spatial planning", "ruimtelijke planning": "spatial planning", "stedelijke ontwikkeling": "urban development", gebiedsontwikkeling: "area development",
+  geospatial: "geospatial analysis", "spatial analysis": "spatial analysis", "geographic information": "geographic information systems", "geo-informatie": "geographic information systems", "geografische informatie": "geographic information systems",
+  "public policy": "public policy", "policy research": "policy research", survey: "survey research", "social science": "social science research", "evidence-based": "evidence-based policy work", "policy analysis": "policy analysis", stakeholder: "stakeholder engagement", beleidsonderzoek: "policy research", beleidsevaluatie: "policy evaluation", beleidsanalyse: "policy analysis", beleidsadvies: "policy advisory work",
+  housing: "housing policy", affordab: "affordable housing", ageing: "policy on aging", aging: "policy on aging", "older adults": "policy for older adults", livability: "livability and community quality", "community development": "community development", "social policy": "social policy", volkshuisvesting: "housing policy", woningmarkt: "housing-market analysis", ouderenbeleid: "policy for older adults", leefbaarheid: "livability",
+  statistical: "statistical analysis", econometric: "econometric analysis", "survey methodology": "survey methodology", statistics: "statistics", modelling: "modeling", modeling: "modeling", quantitative: "quantitative analysis", predictive: "predictive modeling",
+  "large language model": "large language models", "ai agent": "AI agents", agentic: "agentic AI systems", "generative ai": "generative AI", "applied ai": "applied AI", "machine learning": "machine learning", "deep learning": "deep learning", "ai evaluation": "AI evaluation", evals: "model evaluations", "research integrity": "research integrity", reproducib: "reproducible research", "peer review": "peer review", "scientific integrity": "scientific integrity", "open science": "open science", provenance: "data provenance", "responsible ai": "responsible AI", "ai governance": "AI governance", "ai safety": "AI safety", audit: "auditing", trustworthy: "trustworthy-systems work", llm: "large language models", nlp: "natural language processing",
+  "data product": "data products", "data platform": "data platforms", analytics: "analytics", dashboard: "dashboards", "data strategy": "data strategy", "data governance": "data governance", "data science": "data science", "data scientist": "data science", etl: "ETL pipelines", api: "API design and integration", "a/b testing": "A/B testing",
+  "autonomous system": "autonomous systems", autonomy: "autonomous systems", "multi-agent": "multi-agent systems", "multi agent": "multi-agent systems", "agent-based": "agent-based modeling", alignment: "AI alignment", "ai assurance": "AI assurance", oversight: "oversight of automated systems", "failure mode": "failure-mode analysis", "socio-technical": "socio-technical systems", sociotechnical: "socio-technical systems",
+  founder: "founding and building organizations", "0 to 1": "building new products from scratch", "zero to one": "building new products from scratch", "0-to-1": "building new products from scratch", "platform strategy": "platform strategy", "product strategy": "product strategy", "ai strategy": "AI strategy", "ai transformation": "AI transformation programs", "ai adoption": "AI adoption programs", "operating model": "operating-model design", "systems thinking": "systems thinking", "coding agents": "AI coding agents", "ai coding": "AI-assisted coding", "developer productivity": "developer productivity", "autonomous development": "autonomous software development", "self-governing": "self-governing systems", "agent orchestration": "agent orchestration", agentops: "AgentOps", "ai operations": "AI operations", "governance of agents": "governance of AI agents", "agent oversight": "oversight of AI agents", venture: "venture building",
+  "systems modeling": "systems modeling", "systems modelling": "systems modeling", "system dynamics": "system dynamics", "complex systems": "complex systems", "network model": "network models", "network analysis": "network analysis", "simulation model": "simulation models", "decision support": "decision-support systems", "operations research": "operations research", quantum: "quantum computing", "energy efficiency": "energy efficiency", benchmark: "benchmarking",
+  nonprofit: "nonprofit organizations", "non-profit": "nonprofit organizations", "civil society": "civil-society organizations", foundation: "philanthropic foundations", philanthrop: "philanthropy", "product manager": "product management", "product management": "product management", roadmap: "product roadmaps",
+  portfolio: "portfolio management", delivery: "program delivery", milestone: "milestone tracking", budget: "budget management", "contracting officer": "contracting-officer coordination", procurement: "procurement", "vendor management": "vendor management", "contract management": "contract management", deliverables: "deliverable management", tender: "tender and proposal processes", consulting: "consulting engagements", advisory: "advisory work", "client engagement": "client engagement", clients: "client-facing work",
+  sustainab: "sustainability", climate: "climate-related work", "energy transition": "the energy transition", "net zero": "net-zero planning", decarbon: "decarbonization", "software engineering": "software engineering", serverless: "serverless architectures", "distributed systems": "distributed systems", "cloud infrastructure": "cloud infrastructure",
+  "theoretical physics": "theoretical physics", "quantum field theory": "quantum field theory", renormali: "renormalization", "effective field theory": "effective field theory", "statistical mechanics": "statistical mechanics", "perturbation theory": "perturbation theory", "path integral": "path-integral methods", "condensed matter": "condensed-matter physics", "particle physics": "particle physics", "high energy physics": "high-energy physics", "high-dimensional": "high-dimensional data analysis", "high dimensional": "high-dimensional data analysis", regulari: "regularization methods", lasso: "lasso regression", "dimensionality reduction": "dimensionality reduction", shrinkage: "shrinkage estimation", penali: "penalized regression", numerical: "numerical methods", simulation: "simulation", "monte carlo": "Monte Carlo methods", optimization: "optimization", "scientific computing": "scientific computing", "linear algebra": "linear algebra", "differential equations": "differential equations",
+  teaching: "teaching", lecturer: "lecturing", instructor: "instruction", curriculum: "curriculum development", tutor: "tutoring", "technical writing": "technical writing", "peer-reviewed": "peer-reviewed publishing", "scientific writing": "scientific writing", publications: "scientific publishing", "report writing": "report writing",
+  agile: "Agile delivery", scrum: "Scrum delivery", okr: "OKR planning and tracking", kpi: "KPI definition and tracking", "stakeholder management": "stakeholder management", "grant writing": "grant writing", "six sigma": "Six Sigma methods", prince2: "PRINCE2 project management", pmp: "project management", gdpr: "GDPR compliance", wcag: "WCAG accessibility standards",
+};
+// labels that name organizations, not work: they take "work with" in the question and the resume sentence
+const ENTITY_LABEL = new Set(["federal government agencies", "federal agencies", "government agencies", "public-sector clients", "government ministries", "municipal governments", "European Commission programs", "Dutch national government agencies", "Dutch government ministries", "Dutch municipal governments", "Dutch provincial governments", "Dutch water authorities", "Dutch public-sector organizations", "nonprofit organizations", "civil-society organizations", "philanthropic foundations"]);
+const recallShow = (term) => toolCase(term);
 function recallTermTags(term, kind) {
   const cls = new Set();
   for (const [cl, kws] of Object.entries(CLUSTER_KW)) if (kws.some((k) => k.replace(/\*$/, "").trim() === term)) cls.add(cl);
@@ -2419,17 +2527,25 @@ function recallRoles(ids, tags) {
   return picked.slice(0, 3).map((r) => ({ id: r.id, label: r.title + ", " + String(r.org).split(/[(,]/)[0].trim() }));
 }
 function recallQuestion(key, extra = {}) {
-  let what, ask, cue = extra.cue || "", tags, roles, kind = "topic";
+  let what, ask, cue = extra.cue || "", tags, roles, kind = "topic", label, frame, skillName = "";
   const seed = key.startsWith("seed:") && RECALL_SEED.find((s) => "seed:" + s.id === key);
-  if (seed) { what = seed.what; ask = "Have you worked on " + seed.what + "?"; cue = seed.cue; tags = seed.tags; roles = recallRoles(seed.roles, seed.tags); }
+  if (seed) { what = seed.what; label = SEED_LABEL[seed.id]; frame = RECALL_FRAMES.seed; ask = "Have you worked on " + seed.what + "?"; cue = seed.cue; tags = seed.tags; roles = recallRoles(seed.roles, seed.tags); }
   else if (key.startsWith("term:")) {
     const term = clean(key.slice(5), 80).toLowerCase();
     if (!term || !vocabulary().has(term)) return null;
-    kind = vocabulary().get(term); what = recallShow(term, kind); tags = recallTermTags(term, kind); roles = recallRoles(null, tags);
-    ask = kind === "tool" ? "Have you ever used " + what + "?" : "Have you done work involving " + what + "?";
+    kind = vocabulary().get(term); tags = recallTermTags(term, kind); roles = recallRoles(null, tags);
+    if (SOFTWARE.has(term)) { what = label = toolCase(term); frame = RECALL_FRAMES.tool; ask = "Have you used " + what + " in your work?"; skillName = what; }
+    else {
+      const own = kind === "skill" ? ((BANK.skills || []).find((s) => s.name.toLowerCase() === term) || {}).name : "";
+      label = TOPIC_LABEL[term] || (own ? own.charAt(0).toLowerCase() + own.slice(1) : "");
+      if (!label) return null;   // a keyword with no noun phrase would produce an ungrammatical question or resume line: it is not asked
+      what = label; const ent = ENTITY_LABEL.has(label); frame = ent ? RECALL_FRAMES.entity : RECALL_FRAMES.topic; ask = ent ? "Have you worked with " + label + "?" : "Does your experience include " + label + "?";
+      if (kind !== "topic") skillName = toolCase(label.charAt(0).toUpperCase() + label.slice(1));
+    }
   } else return null;
-  const drafts = Object.fromEntries(RECALL_DEPTHS.map(([d, , lead]) => [d, lead + what + "."]));
-  return { key, ask, cue, what, kind, tags, roles, depths: RECALL_DEPTHS.map(([id, label]) => ({ id, label, draft: drafts[id] })), drafts, ...(extra.count ? { count: extra.count, example: extra.example } : {}) };
+  if (!label) return null;
+  const drafts = Object.fromEntries(RECALL_DEPTHS.map(([d]) => [d, polishProse(frame[d](label))]));
+  return { key, ask: polishProse(ask, { sentence: false }), cue, what, kind, skillName, tags, roles, depths: RECALL_DEPTHS.map(([id, lab]) => ({ id, label: lab, draft: drafts[id] })), drafts, ...(extra.count ? { count: extra.count, example: extra.example } : {}) };
 }
 function recallOpen(key) {
   const a = (BANK.recall || {})[key];
@@ -2454,7 +2570,7 @@ async function recallQueue(env, matchId, limit = 12) {
     const a = agg.get(g.term) || { n: 0, example: r.title + " at " + r.company };
     a.n++; agg.set(g.term, a);
   }
-  const terms = [...agg.entries()].sort((a, b) => b[1].n - a[1].n).map(([t, a]) => recallQuestion("term:" + t, { count: a.n, example: a.example, cue: "Asked for by " + a.n + " of your open matches, for example " + a.example + "." })).filter(Boolean);
+  const terms = [...agg.entries()].sort((a, b) => b[1].n - a[1].n).map(([t, a]) => recallQuestion("term:" + t, { count: a.n, example: a.example, cue: a.n === 1 ? "Requested in 1 open match: " + a.example + "." : "Requested in " + a.n + " open matches, for example " + a.example + "." })).filter(Boolean);
   const seeds = RECALL_SEED.map((s) => "seed:" + s.id).filter(recallOpen).map((k) => recallQuestion(k));
   const all = seeds.concat(terms);
   return { questions: all.slice(0, limit), total: all.length };
@@ -2478,7 +2594,7 @@ function recallAnswer(b, d) {
     const id = nextFactId(b);
     b.facts.push({ id, role, text: q.drafts[depth], tags, source: "recall:" + q.key, status: "verified" });
     Object.assign(rec, { role, depth, fact: id });
-    if (q.kind !== "topic" && !(b.skills || []).some((s) => s.name.toLowerCase() === q.what.toLowerCase())) { (b.skills = b.skills || []).push({ name: q.what, tags }); rec.skill = q.what; }
+    if (q.skillName && !(b.skills || []).some((s) => s.name.toLowerCase() === q.skillName.toLowerCase())) { (b.skills = b.skills || []).push({ name: q.skillName, tags }); rec.skill = q.skillName; }
   }
   b.recall[q.key] = rec;
 }
@@ -2867,7 +2983,7 @@ const handler = {
     return J({ error: "not found", see: "/api" }, 404);
   },
 };
-handler.__test = { linkedinSearches, LINKEDIN_SEARCHES, codingLoad, CANDIDATE_BOARDS, collectAndRank, cosine, bestSim, semanticLens, scoreJob, exploreOverlap, recordTerms, diversifyRows, recallGaps, recallQuestion, recallAnswer, recallQueue, RECALL_SEED, loadCtx, referralKit, referralList, STAGES, judgeTop, buildResume, verify, headlineVerdict, outcomes, pdfOf, pdfClean, checkAnswer, jsonLoose, PROTECTED_Q, draftAnswers, prepBrief, quizFeedback, judgeJob, calibrate, calibration, followups, atsOf, keywordReport, docxOf, resumeHtml, plainOf, applyKit, matchKit, stripTags, postingTerms, evaluate, rank, buildResume, buildNote, verify, stripHtml, locationGate, has, LEDGER, dedupeKey, feedPrefix, makeCtx, scoreJob, scoreFeatures, featuresFromWhy, applicationSnapshot, parseApplicationSnapshot, outcomeScoreWeights, loadCtx, SURVEY, BOARDS, normKey, applyBank, BANK_SEED, QUESTIONS, TAG_TO_CLUSTERS, clustersOf, cvAnswer, cvFact, cvReview, cvSet, cvImport, mutateBank, loadBank, decidedKeys, FETCHERS, getBank: () => BANK, llmRerank, llmRerankRun, ensureResearchPubs, ensureAutonomyBrand, ensureUltrastableBrand, ultrastableBank, ULTRASTABLE_S1, RESEARCH_PUBS, FAMILIES, CLUSTER_KW, headline, pubLine, parseRerank, reasonOk, rerankMessages, artifactsFor, titleCandidate, sitemapUrls, slugTitle, PUBLIC_SECTOR, opsReport };
+handler.__test = { polishProse, polishBank, copyLint, toolCase, vocabulary, TOPIC_LABEL, SOFTWARE, PROSE_CASE, linkedinSearches, LINKEDIN_SEARCHES, codingLoad, CANDIDATE_BOARDS, collectAndRank, cosine, bestSim, semanticLens, scoreJob, exploreOverlap, recordTerms, diversifyRows, recallGaps, recallQuestion, recallAnswer, recallQueue, RECALL_SEED, loadCtx, referralKit, referralList, STAGES, judgeTop, buildResume, verify, headlineVerdict, outcomes, pdfOf, pdfClean, checkAnswer, jsonLoose, PROTECTED_Q, draftAnswers, prepBrief, quizFeedback, judgeJob, calibrate, calibration, followups, atsOf, keywordReport, docxOf, resumeHtml, plainOf, applyKit, matchKit, stripTags, postingTerms, evaluate, rank, buildResume, buildNote, verify, stripHtml, locationGate, has, LEDGER, dedupeKey, feedPrefix, makeCtx, scoreJob, scoreFeatures, featuresFromWhy, applicationSnapshot, parseApplicationSnapshot, outcomeScoreWeights, loadCtx, SURVEY, BOARDS, normKey, applyBank, BANK_SEED, QUESTIONS, TAG_TO_CLUSTERS, clustersOf, cvAnswer, cvFact, cvReview, cvSet, cvImport, mutateBank, loadBank, decidedKeys, FETCHERS, getBank: () => BANK, llmRerank, llmRerankRun, ensureResearchPubs, ensureAutonomyBrand, ensureUltrastableBrand, ultrastableBank, ULTRASTABLE_S1, RESEARCH_PUBS, FAMILIES, CLUSTER_KW, headline, pubLine, parseRerank, reasonOk, rerankMessages, artifactsFor, titleCandidate, sitemapUrls, slugTitle, PUBLIC_SECTOR, opsReport };
 export default handler;
 
 // ------------------------------------------------------------------ client script shared by both pages (JOBSEARCH-APPLY-1): kit handling and the Fill application bookmark

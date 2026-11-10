@@ -32,7 +32,7 @@ const call = async (path, init, e = env) => { const r = await w.fetch(new Reques
 const g = T.recallGaps({ title: "Research Lead", desc: "You will use Tableau daily." });
 ok(g.some((x) => x.term === "tableau" && x.cue === "You will use Tableau daily.") && !g.some((x) => x.term === "research lead"), "gaps carry the posting sentence as the cue", g);
 const q0 = T.recallQuestion("term:tableau");
-ok(q0 && q0.ask === "Have you ever used Tableau?" && q0.depths.length === 3 && q0.depths.every((d) => d.draft.endsWith("Tableau.")) && q0.roles.length >= 1, "a tool question is yes/no with three tap drafts and role chips", q0);
+ok(q0 && q0.ask === "Have you used Tableau in your work?" && q0.depths.length === 3 && q0.depths.every((d) => d.draft.endsWith("Tableau.")) && q0.roles.length >= 1, "a tool question is yes/no with three tap drafts and role chips", q0);
 ok(T.recallQuestion("term:not-a-vocabulary-term") === null && T.recallQuestion("seed:nope") === null, "only known terms and seeds can be asked");
 ok(T.RECALL_SEED.every((s) => T.recallQuestion("seed:" + s.id).roles.length >= 1), "every seed question offers at least one role chip");
 

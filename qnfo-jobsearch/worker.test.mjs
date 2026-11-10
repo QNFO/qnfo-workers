@@ -157,7 +157,7 @@ ok((await call("/api/run", { method: "POST" }))[0] === 429, "run cooldown");
   const file = JSON.parse(readFileSync(join(here, "../jobsearch/facts.json"), "utf8"));
   const seedFacts = Object.fromEntries(T.BANK_SEED.facts.map((f) => [f.id, f]));
   const moved = file.facts.filter((f) => !f.cluster.includes("credentials") && f.id !== "F15");
-  ok(moved.every((f) => seedFacts[f.id] && seedFacts[f.id].text === f.text), "every verified claim of the original ledger is in the CV bank seed", moved.filter((f) => !seedFacts[f.id] || seedFacts[f.id].text !== f.text).map((f) => f.id));
+  ok(moved.every((f) => seedFacts[f.id] && seedFacts[f.id].text === T.polishProse(f.text)), "every verified claim of the original ledger is in the CV bank seed (word for word, typography polished: JOBSEARCH-COPY-1)", moved.filter((f) => !seedFacts[f.id] || seedFacts[f.id].text !== T.polishProse(f.text)).map((f) => f.id));
   ok(T.dedupeKey({ company: "A", title: "X  Y", location: "NL" }) === T.dedupeKey({ company: "a", title: "x y", location: "nl" }), "dedupe key normalises");
   ok(T.feedPrefix("greenhouse:anthropic") === "gh:anthropic:" && T.feedPrefix("remotive:data") === "rm:", "feed prefixes");
   ok(["cwi", "deepmind", "tno"].every((slug) => !T.BOARDS.greenhouse.includes(slug)), "Greenhouse feeds with persistent HTTP 404s are excluded");
