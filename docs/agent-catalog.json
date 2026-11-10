@@ -1088,6 +1088,11 @@
       "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-1812.md"
     },
     {
+      "path": "docs/handoff/issue-1818.md",
+      "title": "Handoff: METRIC-TRIGGER-5108-WORKERS-COMPAT-DATE-BEHIND: Live workers run at a compatibility date older than a Cloudflare default change",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-1818.md"
+    },
+    {
       "path": "docs/handoff/issue-1965.md",
       "title": "Handoff: VERIFICATION-DEFERRAL-STALL-1: 431 contracts defer forever with no escalation and no owner",
       "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-1965.md"
@@ -1131,6 +1136,11 @@
       "path": "docs/handoff/issue-2335.md",
       "title": "Handoff: METRIC-TRIGGER-538-Q08-NEURONS-PER-PUBLISHED-PIECE-7D: q08 compose cost per published piece regressed (over 6000 neurons)",
       "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-2335.md"
+    },
+    {
+      "path": "docs/handoff/issue-2338.md",
+      "title": "Handoff: METRIC-TRIGGER-3077-SPOFS-TOTAL: Single points of failure remain registered",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-2338.md"
     },
     {
       "path": "docs/handoff/issue-2339.md",
@@ -1268,9 +1278,19 @@
       "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-3487.md"
     },
     {
+      "path": "docs/handoff/issue-3544.md",
+      "title": "Handoff: METRIC-TRIGGER-1924-WORKER-COUNT-DISAGREEMENT: Core gap: the live scripts census and service_registry disagree on which workers",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-3544.md"
+    },
+    {
       "path": "docs/handoff/issue-3988.md",
       "title": "Handoff: METRIC-TRIGGER-10930-FLEET-COST-BOUND-MONTH-USD: Cost: the configured daily caps allow more than USD 300/month (owner 2026-10-21)",
       "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-3988.md"
+    },
+    {
+      "path": "docs/handoff/issue-4035.md",
+      "title": "Handoff: METRIC-TRIGGER-13747-SEO-INDEXNOW-ENGINES-OK: SEO: fewer than 3 IndexNow engines accepted the last submission",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-4035.md"
     },
     {
       "path": "docs/handoff/issue-4039.md",
@@ -1281,6 +1301,11 @@
       "path": "docs/handoff/issue-4059.md",
       "title": "Handoff: fleet_budget caps breached: workers 35>30, d1 11>10, ai_spend:workers-ai 787.72>95; cost sources disagree (787.72 vs metric_registry workers_ai_cost_30d_usd 287.74)",
       "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-4059.md"
+    },
+    {
+      "path": "docs/handoff/issue-4153.md",
+      "title": "Handoff: METRIC-TRIGGER-14017-PRD-FUNNEL-MISSING-TRANSITIONS: PRD-FUNNEL-TRANSITION-1: publication evidence missing",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-4153.md"
     },
     {
       "path": "docs/handoff/issue-4289.md",
@@ -1298,6 +1323,11 @@
       "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-4359.md"
     },
     {
+      "path": "docs/handoff/issue-4386.md",
+      "title": "Handoff: METRIC-TRIGGER-14457-PR-OPEN-OVER-10M: Pull requests open more than 10 minutes",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-4386.md"
+    },
+    {
       "path": "docs/handoff/issue-4410.md",
       "title": "Handoff: BP26-CORRECTIONS-FEED-1: Public corrections and retractions feed per property following COPE Retraction Guidelines v3",
       "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-4410.md"
@@ -1306,6 +1336,16 @@
       "path": "docs/handoff/issue-4413.md",
       "title": "Handoff: BP26-FORECAST-HYGIENE-1: Forecast hygiene: complete resolution criteria, immutable timestamps, updates as new rows, Brier plus log score and a calibration page",
       "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-4413.md"
+    },
+    {
+      "path": "docs/handoff/issue-4414.md",
+      "title": "Handoff: BP26-PAPER-PIDS-1: Reproducible living papers: immutable version URLs, content hashes, CITATION.cff/BibTeX/CSL exports, OAI-PMH validation, PID route",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-4414.md"
+    },
+    {
+      "path": "docs/handoff/issue-4417.md",
+      "title": "Handoff: BP26-AI-ACT-ART50-1: EU AI Act Article 50: visible AI labels on all AI-generated public content and AI disclosure at first interaction",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-4417.md"
     },
     {
       "path": "docs/handoff/issue-4420.md",
@@ -1331,6 +1371,11 @@
       "path": "docs/handoff/issue-4453.md",
       "title": "Handoff: BP26-SLO-ERROR-BUDGETS-1: SLOs and error budgets per user-facing surface with automatic blameless postmortems",
       "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-4453.md"
+    },
+    {
+      "path": "docs/handoff/issue-8023.md",
+      "title": "Handoff: [#1001986] WORK-CLAIM-MERGED-RELEASE-1: a claim whose pull request merged is released at the merge, not at its TTL",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-8023.md"
     },
     {
       "path": "docs/handoff/issues/COST-DECISION-OWNER-LOCAL-TEXT-1.md",
