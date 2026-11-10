@@ -1,7 +1,7 @@
 {
  "mode": "live",
- "at": "2026-11-10T11:15:21.757Z",
- "sha": "51981b3fa515fb7dcc2293c2a0484922acece155",
+ "at": "2026-11-10T12:37:25.856Z",
+ "sha": "e1cf21b680c9897322eaa9cc9a92d4b0ee888764",
  "apps": [
   {
    "app": "ask-qwav",
@@ -30,7 +30,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 2338,
+     "ms": 3141,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -59,7 +59,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 2334,
+     "ms": 2873,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -90,7 +90,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1519,
+     "ms": 1553,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -126,7 +126,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 8671,
+     "ms": 8714,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -155,7 +155,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1108,
+     "ms": 1057,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -182,7 +182,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 3097,
+     "ms": 2741,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -209,7 +209,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 327,
+     "ms": 368,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -255,7 +255,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 2302,
+     "ms": 2035,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -402,7 +402,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 4469,
+     "ms": 5470,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -542,7 +542,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 4278,
+     "ms": 5314,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -574,7 +574,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1794,
+     "ms": 1810,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -615,7 +615,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 8348,
+     "ms": 10286,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -635,7 +635,7 @@
      "ok": false,
      "error": "expected to see \"Order size\" on https://markets.q08.org/",
      "attempts": 2,
-     "ms": 12360,
+     "ms": 14182,
      "grade": {
       "status": "broken",
       "reasons": [
@@ -666,7 +666,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1176,
+     "ms": 1101,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -702,7 +702,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 8423,
+     "ms": 8491,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -772,8 +772,8 @@
          "h": 20
         },
         {
-         "name": "Logic & formalism",
-         "w": 108,
+         "name": "Autonomous systems",
+         "w": 128,
          "h": 20
         },
         {
@@ -782,49 +782,9 @@
          "h": 17
         },
         {
-         "name": "Physics",
-         "w": 45,
-         "h": 20
-        },
-        {
-         "name": "Numbers & p-adics",
-         "w": 114,
-         "h": 20
-        },
-        {
-         "name": "Computation theory",
-         "w": 112,
-         "h": 20
-        },
-        {
-         "name": "Quantum foundations",
-         "w": 124,
-         "h": 20
-        },
-        {
-         "name": "Information theory",
-         "w": 103,
-         "h": 20
-        },
-        {
          "name": "report it here",
          "w": 84,
          "h": 22
-        },
-        {
-         "name": "Scale-Invariant Reality",
-         "w": 152,
-         "h": 20
-        },
-        {
-         "name": "Defining Kappa",
-         "w": 104,
-         "h": 20
-        },
-        {
-         "name": "Connecting Geometrogenesis and Biogenesi",
-         "w": 302,
-         "h": 20
         },
         {
          "name": "RSS",
@@ -888,7 +848,7 @@
         {
          "id": "scrollable-region-focusable",
          "impact": "serious",
-         "nodes": 3,
+         "nodes": 12,
          "help": "Scrollable region must have keyboard access"
         }
        ]
@@ -900,7 +860,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 4507,
+     "ms": 5901,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -1058,7 +1018,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 4787,
+     "ms": 5330,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -1066,11 +1026,11 @@
     }
    ],
    "screenFindings": [
-    "paper: 27 tap target(s) under 24px, e.g. \"QNFO\" 31x19, \"QWAV\" 34x19, \"q08\" 21x19",
+    "paper: 19 tap target(s) under 24px, e.g. \"QNFO\" 31x19, \"QWAV\" 34x19, \"q08\" 21x19",
     "paper: an empty 412x3 bar (#rp) floats over the page",
     "paper: an empty 32x20 bar (#q-toast) floats over the page",
     "paper: accessibility serious color-contrast (1x): Elements must meet minimum color contrast ratio thresholds",
-    "paper: accessibility serious scrollable-region-focusable (3x): Scrollable region must have keyboard access",
+    "paper: accessibility serious scrollable-region-focusable (12x): Scrollable region must have keyboard access",
     "paper-short: 22 tap target(s) under 24px, e.g. \"QNFO\" 31x19, \"QWAV\" 34x19, \"q08\" 21x19",
     "paper-short: an empty 516x3 bar (#rp) floats over the page",
     "paper-short: an empty 32x20 bar (#q-toast) floats over the page",
@@ -1132,7 +1092,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 14648,
+     "ms": 16397,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -1161,7 +1121,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 8488,
+     "ms": 8559,
      "grade": {
       "status": "new",
       "reasons": [
@@ -1194,7 +1154,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 3844,
+     "ms": 4877,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -1225,7 +1185,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1420,
+     "ms": 1391,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -1256,7 +1216,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 7176,
+     "ms": 8980,
      "grade": {
       "status": "new",
       "reasons": [
@@ -1293,7 +1253,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 8739,
+     "ms": 8813,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -1435,7 +1395,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1808,
+     "ms": 1989,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -1490,6 +1450,21 @@
         {
          "name": "All 41 tags →",
          "w": 74,
+         "h": 20
+        },
+        {
+         "name": "Read",
+         "w": 34,
+         "h": 20
+        },
+        {
+         "name": "Quick read",
+         "w": 71,
+         "h": 20
+        },
+        {
+         "name": "Ask about it",
+         "w": 77,
          "h": 20
         },
         {
@@ -2703,31 +2678,6 @@
          "h": 21
         },
         {
-         "name": "Read",
-         "w": 34,
-         "h": 20
-        },
-        {
-         "name": "Quick read",
-         "w": 71,
-         "h": 20
-        },
-        {
-         "name": "Ask about it",
-         "w": 77,
-         "h": 20
-        },
-        {
-         "name": "Ultrametric",
-         "w": 79,
-         "h": 21
-        },
-        {
-         "name": "Tree geometry",
-         "w": 98,
-         "h": 21
-        },
-        {
          "name": "RSS",
          "w": 24,
          "h": 20
@@ -2788,7 +2738,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 3117,
+     "ms": 2808,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -2913,7 +2863,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1619,
+     "ms": 2074,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -2944,7 +2894,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 12990,
+     "ms": 15671,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3061,7 +3011,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 9240,
+     "ms": 9210,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3092,7 +3042,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 9307,
+     "ms": 9361,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3121,7 +3071,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 910,
+     "ms": 928,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3243,7 +3193,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1656,
+     "ms": 1818,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3272,7 +3222,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 8735,
+     "ms": 8745,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3283,7 +3233,7 @@
     "home q08.org: 5 tap target(s) under 24px, e.g. \"QNFO\" 34x20, \"QWAV\" 36x20, \"q08\" 22x20",
     "home travel.q08.org: 1 tap target(s) under 24px, e.g. \"Email me a code\" 115x21",
     "home qnfo.org: 22 tap target(s) under 24px, e.g. \"QNFO\" 37x20, \"QWAV\" 36x20, \"q08\" 22x20",
-    "home papers.qnfo.org: 263 tap target(s) under 24px, e.g. \"QNFO\" 31x19, \"QWAV\" 34x19, \"q08\" 21x19",
+    "home papers.qnfo.org: 261 tap target(s) under 24px, e.g. \"QNFO\" 31x19, \"QWAV\" 34x19, \"q08\" 21x19",
     "home papers.qnfo.org: an empty 32x20 bar (#q-toast) floats over the page",
     "home archive.qnfo.org: 19 tap target(s) under 24px, e.g. \"QNFO\" 37x20, \"QWAV\" 36x20, \"q08\" 22x20",
     "home ideas.qnfo.org: 17 tap target(s) under 24px, e.g. \"QNFO\" 37x20, \"QWAV\" 36x20, \"q08\" 22x20",
@@ -3328,7 +3278,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 4417,
+     "ms": 5475,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3359,7 +3309,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 3370,
+     "ms": 4382,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3390,7 +3340,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 3182,
+     "ms": 3463,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3432,7 +3382,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1000,
+     "ms": 1052,
      "grade": {
       "status": "ok",
       "reasons": []
