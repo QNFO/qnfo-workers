@@ -587,7 +587,7 @@ def freshness_row(ctx):
     dl = desk_deadline(ctx.now)
     tag = "deadline " + iso_utc(dl)
     try:
-        if ctx.d1("SELECT COUNT(*) AS n FROM bp26_probe_results WHERE metric = 'slo_attainment_28d_min' AND subject = ?1 AND detail LIKE ?2", [DESK_SUBJECT, tag + "%"])[0]["n"]:
+        if ctx.d1("SELECT COUNT(*) AS n FROM bp26_probe_results WHERE metric = 'desk_freshness' AND subject = ?1 AND detail LIKE ?2", [DESK_SUBJECT, tag + "%"])[0]["n"]:
             return None
     except Exception:  # noqa: BLE001
         pass  # the dedupe read failed: take the sample, a duplicate row for one deadline is harmless
