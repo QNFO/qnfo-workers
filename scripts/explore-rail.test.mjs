@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
-import { TARGETS, applyText } from "./explore-rail-apply.mjs";
+import { TARGETS } from "./explore-rail-apply.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 let pass = 0, fail = 0;
@@ -85,8 +85,11 @@ ok(threw, "an origin error still surfaces unchanged (the wrapper hides nothing)"
 
 // Every target worker holds the current block and attaches it; the mirror matches.
 for (const w of TARGETS) for (const f of ["worker.js", "deployed-current.worker.js"]) {
-  const t = readFileSync(join(root, w, f), "utf8");
-  ok(applyText(t, w, src.trimEnd()) === t, w + "/" + f + " holds the current EXPLORE-RAIL-1 block (run node scripts/explore-rail-apply.mjs)");
+  const t = readFileSync(join(root, w, f), "utf8").split(String.fromCharCode(13)).join(""); // a Windows checkout may hold CRLF
+  const a = t.indexOf("// ---- EXPLORE-RAIL-1:BEGIN"), b = t.indexOf("// ---- EXPLORE-RAIL-1:END ----");
+  const END = "// ---- EXPLORE-RAIL-1:END ----";
+  ok(a >= 0 && b > a && t.slice(a, b + END.length) === src.trimEnd().split(String.fromCharCode(13)).join(""), w + "/" + f + " holds the current EXPLORE-RAIL-1 block (run node scripts/explore-rail-apply.mjs)");
+  ok(count(t, /^erAttach\(\w+\);/gm) === 1, w + "/" + f + " attaches the rail once");
   ok(count(t, /function erProp\(/g) === 1, w + "/" + f + " defines the block once");
 }
 console.log("explore-rail: " + pass + " passed, " + fail + " failed");
