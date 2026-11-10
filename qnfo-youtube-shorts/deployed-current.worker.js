@@ -1,4 +1,4 @@
-var VERSION = "0.12.0-engage";
+var VERSION = "0.12.1-codeagent";
 /* 0.4.1: new Shorts descriptions include the QNFO channel context. */ /* #5479, pillar reach: authenticated re-consent and code exchange with the stored OAuth client. */ /* 0.3.0 YT-6 (2026-10-28, pillar reach; minor: a data product; agent_issues 1000597): views and average view duration of each uploaded Short are read hourly from the YouTube Data and Analytics APIs into youtube_videos (views, avg_view_duration_s) and metric youtube_avg_view_duration_s; without the extra owner consent (human_actions yt-analytics-consent) the read is refused, recorded as youtube.retention_scope and nothing is written. */ /* 0.2.1 HEALTH-CONTRACT-1 (2026-10-28, pillar autonomy; patch; agent_issues 2852): /health declares capabilities[] and limitations[], so capability_contract_conformance counts this worker. */ /* 0.2.0 YT-QUALITY-1 (2026-10-28, pillar reach; minor: new capabilities): the Shorts stop looking alike and sounding flat. Voice: Workers AI Deepgram Aura 2 (more natural than melotts, which stays as the per-sentence fallback). Director: four new templates (bignum, flow, compare, list) beside the old ones, rules for speech-written narration (contractions, short sentences, pitch-bearing punctuation, no spoken URL) and for variety (at least four kinds, never one kind three times). Render image: scene fitted to a safe width so nothing leaves the frame, five themes (palette plus animated background) chosen per paper, captions measured in the real font and chunked at phrases in the Shorts safe zone, loudness-normalised audio, an AI-generated mp4 comment tag and provenance.json (BP26-AI-ACT-ART50-1). Closing line no longer speaks a URL. Sources: scripts/youtube_poc (YT-POC-3/4), docs/YOUTUBE-PIPELINE.md. */ /* prior: 0.1.5 */ /* 0.1.5 YT-MANIM-PIN-1 (2026-10-27, pillar reach; patch): the render image pins manim 0.22.0, the version the scene was tested on; 0.18.1 has no Scene.time and the first container render failed with that AttributeError (visible since 0.1.4 returns the Manim stderr). */ /* prior: 0.1.4 */ /* 0.1.4 YT-RENDER-ERR-1 (2026-10-27, pillar reach; patch): the render container returns the Manim stderr tail when Manim fails (the first live render failed with only a traceback of the wrapper). */ /* prior: 0.1.3 */ /* 0.1.3 YT-DIRECTOR-1 (2026-10-27, pillar reach; patch): the director takes the first reply that holds a beats array from qnfo-ai, then Workers AI kimi, then gpt-oss, and a failure note quotes each reply (the first live run failed with "no JSON in model reply" from one model). */ /* prior: 0.1.2 */ /* 0.1.2 YT-EXPORTS-1 (2026-10-27, pillar reach; patch): wrangler.toml declares RenderContainer in `exports` instead of `migrations`, so a deploy after a secrets write through the script API is accepted and re-attaches the container (the pilot incident 1485 class). */ /* prior: 0.1.1 */ /* 0.1.1 YT-RUN-SYNC-1 (2026-10-27, pillar reach; patch): POST /run did its pass inside ctx.waitUntil, which a fetch handler loses 30 s after the response, so a manual run died at the director; it now awaits one bounded pass (budget_s, default 80, under the edge 100 s limit) and returns the row states. */ /* prior: 0.1.0 */ /* 0.1.0 YT-SERVER-1 (2026-10-27, pillar reach; minor: a new worker): the plain-language paper to YouTube Short pipeline runs on Cloudflare only. One hourly tick takes the newest plain_article (living-paper, status ok) with no youtube_videos row (cap 2 videos a week), an LLM director writes the beats, a second model family and a number check drop any beat the article does not support, Workers AI TTS speaks each sentence, a Cloudflare Container renders 1080x1920 with Manim, word-timed captions and the visible AI-narration tag into R2, and videos.insert uploads it (public by default, owner directive 2026-10-27) with containsSyntheticMedia. */
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
@@ -328,6 +328,15 @@ function sameMixIssues(beats, prevBeats) {
   var m = kindMix(beats);
   return m && m === kindMix(prevBeats) ? ["same template mix as the previous Short (" + m + "); use different kinds"] : [];
 }
+function sameThemeMixIssues(curTheme, beats, prevTheme, prevBeats) {
+  if (!curTheme || !prevTheme) return [];
+  var curMix = kindMix(beats);
+  var prevMix = kindMix(prevBeats);
+  if (curTheme === prevTheme && curMix && curMix === prevMix) {
+    return ["same theme and template mix as the previous Short (" + curTheme + ", " + curMix + "); use a different theme or mix"];
+  }
+  return [];
+}
 async function prevJson(env, row, name) {
   try {
     var p = await env.QNFO_AUDIT.prepare("SELECT id FROM youtube_videos WHERE id < ?1 AND state NOT IN ('rejected','failed') ORDER BY id DESC LIMIT 1").bind(row.id).first();
@@ -391,8 +400,12 @@ async function stageDirect(env, row) {
     } catch (e) { await logEvent(env, "youtube.director_retry", String(e && e.message || e).slice(0, 200), null, "warn"); }
   }
   var prevBeats = await prevJson(env, row, "beats.json");
+  var prevJob = await prevJson(env, row, "job.json");
+  var prevTheme = prevJob && prevJob.theme_name;
+  var curTheme = pickTheme(row.slug, prevTheme);
   var mixIssues = function (bs) { return sameMixIssues(bs, prevBeats && prevBeats.kept); };
-  var issues = scriptIssues(spec.script).concat(beatIssues(spec.beats), mixIssues(spec.beats)); // YT-AUDIT-1: one self-correcting pass when the script breaks a house rule
+  var themeMixIssues = function (bs) { return sameThemeMixIssues(curTheme, bs, prevTheme, prevBeats && prevBeats.kept); };
+  var issues = scriptIssues(spec.script).concat(beatIssues(spec.beats), mixIssues(spec.beats), themeMixIssues(spec.beats)); // YT-AUDIT-1: one self-correcting pass when the script breaks a house rule
   if (issues.length && pre.kept.length) {
     try {
       var dj3 = await aiJson(env, directorPrompt(), text.slice(0, 9000) + "\n\nREVISE: your previous script had these problems: " + issues.join("; ") + ". Write the whole JSON again with them fixed, keeping every claim supported by the article.", 3500, 0.7);
