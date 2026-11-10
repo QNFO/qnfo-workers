@@ -1,7 +1,7 @@
 {
  "mode": "live",
- "at": "2026-11-10T04:14:11.667Z",
- "sha": "449d6b90a7c994d3d339c1f372c044f924129637",
+ "at": "2026-11-10T05:10:50.352Z",
+ "sha": "94ee0dcd5c719130dff353ffa20ed421458d788c",
  "apps": [
   {
    "app": "ask-qwav",
@@ -30,7 +30,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 2828,
+     "ms": 1921,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -59,7 +59,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 2466,
+     "ms": 1866,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -90,7 +90,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1569,
+     "ms": 1455,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -126,7 +126,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 8833,
+     "ms": 8690,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -155,7 +155,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1076,
+     "ms": 1106,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -182,7 +182,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 2467,
+     "ms": 2222,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -209,7 +209,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 330,
+     "ms": 334,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -255,7 +255,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 2099,
+     "ms": 2218,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -392,7 +392,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 5363,
+     "ms": 4137,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -522,7 +522,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 5479,
+     "ms": 4071,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -554,7 +554,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1771,
+     "ms": 1844,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -595,7 +595,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 10190,
+     "ms": 7726,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -615,7 +615,7 @@
      "ok": false,
      "error": "expected to see \"Order size\" on https://markets.q08.org/",
      "attempts": 2,
-     "ms": 14394,
+     "ms": 11389,
      "grade": {
       "status": "broken",
       "reasons": [
@@ -646,7 +646,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1087,
+     "ms": 1180,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -682,7 +682,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 8407,
+     "ms": 8455,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -880,7 +880,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 5177,
+     "ms": 4094,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -1038,7 +1038,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 5450,
+     "ms": 4568,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -1112,7 +1112,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 15945,
+     "ms": 14336,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -1141,7 +1141,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 8634,
+     "ms": 8494,
      "grade": {
       "status": "new",
       "reasons": [
@@ -1174,7 +1174,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 4629,
+     "ms": 3469,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -1205,7 +1205,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1455,
+     "ms": 1596,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -1236,7 +1236,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 8964,
+     "ms": 6326,
      "grade": {
       "status": "new",
       "reasons": [
@@ -1273,7 +1273,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 8794,
+     "ms": 8774,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -1415,7 +1415,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1965,
+     "ms": 1692,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -2768,7 +2768,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 2799,
+     "ms": 2652,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -2893,7 +2893,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1973,
+     "ms": 1512,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -2924,7 +2924,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 14928,
+     "ms": 12573,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3041,7 +3041,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 9275,
+     "ms": 9329,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3072,7 +3072,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 9258,
+     "ms": 9272,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3101,7 +3101,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 916,
+     "ms": 1065,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3223,7 +3223,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1765,
+     "ms": 1596,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3252,7 +3252,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 8641,
+     "ms": 8717,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3282,7 +3282,7 @@
      "taps": 1,
      "typing": 0,
      "steps": [
-      "tap The surrender of Jerusalem in 1187"
+      "tap A small student model for animal calls"
      ],
      "screens": [
       {
@@ -3308,7 +3308,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 4724,
+     "ms": 3632,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3339,7 +3339,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 4195,
+     "ms": 3220,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3370,7 +3370,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 3413,
+     "ms": 3021,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3412,7 +3412,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 989,
+     "ms": 961,
      "grade": {
       "status": "ok",
       "reasons": []
