@@ -211,6 +211,8 @@ and [the machine-readable catalog](agent-catalog.json).
 - [Handoff: METRIC-TRIGGER-4992-ROSTER-CAPABILITIES-SINGLE-EXECUTOR: Executor roster: a new capability has a single executor](handoff/issue-1554.md) - `docs/handoff/issue-1554.md`
 - [Handoff: METRIC-TRIGGER-1238-IDEA-TOPIC-CONCENTRATION-30D: Intake diversity: one topic cluster exceeds its share of accepted ideas (SIGNAL-](handoff/issue-1625.md) - `docs/handoff/issue-1625.md`
 - [Handoff: DEPLOY-NON-CANONICAL-DEPLOY: fleet](handoff/issue-1675.md) - `docs/handoff/issue-1675.md`
+- [Handoff: METRIC-TRIGGER-5079-WORKERS-BP-FINDINGS-OPEN: Workers standards debt: anti-patterns the CI guard refuses are still on main](handoff/issue-1695.md) - `docs/handoff/issue-1695.md`
+- [Handoff: OBJECTIVE-CONSTRAINT-BREACH-1: capability_contract_conformance](handoff/issue-1812.md) - `docs/handoff/issue-1812.md`
 - [Handoff: VERIFICATION-DEFERRAL-STALL-1: 431 contracts defer forever with no escalation and no owner](handoff/issue-1965.md) - `docs/handoff/issue-1965.md`
 - [Handoff: METRIC-TRIGGER-3059-STUCK-ITEMS-OVER-SLA: Queue SLA breach: an item is stuck past its SLA (minutes)](handoff/issue-2051.md) - `docs/handoff/issue-2051.md`
 - [Handoff: METRIC-TRIGGER-8581-PORTFOLIO-DRIFT: Portfolio drift: projects, issues or roadmap disagree with GitHub](handoff/issue-2052.md) - `docs/handoff/issue-2052.md`
@@ -218,12 +220,14 @@ and [the machine-readable catalog](agent-catalog.json).
 - [Handoff: METRIC-TRIGGER-3072-FAILURE-MODES-RECURRING: A known failure mode recurred or its detector stopped running](handoff/issue-2124.md) - `docs/handoff/issue-2124.md`
 - [Handoff: METRIC-TRIGGER-357-WATCHMAKER-INDEX: Autonomy gap: recurring operations still need a person or a stalled runner](handoff/issue-2277.md) - `docs/handoff/issue-2277.md`
 - [Handoff: METRIC-TRIGGER-2934-SESSION-DEPENDENT-ISSUES-OPEN: Autonomy-first gap: open issues still wait on a Claude session](handoff/issue-2283.md) - `docs/handoff/issue-2283.md`
+- [Handoff: METRIC-TRIGGER-537-Q08-GATE-PASS-RATE-7D: q08 quality gate rejects most drafts (7d pass rate under 50%)](handoff/issue-2334.md) - `docs/handoff/issue-2334.md`
 - [Handoff: METRIC-TRIGGER-538-Q08-NEURONS-PER-PUBLISHED-PIECE-7D: q08 compose cost per published piece regressed (over 6000 neurons)](handoff/issue-2335.md) - `docs/handoff/issue-2335.md`
 - [Handoff: METRIC-TRIGGER-3454-OWNER-DISPATCH-7D: Owner dispatch: more than 5 cards in 7 days asked the owner to act](handoff/issue-2339.md) - `docs/handoff/issue-2339.md`
 - [Handoff: METRIC-TRIGGER-3464-MTTR-H-7D: Doctrine breach: issues take more than a day to close on average](handoff/issue-2340.md) - `docs/handoff/issue-2340.md`
 - [Handoff: METRIC-TRIGGER-3689-MONTHLY-COST-RUN-RATE-USD: Cost: all-billing 7-day run rate over 650/30d](handoff/issue-2365.md) - `docs/handoff/issue-2365.md`
 - [Handoff: METRIC-TRIGGER-5394-RESEARCH-DEFERRED-POOL: Research intake outruns throughput: the deferred pool is above 120](handoff/issue-2370.md) - `docs/handoff/issue-2370.md`
 - [Handoff: METRIC-TRIGGER-5915-CONTENT-ITEMS-OVER-STAGE-SLA: Content pipeline: items are past their stage SLA](handoff/issue-2375.md) - `docs/handoff/issue-2375.md`
+- [Handoff: METRIC-TRIGGER-5929-SLA-BREACHES-OVER-120M: SLA breach: items past 120 minutes (10-minute resolution)](handoff/issue-2377.md) - `docs/handoff/issue-2377.md`
 - [Handoff: METRIC-TRIGGER-3529-OWNER-DISPATCHED-ITEMS-7D: Dispatch gap: fleet work reached the owner's queue](handoff/issue-2635.md) - `docs/handoff/issue-2635.md`
 - [Handoff: METRIC-TRIGGER-9262-FLEET-GRAPH-FINDINGS-WARN: FLEET-GRAPH-FINDINGS-1: the fleet graph reports warn-level drift or dead referen](handoff/issue-2714.md) - `docs/handoff/issue-2714.md`
 - [Handoff: CLOSEOUT-HANDOFF-20261019: 30 unfinished plans in docs/handoff/2026-10-19-closeout.md; this tracker closes when the 51 issues behind them are resolved](handoff/issue-2790.md) - `docs/handoff/issue-2790.md`
@@ -245,6 +249,19 @@ and [the machine-readable catalog](agent-catalog.json).
 - [Handoff: WORKFLOW-FAILED-1: deploy-gate](handoff/issue-3441.md) - `docs/handoff/issue-3441.md`
 - [Handoff: METRIC-TRIGGER-10820-FLEET-COST-PACE-30D-USD: Cost: fleet 30-day pace above USD 300 all-in (owner 2026-10-21)](handoff/issue-3460.md) - `docs/handoff/issue-3460.md`
 - [Handoff: Q08-GATE-ECONOMICS: gate_pass_rate_7d 0.032 drives 27.7x neuron overrun and a stalled publication cadence](handoff/issue-3487.md) - `docs/handoff/issue-3487.md`
+- [Handoff: METRIC-TRIGGER-10930-FLEET-COST-BOUND-MONTH-USD: Cost: the configured daily caps allow more than USD 300/month (owner 2026-10-21)](handoff/issue-3988.md) - `docs/handoff/issue-3988.md`
+- [Handoff: REMEDIATION-CONTRACT-DEAD-PATH-1: 1138 superseded contracts (337 never attempted) leave critical issues with no doer](handoff/issue-4039.md) - `docs/handoff/issue-4039.md`
+- [Handoff: fleet_budget caps breached: workers 35>30, d1 11>10, ai_spend:workers-ai 787.72>95; cost sources disagree (787.72 vs metric_registry workers_ai_cost_30d_usd 287.74)](handoff/issue-4059.md) - `docs/handoff/issue-4059.md`
+- [Handoff: BREACH-DOCTOR-1: the fleet does not diagnose and remediate its own unowned breaches (owner directive 2026-10-26: FLEET IS NOT SELF-DIAGNOSING ITS OWN BREACHES AND AUTOMATICALLY REMEDIATING)](handoff/issue-4289.md) - `docs/handoff/issue-4289.md`
+- [Handoff: METRIC-TRIGGER-14349-PUBLISH-RATE-RATIO-24H: Publishing fell under 40% of its 7-day rate](handoff/issue-4301.md) - `docs/handoff/issue-4301.md`
+- [Handoff: ROOT-CAUSE-1: LOOP-BREAKER-1 keeps recurring](handoff/issue-4359.md) - `docs/handoff/issue-4359.md`
+- [Handoff: BP26-CORRECTIONS-FEED-1: Public corrections and retractions feed per property following COPE Retraction Guidelines v3](handoff/issue-4410.md) - `docs/handoff/issue-4410.md`
+- [Handoff: BP26-FORECAST-HYGIENE-1: Forecast hygiene: complete resolution criteria, immutable timestamps, updates as new rows, Brier plus log score and a calibration page](handoff/issue-4413.md) - `docs/handoff/issue-4413.md`
+- [Handoff: BP26-RETENTION-1: Data minimisation and retention: TTL sweeps, payload logging off for mail, no raw emails in logs](handoff/issue-4420.md) - `docs/handoff/issue-4420.md`
+- [Handoff: BP26-AI-GATEWAY-BUDGETS-1: Every model call through AI Gateway with caching, rate limits, spend limits and per-loop hard budgets](handoff/issue-4427.md) - `docs/handoff/issue-4427.md`
+- [Handoff: BP26-GRADUAL-DEPLOYS-1: Versions, health-gated gradual deployments and automatic rollback on error-rate regression](handoff/issue-4428.md) - `docs/handoff/issue-4428.md`
+- [Handoff: BP26-EDGE-SECURITY-1: Edge security baseline: secure headers on every public host, Turnstile on public forms, Durable Object rate limit on OTP](handoff/issue-4452.md) - `docs/handoff/issue-4452.md`
+- [Handoff: BP26-SLO-ERROR-BUDGETS-1: SLOs and error budgets per user-facing surface with automatic blameless postmortems](handoff/issue-4453.md) - `docs/handoff/issue-4453.md`
 - [COST-DECISION-OWNER-LOCAL-TEXT-1: owner-local sentence contradicts the $0 spend and the credit runway divides by unbilled third-party list cost](handoff/issues/COST-DECISION-OWNER-LOCAL-TEXT-1.md) - `docs/handoff/issues/COST-DECISION-OWNER-LOCAL-TEXT-1.md`
 - [COST-FEED-7D-WINDOW-1: /api/cost by_model_7d and by_worker_7d sum 8 UTC day buckets (today partial) under a 7d label, with est_usd unlabelled as list price](handoff/issues/by-window-8-buckets.md) - `docs/handoff/issues/by-window-8-buckets.md`
 - [RUM-ZERO-DAY-1: a stored false zero for 2026-10-13 understates the 7- and 28-day pageviews, and the dashboard top pages read the unfiltered source](handoff/issues/rum-zero-13.md) - `docs/handoff/issues/rum-zero-13.md`
@@ -396,6 +413,7 @@ and [the machine-readable catalog](agent-catalog.json).
 - [personal-api - Agentic Personal Twin (v4.11.0)](../personal-api/README.md) - `personal-api/README.md`
 - [Outlook.com mail in the twin (Microsoft Graph, read-only)](../personal-api/msgraph/README.md) - `personal-api/msgraph/README.md`
 - [personal-companion](../personal-companion/README.md) - `personal-companion/README.md`
+- [Ultrastable: inventory of everything produced (2026-11-10)](../product/INVENTORY.md) - `product/INVENTORY.md`
 - [q08-signal-engine](../q08-signal-engine/README.md) - `q08-signal-engine/README.md`
 - [qnfo-agent-ws](../qnfo-agent-ws/README.md) - `qnfo-agent-ws/README.md`
 - [qnfo-agents](../qnfo-agents/README.md) - `qnfo-agents/README.md`

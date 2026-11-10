@@ -1078,6 +1078,16 @@
       "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-1675.md"
     },
     {
+      "path": "docs/handoff/issue-1695.md",
+      "title": "Handoff: METRIC-TRIGGER-5079-WORKERS-BP-FINDINGS-OPEN: Workers standards debt: anti-patterns the CI guard refuses are still on main",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-1695.md"
+    },
+    {
+      "path": "docs/handoff/issue-1812.md",
+      "title": "Handoff: OBJECTIVE-CONSTRAINT-BREACH-1: capability_contract_conformance",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-1812.md"
+    },
+    {
       "path": "docs/handoff/issue-1965.md",
       "title": "Handoff: VERIFICATION-DEFERRAL-STALL-1: 431 contracts defer forever with no escalation and no owner",
       "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-1965.md"
@@ -1113,6 +1123,11 @@
       "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-2283.md"
     },
     {
+      "path": "docs/handoff/issue-2334.md",
+      "title": "Handoff: METRIC-TRIGGER-537-Q08-GATE-PASS-RATE-7D: q08 quality gate rejects most drafts (7d pass rate under 50%)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-2334.md"
+    },
+    {
       "path": "docs/handoff/issue-2335.md",
       "title": "Handoff: METRIC-TRIGGER-538-Q08-NEURONS-PER-PUBLISHED-PIECE-7D: q08 compose cost per published piece regressed (over 6000 neurons)",
       "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-2335.md"
@@ -1141,6 +1156,11 @@
       "path": "docs/handoff/issue-2375.md",
       "title": "Handoff: METRIC-TRIGGER-5915-CONTENT-ITEMS-OVER-STAGE-SLA: Content pipeline: items are past their stage SLA",
       "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-2375.md"
+    },
+    {
+      "path": "docs/handoff/issue-2377.md",
+      "title": "Handoff: METRIC-TRIGGER-5929-SLA-BREACHES-OVER-120M: SLA breach: items past 120 minutes (10-minute resolution)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-2377.md"
     },
     {
       "path": "docs/handoff/issue-2635.md",
@@ -1246,6 +1266,71 @@
       "path": "docs/handoff/issue-3487.md",
       "title": "Handoff: Q08-GATE-ECONOMICS: gate_pass_rate_7d 0.032 drives 27.7x neuron overrun and a stalled publication cadence",
       "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-3487.md"
+    },
+    {
+      "path": "docs/handoff/issue-3988.md",
+      "title": "Handoff: METRIC-TRIGGER-10930-FLEET-COST-BOUND-MONTH-USD: Cost: the configured daily caps allow more than USD 300/month (owner 2026-10-21)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-3988.md"
+    },
+    {
+      "path": "docs/handoff/issue-4039.md",
+      "title": "Handoff: REMEDIATION-CONTRACT-DEAD-PATH-1: 1138 superseded contracts (337 never attempted) leave critical issues with no doer",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-4039.md"
+    },
+    {
+      "path": "docs/handoff/issue-4059.md",
+      "title": "Handoff: fleet_budget caps breached: workers 35>30, d1 11>10, ai_spend:workers-ai 787.72>95; cost sources disagree (787.72 vs metric_registry workers_ai_cost_30d_usd 287.74)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-4059.md"
+    },
+    {
+      "path": "docs/handoff/issue-4289.md",
+      "title": "Handoff: BREACH-DOCTOR-1: the fleet does not diagnose and remediate its own unowned breaches (owner directive 2026-10-26: FLEET IS NOT SELF-DIAGNOSING ITS OWN BREACHES AND AUTOMATICALLY REMEDIATING)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-4289.md"
+    },
+    {
+      "path": "docs/handoff/issue-4301.md",
+      "title": "Handoff: METRIC-TRIGGER-14349-PUBLISH-RATE-RATIO-24H: Publishing fell under 40% of its 7-day rate",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-4301.md"
+    },
+    {
+      "path": "docs/handoff/issue-4359.md",
+      "title": "Handoff: ROOT-CAUSE-1: LOOP-BREAKER-1 keeps recurring",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-4359.md"
+    },
+    {
+      "path": "docs/handoff/issue-4410.md",
+      "title": "Handoff: BP26-CORRECTIONS-FEED-1: Public corrections and retractions feed per property following COPE Retraction Guidelines v3",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-4410.md"
+    },
+    {
+      "path": "docs/handoff/issue-4413.md",
+      "title": "Handoff: BP26-FORECAST-HYGIENE-1: Forecast hygiene: complete resolution criteria, immutable timestamps, updates as new rows, Brier plus log score and a calibration page",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-4413.md"
+    },
+    {
+      "path": "docs/handoff/issue-4420.md",
+      "title": "Handoff: BP26-RETENTION-1: Data minimisation and retention: TTL sweeps, payload logging off for mail, no raw emails in logs",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-4420.md"
+    },
+    {
+      "path": "docs/handoff/issue-4427.md",
+      "title": "Handoff: BP26-AI-GATEWAY-BUDGETS-1: Every model call through AI Gateway with caching, rate limits, spend limits and per-loop hard budgets",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-4427.md"
+    },
+    {
+      "path": "docs/handoff/issue-4428.md",
+      "title": "Handoff: BP26-GRADUAL-DEPLOYS-1: Versions, health-gated gradual deployments and automatic rollback on error-rate regression",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-4428.md"
+    },
+    {
+      "path": "docs/handoff/issue-4452.md",
+      "title": "Handoff: BP26-EDGE-SECURITY-1: Edge security baseline: secure headers on every public host, Turnstile on public forms, Durable Object rate limit on OTP",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-4452.md"
+    },
+    {
+      "path": "docs/handoff/issue-4453.md",
+      "title": "Handoff: BP26-SLO-ERROR-BUDGETS-1: SLOs and error budgets per user-facing surface with automatic blameless postmortems",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-4453.md"
     },
     {
       "path": "docs/handoff/issues/COST-DECISION-OWNER-LOCAL-TEXT-1.md",
@@ -1927,6 +2012,11 @@
       "path": "personal-companion/README.md",
       "title": "personal-companion",
       "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/personal-companion/README.md"
+    },
+    {
+      "path": "product/INVENTORY.md",
+      "title": "Ultrastable: inventory of everything produced (2026-11-10)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/product/INVENTORY.md"
     },
     {
       "path": "q08-signal-engine/README.md",
