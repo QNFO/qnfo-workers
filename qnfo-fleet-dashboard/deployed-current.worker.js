@@ -11,7 +11,7 @@ var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target,
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
 // 1.77.2 ERRATA-CHAIN-DISPATCH-1 (pillar research): wake the folded errata consumer and retry its legacy parked receipts.
 // VERSION-LINE-SPLIT-1 (agent_issues 100220): the release notes sit one per line below this statement, newest first, so a VERSION bump is a one-line patch; add a new note as the first line under it.
-var VERSION = "1.106.3";
+var VERSION = "1.106.4";
 // 1.89.0 NOW-NORTH-1 and HOME-MORE-1 (pillar core; minor): the Now screen opens with four numbers tied to the owner goals (readers, fleet cost, owner load, reliability) and drops the count of metrics off target (95 of 297; nothing can be done with it); a quiet footer on the home links the full dashboard, changelog, data index and managers.
 // 1.89.0 (cont.) MONEY-FIX-1 (pillar cost; patch): the Money card subtracted the subscription figure from a pace that never included it (fleet scope of v_cost_forecast), so it showed the fleet at 701 instead of 1151 a month; it now shows the fleet line, the subscriptions line and both together.
 // 1.85.0 (cont.) NOW-REVIEW-1: independent review fixes: Snooze and Not needed hide the card; a tap removes the card at once and reloads fresh, and the hand-back claims the card before filing (no duplicate tickets); strangers get no card keys or raw error text; only the signed-in owner (not the loop token) can run commands or hand work back; bound cards are read first; an unrefreshed metric reads n/a, not 0; one refresh in flight at a time and a failed refresh retries in 10 s; the Code poll says when the executor does not answer.
@@ -7921,17 +7921,26 @@ async function brandProbe(kind, f) {
   }
   return null;
 }
+// BRAND-SYNC-ON-CHANGE-1: a short hash of every brand text, logged with each run; a run whose key differs is due at once.
+function brandTextKey() {
+  const t = JSON.stringify([BRAND_GH_ABOUT, BRAND_GH_TOPICS, BRAND_GH_BIO, BRAND_GH_PINS, BRAND_LI_HEADLINE, BRAND_LI_ABOUT, BRAND_ORCID_BIO, BRAND_ORCID_KEYWORDS, BRAND_SCHOLAR_AFFIL, BRAND_SCHOLAR_INTERESTS, BRAND_X_BIO, BRAND_SIGNATURE]);
+  let h = 5381;
+  for (let i = 0; i < t.length; i++) h = ((h * 33) ^ t.charCodeAt(i)) >>> 0;
+  return h.toString(36);
+}
 async function brandProfileSync(env, opts) {
   const o = opts || {}, f = o.fetch || fetch, now = o.now || Date.now();
   if (!o.force && now - brandSyncLast < BRAND_SYNC_EVERY_MS) return { skipped: "ran in this isolate" };
   await brandEnsure(env);
   if (!o.force) {
-    const last = await env.AUDIT.prepare("SELECT ts FROM brand_profile_sync_log ORDER BY id DESC LIMIT 1").first().catch(function() { return null; });
+    const last = await env.AUDIT.prepare("SELECT ts, result FROM brand_profile_sync_log ORDER BY id DESC LIMIT 1").first().catch(function() { return null; });
     const at = last ? Date.parse(String(last.ts)) : NaN;
-    if (at && now - at < BRAND_SYNC_EVERY_MS) { brandSyncLast = at; return { skipped: "ran at " + last.ts }; }
+    // BRAND-SYNC-ON-CHANGE-1: a changed brand text runs at the next tick, not up to 6 hours later.
+    const sameText = !!last && String(last.result || "").indexOf('"text_key":"' + brandTextKey() + '"') >= 0;
+    if (at && now - at < BRAND_SYNC_EVERY_MS && sameText) { brandSyncLast = at; return { skipped: "ran at " + last.ts }; }
   }
   brandSyncLast = now;
-  const result = { github: null, cards: {}, probes: {} };
+  const result = { text_key: brandTextKey(), github: null, cards: {}, probes: {} };
   for (const c of BRAND_OWNER_CARDS) {
     try { await brandCard(env, c); result.cards[c.slug] = "filed"; } catch (e) { result.cards[c.slug] = "error " + String(e && e.message || e).slice(0, 80); }
   }

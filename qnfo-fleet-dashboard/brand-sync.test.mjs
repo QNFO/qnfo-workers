@@ -65,7 +65,7 @@ function gh(opts) {
 const sb = { console, JSON, Date, Math, String, Array, Object, Promise, RegExp, Error, NAME: "qnfo-fleet-dashboard", fetch: async () => { throw new Error("network"); }, out: null };
 sb.ensureHumanTable = async () => {};
 vm.createContext(sb);
-vm.runInContext(src.slice(a, c2) + "\n;out = { brandProfileSync, copyRowHtml, BRAND_OWNER_CARDS, BRAND_GH_ABOUT, BRAND_GH_BIO, BRAND_GH_TOPICS, BRAND_GH_PINS, BRAND_LI_HEADLINE };", sb);
+vm.runInContext(src.slice(a, c2) + "\n;out = { brandProfileSync, brandTextKey, copyRowHtml, BRAND_OWNER_CARDS, BRAND_GH_ABOUT, BRAND_GH_BIO, BRAND_GH_TOPICS, BRAND_GH_PINS, BRAND_LI_HEADLINE };", sb);
 const M = sb.out;
 
 // Brand wording guard: nothing quantum-led, no engineer/developer identity, the headline from BRAND.md.
@@ -98,6 +98,19 @@ ok(!JSON.stringify(r).includes("ghp_SECRET") && db.log.length === 1, "the token 
 const n0 = net.calls.length;
 r = await M.brandProfileSync(env, { fetch: net.f, now: Date.now() + 60e3 });
 ok(r.skipped && net.calls.length === n0, "a run within six hours is skipped", r);
+
+// BRAND-SYNC-ON-CHANGE-1: a fresh isolate inside six hours runs again when the logged text key differs, and skips when it matches.
+{
+  const fresh = (log) => { const s2 = { ...sb, out: null }; vm.createContext(s2); vm.runInContext(src.slice(a, c2) + "\n;out = { brandProfileSync, brandTextKey };", s2); return s2.out; };
+  const F1 = fresh(), dbA = makeDb();
+  dbA.log.push({ ts: new Date().toISOString().slice(0, 19) + "Z", result: JSON.stringify({ text_key: "stale" }) });
+  const ra = await F1.brandProfileSync({ AUDIT: dbA }, { fetch: gh({ repos }).f, now: Date.now() + 60e3 });
+  ok(!ra.skipped && ra.text_key === F1.brandTextKey(), "a changed brand text runs inside six hours", ra);
+  const F2 = fresh(), dbB = makeDb();
+  dbB.log.push({ ts: new Date().toISOString().slice(0, 19) + "Z", result: JSON.stringify({ text_key: F2.brandTextKey() }) });
+  const rb = await F2.brandProfileSync({ AUDIT: dbB }, { fetch: gh({ repos }).f, now: Date.now() + 60e3 });
+  ok(!!rb.skipped, "an unchanged brand text keeps the six-hour throttle", rb);
+}
 
 // Owner taps Done on LinkedIn; ORCID and Scholar now show the text; pins are set; bio still refused.
 db.cards.get("brand-linkedin-headline").status = "resolved";
