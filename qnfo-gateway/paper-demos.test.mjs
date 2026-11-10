@@ -18,3 +18,9 @@ test("migration seeds the first demo with a valid address", () => {
   assert.match(sql, /CREATE TABLE IF NOT EXISTS paper_demos/);
   assert.match(sql, /https:\/\/qnfo\.github\.io\/paper-demo-llm-convergence-gate\//);
 });
+
+test("second demo is seeded for its paper", () => {
+  const m = readFileSync(new URL("../migrations/2026-11-10-paper-demos-ess.sql", import.meta.url), "utf8");
+  assert.match(m, /INSERT OR REPLACE INTO paper_demos/);
+  assert.match(m, /https:\/\/qnfo\.github\.io\/paper-demo-unfalsifiability-ess\//);
+});
