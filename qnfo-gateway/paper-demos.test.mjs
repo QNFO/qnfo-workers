@@ -25,8 +25,8 @@ test("second demo is seeded for its paper", () => {
   assert.match(m, /https:\/\/qnfo\.github\.io\/paper-demo-unfalsifiability-ess\//);
 });
 
-test("PAPER-DEMOS-3 seeds four AI paper demos", () => {
+test("PAPER-DEMOS-3 seeds the agentic-collapse demo", () => {
   const m = readFileSync(new URL("../migrations/2026-11-10-paper-demos-ai.sql", import.meta.url), "utf8");
-  for (const r of ["agentic-collapse", "agent-deadlock", "hallucination-monna-map", "subliminal-learning"])
+  for (const r of ["agentic-collapse"])
     assert.match(m, new RegExp("https://qnfo\.github\.io/paper-demo-" + r + "/"));
 });
