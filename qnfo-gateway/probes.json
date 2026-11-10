@@ -47,6 +47,22 @@
         "qnfo.github.io/paper-demo-unfalsifiability-ess",
         "Try it yourself"
       ]
+    },
+    {
+      "url": "https://papers.qnfo.org/papers/agentic-collapse",
+      "status": 200,
+      "contains": [
+        "qnfo.github.io/paper-demo-agentic-collapse",
+        "Try it yourself"
+      ]
+    },
+    {
+      "url": "https://papers.qnfo.org/papers/specification-induced-deadlock-in-zero-tolerance-agent-protocols-a-state-machine",
+      "status": 200,
+      "contains": [
+        "qnfo.github.io/paper-demo-agent-deadlock",
+        "Try it yourself"
+      ]
     }
   ],
   "d1": [
