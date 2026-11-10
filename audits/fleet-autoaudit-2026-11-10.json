@@ -1,7 +1,7 @@
 {
-  "audited_at": "2026-11-10 09:23:27",
+  "audited_at": "2026-11-10 10:09:51",
   "d1_write_failures": [],
-  "d1_writes_ok": 3,
+  "d1_writes_ok": 4,
   "guard": {
     "_guard_rc": 0,
     "ahead": [],
@@ -46,10 +46,15 @@
         "http": 404,
         "version": null,
         "worker": "ultrastable-site"
+      },
+      {
+        "http": 404,
+        "version": null,
+        "worker": "ultrastable-tick"
       }
     ]
   },
-  "purge_error": "purge skipped: run classified 3 workers, table held 46; a partial report must not shrink the audit surface",
+  "purge_error": "purge skipped: run classified 4 workers, table held 47; a partial report must not shrink the audit surface",
   "rows": {
     "qnfo-workers": {
       "before": null,
@@ -74,6 +79,14 @@
       "match": 0,
       "note": "UNMANAGED_NO_HEALTH",
       "worker": "ultrastable-site"
+    },
+    "ultrastable-tick": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "UNMANAGED_NO_HEALTH",
+      "worker": "ultrastable-tick"
     }
   },
   "stale_rows_purged": null
