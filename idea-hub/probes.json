@@ -28,6 +28,12 @@
       "contains": [
         "<urlset"
       ]
+    },
+    {
+      "url": "https://ideas.qnfo.org/",
+      "contains": [
+        "data-explore-rail"
+      ]
     }
   ]
 }
