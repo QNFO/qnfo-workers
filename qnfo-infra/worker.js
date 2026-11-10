@@ -84,7 +84,7 @@ function infraManifestRoute(url, env) {
 }
 __name(infraManifestRoute, "infraManifestRoute");
 __name2(infraManifestRoute, "infraManifestRoute");
-var VERSION = "1.17.7-codeagent";
+var VERSION = "1.17.8-codeagent";
 // D1-RESULT-CAP-1 (#9794, DATA-SPINE-W0-1): D1 refuses a result payload over 50 MB. d1ReadAll runs a read; a statement that fails with a result-size
 // error is retried once as LIMIT/OFFSET pages over the same statement, and a payload at or over D1_RESULT_NEAR_BYTES is logged either way as a
 // cloud_ops_events row of kind d1_result_cap_near (fail-soft, never blocks the read).
@@ -539,9 +539,9 @@ __name(store, "store");
 __name2(store, "store");
 function scopeIndexes(scope, env) {
   const map = {
-    research: ["PAPER_VZ", "NOTES_VZ", "TASKS_VZ", "LOG_VZ", "HANDOFFS_VZ", "IPATENT_VZ"],
+    research: ["PAPER_VZ", "LOG_VZ", "HANDOFFS_VZ", "IPATENT_VZ"],
     infra: ["VZ"],
-    all: ["PAPER_VZ", "NOTES_VZ", "TASKS_VZ", "LOG_VZ", "HANDOFFS_VZ", "IPATENT_VZ", "VZ"]
+    all: ["PAPER_VZ", "LOG_VZ", "HANDOFFS_VZ", "IPATENT_VZ", "VZ"]
   };
   return (map[scope] || map.all).filter((b) => env[b]);
 }
@@ -575,10 +575,8 @@ function metaLine(doc, m) {
   }, "pick");
   if (doc === "PAPER_VZ") return (pick(["title"]) ? pick(["title"]) + " \u2014 " : "") + (pick(["doi"]) && !isDeadPrefixDoi(pick(["doi"])) ? "DOI " + pick(["doi"]) + " \u2014 " : "") + (pick(["abstract"]) ? pick(["abstract"]).slice(0, 300) : pick(["slug"]) ? "slug " + pick(["slug"]) + " chunk " + pick(["chunk"]) : "");
   if (doc === "IPATENT_VZ") return pick(["title"]) + " \u2014 " + pick(["text"]).slice(0, 300) + (pick(["section"]) ? " [" + pick(["section"]) + "]" : "");
-  if (doc === "TASKS_VZ") return (pick(["title"]) || pick(["summary"])) + (pick(["status"]) ? " [" + pick(["status"]) + "]" : "") + (pick(["source_id"]) ? " (source " + pick(["source_id"]) + ")" : "");
   if (doc === "LOG_VZ") return "Q: " + pick(["prompt"]).slice(0, 180) + " || A: " + pick(["response"]).slice(0, 180);
   if (doc === "HANDOFFS_VZ") return (pick(["summary"]) || pick(["title"])) + (pick(["category"]) ? " [" + pick(["category"]) + "]" : "") + (pick(["session_id"]) ? " (session " + pick(["session_id"]) + ")" : "");
-  if (doc === "NOTES_VZ") return pick(["path"]) + (pick(["title"]) && pick(["title"]) !== pick(["path"]) ? " \u2014 " + pick(["title"]) : "");
   if (doc === "VZ") return (pick(["kind"]) || "snapshot") + " @ " + (pick(["ts"]) || "") + " \u2014 " + pick(["text"]);
   return (pick(["path"]) || pick(["id"]) || doc) + " \u2014 " + pick(["text"]).slice(0, 300);
 }
@@ -679,8 +677,6 @@ function renderContext(retrieved) {
   let any = false;
   const label = {
     PAPER_VZ: "RESEARCH PAPERS (vector)",
-    NOTES_VZ: "QNFO NOTES",
-    TASKS_VZ: "QNFO TASKS",
     LOG_VZ: "PAST QUERIES",
     HANDOFFS_VZ: "HANDOFFS",
     IPATENT_VZ: "IPATENT CORPUS",
@@ -2451,7 +2447,7 @@ var worker_default = {
       return indexerMod.fetch(new Request(iu.toString(), request), indexerEnv(env), {});
     }
     if (path === "/health" && method === "GET") {
-      return new Response(JSON.stringify({ ok: true, worker: "qnfo-infra", version: VERSION, capabilities: ["infra-retrieve", "context", "state-refresh", "analytics", "credential-expiry", "handoffs-index", "ai-reach-series", "ai-crawl-probe", "open-data-atlas", "cost-ledger", "lake-spine"], limitations: ["every route except /health needs a bearer token", "handoffs are embedded 100 per hourly fire from the ops_config watermark handoffs_vz_last_id (a backlog drains over hours)","state refreshes hourly at :30 (CRON-GRID-1); the indexer member runs on the 06:30 fire"], oracle: { retrieve: "GET /retrieve?q=&scope=&k=", context: "GET /context?q=&scope=&k=" }, bindings: { audit: !!env.AUDIT, graph: !!env.GRAPH, living: !!env.LIVING, personal: !!env.PERSONAL, portfolio: !!env.PORTFOLIO, paper_vz: !!env.PAPER_VZ, notes_vz: !!env.NOTES_VZ, tasks_vz: !!env.TASKS_VZ, log_vz: !!env.LOG_VZ, handoffs_vz: !!env.HANDOFFS_VZ, ipatent_vz: !!env.IPATENT_VZ, infra_vz: !!env.VZ, ai: !!env.AI } }), { headers: { "Content-Type": "application/json", ...cors } });
+      return new Response(JSON.stringify({ ok: true, worker: "qnfo-infra", version: VERSION, capabilities: ["infra-retrieve", "context", "state-refresh", "analytics", "credential-expiry", "handoffs-index", "ai-reach-series", "ai-crawl-probe", "open-data-atlas", "cost-ledger", "lake-spine"], limitations: ["every route except /health needs a bearer token", "handoffs are embedded 100 per hourly fire from the ops_config watermark handoffs_vz_last_id (a backlog drains over hours)","state refreshes hourly at :30 (CRON-GRID-1); the indexer member runs on the 06:30 fire"], oracle: { retrieve: "GET /retrieve?q=&scope=&k=", context: "GET /context?q=&scope=&k=" }, bindings: { audit: !!env.AUDIT, graph: !!env.GRAPH, living: !!env.LIVING, personal: !!env.PERSONAL, portfolio: !!env.PORTFOLIO, paper_vz: !!env.PAPER_VZ, log_vz: !!env.LOG_VZ, handoffs_vz: !!env.HANDOFFS_VZ, ipatent_vz: !!env.IPATENT_VZ, infra_vz: !!env.VZ, ai: !!env.AI } }), { headers: { "Content-Type": "application/json", ...cors } });
     }
     const token = (request.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
     // LAKE-SPINE-1: these routes read and move telemetry, so they await the token check (the shared check below does not).
