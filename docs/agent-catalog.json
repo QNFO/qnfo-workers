@@ -681,6 +681,11 @@
       "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/PROBE-WRITE-DEAD-1.md"
     },
     {
+      "path": "docs/PRODUCT-ULTRASTABLE.md",
+      "title": "Ultrastable: the self-governing development platform QNFO runs on",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/PRODUCT-ULTRASTABLE.md"
+    },
+    {
       "path": "docs/PROMPTED-RECALL.md",
       "title": "Prompted recall (PROMPTED-RECALL-1, owner directive 2026-11-09)",
       "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/PROMPTED-RECALL.md"
