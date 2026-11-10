@@ -1,4 +1,4 @@
-var VERSION = "1.20.3-codeagent";
+var VERSION = "1.20.4-codeagent";
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -3243,6 +3243,18 @@ async function plRetriage(env, o, mechs, now, out) {
   out.retriaged = 0; out.lapsed = 0;
   var rflag = await env.QNFO_AUDIT.prepare("SELECT value FROM ops_config WHERE key = 'paper_learn_retriage'").first();
   if (rflag && String(rflag.value || "").trim().toLowerCase() === "off") { out.retriage_skipped = true; return; }
+  // Close any adopted PAPER-LEARN goals older than 96 hours to avoid autonomy gap
+  var staleCut = new Date(Date.now() - 96 * 3600e3).toISOString();
+  // Goal keys are of the form PAPER-LEARN-<learningId>
+  var staleRows = ((await env.QNFO_AUDIT.prepare(`
+    SELECT g.goal_key, pl.id AS learning_id, pl.updated_at
+    FROM goals g
+    JOIN paper_learnings pl ON pl.id = CAST(substr(g.goal_key, 13) AS INTEGER)
+    WHERE g.status = 'adopted' AND g.goal_key LIKE 'PAPER-LEARN-%' AND pl.fleet_status = 'probation' AND pl.updated_at < ?1
+  `).bind(staleCut).all()).results) || [];
+  for (var s = 0; s < staleRows.length; s++) {
+    await plCloseProbationGoal(env, staleRows[s].learning_id);
+  }
   var cut = new Date(Date.parse(now) - (o.retriageGapH == null ? PL_RETRIAGE_GAP_H : o.retriageGapH) * 3600e3).toISOString();
   var prows = ((await env.QNFO_AUDIT.prepare("SELECT id, slug, version, kind, verification, claim, fleet_lever, application, status_note FROM paper_learnings WHERE fleet_status = 'probation' AND applicability = 'direct' AND updated_at < ?1 ORDER BY updated_at ASC LIMIT ?2").bind(cut, o.retriage || PL_RETRIAGE_EXAMINE).all()).results) || [];
   var budget = o.retriageModelMax == null ? PL_RETRIAGE_MODEL_MAX : o.retriageModelMax;
