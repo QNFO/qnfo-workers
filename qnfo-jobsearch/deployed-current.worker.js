@@ -2270,7 +2270,7 @@ const ULTRASTABLE_SKILL_FACTS = [
     "I wrote the operating doctrine that governs Ultrastable's agents: what they decide alone, what needs a person, and the limits none may cross."],
   ["Defined the human-oversight boundary: agents proceed on reversible work, and only irreversible, identity-bound steps (money, legal or signing acts, the owner's own accounts) come to a person.", ["founder", "llm", "research_integrity", "policy"],
     "I defined where a person must stay in the loop: agents proceed on reversible work, and only irreversible, identity-bound steps come to a human."],
-  ["Set the verification and evaluation requirements: no change counts until a live check proves it, every failure mode gets a detector, and output quality is judged by outcomes rather than proxy scores.", ["founder", "research_integrity", "llm"],
+  ["Set the verification and evaluation requirements: no change counts until a live check proves it, every problem found is fixed, deployed and verified, and output quality is judged by outcomes rather than proxy scores.", ["founder", "research_integrity", "llm"],
     "I set Ultrastable's verification rules: nothing counts until a live check proves it, and quality is judged by outcomes, not proxy scores."],
   ["Directed coding agents from several vendors (Claude Code, GitHub Copilot, OpenAI Codex) under one written operating agreement that routes each kind of work to the agent best suited to it.", ["founder", "llm", "leadership"],
     "I direct coding agents from several vendors under one written operating agreement that decides which agent takes which work."],
