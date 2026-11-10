@@ -785,7 +785,10 @@ export function computeFindings(ctx) {
       // FLEET-GRAPH-FINDINGS-1: only treat a string as a SQL statement (and its tables as real references)
       // when it starts with a statement keyword; prose or example strings that merely look like SQL are skipped.
       if (!known || known.has(s.table.toLowerCase()) || s.createdInCode) continue;
-      if (s.sql && !/^\s*(SELECT|INSERT|UPDATE|DELETE|REPLACE|WITH|CREATE|ALTER|DROP|PRAGMA)\b/i.test(s.sql)) continue;
+      // FLEET-GRAPH-FINDINGS-1: a table reference only counts when it comes from a string that actually
+      // starts with a SQL statement keyword; prose or example strings that merely look like SQL, and rows
+      // whose source string was not captured, are skipped so they can never file sql-table-missing warns.
+      if (!s.sql || !/^\s*(SELECT|INSERT|UPDATE|DELETE|REPLACE|WITH|CREATE|ALTER|DROP|PRAGMA)\b/i.test(s.sql)) continue;
       const guarded = !!s.guarded && !unguardedTable.has(s.worker + ":" + s.db + "." + s.table.toLowerCase());
       add("sql-table-missing", s.worker + ":" + s.db + "." + s.table, s.confidence === "EXTRACTED" && !guarded ? "warn" : "info", s.unit + " " + s.rel + " " + s.table + " in " + s.db + ", which has no table or view of that name" + (guarded ? " (guarded: the function checks sqlite_master for the table first and skips the read while it is absent)" : ""));
     }
