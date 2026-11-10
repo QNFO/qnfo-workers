@@ -1,4 +1,4 @@
-var VERSION = "1.1.4-codeagent";
+var VERSION = "1.1.5-codeagent";
 // WORKER-SOURCE-IN-REPO-1 (issue 9663): tracked copy of the deployed script, plus /health.
 const URLS=["https://me.q08.org/"];
 const ACCOUNT="edb167b78c9fb901ea5bca3ce58ccc4b", SERVED_BY="personal-api";
@@ -8,14 +8,14 @@ async function rollback(env){
   if(!tok) return "rollback unavailable: no API token bound to the guard";
   const base="https://api.cloudflare.com/client/v4/accounts/"+ACCOUNT+"/workers/scripts/"+SERVED_BY+"/deployments";
   const h={Authorization:"Bearer "+tok,"content-type":"application/json"};
-  const j=await (await fetch(base,{headers:h})).json();
+  const j=await (await globalThis.fetch(base,{headers:h})).json();
   const dl=(j.result&&j.result.deployments)||[];
   if(dl.length<2) return "rollback unavailable: fewer than two deployments";
   const msg=(dl[0].annotations&&dl[0].annotations["workers/message"])||"";
   if(msg.indexOf("COMPANION-GUARD-ROLLBACK-1")>=0) return "rollback skipped: current deployment is already a guard rollback; waiting for a new deploy";
   const prev=dl[1], vs=(prev.versions||[]).map(function(v){return {version_id:v.version_id,percentage:v.percentage};});
   if(!vs.length) return "rollback unavailable: previous deployment lists no versions";
-  const r=await fetch(base,{method:"POST",headers:h,body:JSON.stringify({strategy:"percentage",versions:vs,annotations:{"workers/message":"COMPANION-GUARD-ROLLBACK-1: probe failed twice"}})});
+  const r=await globalThis.fetch(base,{method:"POST",headers:h,body:JSON.stringify({strategy:"percentage",versions:vs,annotations:{"workers/message":"COMPANION-GUARD-ROLLBACK-1: probe failed twice"}})});
   return r.ok?"rolled back "+SERVED_BY+" to deployment "+prev.id:"rollback failed: HTTP "+r.status;
 }
 async function q(env,sql,params){
@@ -33,7 +33,7 @@ async function probe(env){
   const res=[];
   for(const url of URLS){
     let status=0, html="", err="";
-    try{ const r=await fetch(url,{redirect:"follow",headers:{"user-agent":"qnfo-companion-guard/1"}}); status=r.status; html=await r.text(); }catch(e){ err=String(e).slice(0,120); }
+    try{ const r=await globalThis.fetch(url,{redirect:"follow",headers:{"user-agent":"qnfo-companion-guard/1"}}); status=r.status; html=await r.text(); }catch(e){ err=String(e).slice(0,120); }
     const tm=html.match(/<title[^>]*>([^<]*)/i); const title=tm?tm[1].trim():"";
     const ids=[]; const re=/\sid="([^"]{1,60})"/g; let m;
     while((m=re.exec(html))!==null){ if(ids.indexOf(m[1])<0&&ids.length<80) ids.push(m[1]); }
