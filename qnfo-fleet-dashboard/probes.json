@@ -28,6 +28,12 @@
         "<h1>Touchpoints</h1>",
         "Touches, 7 days"
       ]
+    },
+    {
+      "url": "https://fleet.qnfo.org/touch",
+      "contains": [
+        "data-explore-rail"
+      ]
     }
   ]
 }

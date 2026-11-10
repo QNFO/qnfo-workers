@@ -14,7 +14,7 @@ const END = "// ---- EXPLORE-RAIL-1:END ----";
 const ATTACH = "// ---- EXPLORE-RAIL-1:ATTACH ";
 const NL = String.fromCharCode(10);
 // A worker joins when a public property's pages come out of it. The block is gated by request host, so a worker that also serves a private host is not decorated there.
-export const TARGETS = ["qnfo-gateway", "idea-hub", "qnfo-ai-search", "qnfo-ipatent"];
+export const TARGETS = ["qnfo-gateway", "idea-hub", "qnfo-ai-search", "qnfo-ipatent", "qnfo-fleet-dashboard"];
 
 export function strip(src) {
   const i = src.indexOf(BEGIN);
