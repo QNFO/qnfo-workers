@@ -31,7 +31,8 @@ async function infraAIRun(env, model, input, options = {}) {
   const skipCache = options.skipCache === true;
   const requestedTtl = Number(options.cacheTtl);
   const cacheTtl = Number.isFinite(requestedTtl) && requestedTtl > 0 ? requestedTtl : AI_GATEWAY_CACHE_TTL;
-  const selectedModel = critical || String(model).startsWith("@cf/baai/") ? model : AI_COST_LADDER[model] || model;
+  const fallbackModel = Object.values(AI_COST_LADDER)[0];
+  const selectedModel = critical || String(model).startsWith("@cf/baai/") ? model : AI_COST_LADDER[model] || fallbackModel;
   const gateway = { id: "default", skipCache };
   if (!skipCache) gateway.cacheTtl = cacheTtl;
   return env.AI.run(selectedModel, input, { gateway });
@@ -80,7 +81,7 @@ function infraManifestRoute(url, env) {
 }
 __name(infraManifestRoute, "infraManifestRoute");
 __name2(infraManifestRoute, "infraManifestRoute");
-var VERSION = "1.17.5-codeagent";
+var VERSION = "1.17.6-codeagent";
 // D1-RESULT-CAP-1 (#9794, DATA-SPINE-W0-1): D1 refuses a result payload over 50 MB. d1ReadAll runs a read; a statement that fails with a result-size
 // error is retried once as LIMIT/OFFSET pages over the same statement, and a payload at or over D1_RESULT_NEAR_BYTES is logged either way as a
 // cloud_ops_events row of kind d1_result_cap_near (fail-soft, never blocks the read).
