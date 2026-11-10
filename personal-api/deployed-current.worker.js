@@ -296,7 +296,7 @@ function clampMaxTokens(requested, isReason) {
 __name(clampMaxTokens, "clampMaxTokens");
 __name2(clampMaxTokens, "clampMaxTokens");
 __name22(clampMaxTokens, "clampMaxTokens");
-var VERSION = "4.41.1";
+var VERSION = "4.41.2";
 // 4.37.2 KERNEL-PERSONAL-PRIVACY-1: preserve all ten registered reply categories across the content-free telemetry boundary.
 // 4.37.1 KERNEL-PERSONAL-PRIVACY-1: classify twin replies inside the personal plane; AUDIT receives only fixed categories and random event ids, never reply text or excerpts.
 // 4.37.0 KERNEL-EVERYWHERE-1 (2026-11-06, owner directive "IMPLEMENT EVERYWHERE ACROSS ALL AI APPS AND SERVICES AND SURFACES", pillar personal): the twin SYSTEM_PROMPT carries the DOCTRINE-1 kernel 8.2.1 reply recognitions (KERNEL-REPLY-4): end every reply on the answer or result, never on a question, conditional offer or menu; ambiguity gets a stated assumption; a refusal or limit with its reason is a disposition stated declaratively; reversible tool actions are taken and reported in the same reply, and a requested change is made with the tool, not described. Each twin reply is also mirrored to qnfo-audit.personal_replies so the kernel false-stop scan covers this surface. prior 4.36.2
@@ -4680,6 +4680,75 @@ async function noteRiskInChat(env, q) {
 
 // ---------------------------------------------------------------- tools for the chat loop and MCP
 
+// COMPANION-FORYOU-2: away-aware and city-aware ranking. The feed used to read the Amsterdam venues only; the stays in
+// personal-life.events and the current location now decide: dates inside an away window are skipped, and when the owner
+// is in another city the venues of that city are read (live_sources.city).
+async function fyPlaceContext(env) {
+  const today = await localDay(env, nowIso());
+  let stays = [];
+  for (const db of [env.LIFE, env.PERSONAL]) {
+    if (!db) continue;
+    stays = await all(db, "SELECT start AS s, end AS e, city, location FROM personal-life_events WHERE end >= ? ORDER BY start", today).catch(() => all(db, "SELECT start_date AS s, end_date AS e, city, location FROM personal-life_events WHERE end_date >= ? ORDER BY start_date", today)).catch(() => []);
+    if (stays.length) break;
+  }
+  const home = "Amsterdam";
+  const windows = stays.map((r) => ({ start: String(r.s || "").slice(0, 10), end: String(r.e || "").slice(0, 10), city: r.city || r.location || null })).filter((w) => w.start);
+  const here = windows.find((w) => today >= w.start && today <= w.end && w.city) || null;
+  const away = !!(here && String(here.city).toLowerCase() !== home.toLowerCase());
+  return { today, home, city: here ? String(here.city) : home, away, awayUntil: away ? here.end : null, windows };
+}
+const fyInsideAway = (ctx, date) => !!(ctx && (ctx.windows || []).some((w) => date >= w.start && date <= w.end && String(w.city || "").toLowerCase() !== String(ctx.home).toLowerCase()));
+
+// COMPANION-FORYOU-3: captured items reach the feed: a photographed poster or a jotted event in cmp_inbox (or a calendar
+// item marked From capture) becomes a card with its capture date as the reason, first in the list, with the moment-of-impact
+// action (buy ticket date, decide-by) and a memory-recall line showing what the owner noted when capturing it.
+async function fyCaptureCards(env, today) {
+  await ensureSchema(env.PERSONAL);
+  const rows = await all(env.PERSONAL, "SELECT id, text, created_at FROM cmp_inbox WHERE created_at >= date('now','-21 days') ORDER BY created_at DESC LIMIT 20").catch(() => []);
+  const cal = await all(env.PERSONAL, "SELECT id, title, date, note, source FROM calendar WHERE source = 'From capture' AND date >= ? ORDER BY date LIMIT 20", today).catch(() => []);
+  const cards = [];
+  for (const r of cal) {
+    const d = String(r.date).slice(0, 10), decide = addDays(d, -7) < today ? addDays(today, 3) : addDays(d, -7);
+    cards.push({ title: untrusted(r.title, 160), date: d, time: null, venue: null, why: "you saved this on " + d, recall: untrusted(r.note, 300) || null, decide_by: decide, action: "buy ticket by " + decide + " or drop it", url: null, saved: r.id });
+  }
+  for (const r of rows) {
+    const d = String(r.created_at).slice(0, 10), decide = addDays(today, 3);
+    cards.push({ title: untrusted(r.text, 160), date: today, time: null, venue: null, why: "you saved this on " + d, recall: untrusted(r.text, 300), decide_by: decide, action: "decide by " + decide + ": buy the ticket or let it go", url: null, saved: r.id });
+  }
+  return cards;
+}
+
+// COMPANION-FORYOU-4: learn from the why, not only from taste words. cmp_feed.reason held "wrong time", "too far",
+// "too expensive" and "seen it" but only "not my taste" changed ranking; the other reasons now weight time-of-day,
+// distance and price, hidden cards say why, and discovery grows past the seeded venues: listings aggregators are
+// added as sources with the same grounding check (dated listings or switched off).
+async function fyReasonWeights(env) {
+  const rows = await all(env.PERSONAL, "SELECT LOWER(TRIM(reason)) AS r, COUNT(*) AS n FROM cmp_feed WHERE reason IS NOT NULL AND reason != '' GROUP BY r").catch(() => []);
+  const w = { taste: 0, time: 0, far: 0, money: 0, seen: 0 };
+  for (const x of rows) {
+    const r = x.r || "";
+    if (/taste/.test(r)) w.taste += Number(x.n);
+    if (/wrong time|time/.test(r)) w.time += Number(x.n);
+    if (/far|distance/.test(r)) w.far += Number(x.n);
+    if (/expensive|price|cost/.test(r)) w.money += Number(x.n);
+    if (/seen/.test(r)) w.seen += Number(x.n);
+  }
+  return w;
+}
+function fyApplyWeights(items, w) {
+  const tp = Math.min(w.time, 5) * 0.2, fp = Math.min(w.far, 5) * 0.2, mp = Math.min(w.money, 5) * 0.2, sp = Math.min(w.seen, 5) * 0.3;
+  return items.map((x) => {
+    const late = x.time && Number(String(x.time).slice(0, 2)) >= 20;
+    const km = Number(x.km || x.distance || 0);
+    const price = Number(x.price || 0);
+    const fit = Number(x.fit || 0) - (late ? tp : 0) - (km > 5 ? fp : 0) - (price >= 30 ? mp : 0) - (/seen|visited/i.test(String(x.why || "")) ? sp : 0);
+    return Object.assign({}, x, { fit });
+  }).sort((a, b) => b.fit - a.fit);
+}
+async function fyHidden(env, today) {
+  const rows = await all(env.PERSONAL, "SELECT title, date, reason FROM cmp_feed WHERE date >= ? AND state = 'hidden' AND reason IS NOT NULL AND reason != '' ORDER BY date LIMIT 20", today).catch(() => []);
+  return rows.map((r) => ({ title: untrusted(r.title, 160), date: String(r.date).slice(0, 10), because: /far/i.test(r.reason || "") ? "Because you said too far" : /time/i.test(r.reason || "") ? "Because you said wrong time" : /expensive|price|cost/i.test(r.reason || "") ? "Because you said too expensive" : /seen/i.test(r.reason || "") ? "Because you said you have seen it" : /taste/i.test(r.reason || "") ? "Because you said not my taste" : "Because you said " + untrusted(r.reason, 60) }));
+}
 function companionTools(deps) {
   const T = (desc, args, run) => ({ desc, args, run });
   return {
@@ -4687,7 +4756,9 @@ function companionTools(deps) {
     cmp_source_add: T("Companion ops: add a venue, bookshop or community calendar page for the For you feed to read. Needs the page address; find it with web_search first. The page is fetched and checked for dated listings in the next 14 days; a page with none is switched off and the result says so.", { name: { type: "string", required: true }, url: { type: "string", required: true }, kind: { type: "string", required: false } }, async (env, a) => {
       if (!deps.liveSourceAdd || !deps.fetchPage || !deps.excerpt) return { ok: false, error: "source tools are not wired" };
       const g1 = await opsGuard(env, "cmp_source_add", (a && a.url) || ""); if (!g1.ok) return g1;
-      const add = await deps.liveSourceAdd(env, { name: a && a.name, url: a && a.url, kind: a && a.kind });
+      // COMPANION-FORYOU-4: discovery sources beyond the seeded venues: listings aggregators are accepted here and go through the same grounding check below (dated listings or switched off).
+      const agg = /listing|agenda|what'?s ?on|evenementen|uit-in|timeout|discover/i.test(String((a && a.url) || "") + " " + String((a && a.name) || ""));
+      const add = await deps.liveSourceAdd(env, { name: a && a.name, url: a && a.url, kind: (a && a.kind) || (agg ? "listings-aggregator" : "venue") });
       if (!add || !add.ok) return add || { ok: false, error: "not added" };
       let days = 0, chars = 0, err = "";
       try {
@@ -4703,11 +4774,19 @@ function companionTools(deps) {
       if (days) await env.PERSONAL.prepare("DELETE FROM cmp_feed_meta WHERE k IN ('built','quick')").run().catch(() => null);
       return { ok: true, id: add.id, name: add.name, url: add.url, status, days_with_listings: days, active: days > 0, note: days ? "It joins the For you feed the next time Today opens." : "Switched off because the page could not be read or shows no dated listings; tell Rowan and ask for a better page." };
     }),
-    cmp_feed_refresh: T("Companion ops: read the venues again now and rebuild the For you feed (1 to 7 days ahead)", { days: { type: "number", required: false } }, async (env, a) => fyBuild(env, deps, { days: Math.min(Math.max(Number(a && a.days) || 5, 1), 7) })),
+    // COMPANION-FORYOU-2: away-aware and city-aware rebuild: dates inside an away window are skipped, and when the owner is in another city that city's venues are read (live_sources.city).
+    cmp_feed_refresh: T("Companion ops: read the venues again now and rebuild the For you feed (1 to 7 days ahead); away dates are skipped and the city the owner is in is read", { days: { type: "number", required: false } }, async (env, a) => { const c = await fyPlaceContext(env); return fyBuild(env, deps, { days: Math.min(Math.max(Number(a && a.days) || 5, 1), 7), city: c.city, home: c.home }); }),
     // COMPANION-FORYOU-6: the Ask answers "what should I do" from the same ranked feed the Today card shows, with the reason for each.
+    // COMPANION-FORYOU-2/3/4: away windows are skipped, the city's venues are read, saved captures come first with their
+    // capture date as the reason and a decide-by line, the why-reasons weight the ranking, and hidden cards say why.
     cmp_foryou: T("What is on for Rowan, ranked: the For you feed with date, time, venue and why each fits Rowan. Use for what should I do tonight or this weekend.", {}, async (env) => {
       const f = await fyFeed(env, deps);
-      return { ok: true, today: f.today, items: (f.items || []).map((x) => ({ title: x.title, date: x.date, time: x.time, venue: x.venue, why: x.why, url: x.url, noted: x.noted || null })) };
+      const ctx = await fyPlaceContext(env);
+      const w = await fyReasonWeights(env);
+      let items = (f.items || []).filter((x) => !fyInsideAway(ctx, String(x.date).slice(0, 10)));
+      items = fyApplyWeights(items, w).map((x) => ({ title: x.title, date: x.date, time: x.time, venue: x.venue, why: x.why, url: x.url, noted: x.noted || null }));
+      const saved = await fyCaptureCards(env, f.today);
+      return { ok: true, today: f.today, city: ctx.city, away: ctx.away, away_until: ctx.awayUntil, items: saved.concat(items), hidden: await fyHidden(env, f.today) };
     }),
     cmp_ops_status: T("Companion ops: system status - version, venue sources and which fail, For you feed size and age, push devices, and the open companion issues in the fleet", {}, async (env) => {
       await fyEnsure(env);
@@ -5756,7 +5835,7 @@ window.addEventListener('online',flushQueue);document.addEventListener('visibili
 flushQueue();showPending();
 </script></body></html>`;
 
-return Object.freeze({ COMPANION_VERSION, TZ, CONTEXTS, ENERGY, NUDGE_KINDS, LADDER_KINDS, DDL, TASK_COLUMNS, ensureSchema, nowIso, FRESH_DUE_SQL, rid, esc, tzOffsetMinutes, localParts, dayKey, OFFLINE_MAX_AGE_MS, clientStamp, inQuiet, FSRS_W, RETENTION, MAX_INTERVAL_DAYS, retrievability, intervalDays, fsrsSchedule, CLARIFY_SYSTEM, contextFor, heuristicClarify, parseClarify, crisisSignal, FALLBACK_CRISIS_LINES, crisisText, SAFETY_PLAN_FIELDS, normalizeSafetyPlan, saveSafetyPlan, ACTIVITY_CATEGORIES, SEED_ACTIVITIES, helpScores, pickActivity, AI_USD_PER_1K_NEURONS, aiUseSummary, aiUse, focusOptions, logActivity, whatHelps, activityBank, addActivity, WHO5_ITEMS, WHO5_SCALE, who5Score, who5Read, recordWho5, who5Status, setPause, fallbackReply, EMAIL_MODES, saveSettings, LOGIN_TO, SESSION_COOKIE, SESSION_MS, maskedLoginTo, sessionFor, sendLoginCode, verifyLoginCode, isPaused, NEVER_RETIRE, retiredFrom, DISCREET_KINDS, discreetPayload, pruneMedia, TEXTS, pickLru, energyFor, chooseAction, receptiveHours, addDays, mondayOf, weekWindow, weekText, weekLookback, weekSeen, planNudge, b64u, unb64u, makeVapidKeys, vapidAuthHeader, encryptPayload, sendPush, pushAll, loadCfg, dayStartIso, COUNTRY_TZ, CITY_TZ, MULTI_TZ_COUNTRIES, countryCode, placeTz, stayAt, effectiveTz, localDay, EVENT_DEFAULT_MIN, eventMs, normalizeEvents, clearEventCache, loadEvents, afterEventText, GP_DAYS, gpSummaryBuild, gpSummary, sleepFromTimestamps, sleepWindow, moodStats, MIND_URL, readingLane, retiredKinds, daysSinceSocial, unansweredStreak, gatherState, remember, recall, contextSnapshot, recordMood, moodReply, addAction, upsertProject, actionDone, addJournal, addCard, reviewCard, answerNudge, MAX_CAPTURE_BYTES, transcribe, describeImage, describeImages, capture, shortClarify, clarify, dueFromWords, processItem, processInbox, pushPayloadFor, companionTick, agenda, FB_KINDS, fbKey, tasteTokens, tasteModel, tasteScore, applyTaste, loadFeedback, recordFeedback, tasteSummary, tripCard, today, tasteFilterToday, dashboard, PRIVACY_TABLES, privacy, exportAll, deleteData, PERSONA, untrusted, checkInAnswer, chatFollowUp, chatContext, noteRiskInChat, companionTools, TOOL_APPENDIX_LINE, TICK_MS, doKeys, doEnsure, doTick, SELF_CHECKS, selfCheckState, selfCheck, sendToFleet, doAlarm, doFetch, RECALL_DDL, RECALL_UNSURE_DAYS, RECALL_OPEN_MAX, RECALL_PARTS, recallOptions, isoWeekKey, recallGenerate, recallNext, recallAnswer, recallSummary, handleTranscription, handleCompanion, MANIFEST, ICON_SVG, SW_JS, OFFLINE_JS, GUIDE_HTML, PAGE_HTML });
+return Object.freeze({ COMPANION_VERSION, TZ, CONTEXTS, ENERGY, NUDGE_KINDS, LADDER_KINDS, DDL, TASK_COLUMNS, ensureSchema, nowIso, FRESH_DUE_SQL, rid, esc, tzOffsetMinutes, localParts, dayKey, OFFLINE_MAX_AGE_MS, clientStamp, inQuiet, FSRS_W, RETENTION, MAX_INTERVAL_DAYS, retrievability, intervalDays, fsrsSchedule, CLARIFY_SYSTEM, contextFor, heuristicClarify, parseClarify, crisisSignal, FALLBACK_CRISIS_LINES, crisisText, SAFETY_PLAN_FIELDS, normalizeSafetyPlan, saveSafetyPlan, ACTIVITY_CATEGORIES, SEED_ACTIVITIES, helpScores, pickActivity, AI_USD_PER_1K_NEURONS, aiUseSummary, aiUse, focusOptions, logActivity, whatHelps, activityBank, addActivity, WHO5_ITEMS, WHO5_SCALE, who5Score, who5Read, recordWho5, who5Status, setPause, fallbackReply, EMAIL_MODES, saveSettings, LOGIN_TO, SESSION_COOKIE, SESSION_MS, maskedLoginTo, sessionFor, sendLoginCode, verifyLoginCode, isPaused, NEVER_RETIRE, retiredFrom, DISCREET_KINDS, discreetPayload, pruneMedia, TEXTS, pickLru, energyFor, chooseAction, receptiveHours, addDays, mondayOf, weekWindow, weekText, weekLookback, weekSeen, planNudge, b64u, unb64u, makeVapidKeys, vapidAuthHeader, encryptPayload, sendPush, pushAll, loadCfg, dayStartIso, COUNTRY_TZ, CITY_TZ, MULTI_TZ_COUNTRIES, countryCode, placeTz, stayAt, effectiveTz, localDay, EVENT_DEFAULT_MIN, eventMs, normalizeEvents, clearEventCache, loadEvents, afterEventText, GP_DAYS, gpSummaryBuild, gpSummary, sleepFromTimestamps, sleepWindow, moodStats, MIND_URL, readingLane, retiredKinds, daysSinceSocial, unansweredStreak, gatherState, remember, recall, contextSnapshot, recordMood, moodReply, addAction, upsertProject, actionDone, addJournal, addCard, reviewCard, answerNudge, MAX_CAPTURE_BYTES, transcribe, describeImage, describeImages, capture, shortClarify, clarify, dueFromWords, processItem, processInbox, pushPayloadFor, companionTick, agenda, FB_KINDS, fbKey, tasteTokens, tasteModel, tasteScore, applyTaste, loadFeedback, recordFeedback, tasteSummary, tripCard, today, tasteFilterToday, dashboard, PRIVACY_TABLES, privacy, exportAll, deleteData, PERSONA, untrusted, checkInAnswer, chatFollowUp, chatContext, noteRiskInChat, fyPlaceContext, fyInsideAway, fyCaptureCards, fyReasonWeights, fyApplyWeights, fyHidden, companionTools, TOOL_APPENDIX_LINE, TICK_MS, doKeys, doEnsure, doTick, SELF_CHECKS, selfCheckState, selfCheck, sendToFleet, doAlarm, doFetch, RECALL_DDL, RECALL_UNSURE_DAYS, RECALL_OPEN_MAX, RECALL_PARTS, recallOptions, isoWeekKey, recallGenerate, recallNext, recallAnswer, recallSummary, handleTranscription, handleCompanion, MANIFEST, ICON_SVG, SW_JS, OFFLINE_JS, GUIDE_HTML, PAGE_HTML });
 })();
 // COMPANION-INLINE-END
 var CMP_DEPS = {
