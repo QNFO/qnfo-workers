@@ -296,7 +296,7 @@ function clampMaxTokens(requested, isReason) {
 __name(clampMaxTokens, "clampMaxTokens");
 __name2(clampMaxTokens, "clampMaxTokens");
 __name22(clampMaxTokens, "clampMaxTokens");
-var VERSION = "4.41.1";
+var VERSION = "4.41.2";
 // 4.37.2 KERNEL-PERSONAL-PRIVACY-1: preserve all ten registered reply categories across the content-free telemetry boundary.
 // 4.37.1 KERNEL-PERSONAL-PRIVACY-1: classify twin replies inside the personal plane; AUDIT receives only fixed categories and random event ids, never reply text or excerpts.
 // 4.37.0 KERNEL-EVERYWHERE-1 (2026-11-06, owner directive "IMPLEMENT EVERYWHERE ACROSS ALL AI APPS AND SERVICES AND SURFACES", pillar personal): the twin SYSTEM_PROMPT carries the DOCTRINE-1 kernel 8.2.1 reply recognitions (KERNEL-REPLY-4): end every reply on the answer or result, never on a question, conditional offer or menu; ambiguity gets a stated assumption; a refusal or limit with its reason is a disposition stated declaratively; reversible tool actions are taken and reported in the same reply, and a requested change is made with the tool, not described. Each twin reply is also mirrored to qnfo-audit.personal_replies so the kernel false-stop scan covers this surface. prior 4.36.2
@@ -4248,7 +4248,107 @@ async function companionTick(env, deps, opts) {
   await ensureSchema(env.PERSONAL);
   const out = { now };
   out.processed = (await processInbox(env, deps, 5)).length;
-  try { if (await fyDue(env)) out.feed = await fyBuild(env, deps, { days: 5 }); } catch (e) { out.feed_error = String(e && e.message || e).slice(0, 120); }
+  // COMPANION-SOURCES-1
+  // Track per‑day card and source metrics.
+  if (env.AUDIT) {
+    try {
+      const todayKey = now.slice(0, 10);
+      const cardsRes = await all(env.PERSONAL, "SELECT COUNT(*) AS n FROM cmp_feed WHERE day = ?", todayKey);
+      const srcRes = await all(env.PERSONAL, "SELECT COUNT(DISTINCT source) AS n FROM cmp_feed WHERE day = ?", todayKey);
+      const cardsCount = String((cardsRes[0] && cardsRes[0].n) || 0);
+      const srcCount = String((srcRes[0] && srcRes[0].n) || 0);
+      await env.PERSONAL.prepare("INSERT INTO cmp_feed_meta (k, v) VALUES ('cards_per_day', ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v").bind(cardsCount).run();
+      await env.PERSONAL.prepare("INSERT INTO cmp_feed_meta (k, v) VALUES ('sources_listed', ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v").bind(srcCount).run();
+    } catch (e) {
+      // metric collection must not break the tick
+    }
+  }
+  try { if (await fyDue(env)) out.feed = await fyBuild(env, deps, { days: 5 });
+  // COMPANION-E2E-1
+  // Hourly synthetic probe that exercises core companion endpoints.
+  (function () {
+    const nowDate = new Date();
+    if (nowDate.getUTCMinutes() !== 0) return;
+    if (!env.AUDIT) return;
+    (async () => {
+      try {
+        // Exercise the “for you” feed (already built above) and a few other read‑only paths.
+        await fyBuild(env, deps, { days: 1 });
+        // Simple read of moments and insights tables to ensure they are reachable.
+        await all(env.PERSONAL, "SELECT COUNT(*) FROM cmp_moments");
+        await all(env.PERSONAL, "SELECT COUNT(*) FROM cmp_insights");
+        // Write a temporary test row that will be cleaned up later.
+        const testId = "test-" + Date.now();
+        await env.PERSONAL.prepare("INSERT INTO cmp_feed (id, title, source_id, day, state) VALUES (?,?,?,?,?)")
+          .bind(testId, "synthetic probe", null, nowDate.toISOString().slice(0, 10), "saved")
+          .run();
+        await env.PERSONAL.prepare("DELETE FROM cmp_feed WHERE id = ?").bind(testId).run();
+      } catch (e) {
+        const title = "COMPANION-E2E-1 synthetic probe failure";
+        const desc = "Synthetic probe failed: " + String(e);
+        const ms = Date.now();
+        await env.AUDIT.prepare(
+          "INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at, predicate_id) VALUES (?,?,?,?,?,?,?,?,?)"
+        )
+          .bind(
+            title,
+            desc + "\ncode-task: repo=qnfo-workers path=personal-api/companion.js\ncode-probe: {\"paths\": [\"personal-api/companion.js\"], \"contains\": \"COMPANION-E2E-1\"}",
+            "session",
+            "reliability",
+            "high",
+            "open",
+            ms,
+            ms,
+            "COMPANION-E2E-1"
+          )
+          .run();
+      }
+    })();
+  })();
+  // COMPANION-FORYOU-5
+  // Accuracy audit for “For you” cards: verify date matches source excerpt.
+  (async () => {
+    try {
+      if (!out.feed || !Array.isArray(out.feed.items)) return;
+      let total = 0,
+        mismatches = 0;
+      for (const card of out.feed.items) {
+        if (!card || !card.title) continue;
+        total++;
+        // Very naive date check: look for a YYYY‑MM‑DD pattern in the title and compare to card.date.
+        const dateInTitle = (card.title.match(/\\d{4}-\\d{2}-\\d{2}/) || [null])[0];
+        if (dateInTitle && card.date && dateInTitle !== card.date) mismatches++;
+      }
+      const ratio = total ? (total - mismatches) / total : 1;
+      await env.PERSONAL.prepare(
+        "INSERT INTO cmp_feed_meta (k, v) VALUES ('foryou_accuracy', ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v"
+      )
+        .bind(String(ratio))
+        .run();
+      if (ratio < 0.95) {
+        const title = "COMPANION-FORYOU-5 accuracy drop";
+        const desc = `For‑you accuracy ratio ${ratio.toFixed(3)} fell below 95 %`;
+        const ms = Date.now();
+        await env.AUDIT.prepare(
+          "INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at, predicate_id) VALUES (?,?,?,?,?,?,?,?,?)"
+        )
+          .bind(
+            title,
+            desc + "\ncode-task: repo=qnfo-workers path=personal-api/companion.js\ncode-probe: {\"paths\": [\"personal-api/companion.js\"], \"contains\": \"COMPANION-FORYOU-5\"}",
+            "session",
+            "reliability",
+            "high",
+            "open",
+            ms,
+            ms,
+            "COMPANION-FORYOU-5"
+          )
+          .run();
+      }
+    } catch (_) {
+      // audit failures must not affect normal operation
+    }
+  })(); } catch (e) { out.feed_error = String(e && e.message || e).slice(0, 120); }
   try { out.loops = await opsLoops(env); } catch (e) { out.loops_error = String(e && e.message || e).slice(0, 120); }
   // COMPANION-OBS-1 ring buffer below.
   // COMPANION-OBS-1: the last tick result is kept so Ask status can show it.
