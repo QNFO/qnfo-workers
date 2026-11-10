@@ -43,7 +43,7 @@ await w.scheduled({}, env, ctxStub); await settle();
 const rows = db.prepare("SELECT * FROM owner_asks WHERE kind='cv-skill' ORDER BY id").all();
 ok(rows.length === asks.length && rows.every((r) => r.plane === "jobs" && JSON.parse(r.options_json).length >= 3), "one owner_asks card per unbacked skill", rows.length);
 let st = (await call("/api/cv", { headers: H }))[1];
-ok(T.ULTRASTABLE_SKILL_FACTS.every(([t]) => st.facts.some((f) => f.text === t && f.status === "verified")), "the evidenced facts are in the live bank");
+ok(T.ULTRASTABLE_SKILL_FACTS.every(([t]) => st.facts.some((f) => f.text === T.polishProse(t) && f.status === "verified")), "the evidenced facts are in the live bank");
 
 // taps on fleet.qnfo.org/focus reach the CV
 let tick = 1;
