@@ -53,6 +53,8 @@ INSERT OR IGNORE INTO queue_sla (stuck_type, queue, definition, cycle_min, sla_m
   'park: status wontfix, stage parked, prior status and stage kept in error', 'qnfo-research-exec', 'research_review_error'),
  ('research-head-stalled', 'research_queue', 'rows queued or researching and no qnfo-research-exec done-ok event in 60 min', 15, 60,
   'none automatic beyond research-review-error; the metric trigger files the issue with the lever', 'qnfo-research-exec', 'research_head_stalled'),
+ ('research-queued-backpressure', 'research_queue', 'rows queued for more than 180 min; structural: RESEARCH-BACKPRESSURE-1 deliberately limits admission, measured but excluded from stuck_items_over_sla (issue #2971)', 15, 180,
+  'none automatic: deliberate admission limiting, not a stuck item; a breach here files an issue with qnfo-research-exec capacity, not a queue fix', 'qnfo-research-exec', 'research_queued_180m'),
  ('intent-untriaged', 'intents', 'status pending for more than 60 min', 10, 60,
   'reject as untriaged noise with the rationale recorded (status rejected, noise 1)', 'qnfo-intent-orchestrator', 'intents_pending'),
  ('outreach-needs-email', 'outreach_queue', 'status needs-email or needs-contact for more than 180 min', 60, 180,
@@ -91,7 +93,7 @@ SELECT
 -- stuck_total is the headline: every stuck type that has an automatic fix or a measured breach, summed.
 INSERT OR IGNORE INTO metric_registry (metric, layer, kind, formula, source_of_truth, baseline, target, owner, disposition_actor, refresh_cadence, warning_band, kill_band, last_value, last_refreshed, state, refresh_class) VALUES
  ('stuck_items_over_sla', 'operational', 'target',
-  'Sum of v_stuck_summary columns except issues_unprobed_60m (its own metric): queue items past their queue_sla.sla_min plus open issues with no doer after 180 minutes (QUEUE-SLA-1).',
+  'Sum of v_stuck_summary columns except issues_unprobed_60m (its own metric) and research_queued_180m (measured, structural: the 120-minute admission-limited research queue, RESEARCH-BACKPRESSURE-1 triage 2026-10-19, issue #2971): queue items past their queue_sla.sla_min plus open issues with no doer after 180 minutes (QUEUE-SLA-1).',
   'qnfo-audit.v_stuck_summary + queue_sla (migrations/2026-10-08-10-queue-sla.sql), refreshed every 10 minutes by trigger queue_sla_tick_10m',
   '13 on 2026-10-08 before the first fix (2 intents, 2 outreach, 9 issues without a doer)', '0', 'qnfo-fleet-control',
   'trigger gt 0 -> one METRIC-TRIGGER issue naming the stuck type and its fix', '10m', '> 0', '> 5',
@@ -180,7 +182,7 @@ BEGIN
     AND status IN ('needs-email', 'needs-contact') AND datetime(created_at) < datetime('now', '-180 minutes');
 
   -- the two metrics, every 10 minutes.
-  UPDATE metric_registry SET last_value = CAST((SELECT research_review_error + research_head_stalled + research_queued_180m + intents_pending + outreach_waiting + code_tasks_stalled + issues_without_doer_3h FROM v_stuck_summary) AS TEXT),
+  UPDATE metric_registry SET last_value = CAST((SELECT research_review_error + research_head_stalled + intents_pending + outreach_waiting + code_tasks_stalled + issues_without_doer_3h FROM v_stuck_summary) AS TEXT),
       last_refreshed = strftime('%Y-%m-%dT%H:%M:%SZ', 'now'), state = 'MEASURED'
   WHERE metric = 'stuck_items_over_sla';
   UPDATE metric_registry SET last_value = CAST((SELECT issues_unprobed_60m FROM v_stuck_summary) AS TEXT),
