@@ -1,5 +1,5 @@
 // WORKER-SOURCE-IN-REPO-1 (issue 9713): tracked copy of the deployed script (fetched through the Cloudflare API on 2026-11-09), plus /health.
-var VERSION = "1.0.2-codeagent";
+var VERSION = "1.0.3-codeagent";
 const SCOPES=[["AUDIT","handoffs/"],["AUDIT","audits/"],["AUDIT","closeouts/"],["AUDIT","fleet-consolidation/"],["AUDIT","audit/"],["AUDIT","install-dir-cleanup/"],["PALIMPSEST","docs/"],["QNFO","governance/"]];
 const CUTOFF="2026-11-06T18:00:00.000Z";
 const MAX_LISTED=50;
@@ -98,6 +98,27 @@ async function run(env){
     const traced=(a[0].n>0||r[0].n>0)?1:0;
     const disp=(!traced&&d.up<CUTOFF)?("cluster:"+cluster(d.b,d.key)):null;
     await q(env,"INSERT OR IGNORE INTO doc_audit (bucket,key,size,uploaded,first_seen,last_seen,traced,disposition) VALUES (?1,?2,?3,?4,?5,?5,?6,?7)",[d.b,d.key,d.size,d.up,now,traced,disp]);
+    // Ingest specific backlog audit documents into roadmap_implementation if not already present
+    const backlogKeys = [
+      "audits/2026-09-30-master-build-out-backlog/v1",
+      "audits/2026-09-30-master-build-out-backlog/ADDENDUM",
+      "audits/2026-09-30-master-build-out-backlog/SWEEP2",
+      "audits/2026-09-30-master-build-out-backlog/v3",
+      "audits/2026-09-18-bloat-audit"
+    ];
+    for (const bk of backlogKeys) {
+      // Ensure the document exists in doc_audit (bucket "AUDIT")
+      const docExists = await q(env, "SELECT 1 FROM doc_audit WHERE bucket=?1 AND key=?2 LIMIT 1", ["AUDIT", bk]);
+      if (!docExists.length) continue;
+      const pid = "DOC-BACKLOG-1-" + bk.replace(/[^A-Za-z0-9]/g, "");
+      const implExists = await q(env, "SELECT id FROM roadmap_implementation WHERE item=?1 LIMIT 1", [pid]);
+      if (!implExists.length) {
+        await q(env,
+          "INSERT INTO roadmap_implementation (item,source,title,artifact_type,status,evidence) VALUES (?1,'doc-gate',?2,'core','open','ingested by qnfo-doc-gate')",
+          [pid, pid + ": ingest " + bk]
+        );
+      }
+    }
   }
   await q(env,"UPDATE doc_audit SET disposition=NULL WHERE traced=0 AND disposition LIKE 'cluster:%' AND substr(disposition,9) IN (SELECT predicate_id FROM agent_issues WHERE status IN ('closed','resolved','wontfix') AND predicate_id IS NOT NULL) AND substr(disposition,9) NOT IN (SELECT predicate_id FROM agent_issues WHERE status='open' AND predicate_id IS NOT NULL)");
   const unc=await q(env,"SELECT bucket,key FROM doc_audit WHERE traced=0 AND disposition IS NULL ORDER BY first_seen LIMIT "+MAX_LISTED);

@@ -1,10 +1,10 @@
-// qnfo-deploy-guard v1.4.4 (SCHEDULED-FLEET-PROBE-SHARING-1 #6669: share scheduled fleet census; OPS-PROBE-TIMEOUT-RECOVERY-1: retry a timed-out ops probe once and cancel outstanding requests; DEPLOY-LEDGER-EVENT-ORDER-1: use deploy event timestamps instead of insertion order when selecting the last code deployment, so a delayed historical mirror cannot supersede a newer canonical deploy; WORKERS-BUILDS-TOMBSTONE-1: a content-verified Workers Builds deploy of the retired repository-root stub is LEDGERED as TOMBSTONE-STUB instead of filing UNLOGGED-MUTATION/UNCOORDINATED-DEPLOY; CLAIM-TERMINAL-RELEASE-1; SECOND-PATH-CANONICAL-1: a successful deploy by canonical-deploy.yml's second path, direct_content_deploy, is not a non-canonical deploy; LEASE-TOKEN-CSPRNG-1: lease tokens come from crypto.getRandomValues; SECRET-ONLY-LEDGER-1: a ledgered secret rotation is not a code deploy for NON-CANONICAL-DEPLOY-1) - deploy lock + secret lock + work claims (one procedure: the D1 work_claims ledger and the code loop's tasks are read and written by /work-lock) + concurrent-mutation detector + cost watchdog + heartbeat (expected_version enforcement + per-session attribution + registry version refresh on redeploy + NON-CANONICAL-DEPLOY-1 detection excluding synthetic/test rows AND failed canonical attempts + SETTINGS-ONLY ledger rows + DEPLOY-TICKET-AUTORESOLVE-1 + CAPABILITY-SNAPSHOT-1 + WORK-CLAIM-1 + WORK-CLAIM-UNIFY-1)
+// qnfo-deploy-guard v1.4.4 (SCHEDULED-FLEET-PROBE-SHARING-1 #6669: share scheduled fleet census; OPS-PROBE-TIMEOUT-RECOVERY-1: retry a timed-out ops probe once and cancel outstanding requests; DEPLOY-LEDGER-EVENT-ORDER-1: use deploy event timestamps instead of insertion order when selecting the last code deployment, so a delayed historical mirror cannot supersede a newer canonical deploy; WORKERS-BUILDS-TOMBSTONE-1: a content-verified Workers Builds deploy of the retired repository-root stub is LEDGERED as TOMBSTONE-STUB instead of filing UNLOGGED-MUTATION/UNCOORDINATED-DEPLOY; CLAIM-TERMINAL-RELEASE-1; SECOND-PATH-CANONICAL-1: a successful deploy by canonical-deploy.yml's second path, direct_content_deploy, is not a non-canonical deploy; LEASE-TOKEN-CSPRNG-1: lease tokens come from crypto.getRandomValues; SECRET-ONLY-LEDGER-1: a ledgered secret rotation is not a code deploy for NON-CANONICAL-DEPLOY-1; WORK-CLAIM-MERGED-RELEASE-1 #8023: a claim linked to a merged pull request is released when the PR closes) - deploy lock + secret lock + work claims (one procedure: the D1 work_claims ledger and the code loop's tasks are read and written by /work-lock) + concurrent-mutation detector + cost watchdog + heartbeat (expected_version enforcement + per-session attribution + registry version refresh on redeploy + NON-CANONICAL-DEPLOY-1 detection excluding synthetic/test rows AND failed canonical attempts + SETTINGS-ONLY ledger rows + DEPLOY-TICKET-AUTORESOLVE-1 + CAPABILITY-SNAPSHOT-1 + WORK-CLAIM-1 + WORK-CLAIM-UNIFY-1)
 // Worker Contract v1: VERSION constant + GET /health
 // Data: https://ops.qnfo.org/fleet (modified_on per worker) + https://ops.qnfo.org/cost (spend)
 // NOTE: source of truth is this file; GET /workers/scripts/<name> TRUNCATES large bodies - never patch from a GET.
 // Trivial change to trigger Workers build check for PR #8592 layer 6 migration
 var LEDGER_GRACE_MS = 180000;
-var VERSION = "1.7.0-codeagent";
+var VERSION = "1.7.1-codeagent";
 /* SCHEDULED-FLEET-PROBE-SHARING-1 (#6669): reuse the same scheduled fleet probe across scan and capability snapshot. */ /* OPS-PROBE-TIMEOUT-RECOVERY-1 (#6429): bounded retry and request cleanup. */ /* 1.4.1 DEPLOY-LEDGER-EVENT-ORDER-1: use deploy event time, not ledger insertion order, when choosing the last code deploy. 1.4.0 BP26-LEASES-KILLSWITCH-1 (2026-10-28, pillar autonomy, agent_issues 1000361; minor: two capabilities and a decision this worker now takes on its own). (a) Global kill switch: ops_config fleet_kill_switch = on makes workAcquire (fresh claims and renewals) and POST /lock/acquire (deploy locks and secret leases) answer 503 reason kill-switch, so no new claim, deploy or secret write starts while it is on; releases, reads, the sweep and /health keep working; the first refusal in five minutes writes one cloud_ops_events row of kind kill-switch.observed; GET /kill-switch reads the state. The flag is read with a 30 second cache, off when the row or table is absent. (b) Fencing tokens: every fresh work claim takes the next fence number for its path (work_claims.fence, migration 2026-10-28-bp26-leases-killswitch.sql; the claim still works while the column is absent), acquire and renew return it, and POST /work-lock/check {key, token, fence} answers valid only when the token holds the live claim and the fence is the live one, so a writer that lost its lease cannot pass. docs/KILL-SWITCH-DRILL.md and docs/LEASES-FENCING.md. prior 1.3.34-codeagent */ /* LEASE-EXPIRY-SWEEP-1 (2026-10-26, orphaned_leases 215): a work_claims row past expires_at and never released is closed with outcome expired on every acquire and on the 20-minute tick, so the BP26 lease metric counts sessions that died holding a claim and then settles. */ /* COMPAT-RISK-TIMER-NAME-1 (2026-10-25, unblocks red main): the four fetch-timeout blocks named their setTimeout handle `t`, and a DIFFERENT `t` (a timestamp from ms(row.ts)) in another function is compared numerically within 60 lines, so scripts/compat-risk-scan.mjs linked them by name across function scopes and reported timer-ids for a worker that never reads a timer id as a number. Renamed to timerId; scan is clean and the guard keeps its full meaning. */ /* WORKERS-BUILDS-TOMBSTONE-1 (2026-10-25, agent_issues 1000142): a Workers Builds rebuild of the retired repository-root stub is ledgered, not filed. CLAIM-TERMINAL-RELEASE-1 (2026-10-18): CODE_TASK_DONE now includes superseded, so the guard stops counting a superseded task as live work on its file. */
 var WORKER = "qnfo-deploy-guard";
 var LOCK_PREFIX = "deploylock:";
@@ -647,6 +647,23 @@ async function sweepExpiredClaims(env, nowMs) {
   var r = await auditRun(env, "UPDATE work_claims SET released_at = expires_at, outcome = COALESCE(outcome, 'expired') WHERE released_at IS NULL AND expires_at <= ?1", [isoS(nowMs)]);
   return changes(r) || 0;
 }
+// WORK-CLAIM-MERGED-RELEASE-1 (#8023): a claim that carries a pr number is released with outcome merged once that pull request is merged.
+// Cooperative: no secret required; it only touches rows whose pr equals the number and writes outcome merged.
+async function releaseMergedClaims(env, repo, prN) {
+  var pr = Number(prN);
+  if (!isFinite(pr) || pr <= 0) return [400, { released: false, error: "pr must be a positive integer" }];
+  var before = await auditAll(env, "SELECT path, issue_id FROM work_claims WHERE pr = ?1 AND released_at IS NULL", [pr]);
+  var nowM = isoS(Date.now());
+  var r = await auditRun(env, "UPDATE work_claims SET released_at = ?1, outcome = 'merged' WHERE pr = ?2 AND released_at IS NULL", [nowM, pr]);
+  var n = changes(r) || 0;
+  var freed = 0;
+  for (var i = 0; i < before.length; i++) {
+    var key = before[i].issue_id != null ? ("issue:" + before[i].issue_id) : ("file:" + before[i].path);
+    var del = await auditRun(env, "DELETE FROM deploy_locks WHERE worker = ?1", [WORK_PREFIX + key]);
+    freed += changes(del) || 0;
+  }
+  return [200, { released: true, repo: String(repo || ""), pr: pr, claims_released: n, locks_freed: freed }];
+}
 // BP26-LEASES-KILLSWITCH-1: the global kill switch. One ops_config row, read with a 30 second cache; absent or any value but "on" is off.
 var KS_CACHE = { at: 0, on: false };
 async function killSwitchOn(env) {
@@ -1091,6 +1108,11 @@ async function routeFetch(request, env, ctx) {
         await auditRun(env, "UPDATE work_claims SET released_at=?1, pr=COALESCE(?2, pr), outcome=COALESCE(?3, outcome) WHERE released_at IS NULL AND path=?4 AND holder=?5", [isoS(Date.now()), wpr, wout, claimTarget(wrk).path, wHeld.owner]);
       }
       return json(Object.assign({ key: wrk }, wr[1]), wr[0]);
+    }
+    if (p === "/work-lock/release-merged" && request.method === "POST") {
+      var rmb = await request.json().catch(function () { return {}; });
+      var rm = await releaseMergedClaims(env, rmb.repo, rmb.pr);
+      return json(rm[1], rm[0]);
     }
     if (p === "/work-lock/check" && request.method === "POST") { var wck = await workCheck(env, await request.json().catch(function () { return {}; })); return json(wck[1], wck[0]); }
     if (p === "/kill-switch" && request.method === "GET") { KS_CACHE.at = 0; return json({ kill_switch: (await killSwitchOn(env)) ? "on" : "off", flag: "ops_config fleet_kill_switch", worker: WORKER, version: VERSION, now: nowIso() }); }
