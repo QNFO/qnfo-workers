@@ -11,7 +11,7 @@ var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target,
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
 // 1.77.2 ERRATA-CHAIN-DISPATCH-1 (pillar research): wake the folded errata consumer and retry its legacy parked receipts.
 // VERSION-LINE-SPLIT-1 (agent_issues 100220): the release notes sit one per line below this statement, newest first, so a VERSION bump is a one-line patch; add a new note as the first line under it.
-var VERSION = "1.106.4";
+var VERSION = "1.107.0";
 // 1.89.0 NOW-NORTH-1 and HOME-MORE-1 (pillar core; minor): the Now screen opens with four numbers tied to the owner goals (readers, fleet cost, owner load, reliability) and drops the count of metrics off target (95 of 297; nothing can be done with it); a quiet footer on the home links the full dashboard, changelog, data index and managers.
 // 1.89.0 (cont.) MONEY-FIX-1 (pillar cost; patch): the Money card subtracted the subscription figure from a pace that never included it (fleet scope of v_cost_forecast), so it showed the fleet at 701 instead of 1151 a month; it now shows the fleet line, the subscriptions line and both together.
 // 1.85.0 (cont.) NOW-REVIEW-1: independent review fixes: Snooze and Not needed hide the card; a tap removes the card at once and reloads fresh, and the hand-back claims the card before filing (no duplicate tickets); strangers get no card keys or raw error text; only the signed-in owner (not the loop token) can run commands or hand work back; bound cards are read first; an unrefreshed metric reads n/a, not 0; one refresh in flight at a time and a failed refresh retries in 10 s; the Code poll says when the executor does not answer.
@@ -4244,7 +4244,7 @@ async function focusAnswer(env, id, key, via) {
 // (Yes / No / Not sure style ds-choices for up to three short answers, stacked ds-options otherwise), plain form posts so the page needs no script.
 function focusPage(state, ask, authed, notice) {
   const e = ownerEsc;
-  const o = ['<header class="ds-top"><div class="ds-top-in"><a class="ds-brand" href="/">Fleet</a><a class="btn btn-quiet" href="/">Status</a></div></header><main class="ds-main" id="main" style="max-width:720px"><div class="ds-head"><h1>Research focus</h1><p>What the fleet works on next follows your answers. A paused line gets no new papers; a line you push goes first. The next answer can change any of them.</p></div>'];
+  const o = ['<header class="ds-top"><div class="ds-top-in"><a class="ds-brand" href="/">Fleet</a><a class="btn btn-quiet" href="/touch">Touchpoints</a></div></header><main class="ds-main" id="main" style="max-width:720px"><div class="ds-head"><h1>Research focus</h1><p>What the fleet works on next follows your answers. A paused line gets no new papers; a line you push goes first. The next answer can change any of them.</p></div>'];
   if (notice) o.push('<p class="ds-note ' + (/^Saved/.test(notice) ? "ds-note-good" : "ds-note-warn") + '" role="status">' + e(notice) + "</p>");
   if (ask) {
     o.push('<section class="ds-card" aria-label="Question"><div class="ds-step">Question' + (state.open_asks > 1 ? " 1 of " + e(String(state.open_asks)) : "") + '</div><p class="ds-q">' + e(ask.question) + "</p>" + (ask.cue ? '<p class="ds-muted">' + e(ask.cue) + "</p>" : ""));
@@ -4276,9 +4276,9 @@ function focusPage(state, ask, authed, notice) {
   return o.join("");
 }
 // The /focus page wrapper: the owner page headers (no script, no framing) around a design-system document.
-function focusHtml(title, inner, status) {
+function focusHtml(title, inner, status, desc) {
   const r = ownerHtml(title, "", status);
-  return new Response('<!doctype html><html lang="en"><head>' + dsHead(title, "Tap to set what the fleet researches next.") + '<meta name="robots" content="noindex,nofollow,noarchive"><meta name="referrer" content="no-referrer"></head><body class="ds">' + inner + "</body></html>", { status: r.status, headers: r.headers });
+  return new Response('<!doctype html><html lang="en"><head>' + dsHead(title, desc || "Tap to set what the fleet researches next.") + '<meta name="robots" content="noindex,nofollow,noarchive"><meta name="referrer" content="no-referrer"></head><body class="ds">' + inner + "</body></html>", { status: r.status, headers: r.headers });
 }
 async function focusRoute(request, env, path, owner) {
   if (path !== "/focus" && path !== "/focus/" && path !== "/api/focus") return null;
@@ -4300,6 +4300,240 @@ async function focusRoute(request, env, path, owner) {
   try { ask = await focusNextAsk(env); } catch (e) { ask = null; }
   return focusHtml("Research focus", focusPage(await focusState(env), ask, authed, notice));
 }
+// ==== TOUCHPOINTS-1 (1.107.0, owner directive 2026-11-10, pillar reach): GitHub stars and follows, and the /touch tap page ====
+// GitHub's Acceptable Use Policies name "automated starring or following" as rank abuse, so the fleet never stars or follows by API: it audits the owner's stars and follows,
+// removes stale and quantum-era ones (archived, no push in a year, or quantum-only), finds active autonomous-systems repositories whose maintainers answer their issues, and puts
+// "star it, follow its maintainer" on the owner's tap list. A tap is verified from GitHub itself (GET /user/starred/<repo> answers 204), so the owner never has to report it.
+// Scoring is qnfo-social's (TOUCHPOINTS-1 there scores every row this writes with scored_at NULL); this side writes the raw evidence only.
+var TOUCH_GH_OWN = /^(rwnq8|qnfo|ultrastable)$/i;
+var TOUCH_GH_QUERIES = ["topic:ai-agents", "topic:ai-safety", "topic:llm-evaluation", "topic:ai-governance", "topic:multi-agent-systems", "topic:agentic-ai", "topic:ai-alignment", "\"agent evaluation\" in:description"];
+var TOUCH_GH_CAPS = { unstar: 10, unfollow: 10, tap: 3, discover: 12 };
+var TOUCH_GH_REPO_STALE_DAYS = 365, TOUCH_GH_USER_STALE_DAYS = 120, TOUCH_GH_TAP_MIN = 55;
+function touchGhDay(ms) { return new Date(ms).toISOString().slice(0, 10); }
+function touchGhRepoRow(r) {
+  return { handle: String(r.full_name), name: r.full_name, bio: String(r.description || "") + " " + (r.topics || []).join(" "), url: r.html_url,
+    followers: r.stargazers_count, last_post_at: r.archived ? null : (r.pushed_at || null), owner: r.owner && r.owner.login, owner_type: r.owner && r.owner.type };
+}
+async function touchGhUpsert(env, platform, p, state, source) {
+  await env.AUDIT.prepare("INSERT INTO touch_targets (platform, handle, name, bio, url, followers, following, last_post_at, posts_30d, reply_share, followed_by, state, source, scored_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,NULL) " +
+    "ON CONFLICT(platform, handle) DO UPDATE SET name = excluded.name, bio = excluded.bio, url = excluded.url, followers = excluded.followers, following = COALESCE(excluded.following, following), last_post_at = excluded.last_post_at, " +
+    "posts_30d = COALESCE(excluded.posts_30d, posts_30d), reply_share = COALESCE(excluded.reply_share, reply_share), followed_by = COALESCE(excluded.followed_by, followed_by), " +
+    "state = CASE WHEN ?12 = 'followed' AND state IN ('candidate','dismissed') THEN 'followed' WHEN ?12 = 'candidate' AND state = 'followed' AND ?13 = 'resync' THEN 'candidate' ELSE state END, scored_at = NULL")
+    .bind(platform, String(p.handle).slice(0, 200), String(p.name || "").slice(0, 200), String(p.bio || "").slice(0, 1000), p.url || null, p.followers == null ? null : Number(p.followers), p.following == null ? null : Number(p.following),
+      p.last_post_at || null, p.posts_30d == null ? null : Number(p.posts_30d), p.reply_share == null ? null : Number(p.reply_share), p.followed_by == null ? null : (p.followed_by ? 1 : 0), state, source).run();
+}
+async function touchGhLog(env, a, nowMs) {
+  await env.AUDIT.prepare("INSERT INTO touch_actions (platform, target, kind, mode, status, text, url, subject, note, day, created_at, done_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12)")
+    .bind("github", a.target, a.kind, a.mode || "auto", a.status, a.text || null, a.url || null, a.subject || null, a.note || null, touchGhDay(nowMs), new Date(nowMs).toISOString(), a.status === "done" ? new Date(nowMs).toISOString() : null).run();
+}
+async function touchGhCount(env, kind, day) {
+  const r = await d1all(env.AUDIT, "SELECT COUNT(*) AS n FROM touch_actions WHERE platform = 'github' AND kind = ?1 AND day = ?2 AND status IN ('done','proposed')", [kind, day]);
+  return Number(r[0] && r[0].n || 0);
+}
+// A user's public activity: last event, events in 30 days, and the share of them that answer someone (issue and pull-request comments, reviews).
+async function touchGhUserEvidence(gh, login, nowMs) {
+  const u = await gh("GET", "/users/" + encodeURIComponent(login));
+  if (!u.ok) return null;
+  const j = await u.json();
+  const ev = await gh("GET", "/users/" + encodeURIComponent(login) + "/events/public?per_page=30");
+  const evs = ev.ok ? await ev.json() : [];
+  const times = evs.map(function(e) { return Date.parse(e.created_at); }).filter(function(x) { return x > 0; });
+  const talk = evs.filter(function(e) { return /^(IssueCommentEvent|PullRequestReviewEvent|PullRequestReviewCommentEvent|DiscussionCommentEvent)$/.test(e.type); }).length;
+  const back = await gh("GET", "/users/" + encodeURIComponent(login) + "/following/rwnq8");
+  return { handle: login, name: j.name || login, bio: String(j.bio || "") + " " + String(j.company || "") + " " + evs.map(function(e) { return e.repo && e.repo.name || ""; }).join(" "),
+    url: j.html_url, followers: j.followers, following: j.following, last_post_at: times.length ? new Date(Math.max.apply(null, times)).toISOString() : null,
+    posts_30d: times.filter(function(x) { return nowMs - x <= 30 * 864e5; }).length, reply_share: evs.length ? Math.round(talk / evs.length * 100) / 100 : 0, followed_by: back.status === 204 };
+}
+async function touchGithubTick(env, opts) {
+  const o = opts || {}, f = o.fetch || fetch, nowMs = o.nowMs || Date.now(), day = touchGhDay(nowMs), out = { day: day };
+  if (!env.GITHUB_TOKEN || !env.AUDIT) return { skipped: "no GITHUB_TOKEN or AUDIT" };
+  const H = { Authorization: "Bearer " + env.GITHUB_TOKEN, Accept: "application/vnd.github+json", "User-Agent": "qnfo-fleet-dashboard touchpoints", "X-GitHub-Api-Version": "2022-11-28" };
+  const gh = function(method, path) { return f("https://api.github.com" + path, { method: method, headers: H }); };
+  // the tap items are verified from GitHub every tick (cheap: one call per open item)
+  out.verified = 0;
+  const open = await d1all(env.AUDIT, "SELECT id, kind, subject, target FROM touch_actions WHERE platform = 'github' AND mode = 'tap' AND status = 'proposed' ORDER BY id LIMIT 20", []);
+  for (const a of open) {
+    const path = a.kind === "star" ? "/user/starred/" + a.subject : "/user/following/" + encodeURIComponent(a.target);
+    const r = await gh("GET", path).catch(function() { return null; });
+    if (r && r.status === 204) {
+      await env.AUDIT.prepare("UPDATE touch_actions SET status = 'done', done_at = ?2, decided_at = COALESCE(decided_at, ?2), note = COALESCE(note, '') || ' (verified on GitHub)' WHERE id = ?1").bind(a.id, new Date(nowMs).toISOString()).run();
+      await env.AUDIT.prepare("UPDATE touch_targets SET state = 'followed', followed_at = ?3 WHERE platform = ?1 AND handle = ?2").bind(a.kind === "star" ? "github-repo" : "github", a.kind === "star" ? a.subject : a.target, new Date(nowMs).toISOString()).run();
+      out.verified++;
+    }
+  }
+  const ran = await d1all(env.AUDIT, "SELECT 1 FROM touch_actions WHERE platform = 'github' AND kind = 'audit' AND day = ?1 LIMIT 1", [day]);
+  if (ran.length && !o.force) return Object.assign(out, { skipped: "audited today" });
+  // 1. stars
+  const stars = [];
+  for (let page = 1; page <= 5; page++) {
+    const r = await gh("GET", "/user/starred?per_page=100&page=" + page);
+    if (!r.ok) { out.stars_error = "read " + r.status; break; }
+    const j = await r.json();
+    j.forEach(function(x) { if (!TOUCH_GH_OWN.test(String(x.owner && x.owner.login))) stars.push(touchGhRepoRow(x)); });
+    if (j.length < 100) break;
+  }
+  if (!out.stars_error) {
+    for (const s of stars) await touchGhUpsert(env, "github-repo", s, "followed", "starred");
+    const have = {}; stars.forEach(function(s) { have[s.handle] = 1; });
+    const rows = await d1all(env.AUDIT, "SELECT handle FROM touch_targets WHERE platform = 'github-repo' AND state = 'followed'", []);
+    for (const r of rows) if (!have[r.handle]) await env.AUDIT.prepare("UPDATE touch_targets SET state = 'candidate' WHERE platform = 'github-repo' AND handle = ?1").bind(r.handle).run();
+  }
+  out.stars = stars.length;
+  // 2. follows
+  const fol = [];
+  for (let page = 1; page <= 3; page++) {
+    const r = await gh("GET", "/user/following?per_page=100&page=" + page);
+    if (!r.ok) { out.following_error = "read " + r.status; break; }
+    const j = await r.json();
+    j.forEach(function(u) { fol.push(u.login); });
+    if (j.length < 100) break;
+  }
+  for (const login of fol) await env.AUDIT.prepare("INSERT INTO touch_targets (platform, handle, url, state, source) VALUES ('github', ?1, ?2, 'followed', 'following') ON CONFLICT(platform, handle) DO UPDATE SET state = CASE WHEN state IN ('candidate','dismissed') THEN 'followed' ELSE state END").bind(login, "https://github.com/" + login).run();
+  out.following = fol.length;
+  const users = await d1all(env.AUDIT, "SELECT handle FROM touch_targets WHERE platform = 'github' AND state IN ('followed','candidate') ORDER BY CASE WHEN bio IS NULL THEN 0 ELSE 1 END, created_at LIMIT 20", []);
+  for (const u of users) { const e = await touchGhUserEvidence(gh, u.handle, nowMs).catch(function() { return null; }); if (e) await touchGhUpsert(env, "github", e, "candidate", "keep"); }
+  // 3. prune what qnfo-social scored stale or quantum-only (never a mutual, never someone the owner knows)
+  out.unstarred = 0; out.unfollowed = 0;
+  const cut = function(days) { return new Date(nowMs - days * 864e5).toISOString(); };
+  const stale = await d1all(env.AUDIT, "SELECT platform, handle FROM touch_targets WHERE platform IN ('github-repo','github') AND state = 'followed' AND known = 0 AND COALESCE(followed_by, 0) = 0 AND (quantum_only = 1 OR (last_post_at IS NULL AND bio IS NOT NULL) OR (platform = 'github-repo' AND last_post_at < ?1) OR (platform = 'github' AND last_post_at < ?2)) LIMIT 40", [cut(TOUCH_GH_REPO_STALE_DAYS), cut(TOUCH_GH_USER_STALE_DAYS)]);
+  let roomS = TOUCH_GH_CAPS.unstar - await touchGhCount(env, "unstar", day), roomF = TOUCH_GH_CAPS.unfollow - await touchGhCount(env, "gh-unfollow", day);
+  for (const s of stale) {
+    const repo = s.platform === "github-repo";
+    if (repo ? roomS <= 0 : roomF <= 0) continue;
+    const r = await gh("DELETE", repo ? "/user/starred/" + s.handle : "/user/following/" + encodeURIComponent(s.handle));
+    const okD = r.status === 204;
+    await touchGhLog(env, { target: s.handle, kind: repo ? "unstar" : "gh-unfollow", status: okD ? "done" : (r.status === 403 || r.status === 401 ? "refused" : "failed"), url: "https://github.com/" + s.handle, note: okD ? "stale or quantum-only (TOUCHPOINTS-1)" : "GitHub answered " + r.status }, nowMs);
+    if (okD) { await env.AUDIT.prepare("UPDATE touch_targets SET state = 'pruned', pruned_at = ?3 WHERE platform = ?1 AND handle = ?2").bind(s.platform, s.handle, new Date(nowMs).toISOString()).run(); if (repo) { roomS--; out.unstarred++; } else { roomF--; out.unfollowed++; } }
+    else if (r.status === 403 || r.status === 401) break;
+  }
+  // 4. discovery: two queries a day, active repositories in the size band where a maintainer still reads a new star
+  const since30 = cut(30).slice(0, 10), dayN = Math.floor(nowMs / 864e5);
+  out.discovered = 0;
+  for (let qi = 0; qi < 2; qi++) {
+    const q = TOUCH_GH_QUERIES[(dayN * 2 + qi) % TOUCH_GH_QUERIES.length];
+    const r = await gh("GET", "/search/repositories?per_page=" + TOUCH_GH_CAPS.discover / 2 + "&sort=updated&q=" + encodeURIComponent(q + " pushed:>" + since30 + " stars:50..20000 archived:false"));
+    if (!r.ok) { out.search_error = "search " + r.status; break; }
+    for (const x of ((await r.json()).items || [])) {
+      if (TOUCH_GH_OWN.test(String(x.owner && x.owner.login))) continue;
+      const row = touchGhRepoRow(x);
+      const iss = await gh("GET", "/search/issues?per_page=1&q=" + encodeURIComponent("repo:" + x.full_name + " is:issue closed:>" + since30));
+      const closed = iss.ok ? Number((await iss.json()).total_count || 0) : null;
+      if (closed != null) { row.posts_30d = closed; row.reply_share = Math.round(closed / Math.max(1, closed + Number(x.open_issues_count || 0)) * 100) / 100; }
+      await touchGhUpsert(env, "github-repo", row, "candidate", "search:" + q);
+      out.discovered++;
+      let maint = x.owner && x.owner.type === "User" ? x.owner.login : null;
+      if (!maint) { const c = await gh("GET", "/repos/" + x.full_name + "/contributors?per_page=1"); const cj = c.ok ? await c.json() : []; maint = cj[0] && cj[0].type === "User" ? cj[0].login : null; }
+      if (maint) {
+        await env.AUDIT.prepare("UPDATE touch_targets SET evidence_json = json_set(COALESCE(evidence_json, '{}'), '$.maintainer', ?2) WHERE platform = 'github-repo' AND handle = ?1").bind(row.handle, maint).run();
+        const e = await touchGhUserEvidence(gh, maint, nowMs).catch(function() { return null; });
+        if (e) await touchGhUpsert(env, "github", e, "candidate", "maintainer:" + row.handle);
+      }
+    }
+  }
+  // 5. tap list: star the best active repositories and follow their maintainers (the owner taps; GitHub forbids doing it by API)
+  let room = TOUCH_GH_CAPS.tap - await touchGhCount(env, "star", day);
+  out.taps = 0;
+  if (room > 0) {
+    const best = await d1all(env.AUDIT, "SELECT handle, url, score, topics, posts_30d, evidence_json FROM touch_targets t WHERE platform = 'github-repo' AND state = 'candidate' AND pruned_at IS NULL AND score >= ?1 AND NOT EXISTS (SELECT 1 FROM touch_actions a WHERE a.platform = 'github' AND a.kind = 'star' AND a.subject = t.handle) ORDER BY score DESC LIMIT ?2", [TOUCH_GH_TAP_MIN, room]);
+    for (const b of best) {
+      let maint = null; try { maint = JSON.parse(b.evidence_json || "{}").maintainer || null; } catch (e) { maint = null; }
+      await touchGhLog(env, { target: b.handle, kind: "star", mode: "tap", status: "proposed", url: b.url, subject: b.handle, note: "Score " + b.score + (b.topics ? " (" + String(b.topics).split(",").join(", ") + ")" : "") + "; " + Number(b.posts_30d || 0) + " issues closed in 30 days." + (maint ? " Then follow " + maint + ", who maintains it." : "") }, nowMs);
+      if (maint) await touchGhLog(env, { target: maint, kind: "gh-follow", mode: "tap", status: "proposed", url: "https://github.com/" + maint, subject: b.handle, note: "Maintains " + b.handle }, nowMs);
+      out.taps++;
+    }
+  }
+  // 6. outcomes: a maintainer the owner followed who follows back
+  const fb = await d1all(env.AUDIT, "SELECT id, target FROM touch_actions WHERE platform = 'github' AND kind = 'gh-follow' AND status = 'done' AND outcome IS NULL AND done_at >= ?1 LIMIT 15", [cut(30)]);
+  for (const a of fb) {
+    const r = await gh("GET", "/users/" + encodeURIComponent(a.target) + "/following/rwnq8");
+    if (r.status === 204) await env.AUDIT.prepare("UPDATE touch_actions SET outcome = 'followed-back', outcome_at = ?2 WHERE id = ?1").bind(a.id, new Date(nowMs).toISOString()).run();
+  }
+  await touchGhLog(env, { target: "rwnq8", kind: "audit", status: "done", note: JSON.stringify(out).slice(0, 900) }, nowMs);
+  return out;
+}
+
+// ---- /touch: the owner's tap list (owner session to act; open to read) ----
+var TOUCH_PLATFORM_LABEL = { bluesky: "Bluesky", mastodon: "Mastodon", github: "GitHub", x: "X", linkedin: "LinkedIn" };
+async function touchState(env) {
+  const out = { schema_version: "touchpoints-page/v1", metrics: {}, approve: [], taps: [], recent: [], unavailable: [] };
+  try {
+    const m = await d1all(env.AUDIT, "SELECT metric, last_value, last_refreshed FROM metric_registry WHERE metric IN ('touchpoints_7d','touch_reciprocation_30d','touch_stale_follows')", []);
+    m.forEach(function(r) { out.metrics[r.metric] = { value: r.last_value, at: r.last_refreshed }; });
+  } catch (e) { out.unavailable.push("metrics"); }
+  try {
+    out.approve = await d1all(env.AUDIT, "SELECT a.id, a.platform, a.target, a.text, a.url, a.grounding, a.created_at, t.name FROM touch_actions a LEFT JOIN touch_targets t ON t.platform = a.platform AND t.handle = a.target WHERE a.mode = 'approve' AND a.status = 'proposed' ORDER BY a.id DESC LIMIT 6", []);
+    out.taps = await d1all(env.AUDIT, "SELECT id, platform, target, kind, url, note, grounding, created_at FROM touch_actions WHERE mode = 'tap' AND status = 'proposed' ORDER BY CASE platform WHEN 'github' THEN 0 WHEN 'linkedin' THEN 1 ELSE 2 END, id LIMIT 12", []);
+    out.recent = await d1all(env.AUDIT, "SELECT platform, kind, COUNT(*) AS n, SUM(CASE WHEN outcome IN ('followed-back','replied','liked-back') THEN 1 ELSE 0 END) AS noticed FROM touch_actions WHERE status = 'done' AND done_at >= ?1 AND kind != 'audit' GROUP BY platform, kind ORDER BY n DESC", [new Date(Date.now() - 7 * 864e5).toISOString()]);
+  } catch (e) { out.unavailable.push("touch_actions"); }
+  return out;
+}
+function touchPage(st, authed, notice) {
+  const e = ownerEsc, mv = function(k, pct) { const m = st.metrics[k]; if (!m || m.value == null || m.value === "") return "\u2013"; return pct ? Math.round(Number(m.value) * 100) + "%" : String(m.value); };
+  const n = st.approve.length + st.taps.length;
+  const o = ['<header class="ds-top"><div class="ds-top-in"><a class="ds-brand" href="/">Fleet</a><a class="btn btn-quiet" href="/focus">Questions</a></div></header><main class="ds-main" id="main" style="max-width:720px">',
+    '<div class="ds-head"><h1>Touchpoints</h1><p>' + (n ? e(String(n)) + " waiting for you. Follows, likes and prunes on Bluesky and Mastodon run by themselves inside small daily limits." : "Nothing waits for you. Follows, likes and prunes on Bluesky and Mastodon run by themselves inside small daily limits.") + "</p></div>"];
+  if (notice) o.push('<p class="ds-note ' + (/^(Approved|Done|Skipped)/.test(notice) ? "ds-note-good" : "ds-note-warn") + '" role="status">' + e(notice) + "</p>");
+  o.push('<div class="ds-stats"><div class="ds-stat"><div class="k">Touches, 7 days</div><div class="v">' + e(mv("touchpoints_7d")) + '</div></div><div class="ds-stat"><div class="k">Noticed you back</div><div class="v">' + e(mv("touch_reciprocation_30d", true)) + '</div></div><div class="ds-stat"><div class="k">Stale follows left</div><div class="v">' + e(mv("touch_stale_follows")) + "</div></div></div>");
+  let primary = true;
+  const btn = function(label) { const c = primary ? "btn btn-primary" : "btn"; primary = false; return '<button class="' + c + '" name="act" value="' + (label === "Approve" ? "approve" : "done") + '">' + label + "</button>"; };
+  if (st.approve.length) {
+    o.push("<h2>Replies to approve</h2>");
+    st.approve.forEach(function(a) {
+      o.push('<section class="ds-card"><p class="ds-card-title">Reply to ' + e(a.name || a.target) + " on " + e(TOUCH_PLATFORM_LABEL[a.platform] || a.platform) + "</p>" +
+        (a.grounding ? '<p class="ds-meta">They wrote: \u201c' + e(String(a.grounding).slice(0, 280)) + "\u201d</p>" : "") +
+        '<p class="ds-q">' + e(a.text) + "</p>" + (authed ? '<form method="post" action="/touch"><input type="hidden" name="id" value="' + e(String(a.id)) + '"><div class="ds-actions">' + btn("Approve") + '<button class="btn" name="act" value="skip">Skip</button><a class="btn btn-quiet" href="' + e(a.url) + '" rel="noopener" target="_blank">See the post</a></div></form>' : "") + "</section>");
+    });
+  }
+  if (st.taps.length) {
+    o.push("<h2>Your taps today</h2>");
+    st.taps.forEach(function(a) {
+      const what = a.kind === "star" ? "Star " + a.target : a.kind === "gh-follow" ? "Follow " + a.target + " on GitHub" : "Follow " + a.target + " on " + (TOUCH_PLATFORM_LABEL[a.platform] || a.platform);
+      o.push('<section class="ds-card"><p class="ds-card-title">' + e(what) + '</p><p class="ds-meta">' + e(a.note || "") + "</p>" +
+        (a.grounding ? '<p class="ds-meta">Their latest post on the topic: \u201c' + e(String(a.grounding).slice(0, 240)) + "\u201d</p>" : "") +
+        '<div class="ds-actions"><a class="btn" href="' + e(a.url) + '" rel="noopener" target="_blank">Open</a>' +
+        (authed ? '<form method="post" action="/touch" style="display:contents"><input type="hidden" name="id" value="' + e(String(a.id)) + '">' + (a.platform === "github" ? "" : btn("Done")) + '<button class="btn btn-quiet" name="act" value="skip">Skip</button></form>' : "") + "</div>" +
+        (a.platform === "github" ? '<p class="ds-meta">GitHub confirms it on its own within 15 minutes; no need to tap Done.</p>' : "") + "</section>");
+    });
+  }
+  if (!n) o.push('<div class="ds-empty"><b>All caught up</b>New taps arrive each morning, at most three per platform.</div>');
+  if (!authed && n) o.push('<p class="ds-note">Sign in on <a href="/cmd">the command line</a> to approve or skip, then come back.</p>');
+  if (st.recent.length) {
+    o.push('<details class="ds-more"><summary>What ran this week</summary><div class="ds-more-body"><div class="ds-rows">');
+    st.recent.forEach(function(r) { o.push('<div class="ds-row"><div class="main">' + e((TOUCH_PLATFORM_LABEL[r.platform] || r.platform) + ", " + r.kind) + '</div><div class="side">' + e(String(r.n)) + (Number(r.noticed) ? ' <span class="ds-badge ds-badge-good">' + e(String(r.noticed)) + " noticed</span>" : "") + "</div></div>"); });
+    o.push("</div></div></details>");
+  }
+  if (st.unavailable.length) o.push('<p class="ds-note ds-note-warn">Not readable right now: ' + e(st.unavailable.join(", ")) + ". The page tries again on the next load.</p>");
+  o.push('<p class="ds-muted" style="margin-top:24px"><a href="/api/touch">The same data as JSON</a> &middot; <a href="https://qnfo-social.q08.workers.dev/touchpoints">Scored targets</a></p></main>');
+  return o.join("");
+}
+async function touchDecide(env, id, act) {
+  const row = (await d1all(env.AUDIT, "SELECT id, mode, status FROM touch_actions WHERE id = ?1", [Number(id) || 0]))[0];
+  if (!row || row.status !== "proposed") return { ok: false, error: "That item is already handled." };
+  const now = new Date().toISOString();
+  if (act === "approve" && row.mode === "approve") { await env.AUDIT.prepare("UPDATE touch_actions SET status = 'approved', decided_at = ?2 WHERE id = ?1").bind(row.id, now).run(); return { ok: true, label: "Approved. It posts within the hour." }; }
+  if (act === "done" && row.mode === "tap") { await env.AUDIT.prepare("UPDATE touch_actions SET status = 'done', decided_at = ?2, done_at = ?2 WHERE id = ?1").bind(row.id, now).run(); return { ok: true, label: "Done. Recorded." }; }
+  if (act === "skip") { await env.AUDIT.prepare("UPDATE touch_actions SET status = 'skipped', decided_at = ?2 WHERE id = ?1").bind(row.id, now).run(); return { ok: true, label: "Skipped." }; }
+  return { ok: false, error: "That button does not apply to this item." };
+}
+async function touchRoute(request, env, path, owner) {
+  if (!env.AUDIT) return json({ ok: false, error: "AUDIT binding absent" }, 503);
+  if (path === "/api/touch") return json(Object.assign({ ok: true, version: VERSION }, await touchState(env)));
+  const authed = !!(owner && (owner.authed || owner.loop));
+  if (path === "/api/touch/github-run") {
+    if (request.method !== "POST" || !(owner && owner.loop)) return json({ error: "POST with the loop token" }, 401);
+    return json(await touchGithubTick(env, { force: true }));
+  }
+  if (request.method === "POST") {
+    if (!authed) return focusHtml("Touchpoints", '<main class="ds-main"><div class="ds-empty"><b>Sign in first</b>Nothing was changed. <a href="/touch">Back to the list</a></div></main>', 401);
+    let form = null;
+    try { form = new URLSearchParams((await request.text()).slice(0, 2000)); } catch (e) { form = new URLSearchParams(); }
+    const res = await touchDecide(env, form.get("id"), String(form.get("act") || ""));
+    return new Response(null, { status: 303, headers: { Location: "/touch?done=" + encodeURIComponent(res.ok ? res.label : res.error), "Cache-Control": "no-store" } });
+  }
+  if (request.method !== "GET") return json({ error: "method not allowed" }, 405);
+  const notice = String(new URL(request.url).searchParams.get("done") || "").slice(0, 120);
+  return focusHtml("Touchpoints", touchPage(await touchState(env), authed, notice), 200, "Approve replies and tap the follows and stars that make you visible to the right people.");
+}
 // ==== AREA-MAP platform: HTTP routes (handleRequest) ====
 async function handleRequest(request, env, ctx) {
   const url = new URL(request.url);
@@ -4312,6 +4546,8 @@ async function handleRequest(request, env, ctx) {
   if (path.indexOf("/api/owner/") === 0) return await ownerRoutes(request, env, ctx, path, owner);
   // RECALL-LOOP-1: the owner's research focus (tap questions and the focus they set).
   if (path === "/focus" || path === "/focus/" || path === "/api/focus") return await focusRoute(request, env, path, owner);
+  // TOUCHPOINTS-1: the owner's tap list (reply approvals, GitHub, LinkedIn and X taps) and the touchpoint metrics.
+  if (path === "/touch" || path === "/touch/" || path === "/api/touch" || path === "/api/touch/github-run") return await touchRoute(request, env, path.replace(/\/$/, ""), owner);
   // OWNER-PAGE-1 (2026-10-01): private owner page. Reconciled with OWNER-RESPOND-1: the owner cookie OR LOOP_TOKEN opens it.
   // OWNER-EDIT-1 (2026-10-01, CLOUDFLARE-ONLY-HOST-1): /owner/edit/<key> is the owner's editor for owner_docs, so the Identity
   // doc is read AND changed on Cloudflare; its claude.ai copy is retired.
@@ -5145,6 +5381,10 @@ var worker_default = {
     ctx.waitUntil(uxAudit(env));
     ctx.waitUntil(brandProfileSync(env).catch(function(e) {
       console.log(JSON.stringify({ worker: NAME, where: "scheduled:brand-sync", note: String(e && e.message || e) }));
+    }));
+    // TOUCHPOINTS-1: verify the owner's GitHub taps every tick; audit stars and follows, prune and discover once a day.
+    ctx.waitUntil(touchGithubTick(env).catch(function(e) {
+      console.log(JSON.stringify({ worker: NAME, where: "scheduled:touchpoints", note: String(e && e.message || e) }));
     }));
     if (!fullDashboardRefreshDue(controller)) {
       const saved = await loadState(env).catch(function() {

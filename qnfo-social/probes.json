@@ -8,6 +8,12 @@
       "contains": [
         "\"worker\":\"qnfo-social\""
       ]
+    },
+    {
+      "url": "https://qnfo-social.q08.workers.dev/health",
+      "contains": [
+        "\"touchpoints\""
+      ]
     }
   ],
   "d1": [
