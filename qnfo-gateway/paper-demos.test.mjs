@@ -30,3 +30,8 @@ test("PAPER-DEMOS-3 seeds the agentic-collapse demo", () => {
   for (const r of ["agentic-collapse", "agent-deadlock", "subliminal-learning"])
     assert.match(m, new RegExp("https://qnfo\.github\.io/paper-demo-" + r + "/"));
 });
+
+test("PAPER-DEMOS-3b seeds the Monna-map demo", () => {
+  const m = readFileSync(new URL("../migrations/2026-11-10-paper-demos-monna.sql", import.meta.url), "utf8");
+  assert.match(m, /https:\/\/qnfo\.github\.io\/paper-demo-hallucination-monna-map\//);
+});
