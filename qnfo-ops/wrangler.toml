@@ -172,14 +172,6 @@ binding = "RESEARCH_VZ"
 index_name = "qwav-research-v2"
 
 [[vectorize]]
-binding = "NOTES_VZ"
-index_name = "qnfo-notes"
-
-[[vectorize]]
-binding = "TASKS_VZ"
-index_name = "qnfo-tasks"
-
-[[vectorize]]
 binding = "HANDOFFS_VZ"
 index_name = "qnfo-handoffs"
 

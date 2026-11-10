@@ -1606,7 +1606,7 @@ function shouldEnsemble(cls) {
 __name(shouldEnsemble, "shouldEnsemble");
 __name2(shouldEnsemble, "shouldEnsemble");
 __name22(shouldEnsemble, "shouldEnsemble");
-var QNFO_INDEXES = ["PAPER_VZ", "NOTES_VZ", "TASKS_VZ", "HANDOFFS_VZ", "LOG_VZ", "IPATENT_VZ", "INFRA_VZ", "CLOUD_OPS_VZ"];
+var QNFO_INDEXES = ["PAPER_VZ", "HANDOFFS_VZ", "LOG_VZ", "IPATENT_VZ", "INFRA_VZ", "CLOUD_OPS_VZ"];
 async function searchQnfoIndexes(env, q, k) {
   const embed = await aiRunAttr(env, "qnfo-ai", "embed-search", "@cf/baai/bge-base-en-v1.5", { text: [String(q).slice(0, 500)] });
   const vec = embed?.data?.[0] || (Array.isArray(embed) ? embed[0] : null);
@@ -4956,8 +4956,6 @@ var worker_default = {
           auth: !!env.ROUTER_AUTH_KEY,
           loader: !!env.LOADER,
           paper_vz: !!env.PAPER_VZ,
-          notes_vz: !!env.NOTES_VZ,
-          tasks_vz: !!env.TASKS_VZ,
           handoffs_vz: !!env.HANDOFFS_VZ,
           ipatent_vz: !!env.IPATENT_VZ,
           infra_vz: !!env.INFRA_VZ,
