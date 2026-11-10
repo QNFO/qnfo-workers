@@ -4606,7 +4606,7 @@ async function touchTapList(env, opts) {
       const tp = ev.top_post;
       await touchLog(db, { platform: plat, target: h, kind: 'tap-follow', mode: 'tap', status: 'proposed', url: url, subject: t.platform + ':' + t.handle,
         grounding: tp ? tp.text : null, text: null,
-        note: String(t.name || t.handle) + ', score ' + t.score + ' on ' + t.platform + ' (' + (t.topics || '') + '). Follow, then like or comment on their latest post about it.' }, nowMs);
+        note: String(t.name || t.handle) + ', score ' + t.score + ' on ' + ({ bluesky: 'Bluesky', mastodon: 'Mastodon' }[t.platform] || t.platform) + (t.topics ? ' (' + String(t.topics).split(',').join(', ') + ')' : '') + '. Follow, then like or comment on their latest post about it.' }, nowMs);
       n++; room--;
     }
     out[plat] = n;

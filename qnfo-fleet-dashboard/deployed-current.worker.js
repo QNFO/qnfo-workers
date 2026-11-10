@@ -4437,7 +4437,7 @@ async function touchGithubTick(env, opts) {
     const best = await d1all(env.AUDIT, "SELECT handle, url, score, topics, posts_30d, evidence_json FROM touch_targets t WHERE platform = 'github-repo' AND state = 'candidate' AND pruned_at IS NULL AND score >= ?1 AND NOT EXISTS (SELECT 1 FROM touch_actions a WHERE a.platform = 'github' AND a.kind = 'star' AND a.subject = t.handle) ORDER BY score DESC LIMIT ?2", [TOUCH_GH_TAP_MIN, room]);
     for (const b of best) {
       let maint = null; try { maint = JSON.parse(b.evidence_json || "{}").maintainer || null; } catch (e) { maint = null; }
-      await touchGhLog(env, { target: b.handle, kind: "star", mode: "tap", status: "proposed", url: b.url, subject: b.handle, note: "Score " + b.score + (b.topics ? " (" + b.topics + ")" : "") + "; " + Number(b.posts_30d || 0) + " issues closed in 30 days." + (maint ? " Then follow " + maint + ", who maintains it." : "") }, nowMs);
+      await touchGhLog(env, { target: b.handle, kind: "star", mode: "tap", status: "proposed", url: b.url, subject: b.handle, note: "Score " + b.score + (b.topics ? " (" + String(b.topics).split(",").join(", ") + ")" : "") + "; " + Number(b.posts_30d || 0) + " issues closed in 30 days." + (maint ? " Then follow " + maint + ", who maintains it." : "") }, nowMs);
       if (maint) await touchGhLog(env, { target: maint, kind: "gh-follow", mode: "tap", status: "proposed", url: "https://github.com/" + maint, subject: b.handle, note: "Maintains " + b.handle }, nowMs);
       out.taps++;
     }
