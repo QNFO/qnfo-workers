@@ -22,7 +22,8 @@ function mk() {
   // Same columns and constraints as the live qnfo-audit tables (read from sqlite_master 2026-10-02).
   db.exec(`CREATE TABLE deploy_locks (worker TEXT PRIMARY KEY, token_hash TEXT NOT NULL, owner TEXT, actor TEXT, session_id TEXT, since TEXT NOT NULL, expires_at INTEGER NOT NULL, expected_version TEXT, released_at TEXT, released_by TEXT);
   CREATE TABLE service_registry (service TEXT PRIMARY KEY, version TEXT);
-  CREATE TABLE agent_issues (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, description TEXT, source TEXT, category TEXT DEFAULT 'optimization', priority TEXT DEFAULT 'medium', status TEXT DEFAULT 'open', linked_session TEXT, created_at INTEGER, updated_at INTEGER);`);
+  CREATE TABLE agent_issues (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, description TEXT, source TEXT, category TEXT DEFAULT 'optimization', priority TEXT DEFAULT 'medium', status TEXT DEFAULT 'open', linked_session TEXT, created_at INTEGER, updated_at INTEGER);
+  CREATE TABLE work_claims (id INTEGER PRIMARY KEY AUTOINCREMENT, path TEXT NOT NULL, intent TEXT NOT NULL, holder TEXT NOT NULL, issue_id INTEGER, pr INTEGER, claimed_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')), expires_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now','+2 hours')), released_at TEXT, outcome TEXT, fence INTEGER);`);
   db.prepare("INSERT INTO agent_issues (id, title, status, linked_session, created_at, updated_at) VALUES (42, 'live issue', 'open', 'filer-1', 1, 1)").run();
   db.prepare("INSERT INTO agent_issues (id, title, status, linked_session, created_at, updated_at) VALUES (43, 'closed issue', 'closed', 'filer-2', 1, 1)").run();
   const prep = (sql) => { let a = []; const q = { bind(...x) { a = x.map((v) => (v === undefined ? null : v)); return q; }, async all() { return { results: db.prepare(sql).all(...a) }; }, async run() { const r = db.prepare(sql).run(...a); return { success: true, meta: { changes: Number(r.changes) } }; }, async first() { return db.prepare(sql).get(...a) || null; } }; return q; };
@@ -52,9 +53,9 @@ const ok = (c, m) => { if (c) pass++; else { fail++; console.log("FAIL " + m); }
 
   let b = await post(env, "/work-lock/acquire", { key: "file:./qnfo-fleet-dashboard//worker.js", owner: "session-B", ttl_sec: 600 });
   ok(b.status === 409 && b.j.acquired === false, "A5 a second session is refused (also through a differently spelled path)");
-  ok(b.j.holder === "session-A" && b.j.expires_at === new Date(t0 + 600_000).toISOString(), "A6 the refusal names the holder and when the claim lapses");
+  ok(b.j.holder === "session-A" && b.j.expires_at === new Date(t0 + 600_000).toISOString().replace(/\.\d{3}Z$/, "Z"), "A6 the refusal names the holder and when the claim lapses");
   ok(!("token" in b.j) && !JSON.stringify(b.j).includes(tokA), "A7 the refused session gets no token");
-  ok(b.j.since === new Date(t0).toISOString(), "A8 the refusal says since when the claim is held");
+  ok(b.j.since === new Date(t0).toISOString().replace(/\.\d{3}Z$/, "Z"), "A8 the refusal says since when the claim is held");
   ok([...kv.keys()].every((k) => !k.startsWith("deploydeny:")), "A9 a refused work claim records no lock denial (no DEPLOY-LOCK-CONTENTION)");
 
   let l = await get(env, "/work-locks");
@@ -148,6 +149,27 @@ const ok = (c, m) => { if (c) pass++; else { fail++; console.log("FAIL " + m); }
   const env = { AUDIT: { prepare() { throw new Error("D1 down"); } }, FLEET_CONFIG: { async get() { return null; }, async put() {}, async list() { return { keys: [] }; }, async delete() {} } };
   const r = await call(env, "/work-locks");
   ok(r.status === 503, "E1 GET /work-locks is a 503 when D1 is unavailable, never a false empty list");
+}
+
+// F. WORK-CLAIM-MERGED-RELEASE-1 (#8023): a merged pull request releases its linked claims by pr number
+{
+  const { env, db } = mk();
+  let a = await post(env, "/work-lock/acquire", { key: "file:qnfo-fleet-dashboard/worker.js", owner: "session-A", ttl_sec: 600, pr: 7444 });
+  ok(a.status === 200 && a.j.acquired === true, "F1 acquire with pr succeeds");
+  ok(db.prepare("SELECT pr p FROM work_claims WHERE path='qnfo-fleet-dashboard/worker.js'").get().p === 7444, "F1b the pr is stored in work_claims");
+  let b = await post(env, "/work-lock/acquire", { key: "file:qnfo-fleet-dashboard/worker.js", owner: "session-B", ttl_sec: 600 });
+  ok(b.status === 409 && b.j.holder === "session-A", "F2 the claim is still held before release-merged");
+  let c = await post(env, "/work-lock/release-merged", { repo: "QNFO/qnfo-workers", pr: 7444 });
+  ok(c.status === 200 && c.j.claims_released === 1 && c.j.locks_freed === 1, "F3 release-merged releases the claim and its lock");
+  let d = await post(env, "/work-lock/acquire", { key: "file:qnfo-fleet-dashboard/worker.js", owner: "session-B", ttl_sec: 600 });
+  ok(d.status === 200 && d.j.acquired === true && d.j.holder === "session-B", "F4 a second acquire of the same key succeeds after release-merged");
+  let e = await post(env, "/work-lock/acquire", { key: "file:qnfo-ops/worker.js", owner: "session-C", ttl_sec: 600 });
+  ok(e.status === 200 && e.j.acquired === true, "F5 a claim without pr is acquired");
+  let f = await post(env, "/work-lock/release-merged", { repo: "QNFO/qnfo-workers", pr: 7444 });
+  ok(f.status === 200 && f.j.claims_released === 0, "F6 release-merged for the same pr finds no remaining claim");
+  ok(db.prepare("SELECT COUNT(*) n FROM deploy_locks WHERE worker='work:file:qnfo-ops/worker.js'").get().n === 1, "F7 the claim without pr is untouched");
+  let g = await post(env, "/work-lock/release-merged", { repo: "QNFO/qnfo-workers", pr: "not-a-number" });
+  ok(g.status === 400, "F8 a non-numeric pr is refused");
 }
 
 console.log(pass + " passed, " + fail + " failed");

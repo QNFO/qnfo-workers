@@ -16,7 +16,7 @@ name: pr-lane
 
 on:
   pull_request_target:
-    types: [opened, reopened, synchronize, ready_for_review]
+    types: [opened, reopened, synchronize, ready_for_review, closed]
   workflow_run:
     workflows: [pr-checks]
     types: [completed]
@@ -30,7 +30,7 @@ permissions:
 
 jobs:
   lane:
-    if: ${{ (github.event_name == 'pull_request_target' && (github.event.pull_request.user.login == 'Copilot' || contains(fromJSON('["opened","reopened","ready_for_review","edited"]'), github.event.action))) || (github.event_name == 'workflow_run' && github.event.workflow_run.event == 'pull_request' && github.event.workflow_run.conclusion != 'cancelled') }}
+    if: ${{ (github.event_name == 'pull_request_target' && (github.event.pull_request.user.login == 'Copilot' || contains(fromJSON('["opened","reopened","ready_for_review","edited","closed"]'), github.event.action))) || (github.event_name == 'workflow_run' && github.event.workflow_run.event == 'pull_request' && github.event.workflow_run.conclusion != 'cancelled') }}
     # RUNNER-PIN-2 (2026-11-04): pinned to ubuntu-24.04 because ubuntu-latest moves to Ubuntu 26 until 2026-11-19; unpin after a green trial run on ubuntu-26.04.
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -44,6 +44,7 @@ jobs:
       DO_POKE: ${{ (github.event_name == 'pull_request_target' && github.event.pull_request.base.ref == 'main' && contains(fromJSON('["opened","reopened","ready_for_review","edited"]'), github.event.action) && 'true') || (github.event_name == 'workflow_run' && !startsWith(github.event.workflow_run.head_branch, 'copilot/') && 'true') || 'false' }}
       DO_MERGE: ${{ (github.event_name == 'pull_request_target' && github.event.action == 'ready_for_review' && github.event.pull_request.base.ref == 'main' && 'true') || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.pull_requests[0].number != null && 'true') || 'false' }}
       DO_RETRY: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'failure' && github.event.workflow_run.run_attempt == 1 && github.event.workflow_run.pull_requests[0].number != null && !startsWith(github.event.workflow_run.head_branch, 'copilot/') && 'true' || 'false' }}
+      DO_RELEASE_MERGED: ${{ github.event_name == 'pull_request_target' && github.event.action == 'closed' && github.event.pull_request.merged == true && 'true' || 'false' }}
     steps:
       # REVIEW-GATE-1: the merge event also needs the repository (main, never the pull request) for scripts/review_gate.py.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -145,6 +146,14 @@ jobs:
           else
             gh run rerun "$RUN_ID" --repo "$GITHUB_REPOSITORY" --failed || echo "::notice::rerun refused"
           fi
+
+      # WORK-CLAIM-MERGED-RELEASE-1 (#8023): release work claims linked to this PR the moment it merges, instead of waiting for the claim TTL to expire.
+      - name: Release work claims for the merged pull request
+        if: ${{ env.DO_RELEASE_MERGED == 'true' }}
+        run: |
+          curl -sS -m 20 -X POST "https://qnfo-deploy-guard.q08.workers.dev/work-lock/release-merged" \
+            -H "Content-Type: application/json" \
+            -d "{\"repo\":\"${GITHUB_REPOSITORY}\",\"pr\":${PR_NUMBER}}"
 
       # REVIEW-GATE-1 (2026-11-04, pillar autonomy): on the event that is about to merge (checks green), a pull request that touches auth, a route, the cache, a trigger, a
       # migration or a workflow is read by two independent models (glm and llama, scripts/review_gate.py) before the merge step below. A verified High finding posts a
