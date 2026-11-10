@@ -1,6 +1,6 @@
 // q08-prediction-markets: the paper-trading proving ground for q08's information edge (PM-CHARTER-1).
 // Paper money only. No wallet, no exchange key, no order ever leaves this worker: the only executor in this file writes D1 rows.
-var VERSION = "1.9.6";
+var VERSION = "1.9.7-codeagent";
 
 // ---------- charter (the machine-readable form; GET /api/charter serves it with the live evidence) ----------
 export const CHARTER = {
@@ -1144,5 +1144,7 @@ export default {
       return json({ error: "not found" }, 404);
     } catch (e) { return json({ error: String(e.message || e) }, 500); }
   },
-  async scheduled(_e, env, ctx) { ctx.waitUntil(tick(env)); },
+  async scheduled(_e, env, ctx) {
+    ctx.waitUntil(tick(env).catch(err => { console.warn("tick failed:", err && (err.message || String(err)), err && err.stack || ""); }));
+  },
 };
