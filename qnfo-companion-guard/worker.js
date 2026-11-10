@@ -1,4 +1,4 @@
-var VERSION = "1.1.3";
+var VERSION = "1.1.4-codeagent";
 // WORKER-SOURCE-IN-REPO-1 (issue 9663): tracked copy of the deployed script, plus /health.
 const URLS=["https://me.q08.org/"];
 const ACCOUNT="edb167b78c9fb901ea5bca3ce58ccc4b", SERVED_BY="personal-api";
@@ -84,17 +84,18 @@ async function probe(env){
   }
   return res;
 }
-export default {
-  async scheduled(ev,env,ctx){ ctx.waitUntil(probe(env)); },
-  async fetch(req,env){
-    const u=new URL(req.url);
-    if(u.pathname==="/health"){
-      return new Response(JSON.stringify({ok:true,worker:"qnfo-companion-guard",version:VERSION}),{headers:{"content-type":"application/json"}});
-    }
-    if(u.pathname==="/status"){
-      const r=await q(env,"SELECT * FROM companion_probe_runs ORDER BY id DESC LIMIT 1");
-      return new Response(JSON.stringify(r[0]||{}),{headers:{"content-type":"application/json"}});
-    }
-    return new Response("qnfo-companion-guard",{status:404});
+async function scheduled(ev,env,ctx){ ctx.waitUntil(probe(env)); }
+
+async function fetch(req,env){
+  const u=new URL(req.url);
+  if(u.pathname==="/health"){
+    return new Response(JSON.stringify({ok:true,worker:"qnfo-companion-guard",version:VERSION}),{headers:{"content-type":"application/json"}});
   }
-};
+  if(u.pathname==="/status"){
+    const r=await q(env,"SELECT * FROM companion_probe_runs ORDER BY id DESC LIMIT 1");
+    return new Response(JSON.stringify(r[0]||{}),{headers:{"content-type":"application/json"}});
+  }
+  return new Response("qnfo-companion-guard",{status:404});
+}
+
+export default { scheduled, fetch };
