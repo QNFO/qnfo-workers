@@ -27,13 +27,13 @@ const ok = (c, m, d) => { if (c) pass++; else { fail++; console.log("FAIL " + m 
 const css = await get("https://qnfo.org/qds.css");
 ok(css.status === 200 && /text\/css/.test(css.ct) && /--q-accent/.test(css.text), "qds.css is served with the tokens");
 const nfh = await get("https://papers.qnfo.org/papers/distinction-latice-framwork", "text/html");
-ok(nfh.status === 404 && /text\/html/.test(nfh.ct) && /There is no paper at this address/.test(nfh.text), "a mistyped paper link is an HTML 404 for a browser", nfh.status + " " + nfh.ct);
+ok(nfh.status === 404 && /text\/html/.test(nfh.ct) && /Keep exploring/.test(nfh.text) && !/not found/i.test(nfh.text), "a mistyped paper link is an HTML 404 for a browser", nfh.status + " " + nfh.ct);
 ok(/papers\/distinction-lattice-framework/.test(nfh.text) && !/papers\/hidden/.test(nfh.text), "it suggests the closest published paper and never a hidden one");
 ok(/name="robots" content="noindex"/.test(nfh.text), "the 404 page is noindex");
 const nfj = await get("https://papers.qnfo.org/papers/nope", "application/json");
 ok(nfj.status === 404 && /json/.test(nfj.ct) && JSON.parse(nfj.text).error === "Paper not found", "an API client still gets the JSON 404");
 const nfq = await get("https://qnfo.org/does-not-exist", "text/html");
-ok(nfq.status === 404 && /There is nothing at this address/.test(nfq.text), "an unknown qnfo.org path is an HTML 404");
+ok(nfq.status === 404 && /Keep exploring/.test(nfq.text) && !/not found/i.test(nfq.text), "an unknown qnfo.org path is an HTML 404");
 for (const u of ["https://legal.qnfo.org/privacy", "https://qnfo.org/privacy"]) {
   const pr = await get(u, "text/html");
   ok(pr.status === 200 && /What the QNFO sites collect/.test(pr.text) && /G-LV7RHRVW6R/.test(pr.text) && /unsubscribe/.test(pr.text) && /without your network address/.test(pr.text), u + " is the privacy notice, not the licence");

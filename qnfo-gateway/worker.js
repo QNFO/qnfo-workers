@@ -165,7 +165,7 @@ function formatPaper(source, record) {
 }
 // PAPER-FORMAT-2:END
 // 3.48.7 PAPER-REVISION-QUALITY-1 (2026-11-03, pillar reach): recover split revision titles and record abstracts at public rendering, and reject cached refusals from both summary surfaces.
-var VERSION="3.67.0-codeagent";
+var VERSION="3.68.0-codeagent";
 /* 3.54.2 SEO-404-PATHS-1 follow-up: the paper page script no longer requests /api/paper-context/undefined when the page data block is missing (first path recorded in seo_404_paths). */ /* 3.54.0 SEO-404-PATHS-1 and INDEXNOW-BACKOFF-1 (merged): see the two notes below. GET /api/seo/crawl also returns notFound, the top 50 crawler 404 paths of the window, so the dashboard UX auditor reads them from the open route. INDEXNOW-BACKOFF-1: an IndexNow endpoint that failed its last 6 logged runs is tried once per 3 hours and a 429 is not retried. */ /* SEO-404-PATHS-1 (2026-11-04, pillar reach): a crawler request that answers 404 records its path in living-paper seo_404_paths (day, host, path, n; 500 paths a day, 14 days kept). seo_crawl_log counted 1,875 crawler 404s on 2026-11-02 (qnfo.org, every bot, kind other) and kept no path to fix. */ // 3.52.0 QWAV-DEMOS-1 (2026-11-04, pillar reach; minor: the QWAV page lists the ten interactive demos that only the retired Pages site linked, with a Demos nav item, a hero action and a footer link; the page is now the whole of qwav.org through a qwav.org/* route, so unknown paths redirect home instead of answering 200). Revert: restore 3.51.0. // 3.51.0 earlier history follows: // 3.51.0 CROSS-LINK-1 (2026-11-04, pillar reach; minor: every QDS page gains a family bar linking QNFO, QWAV and q08, a Keep exploring module (newest and random papers from the open API, the three family sites, topic chips) and a family line in the footer; QDS 1.1.0; visible ask links use ask.qwav.org per DOMAIN-PLANE-1). Prediction: pages per session on qwav.org and qnfo.org rise and clicks between the three sites become non-zero. Revert: restore 3.50.0. // 3.50.0 earlier history follows: // 3.50.0 PAPER-CITATION-ALIASES-1 (#5577, pillar research; minor): expose the documented /papers/<slug>/cite.* routes alongside the existing API exports. /* main 3.53.1 */ // 3.53.1 PAPER-TTFB-1 (2026-11-04, pillar reach; patch): a paper page whose plain summary kept failing the readability gate ran two model generations inside every request (17 to 44 s to first byte for a-minimal-generative-grammar-of-coordination..., 1.2 s for its neighbours); the fill now runs after the response and once per PLAIN_RETRY_MS per paper per colo. Revert: restore 3.53.0. // 3.53.0 earlier history follows: // 3.53.0 CROSS-LINK-2 (2026-11-04, pillar reach; minor: papers.qnfo.org index and paper pages, rendered by lpDoc, gain the family bar and a Keep exploring strip linking QWAV, Ask, ideas and q08, so the pages a search lands on lead to the rest of the family). Revert: restore 3.52.0. // 3.52.0 earlier history follows: // 3.52.0 QWAV-DEMOS-1 (2026-11-04, pillar reach; minor: the QWAV page lists the ten interactive demos that only the retired Pages site linked, with a Demos nav item, a hero action and a footer link; the page is now the whole of qwav.org through a qwav.org/* route, so unknown paths redirect home instead of answering 200). Revert: restore 3.51.0. // 3.51.0 earlier history follows: // 3.51.0 CROSS-LINK-1 (2026-11-04, pillar reach; minor: every QDS page gains a family bar linking QNFO, QWAV and q08, a Keep exploring module (newest and random papers from the open API, the three family sites, topic chips) and a family line in the footer; QDS 1.1.0; visible ask links use ask.qwav.org per DOMAIN-PLANE-1). Prediction: pages per session on qwav.org and qnfo.org rise and clicks between the three sites become non-zero. Revert: restore 3.50.0. // 3.50.0 earlier history follows: // 3.50.0 PAPER-CITATION-ALIASES-1 (#5577, pillar research; minor): expose the documented /papers/<slug>/cite.* routes alongside the existing API exports.
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
@@ -5783,15 +5783,31 @@ async function notFoundPage(request, env, host, path, slug) {
       near = ((await st.bind.apply(st, words.map(function(w) { return "%" + w + "%"; })).all()).results) || [];
     } catch (e) { near = []; }
   }
+  // NEVER-DEAD-END-1 (owner directive 2026-11-10): a visitor is never told "not found". A confident match (every
+  // word of the address is in one paper's slug and no other paper matches as well) is a redirect; otherwise the page
+  // leads with where to go next. The status stays 404 with noindex so crawlers drop the address.
+  if (words.length >= 2 && near.length && near[0].hits >= words.length && !(near[1] && near[1].hits >= words.length)) {
+    return new Response(null, { status: 302, headers: { Location: "https://papers.qnfo.org/papers/" + encodeURIComponent(near[0].slug), "Cache-Control": "no-store" } });
+  }
+  let latest = [];
+  if (env.LIVING_PAPER) {
+    try {
+      latest = ((await env.LIVING_PAPER.prepare("SELECT slug, title FROM papers WHERE slug IS NOT NULL AND status IN ('published','distributed','external_preprint') ORDER BY created_at DESC LIMIT 6").all()).results) || [];
+    } catch (e) { latest = []; }
+  }
   const q = words.join(" ");
-  const list = near.length ? '<h2 class="q-h3" style="margin:28px 0 8px">Did you mean</h2><ul class="q-list q-compact">' + near.map(function(p) {
-    return '<li class="q-item"><a class="q-item-title" href="https://papers.qnfo.org/papers/' + escAttr(p.slug) + '">' + titleHTML(p.title) + "</a></li>";
-  }).join("") + "</ul>" : "";
-  const body = '<section class="q-hero"><div class="q-wrap" style="max-width:760px"><p class="q-eyebrow">Not found</p><h1 class="q-h1">' + (slug ? "There is no paper at this address" : "There is nothing at this address") + "</h1>" +
-    '<p class="q-lede">The link may be mistyped, or the paper may have a new address after a revision. Every paper keeps its address across versions.</p>' +
-    '<form class="q-field" action="https://papers.qnfo.org/papers" method="get" role="search" style="max-width:560px;margin-top:20px"><label class="q-sr" for="nf-q">Search the papers</label><input id="nf-q" name="search" type="search" value="' + escAttr(q) + '" placeholder="Search titles and abstracts"><button class="q-btn q-btn-accent" type="submit">Search</button></form>' +
-    list + '<p class="q-meta" style="margin-top:28px"><a href="https://papers.qnfo.org/papers">The library</a> \u00b7 <a href="https://ask.qwav.org/" rel="nofollow">Ask the corpus</a> \u00b7 <a href="https://qnfo.org/">Home</a></p></div></section>';
-  return new Response(qdsPage({ title: "Not found \u00b7 QNFO", description: "No page at this address.", robots: "noindex", brand: "qnfo", active: slug ? "papers" : "" }, body), { status: 404, headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } });
+  const seen = {};
+  near.forEach(function(p) { seen[p.slug] = 1; });
+  const card = function(p) { return '<a class="q-link-card" href="https://papers.qnfo.org/papers/' + escAttr(p.slug) + '"><h3>' + titleHTML(p.title) + "</h3></a>"; };
+  const nearHtml = near.length ? '<h2 class="q-h3" style="margin:28px 0 12px">Closest to what you were after</h2><div class="q-grid q-grid-2">' + near.map(card).join("") + "</div>" : "";
+  const fresh = latest.filter(function(p) { return !seen[p.slug]; }).slice(0, 4);
+  const freshHtml = fresh.length ? '<h2 class="q-h3" style="margin:28px 0 12px">' + (near.length ? "Also worth reading" : "Start with the newest work") + '</h2><div class="q-grid q-grid-2">' + fresh.map(card).join("") + "</div>" : "";
+  const body = '<section class="q-hero"><div class="q-wrap" style="max-width:760px"><p class="q-eyebrow">Keep exploring</p><h1 class="q-h1">' + (near.length ? "Here is where this leads" : "Start here") + "</h1>" +
+    '<p class="q-lede">Open research on computing, physics and the limits of both. Ask it a question, search it, or pick up where others are reading.</p>' +
+    '<div class="q-actions" style="margin-top:20px"><a class="q-btn q-btn-accent" href="https://ask.qwav.org/">Ask the research a question</a><a class="q-btn q-btn-ghost" href="https://papers.qnfo.org/papers">Browse the library</a></div>' +
+    '<form class="q-field" action="https://papers.qnfo.org/papers" method="get" role="search" style="max-width:560px;margin-top:20px"><label class="q-sr" for="nf-q">Search the papers</label><input id="nf-q" name="search" type="search" value="' + escAttr(q) + '" placeholder="Search titles and abstracts"><button class="q-btn" type="submit">Search</button></form>' +
+    nearHtml + freshHtml + '<p class="q-meta" style="margin-top:28px"><a href="https://qnfo.org/">Home</a> \u00b7 <a href="https://qwav.org/">QWAV</a> \u00b7 <a href="https://qnfo.org/work-with-me">Work with me</a></p></div></section>';
+  return new Response(qdsPage({ title: "Keep exploring \u00b7 QNFO", description: "Open research from QNFO.", robots: "noindex", brand: "qnfo", active: slug ? "papers" : "" }, body), { status: 404, headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } });
 }
 // LIVING-PAPERS-PAGE-1 (3.9.2, 2026-10-02, pillar reach; docs/outreach/living-papers-launch-2026-10.md): the launch
 // landing page. It says what a living paper does for a reader, sends them to one sample, and states the limits plainly.
