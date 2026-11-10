@@ -36,7 +36,7 @@
 //   LIMITS    public AI use is capped per visitor (hashed IP, hourly) and globally (daily); over a cap, or with the
 //             fleet's 30-day AI spend at SPEND_CAP_TOTAL_USD, the answer is sources-only (no model call).
 
-var VERSION = "2.19.10-codeagent";
+var VERSION = "2.19.11-codeagent";
 // 2.19.0 KERNEL-EVERYWHERE-1 (2026-11-06, owner directive "IMPLEMENT EVERYWHERE ACROSS ALL AI APPS AND SERVICES AND SURFACES", pillar reach): the Ask writer SYSTEM prompt carries the DOCTRINE-1 kernel 8.2.1 reply recognitions (KERNEL-REPLY-4): the answer body ends on the result; the designed FOLLOWUPS block remains the only question shape; no conditional offers or menus; ambiguity gets a stated assumption; limits are dispositions with their reason. prior 2.18.2-codeagent
 // 2.13.0 CROSS-LINK-1 (2026-11-04, pillar reach; minor: the Ask page links QWAV and q08 in its nav and footer and carries a Keep exploring strip to the paper library, QWAV, q08 and the idea threads). Prediction: ask.qwav.org visitors click through to another surface; revert: restore 2.12.17. // 2.12.17 earlier history follows: 
 
@@ -2143,6 +2143,40 @@ async function loadConfig(env) {
     // A generation challenger never changes retrieval, so it follows the champion.
     if (!(v.champion.rerank_tuned === true && typeof v.champion.rerank === "boolean")) v.champion.rerank = true;
     if (v.challenger) v.challenger.rerank = v.champion.rerank;
+    // RAG-RERANK-PARITY-1 (agent_issues 1001862): with 3 or more recorded rerank pairs, the challenger that drops the
+    // cross-encoder rerank call is adopted when it held MRR within 0.02 of rerank=true in every pair and was not
+    // slower than the true arm beyond the usual latency guard. Latency counts only from rows that carry a finite
+    // mean_ms on both arms, so a pair with missing latency never adopts. An earlier explicit tuning stands.
+    if (v.champion.rerank === true && v.champion.rerank_tuned !== true) {
+      try {
+        var ev = await d.prepare("SELECT cfg, score, detail FROM ask_evals WHERE kind IN ('retrieval-champion','retrieval-challenger') AND json_extract(detail, '$.rerank_calls') IS NOT NULL ORDER BY id DESC LIMIT 12").all();
+        var byPair = {};
+        ((ev && ev.results) || []).forEach(function (r) {
+          var cfg = {}, dt = {};
+          try { cfg = JSON.parse(r.cfg) || {}; } catch (e) { console.error(JSON.stringify({event: "rerank-parity-cfg-parse", error: String(e)})); }
+          try { dt = JSON.parse(r.detail) || {}; } catch (e) { console.error(JSON.stringify({event: "rerank-parity-detail-parse", error: String(e)})); }
+          var k = String(dt.pair || dt.pair_id || dt.tick || "");
+          if (!k) return;
+          (byPair[k] = byPair[k] || []).push({ rerank: cfg.rerank, mrr: Number(r.score), mean_ms: Number(dt.mean_ms) });
+        });
+        var held = Object.keys(byPair).filter(function (k) {
+          var p = byPair[k];
+          var on = p.filter(function (x) { return x.rerank === true; })[0];
+          var off = p.filter(function (x) { return x.rerank === false; })[0];
+          return !!on && !!off && isFinite(on.mrr) && isFinite(off.mrr) && off.mrr >= on.mrr - 0.02
+            && isFinite(on.mean_ms) && isFinite(off.mean_ms) && off.mean_ms <= on.mean_ms * 1.2 + 200;
+        });
+        if (Object.keys(byPair).length >= 3 && held.length >= 3) {
+          v.champion.rerank = false;
+          v.champion.rerank_tuned = true;
+          if (v.challenger) v.challenger.rerank = false;
+          try {
+            await d.prepare("INSERT INTO experiments (name, status, hypothesis, updated_at) VALUES ('RAG-RERANK-PARITY-1','adopted',?1,?2) ON CONFLICT(name) DO NOTHING")
+              .bind(JSON.stringify(held), new Date().toISOString()).run();
+          } catch (e2) { logErr("experiments RAG-RERANK-PARITY-1", e2); }
+        }
+      } catch (e) { logErr("loadConfig rerank parity", e); }
+    }
     try {
       var gl = await d.prepare("SELECT value FROM pipeline_flags WHERE key='ask_glossary'").first();
       var gj = gl && gl.value ? JSON.parse(gl.value) : null;
