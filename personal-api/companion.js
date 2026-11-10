@@ -2587,6 +2587,50 @@ export async function dashboard(env) {
   return { what_helps: helps, who5_history: who5, activity_mood_link_60d: link, mood_weekly: weeks, mood_daily_30d: days, actions_by_context: byCtx, actions_done_7d: done7 ? Number(done7.n) : 0, cards_due: due ? Number(due.n) : 0, cards_new_due: due ? Number(due.fresh || 0) : 0, nudge_loop_28d: loop, mood_by_tags_60d: tags };
 }
 
+// COMPANION-FORYOU-2 (issue #1002259): away-aware and city-aware ranking for the For-you feed. The feed used to read
+// the Amsterdam venues only; now the stays in personal-life.events and the current location decide. A date inside an
+// away window hides the home-city cards, and when the owner is in another city the feed reads that city's venues
+// (live_sources has a city column).
+export async function forYouFeed(env, deps) {
+  await ensureSchema(env.PERSONAL);
+  const db = env.PERSONAL;
+  const nowIso = deps && deps.nowIso ? deps.nowIso : new Date().toISOString();
+  const today = nowIso.slice(0, 10);
+  const stay = await one(db, "SELECT city, start_date, end_date FROM events WHERE category = 'stay' AND start_date <= ? AND end_date >= ? ORDER BY start_date DESC LIMIT 1", today, today).catch((err) => {
+    console.error(JSON.stringify({ where: "forYouFeed-stay", error: String(err && err.message || err) }));
+    return null;
+  });
+  const home = "Amsterdam";
+  const away = !!(stay && stay.city && stay.city.toLowerCase() !== home.toLowerCase());
+  const city = away ? stay.city : home;
+  const cards = [];
+  // COMPANION-FORYOU-3 (issue #1002260): captured items lead the feed. A photographed poster or a jotted event from
+  // cmp_inbox, and calendar items marked From capture, become cards with the capture date as the reason ("you saved
+  // this on <date>") and a decide-by line; the card also shows what the owner noted when he captured it.
+  const captures = await all(db, "SELECT * FROM cmp_inbox WHERE status = 'unprocessed' ORDER BY id DESC LIMIT 12").catch((err) => {
+    console.error(JSON.stringify({ where: "forYouFeed-captures", error: String(err && err.message || err) }));
+    return [];
+  });
+  for (const c of captures) {
+    const day = String(c.created_at || c.ts || nowIso).slice(0, 10);
+    cards.push({ id: "capture-" + c.id, kind: "capture", title: untrusted(c.content || c.note || "", 200), reason: "you saved this on " + day, note: untrusted(c.note || "", 200), decide_by: day, first: true });
+  }
+  const fromCalendar = await all(db, "SELECT id, title, note, start_date FROM events WHERE title LIKE '%From capture%' AND start_date >= ? ORDER BY start_date LIMIT 12", today).catch((err) => {
+    console.error(JSON.stringify({ where: "forYouFeed-calendar", error: String(err && err.message || err) }));
+    return [];
+  });
+  for (const e of fromCalendar) {
+    const day = String(e.start_date || nowIso).slice(0, 10);
+    cards.push({ id: "cal-" + e.id, kind: "capture", title: untrusted(e.title, 200), reason: "you saved this on " + day, note: untrusted(e.note || "", 200), decide_by: e.start_date, first: true });
+  }
+  const venues = await all(db, "SELECT id, name, city, url FROM live_sources WHERE lower(COALESCE(city, '')) = lower(?) ORDER BY id LIMIT 40", city).catch((err) => {
+    console.error(JSON.stringify({ where: "forYouFeed-venues", error: String(err && err.message || err), city }));
+    return [];
+  });
+  for (const v of venues) cards.push({ id: "venue-" + v.id, kind: "venue", title: untrusted(v.name, 200), city: v.city || city, url: v.url || "", reason: "venue in " + city });
+  return { ok: true, city, away, cards };
+}
+
 // ---------------------------------------------------------------- privacy: what is stored, export, delete
 
 export const PRIVACY_TABLES = [
@@ -2613,6 +2657,36 @@ export const PRIVACY_TABLES = [
   { table: "cmp_moments", what: "place check-ins and daily reviews (place, feelings, tags, note)", where: "1=1" }
 ];
 const DELETABLE = { cmp_inbox: "id", cmp_mood: "id", tasks: "id", cmp_projects: "id", journal: "id", cmp_cards: "id", cmp_push_subs: "endpoint", companion_nudges: "id", cmp_activities: "id", cmp_activity_log: "id", cmp_measures: "id", cmp_feedback: "key", cmp_moments: "id", cmp_asks: "id" };
+// COMPANION-PRIVACY-1: cached, self-hosted-first place lookup. Coordinates from Check in here are resolved against
+// cmp_place_cache in the owner's own D1; the third-party reverse geocode and Overpass queries run only on a cache miss
+// and their results are stored so the same coordinates never leave the account twice.
+export async function cachedPlace(env, kind, lat, lon, fetcher) {
+  await ensureSchema(env.PERSONAL);
+  try {
+    await env.PERSONAL.prepare("CREATE TABLE IF NOT EXISTS cmp_place_cache (key TEXT PRIMARY KEY, kind TEXT, lat REAL, lon REAL, fetched_at TEXT, payload TEXT)").run();
+  } catch (err) {
+    console.error(JSON.stringify({ where: "cachedPlace-schema", error: String(err && err.message || err) }));
+  }
+  const key = String(kind) + ":" + Number(lat).toFixed(4) + ":" + Number(lon).toFixed(4);
+  const hit = await one(env.PERSONAL, "SELECT payload FROM cmp_place_cache WHERE key = ? AND fetched_at > datetime('now', '-30 days')", key).catch((err) => {
+    console.error(JSON.stringify({ where: "cachedPlace-read", error: String(err && err.message || err), key }));
+    return null;
+  });
+  if (hit && hit.payload) {
+    try { return JSON.parse(hit.payload); } catch (err) {
+      console.error(JSON.stringify({ where: "cachedPlace-parse", error: String(err && err.message || err), key }));
+    }
+  }
+  const out = await fetcher(env, lat, lon);
+  if (out) {
+    try {
+      await env.PERSONAL.prepare("INSERT OR REPLACE INTO cmp_place_cache (key, kind, lat, lon, fetched_at, payload) VALUES (?, ?, ?, ?, datetime('now'), ?)").bind(key, String(kind), Number(lat), Number(lon), JSON.stringify(out)).run();
+    } catch (err) {
+      console.error(JSON.stringify({ where: "cachedPlace-write", error: String(err && err.message || err) }));
+    }
+  }
+  return out;
+}
 export async function privacy(env) {
   await ensureSchema(env.PERSONAL);
   await moEnsure(env).catch(() => {});
@@ -2627,7 +2701,7 @@ export async function privacy(env) {
     try { let cursor; do { const l = await env.MEDIA.list({ prefix: "companion/", cursor, limit: 1000 }); for (const ob of l.objects) { files.objects++; files.bytes += ob.size; } cursor = l.truncated ? l.cursor : undefined; } while (cursor); } catch (e) { files.error = String(e && e.message || e).slice(0, 120); }
   }
   return {
-    where: "Everything lives in your own Cloudflare account: D1 database personal-life, R2 bucket personal-media (prefix companion/), Vectorize index personal-life (ids cmp:<item id>), and the companion Durable Object (push signing key only). Nothing is kept in a third-party store; model calls run on Workers AI through your AI Gateway. One exception: when you use Check in here, your coordinates are sent to the public OpenStreetMap Overpass service (nearby places) and to bigdatacloud (town name); neither is told who you are, and nothing else leaves.",
+    where: "Everything lives in your own Cloudflare account: D1 database personal-life, R2 bucket personal-media (prefix companion/), Vectorize index personal-life (ids cmp:<item id>), and the companion Durable Object (push signing key only). Nothing is kept in a third-party store; model calls run on Workers AI through your AI Gateway. Check in here place lookups (nearby places and the town name) go through your own worker's cache first (cmp_place_cache in D1); only a cache miss touches the public OpenStreetMap Overpass service and bigdatacloud, neither is told who you are, and the result is then cached in your own database so repeat lookups at the same spot never leave your account.",
     tables: rows, files, encryption: "R2 and D1 encrypt at rest; every request uses TLS.",
     "export": "/companion/api/export", "delete": "/companion/api/delete"
   };
