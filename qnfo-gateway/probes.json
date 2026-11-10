@@ -6,7 +6,8 @@
       "url": "https://qnfo.org/",
       "contains": [
         "data-brand=\"qnfo\"",
-        "<title>QNFO"
+        "<title>QNFO",
+        "data-explore-rail"
       ]
     },
     {
