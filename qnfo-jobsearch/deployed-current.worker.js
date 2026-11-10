@@ -9,7 +9,7 @@
 // JOBSEARCH-CV-1 (1.5.0): the CV is part of this worker (page /cv): a yes/no interview that builds the claim bank, review of unconfirmed claims, roles, achievements and publications edited in D1, a resume per job (summary, roles, selected work, education, skills) and a cover note, history and backup. The search is tied to that bank (evidence the owner can back up weighs more; what the CV lacks is shown as a gap), decided postings (rejected, applied, approved) never come back under another id, rejections carry a reason the search learns from, and a wider net: stretch matches outside the stated preferences, more boards and aggregators.
 // Routes: GET / (web UI) | GET /api | GET /api/matches | GET /api/matches/:id | GET /api/runs | GET /api/ledger | POST /api/run | POST /api/matches/:id/status | GET /health
 // Port of the jobsearch/ Python modules (tests: jobsearch/test_jobsearch.py, qnfo-jobsearch/worker.test.mjs).
-var VERSION = "1.21.0-codeagent";
+var VERSION = "1.21.1-codeagent";
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -2164,6 +2164,7 @@ async function run(env) {
     await ensureAutonomyBrand(env).catch((e) => logErr("autonomy-brand", e));
     await ensureUltrastableBrand(env).catch((e) => logErr("ultrastable-brand", e));   // JOBSEARCH-ULTRASTABLE-1
     await ensureUltrastableSkills(env).catch((e) => logErr("ultrastable-skills", e));   // JOBSEARCH-SKILLS-1
+    await ensureCredentialEvidence(env).catch((e) => logErr("credential-evidence", e));   // CREDENTIAL-EVIDENCE-1
     await syncSkillAsks(env).catch((e) => logErr("skill-asks", e));   // JOBSEARCH-SKILLS-1: taps on fleet.qnfo.org/focus reach the CV bank
     await ensureResearchPubs(env).catch((e) => logErr("research-pubs", e));   // before loadCtx so the context sees the merged bank
     const ctx = await loadCtx(env);
@@ -2501,11 +2502,37 @@ function cvAnswer(b, d) {
   }
   b.answers[q.id] = { answer: d.answer, facts: ids };
 }
+/* CREDENTIAL-EVIDENCE-1 (2026-11-10): a patent or inventor claim enters the CV bank only with its evidence: a patent number in the text, or the owner's own
+   Yes to a recall card whose sentence says the application is not yet filed. The owner has no granted patent (rwnq8/resume docs/BRAND.md, "Patents: never
+   claim without numbers"); review item V3 was confirmed with its bracket removed and no number, so "Inventor on U.S. patent(s)" sat in the bank as verified.
+   The editor refuses such a claim, and every run removes one already there (the previous bank stays in jobsearch_bank_history). */
+const CREDENTIAL_CLAIM = /\b(?:patent(?:s|ed|\(s\))?|inventor)\b/i;
+const PATENT_NUMBER = /\b\d{1,2},\d{3},\d{3}\b|\b(?:US|EP|WO)\s?\d{6,}\b/i;
+function credentialBacked(text, source) {
+  const t = String(text || "");
+  if (!CREDENTIAL_CLAIM.test(t) || PATENT_NUMBER.test(t)) return true;
+  return /^recall:seed:/.test(String(source || "")) && /not yet filed/i.test(t);
+}
+function dropUnbackedCredentials(b) {
+  const gone = (b.facts || []).filter((f) => !credentialBacked(f.text, f.source)).map((f) => f.id);
+  if (!gone.length) return gone;
+  b.facts = b.facts.filter((f) => !gone.includes(f.id));
+  for (const a of Object.values(b.answers || {})) if (a && Array.isArray(a.facts)) a.facts = a.facts.filter((i) => !gone.includes(i));
+  return gone;
+}
+async function ensureCredentialEvidence(env) {
+  const b = await loadBank(env);
+  if (!(b.facts || []).some((f) => !credentialBacked(f.text, f.source))) return [];
+  let gone = [];
+  await mutateBank(env, (x) => { gone = dropUnbackedCredentials(x); return x; }, { keepVerified: true });
+  return gone;
+}
 function cvFact(b, d) {
   const f = b.facts.find((x) => x.id === d.id);
   if (d.delete) { b.facts = b.facts.filter((x) => x.id !== d.id); for (const a of Object.values(b.answers || {})) a.facts = (a.facts || []).filter((i) => i !== d.id); return; }
   const text = clean(d.text, 600);
   if (!text) throw bad400("write what you did");
+  if (!credentialBacked(text, f ? f.source : "manual")) throw bad400("a patent or inventor claim needs its patent number");
   if (f) { f.text = text; if ("role" in d) f.role = roleOk(b, d.role); if ("tags" in d) f.tags = tagsOk(d.tags); delete f.pitch; f.status = "verified"; }
   else b.facts.push({ id: nextFactId(b), role: roleOk(b, d.role), text, tags: tagsOk(d.tags), source: "manual", status: "verified" });
 }
@@ -2515,6 +2542,7 @@ function cvReview(b, d) {
   if (d.action === "confirm") {
     const text = clean(d.text || it.text, 600);
     if (/\[[^\]]*\]/.test(text)) throw bad400("fill in the bracketed part first");
+    if (!credentialBacked(text, "review:" + it.id)) throw bad400("a patent or inventor claim needs its patent number");
     b.facts.push({ id: nextFactId(b), role: roleOk(b, d.role || it.role), text, tags: tagsOk(it.tags), source: "review:" + it.id, status: "verified" });
   } else if (d.action !== "reject") throw bad400("action is confirm or reject");
   b.review = b.review.filter((x) => x.id !== d.id);
@@ -3112,7 +3140,7 @@ const handler = {
     return J({ error: "not found", see: "/api" }, 404);
   },
 };
-handler.__test = { refreshRecallFacts, polishProse, polishBank, copyLint, toolCase, vocabulary, TOPIC_LABEL, SOFTWARE, PROSE_CASE, linkedinSearches, LINKEDIN_SEARCHES, codingLoad, CANDIDATE_BOARDS, collectAndRank, cosine, bestSim, semanticLens, scoreJob, exploreOverlap, recordTerms, diversifyRows, recallGaps, recallQuestion, recallAnswer, recallQueue, RECALL_SEED, loadCtx, referralKit, referralList, STAGES, judgeTop, buildResume, verify, headlineVerdict, outcomes, pdfOf, pdfClean, checkAnswer, jsonLoose, PROTECTED_Q, draftAnswers, prepBrief, quizFeedback, judgeJob, calibrate, calibration, followups, atsOf, keywordReport, docxOf, resumeHtml, plainOf, applyKit, matchKit, stripTags, postingTerms, evaluate, rank, buildResume, buildNote, verify, stripHtml, locationGate, has, LEDGER, dedupeKey, feedPrefix, makeCtx, scoreJob, scoreFeatures, featuresFromWhy, applicationSnapshot, parseApplicationSnapshot, outcomeScoreWeights, loadCtx, SURVEY, BOARDS, normKey, applyBank, BANK_SEED, QUESTIONS, TAG_TO_CLUSTERS, clustersOf, cvAnswer, cvFact, cvReview, cvSet, cvImport, mutateBank, loadBank, decidedKeys, FETCHERS, getBank: () => BANK, llmRerank, llmRerankRun, ensureResearchPubs, ensureAutonomyBrand, ensureUltrastableBrand, ultrastableBank, ultrastableSkillsBank, ULTRASTABLE_SKILL_FACTS, ULTRASTABLE_SKILLS, syncSkillAsks, skillAskOptions, cvSkills, ULTRASTABLE_S1, RESEARCH_PUBS, FAMILIES, CLUSTER_KW, headline, pubLine, parseRerank, reasonOk, rerankMessages, artifactsFor, titleCandidate, sitemapUrls, slugTitle, PUBLIC_SECTOR, opsReport };
+handler.__test = { credentialBacked, dropUnbackedCredentials, ensureCredentialEvidence, refreshRecallFacts, polishProse, polishBank, copyLint, toolCase, vocabulary, TOPIC_LABEL, SOFTWARE, PROSE_CASE, linkedinSearches, LINKEDIN_SEARCHES, codingLoad, CANDIDATE_BOARDS, collectAndRank, cosine, bestSim, semanticLens, scoreJob, exploreOverlap, recordTerms, diversifyRows, recallGaps, recallQuestion, recallAnswer, recallQueue, RECALL_SEED, loadCtx, referralKit, referralList, STAGES, judgeTop, buildResume, verify, headlineVerdict, outcomes, pdfOf, pdfClean, checkAnswer, jsonLoose, PROTECTED_Q, draftAnswers, prepBrief, quizFeedback, judgeJob, calibrate, calibration, followups, atsOf, keywordReport, docxOf, resumeHtml, plainOf, applyKit, matchKit, stripTags, postingTerms, evaluate, rank, buildResume, buildNote, verify, stripHtml, locationGate, has, LEDGER, dedupeKey, feedPrefix, makeCtx, scoreJob, scoreFeatures, featuresFromWhy, applicationSnapshot, parseApplicationSnapshot, outcomeScoreWeights, loadCtx, SURVEY, BOARDS, normKey, applyBank, BANK_SEED, QUESTIONS, TAG_TO_CLUSTERS, clustersOf, cvAnswer, cvFact, cvReview, cvSet, cvImport, mutateBank, loadBank, decidedKeys, FETCHERS, getBank: () => BANK, llmRerank, llmRerankRun, ensureResearchPubs, ensureAutonomyBrand, ensureUltrastableBrand, ultrastableBank, ultrastableSkillsBank, ULTRASTABLE_SKILL_FACTS, ULTRASTABLE_SKILLS, syncSkillAsks, skillAskOptions, cvSkills, ULTRASTABLE_S1, RESEARCH_PUBS, FAMILIES, CLUSTER_KW, headline, pubLine, parseRerank, reasonOk, rerankMessages, artifactsFor, titleCandidate, sitemapUrls, slugTitle, PUBLIC_SECTOR, opsReport };
 export default handler;
 
 // ------------------------------------------------------------------ client script shared by both pages (JOBSEARCH-APPLY-1): kit handling and the Fill application bookmark
