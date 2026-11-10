@@ -3175,6 +3175,40 @@ export async function handleTranscription(request, env, ctx, deps) {
   return J({ text: tr.text });
 }
 
+async function moBackfillPlaces(env) {
+  await moEnsure(env);
+  const rows = (await all(env.PERSONAL, "SELECT id, lat, lon FROM cmp_moments WHERE place IS NULL AND lat IS NOT NULL AND lon IS NOT NULL").catch(() => [])).slice(0, 20);
+  let n = 0;
+  for (const row of rows) {
+    const places = await moNearby(row.lat, row.lon).catch(() => []);
+    const name = places.length && (places[0].name || places[0].place || places[0].label);
+    if (name) { await env.PERSONAL.prepare("UPDATE cmp_moments SET place = ? WHERE id = ?").bind(s(name, 120), row.id).run(); n++; }
+  }
+  return n;
+}
+// COMPANION-ASK-TOOLS-1: a spoken or typed line like "I am at a jazz club and love it" becomes a check-in with the
+// nearest place; same validation and crisis handling as the check-in route.
+async function cmpToolCheckin(env, deps, b) {
+  const text = s(b.text || b.note || "", 500);
+  if (!text) return { ok: false, error: "Say where you are or how it feels." };
+  const cfg = await loadCfg(env);
+  const crisis = crisisSignal(text);
+  let place = null;
+  const lat = Number(b.lat), lon = Number(b.lon);
+  if (Number.isFinite(lat) && Number.isFinite(lon) && Math.abs(lat) <= 90 && Math.abs(lon) <= 180) {
+    const w = await cmpWhere(env, deps, { lat, lon }).catch(() => null);
+    place = w && w.city || null;
+  }
+  const out = await moSave(env, deps, { note: text, place, lat, lon, loved: b.loved });
+  if (out.ok !== false && crisis.level >= 2) out.crisis = crisisText(cfg);
+  return out;
+}
+// COMPANION-ASK-TOOLS-1: questions read the insights read model directly.
+async function cmpToolInsights(env, deps, q) {
+  const days = Math.min(Math.max(Number(q) || 60, 7), 365);
+  await moBackfillPlaces(env);
+  return await moInsights(env, days);
+}
 export async function handleCompanion(request, env, ctx, deps) {
   const url = new URL(request.url);
   const p = url.pathname.replace(/\/+$/, "") || "/";
@@ -3227,8 +3261,18 @@ export async function handleCompanion(request, env, ctx, deps) {
       return J({ ok: true, places, city: w && w.city || null });
     }
     if (r === "moments" && m === "POST") { const out = await moSave(env, deps, await body()); return J(out, out.ok ? 200 : 400); }
+    // COMPANION-TRAVEL-OFFLINE-1: offline check-ins already queue with their real ts and saved position; once back online,
+    // moBackfillPlaces() fills the nearby-place names from that stored lat/lon, the moment day key follows the existing
+    // travel time-zone logic, and the care panel shows the emergency numbers for the current country instead of fixed text.
+    // COMPANION-DWELL-1: the page cannot read location in the background, so the smallest working path is a geofence in
+    // the Android app that reuses the emailed-code session (no extra keys) and calls cmp_checkin below when he dwells at a place.
+    // COMPANION-ASK-TOOLS-1: the check-in and insight routes as twin tools, so Ask can log by voice or text and read answers directly (also over MCP).
+    if (r === "cmp_checkin" && m === "POST") { const out = await cmpToolCheckin(env, deps, await body()); return J(out, out.ok ? 200 : 400); }
+    if (r === "cmp_insights" && m === "GET") return J(await cmpToolInsights(env, deps, url.searchParams.get("days") || url.searchParams.get("q")));
     if (r === "moments" && m === "GET") {
       await moEnsure(env);
+      // COMPANION-TRAVEL-OFFLINE-1: queued offline entries get their nearby-place names filled in from the saved position.
+      await moBackfillPlaces(env);
       const items = (await all(env.PERSONAL, "SELECT id, ts, kind, city, place, place_kind, valence, energy, feelings, tags, loved, note FROM cmp_moments ORDER BY ts DESC LIMIT 40")).map((x) => Object.assign({}, x, { feelings: moJ(x.feelings, []), tags: moJ(x.tags, []) }));
       return J({ ok: true, items });
     }
