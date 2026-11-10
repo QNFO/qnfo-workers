@@ -1,6 +1,10 @@
 name: open-pr-for-branch
 run-name: open-pr-for-branch ${{ github.ref_name }}
 # COMPANION-PR-1: a session without a working GitHub token pushes a claude/** branch and this opens the pull request, so the lane merges it after checks.
+# BOOTSTRAP-GATED-CHECKS-1 (owner directive 2026-11-10: "audit and remediate all failure modes ... impeding autonomous bootstrapping"): a pull request opened
+# with the workflow token makes github-actions[bot] the actor of its pull_request run, and GitHub holds that run at action_required, so pr-checks never ran
+# on 8 open claude/** pull requests (2026-11-10) and the lane could not merge any. The fleet user credential opens it instead, so checks start at once;
+# the workflow token stays the fallback when the secret is absent.
 on:
   push:
     branches:
@@ -16,7 +20,7 @@ jobs:
     steps:
       - name: Open a pull request when none exists
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.QNFO_GH_PAT || github.token }}
           BRANCH: ${{ github.ref_name }}
         run: |
           n=$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$BRANCH" --state open --json number --jq 'length')
