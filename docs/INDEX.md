@@ -205,6 +205,46 @@ and [the machine-readable catalog](agent-catalog.json).
 - [docs/handoff/TEMPLATE.md](handoff/TEMPLATE.md) - `docs/handoff/TEMPLATE.md`
 - [Companion backlog handoff (code agents: finish from this file and the issues)](handoff/companion-backlog.md) - `docs/handoff/companion-backlog.md`
 - [Handoff: R2 document sweep, fleet audit and weekly dispatch (DOC-IS-CODE-1, SELF-AUDIT-1)](handoff/doc-is-code-r2-sweep.md) - `docs/handoff/doc-is-code-r2-sweep.md`
+- [Handoff: METRIC-TRIGGER-362-OPEN-AGENT-ISSUES: Autonomy gap: more than 20 open agent issues](handoff/issue-1454.md) - `docs/handoff/issue-1454.md`
+- [Handoff: METRIC-REGISTRY-STALENESS-1: metric_registry rows exceed their declared refresh cadence](handoff/issue-1503.md) - `docs/handoff/issue-1503.md`
+- [Handoff: METRIC-TRIGGER-537-Q08-GATE-PASS-RATE-7D: q08 quality gate rejects most drafts (7d pass rate under 50%)](handoff/issue-1510.md) - `docs/handoff/issue-1510.md`
+- [Handoff: METRIC-TRIGGER-4992-ROSTER-CAPABILITIES-SINGLE-EXECUTOR: Executor roster: a new capability has a single executor](handoff/issue-1554.md) - `docs/handoff/issue-1554.md`
+- [Handoff: METRIC-TRIGGER-1238-IDEA-TOPIC-CONCENTRATION-30D: Intake diversity: one topic cluster exceeds its share of accepted ideas (SIGNAL-](handoff/issue-1625.md) - `docs/handoff/issue-1625.md`
+- [Handoff: DEPLOY-NON-CANONICAL-DEPLOY: fleet](handoff/issue-1675.md) - `docs/handoff/issue-1675.md`
+- [Handoff: VERIFICATION-DEFERRAL-STALL-1: 431 contracts defer forever with no escalation and no owner](handoff/issue-1965.md) - `docs/handoff/issue-1965.md`
+- [Handoff: METRIC-TRIGGER-3059-STUCK-ITEMS-OVER-SLA: Queue SLA breach: an item is stuck past its SLA (minutes)](handoff/issue-2051.md) - `docs/handoff/issue-2051.md`
+- [Handoff: METRIC-TRIGGER-8581-PORTFOLIO-DRIFT: Portfolio drift: projects, issues or roadmap disagree with GitHub](handoff/issue-2052.md) - `docs/handoff/issue-2052.md`
+- [Handoff: METRIC-TRIGGER-3061-UNVERIFIED-BLOCKER-CLAIMS: Red team: blocker claims nobody has tested adversarially](handoff/issue-2123.md) - `docs/handoff/issue-2123.md`
+- [Handoff: METRIC-TRIGGER-3072-FAILURE-MODES-RECURRING: A known failure mode recurred or its detector stopped running](handoff/issue-2124.md) - `docs/handoff/issue-2124.md`
+- [Handoff: METRIC-TRIGGER-357-WATCHMAKER-INDEX: Autonomy gap: recurring operations still need a person or a stalled runner](handoff/issue-2277.md) - `docs/handoff/issue-2277.md`
+- [Handoff: METRIC-TRIGGER-2934-SESSION-DEPENDENT-ISSUES-OPEN: Autonomy-first gap: open issues still wait on a Claude session](handoff/issue-2283.md) - `docs/handoff/issue-2283.md`
+- [Handoff: METRIC-TRIGGER-538-Q08-NEURONS-PER-PUBLISHED-PIECE-7D: q08 compose cost per published piece regressed (over 6000 neurons)](handoff/issue-2335.md) - `docs/handoff/issue-2335.md`
+- [Handoff: METRIC-TRIGGER-3454-OWNER-DISPATCH-7D: Owner dispatch: more than 5 cards in 7 days asked the owner to act](handoff/issue-2339.md) - `docs/handoff/issue-2339.md`
+- [Handoff: METRIC-TRIGGER-3464-MTTR-H-7D: Doctrine breach: issues take more than a day to close on average](handoff/issue-2340.md) - `docs/handoff/issue-2340.md`
+- [Handoff: METRIC-TRIGGER-3689-MONTHLY-COST-RUN-RATE-USD: Cost: all-billing 7-day run rate over 650/30d](handoff/issue-2365.md) - `docs/handoff/issue-2365.md`
+- [Handoff: METRIC-TRIGGER-5394-RESEARCH-DEFERRED-POOL: Research intake outruns throughput: the deferred pool is above 120](handoff/issue-2370.md) - `docs/handoff/issue-2370.md`
+- [Handoff: METRIC-TRIGGER-5915-CONTENT-ITEMS-OVER-STAGE-SLA: Content pipeline: items are past their stage SLA](handoff/issue-2375.md) - `docs/handoff/issue-2375.md`
+- [Handoff: METRIC-TRIGGER-3529-OWNER-DISPATCHED-ITEMS-7D: Dispatch gap: fleet work reached the owner's queue](handoff/issue-2635.md) - `docs/handoff/issue-2635.md`
+- [Handoff: METRIC-TRIGGER-9262-FLEET-GRAPH-FINDINGS-WARN: FLEET-GRAPH-FINDINGS-1: the fleet graph reports warn-level drift or dead referen](handoff/issue-2714.md) - `docs/handoff/issue-2714.md`
+- [Handoff: CLOSEOUT-HANDOFF-20261019: 30 unfinished plans in docs/handoff/2026-10-19-closeout.md; this tracker closes when the 51 issues behind them are resolved](handoff/issue-2790.md) - `docs/handoff/issue-2790.md`
+- [Handoff: METRIC-TRIGGER-412-WORKER-HEALTH-FAILURE-RATE: Core gap: live workers failing their health probe](handoff/issue-2793.md) - `docs/handoff/issue-2793.md`
+- [Handoff: METRIC-TRIGGER-361-GUARD-RCS: Security gap: a deploy or model guard exited non-zero](handoff/issue-2831.md) - `docs/handoff/issue-2831.md`
+- [Handoff: METRIC-TRIGGER-8558-IDEA-TO-PUBLISH-H-P50-7D: Idea to publication median above 100 hours](handoff/issue-2836.md) - `docs/handoff/issue-2836.md`
+- [Handoff: RESEARCH-MODEL-COST-1: qnfo-research-exec spends 78 percent of Workers AI neurons on gpt-oss-120b; test glm-5.3-flash first in MODELS (cost per paper up 5x since 10/16)](handoff/issue-2994.md) - `docs/handoff/issue-2994.md`
+- [Handoff: METRIC-TRIGGER-1519-EXTERNAL-IMPACT-PER-DOLLAR: Cost gap: AI cost per unit of external impact above 0.012 (was 0.0142 on 2026-10](handoff/issue-3021.md) - `docs/handoff/issue-3021.md`
+- [Handoff: METRIC-TRIGGER-354-WORKERS-AI-COST-30D-USD: Cost gap: Workers AI cost over $95/30d (target $78 = 2.59/day, owner 2026-10-09)](handoff/issue-3033.md) - `docs/handoff/issue-3033.md`
+- [Handoff: MERGE-LANE-THROUGHPUT-1: code-task lane merges 44% of tasks in 7 days; code-task-merge 288 min vs 120 min SLA. Fix the top failure classes in qnfo-fleet-control / qnfo-code-orchestrator](handoff/issue-3209.md) - `docs/handoff/issue-3209.md`
+- [Handoff: ISSUE-THROUGHPUT-FAMILIES-1: three issue families open faster than they close (RESEARCH-TERMINAL, PAPER-LEARN-1, VERIFICATION-DEFERRED-7D-1)](handoff/issue-3210.md) - `docs/handoff/issue-3210.md`
+- [Handoff: ISSUE-AGE-24H-1: every open issue is closed, or has a live code task, within 24 hours of opening, automatically and server-side (was 100 h)](handoff/issue-3224.md) - `docs/handoff/issue-3224.md`
+- [Handoff: METRIC-TRIGGER-9901-ISSUES-OVER-24H-NO-DOER: Open issues older than 24 h with no doer](handoff/issue-3228.md) - `docs/handoff/issue-3228.md`
+- [Handoff: TP-1.17-STAGED-ROLLOUT-AI-GATEWAY-1: Staged rollout for qnfo-ai and qnfo-gateway, then both leave the never-auto-merge lists together](handoff/issue-3273.md) - `docs/handoff/issue-3273.md`
+- [Handoff: TP-2.3-ONE-PROBE-PASS-1: One probe pass: fleet-control's */20 tick probes every live worker once into worker_live_audit; the dashboard, lifecycle and deploy-guard read that table](handoff/issue-3365.md) - `docs/handoff/issue-3365.md`
+- [Handoff: OWNER-TASK-op-mvh2iuolcaa1: Audit fleet cost attribution: identify the untagged owner-local desktop clients generating ~$167 list cost over the last 30 days, tag them into unified](handoff/issue-3397.md) - `docs/handoff/issue-3397.md`
+- [Handoff: METRIC-TRIGGER-9510-CLOSURE-BRANCHING-RATIO-24H: Closure branching: more than one reopen for every two closures in 24 h](handoff/issue-3432.md) - `docs/handoff/issue-3432.md`
+- [Handoff: COST-SUSTAIN-1: research pipeline spend to <=$300/mo all-in without quality loss](handoff/issue-3433.md) - `docs/handoff/issue-3433.md`
+- [Handoff: WORKFLOW-FAILED-1: deploy-gate](handoff/issue-3441.md) - `docs/handoff/issue-3441.md`
+- [Handoff: METRIC-TRIGGER-10820-FLEET-COST-PACE-30D-USD: Cost: fleet 30-day pace above USD 300 all-in (owner 2026-10-21)](handoff/issue-3460.md) - `docs/handoff/issue-3460.md`
+- [Handoff: Q08-GATE-ECONOMICS: gate_pass_rate_7d 0.032 drives 27.7x neuron overrun and a stalled publication cadence](handoff/issue-3487.md) - `docs/handoff/issue-3487.md`
 - [COST-DECISION-OWNER-LOCAL-TEXT-1: owner-local sentence contradicts the $0 spend and the credit runway divides by unbilled third-party list cost](handoff/issues/COST-DECISION-OWNER-LOCAL-TEXT-1.md) - `docs/handoff/issues/COST-DECISION-OWNER-LOCAL-TEXT-1.md`
 - [COST-FEED-7D-WINDOW-1: /api/cost by_model_7d and by_worker_7d sum 8 UTC day buckets (today partial) under a 7d label, with est_usd unlabelled as list price](handoff/issues/by-window-8-buckets.md) - `docs/handoff/issues/by-window-8-buckets.md`
 - [RUM-ZERO-DAY-1: a stored false zero for 2026-10-13 understates the 7- and 28-day pageviews, and the dashboard top pages read the unfiltered source](handoff/issues/rum-zero-13.md) - `docs/handoff/issues/rum-zero-13.md`
