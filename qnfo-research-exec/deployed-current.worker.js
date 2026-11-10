@@ -496,7 +496,7 @@ var __defProp22222 = Object.defineProperty;
 var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(target, "name", { value, configurable: true }), "__name");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.55.11";
+var VERSION = "0.55.12";
 var __AI_ATTR_RATES = { "@cf/zai-org/glm-5.3": [127273, 4e5], "@cf/zai-org/glm-5.3-flash": [13636, 45455], "@cf/nvidia/nemotron-3-120b-a12b": [45455, 136364], "@cf/moonshotai/kimi-k2.6": [86364, 363636], "@cf/moonshotai/kimi-k2.7-code": [86364, 363636], "@cf/openai/gpt-oss-120b": [31818, 68182], "@cf/openai/gpt-oss-20b": [18182, 27273], "@cf/deepseek-ai/deepseek-v4-pro-0813": [12e4, 36e4], "@cf/deepseek-ai/deepseek-v4-flash-0731": [4e4, 12e4], "@cf/meta/llama-3.3-70b-instruct-fp8-fast": [26668, 204805], "@cf/qwen/qwen3-30b-a3b-fp8": [4625, 30475], "@cf/qwen/qwen3.8-27b": [40909, 290909], "@cf/baai/bge-base-en-v1.5": [6058, 0], "@cf/baai/bge-small-en-v1.5": [1841, 0], "@cf/baai/bge-large-en-v1.5": [18582, 0] };
 function __attrStageSet(env, stage) {
   if (env && env.__aiAttrCtx) env.__aiAttrCtx.stage = String(stage || "");
@@ -995,8 +995,6 @@ __name22222(reasoningPreamble, "reasoningPreamble");
 __name222222(reasoningPreamble, "reasoningPreamble");
 var TERMINAL_RECOVERY_MAX = 2;
 var LANE_REVISE_FIRST = 2;
-// RESEARCH-ROWS-OVER-4-CYCLES-1 (issue 8794): a paper that failed four full cycles is not drafted again from ground a fifth time. A row that still has open findings
-// keeps its draft and goes to revise (the draft is the asset; a fifth ground draft cost 85k to 100k neurons and failed review the same way).
 var LANE_GROUND_MAX = 4;
 function laneStageFor(kind, cycles) {
   var c = Number(cycles || 0);
@@ -7255,6 +7253,21 @@ function autoCorrectNumeric(paper, adj, claims) {
   return out;
 }
 __name(autoCorrectNumeric, "autoCorrectNumeric");
+var VERIFY_STDLIB_OK = /* @__PURE__ */ new Set(["math", "fractions", "decimal", "statistics", "itertools", "functools", "collections", "re", "json", "sys", "cmath", "operator", "random", "datetime", "typing", "__future__", "string", "textwrap", "numbers", "heapq", "bisect"]);
+function nonStdlibImports(code) {
+  const bad = [];
+  const re = /^\s*(?:from\s+([A-Za-z_]\w*)[\w.]*\s+import\b|import\s+([A-Za-z_][\w.]*(?:\s*,\s*[A-Za-z_][\w.]*)*))/gm;
+  let m;
+  while ((m = re.exec(String(code || ""))) !== null) {
+    const names = m[1] ? [m[1]] : m[2].split(",").map(function(x) {
+      return x.trim().split(/[ .]/)[0];
+    });
+    for (const n of names) if (n && !VERIFY_STDLIB_OK.has(n) && bad.indexOf(n) < 0) bad.push(n);
+  }
+  return bad;
+}
+__name(nonStdlibImports, "nonStdlibImports");
+__name2(nonStdlibImports, "nonStdlibImports");
 function verifyUnrunCause(out) {
   const s = String(out || "");
   const line = /* @__PURE__ */ __name(function(re) {
@@ -7616,6 +7629,14 @@ async function stageVerify(env, row) {
   let code = genRaw;
   const cm = String(genRaw).match(/```python\n([\s\S]*?)```/);
   if (cm) code = cm[1];
+  const _badImp = nonStdlibImports(code);
+  if (_badImp.length) {
+    const genRaw2 = await gwCall(env, stageContextPrompt("VERIFY_GEN", "PAPER", paper, "CLAIMS (JSON):\n" + JSON.stringify(claims) + "\n\nYour previous script imported " + _badImp.join(", ") + ", which the sandbox does not have. Rewrite it with the Python standard library only (math, fractions, decimal, statistics)."), 12e3);
+    const cm2 = String(genRaw2).match(/```python\n([\s\S]*?)```/);
+    const code2 = cm2 ? cm2[1] : genRaw2;
+    await logEvent(env, "verify-stdlib-regen", "row=" + row.id + " imports " + _badImp.join(",") + (nonStdlibImports(code2).length ? " still present after regen" : " cleared"), "warn");
+    if (code2 && code2.length >= 40 && !nonStdlibImports(code2).length) code = code2;
+  }
   if (!code || code.length < 40) {
     await markError(env, row, "verify: no verification script generated");
     return { ok: false, stage: "verify", cause: "no-script", detail: String(genRaw || "").replace(/\s+/g, " ").slice(0, 120) };
@@ -10734,7 +10755,7 @@ var errataMod = (function() {
     };
     return { default: worker_default2 };
   })();
-  var erratapublishMod2 = (function() {
+  var erratapublishMod = (function() {
     const QNFO_VERSION = "qnfo-errata-publish/fabric-20260910";
     var __defProp3 = Object.defineProperty;
     var __name3 = /* @__PURE__ */ __name((target, value) => __defProp3(target, "name", { value, configurable: true }), "__name");
@@ -32579,8 +32600,7 @@ ${sourceUrlComment}
     };
     return { default: publish_worker_src_default, renderSourceHtml };
   })();
-  // RENDER-CHECK-BUNDLE-REF-1 (issue 2562): the bundler nested this module inside errataMod and renamed it, so the renderer outside that scope could not reach it ("erratapublishMod is not defined", /render-check 503 on every call).
-  globalThis.__erratapublishMod = erratapublishMod2;
+  globalThis.__erratapublishMod = erratapublishMod;
   var INTERNAL_SWEEP_MAX = 20;
   function internalErrataSource(detectedBy) {
     return /red[\s_-]?team/i.test(String(detectedBy || "")) ? "red_team" : "internal_audit";
@@ -33053,7 +33073,7 @@ ${sourceUrlComment}
       if (p === "/errata-publish" || p.startsWith("/errata-publish/")) {
         const u = new URL(request.url);
         u.pathname = p.slice(15) || "/";
-        return erratapublishMod2.default.fetch(new Request(u.toString(), request), env, ctx);
+        return erratapublishMod.default.fetch(new Request(u.toString(), request), env, ctx);
       }
       return new Response("errata-hub", { status: 200 });
     },
@@ -33063,7 +33083,7 @@ ${sourceUrlComment}
         const c = event2.cron;
         if (c === "0 * * * *") return erratawatchMod.default.scheduled(event2, env, ctx);
         if (c === "15 * * * *") return erratarespondMod.default.scheduled(event2, env, ctx);
-        if (c === "30 * * * *") return erratapublishMod2.default.scheduled(event2, env, ctx);
+        if (c === "30 * * * *") return erratapublishMod.default.scheduled(event2, env, ctx);
       });
     }
   };
@@ -34233,14 +34253,12 @@ async function paperFormatTick(env, opts) {
     } catch (error) {
       const _fmsg = String(error && error.message || error);
       if (/PUBLISH-FLOOR-BLOCKED/.test(_fmsg)) {
-        // PAPER-FORMAT-FLOOR-REFUSED-1 (issue 2562): the living-paper floor trigger refused the rewrite (it would cut a published paper under 8000 characters or to half its length).
-        // That is the same answer as canonicalRefusal above, a refusal and not an error: the row stays as it is, and it is no longer logged as an exception on every sweep (73 in 6 h for one paper).
         out.refused = (out.refused || 0) + 1;
         (state.refusedList = state.refusedList || []).push({ slug: candidate.slug, why: "floor-trigger refused the canonical rewrite" });
         state.refusedList = state.refusedList.slice(-30);
       } else {
-      out.errors.push({ slug: candidate.slug, error: _fmsg.slice(0, 180) });
-      console.error(JSON.stringify({ worker: WORKER, where: "paper-format", ...out.errors[out.errors.length - 1] }));
+        out.errors.push({ slug: candidate.slug, error: _fmsg.slice(0, 180) });
+        console.error(JSON.stringify({ worker: WORKER, where: "paper-format", ...out.errors[out.errors.length - 1] }));
       }
     }
     out.checked++;
@@ -34845,36 +34863,51 @@ $('go').addEventListener('click',function(){
 });
 })();
 <\/script></body></html>`])));
-// RESEARCH-OPSCFG-CACHE-1 (issue 2562): a tick read ~40 single-key ops_config rows, each its own D1 query; under "D1 DB is overloaded" every one logged an error and the tick counted 73 exceptions in 6 h.
-// Single-key reads are cached 60 s per isolate and served stale (up to 30 min) when D1 refuses; cursors, state and request keys are never cached.
-var _occ = new Map();
+var _occ = /* @__PURE__ */ new Map();
 function cachedOpsConfigDb(db) {
   if (!db || db.__occ || typeof db.prepare !== "function") return db;
   function stmt(st, sql, binds) {
-    return new Proxy(st, { get: function(t, p) {
-      if (p === "bind") return function() { var a = Array.prototype.slice.call(arguments); return stmt(t.bind.apply(t, a), sql, a); };
+    return new Proxy(st, { get: /* @__PURE__ */ __name(function(t, p) {
+      if (p === "bind") return function() {
+        var a = Array.prototype.slice.call(arguments);
+        return stmt(t.bind.apply(t, a), sql, a);
+      };
       if (p === "first") return async function(col) {
         var k = sql + "|" + JSON.stringify(binds), now = Date.now(), hit = _occ.get(k);
         if (hit && now - hit.at < 6e4) return hit.v;
-        try { var v = await t.first(col); _occ.set(k, { at: now, v: v }); return v; }
-        catch (e) { if (hit && now - hit.at < 18e5) return hit.v; throw e; }
+        try {
+          var v = await t.first(col);
+          _occ.set(k, { at: now, v });
+          return v;
+        } catch (e) {
+          if (hit && now - hit.at < 18e5) return hit.v;
+          throw e;
+        }
       };
-      var v2 = t[p]; return typeof v2 === "function" ? v2.bind(t) : v2;
-    } });
+      var v2 = t[p];
+      return typeof v2 === "function" ? v2.bind(t) : v2;
+    }, "get") });
   }
-  return new Proxy(db, { get: function(t, p) {
+  __name(stmt, "stmt");
+  return new Proxy(db, { get: /* @__PURE__ */ __name(function(t, p) {
     if (p === "__occ") return true;
     if (p === "prepare") return function(sql) {
       var st = t.prepare(sql);
       return /^\s*SELECT value FROM ops_config WHERE key\s*=/i.test(sql) && !/cursor|state|requested/i.test(sql) ? stmt(st, String(sql), []) : st;
     };
-    var v = t[p]; return typeof v === "function" ? v.bind(t) : v;
-  } });
+    var v = t[p];
+    return typeof v === "function" ? v.bind(t) : v;
+  }, "get") });
 }
+__name(cachedOpsConfigDb, "cachedOpsConfigDb");
 var worker_default = {
   async scheduled(event, env, ctx) {
     var rawEnv = env;
-    try { env = Object.assign({}, env, { QNFO_AUDIT: cachedOpsConfigDb(env.QNFO_AUDIT) }); } catch (eOcc) { console.error(JSON.stringify({ worker: "qnfo-research-exec", where: "opscfg-cache", error: String(eOcc && eOcc.message || eOcc).slice(0, 160) })); }   // members keep rawEnv: their bindings stay the host's own objects
+    try {
+      env = Object.assign({}, env, { QNFO_AUDIT: cachedOpsConfigDb(env.QNFO_AUDIT) });
+    } catch (eOcc) {
+      console.error(JSON.stringify({ worker: "qnfo-research-exec", where: "opscfg-cache", error: String(eOcc && eOcc.message || eOcc).slice(0, 160) }));
+    }
     var _budTick = await researchBudget(rawEnv, Number(event && event.scheduledTime) || Date.now());
     try {
       rawEnv.__researchStaleMin = researchTickAllowance(_budTick, Number(event && event.scheduledTime) || Date.now(), await researchTickConfig(rawEnv)).staleMin || 0;

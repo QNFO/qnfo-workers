@@ -1,0 +1,12 @@
+import { readFileSync } from "node:fs";
+import assert from "node:assert";
+const src = readFileSync(new URL("./worker.js", import.meta.url), "utf8");
+const a = src.indexOf("const VERIFY_STDLIB_OK"), b = src.indexOf('__name(nonStdlibImports');
+assert(a > 0 && b > a, "guard present");
+const __name = () => {};
+const nonStdlibImports = new Function(src.slice(a, b) + "; return nonStdlibImports;")();
+assert.deepEqual(nonStdlibImports("import math\nfrom fractions import Fraction\nprint(1)"), []);
+assert.deepEqual(nonStdlibImports("import numpy as np\nimport math"), ["numpy"]);
+assert.deepEqual(nonStdlibImports("from scipy.stats import norm\nimport math, sympy"), ["scipy", "sympy"]);
+assert(src.includes("verify-stdlib-regen"), "stage regenerates on a bad import");
+console.log("ok verify-stdlib-guard");
