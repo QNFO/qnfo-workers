@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: merged-step-1-2
 issue: 8024
 ---
 # Handoff: [#1001990] ROADMAP-1: QNFO.INFRA FLEET-BUDGET-W3W4-1: drop the two stale Vectorize indexes (qnfo-tasks, qnfo-notes) and fold or document qnfo-pdf and qnfo-containers-pilot (vectorize_indexes 10 -> 8)
@@ -21,10 +21,16 @@ Opened as a draft PR (DRAFT-PR-PER-ISSUE-1) so every open issue has a PR. GitHub
 4. Migrate ShellContainer lessons of `qnfo-containers-pilot` into docs and keep the DO class.
 5. Post-merge canonical deploy, then `cf-ops-actions delete-vectorize-index` for `qnfo-tasks` and `qnfo-notes` (live index deletion is out of scope for this editing session per `AGENTS.md`).
 
-work-claim: acquired file:qnfo-ops/wrangler.toml (owner kimi-code-session-20261110)
-work-claim: acquired file:qnfo-ops/worker.js (owner kimi-code-session-20261110)
-work-claim: acquired file:qnfo-ai/wrangler.toml (owner kimi-code-session-20261110)
-work-claim: acquired file:qnfo-ai/worker.js (owner kimi-code-session-20261110)
-work-claim: acquired file:qnfo-infra/wrangler.toml (owner kimi-code-session-20261110)
-work-claim: acquired file:qnfo-infra/worker.js (owner kimi-code-session-20261110)
-work-claim: acquired file:docs/handoff/issue-8024.md (owner kimi-code-session-20261110)
+## Merge evidence
+- PR [#10553](https://github.com/QNFO/qnfo-workers/pull/10553) merged to `main` at `2026-11-10T15:46:44Z` (squash commit `bb3d54b9`).
+- CI run [42847675641](https://github.com/QNFO/qnfo-workers/actions/runs/42847675641) green: `versions` and `scans` passed.
+- VERSION bumps: `qnfo-ai 5.50.18 -> 5.50.19`, `qnfo-infra 1.17.7 -> 1.17.8`, `qnfo-ops 2.71.1 -> 2.71.2`.
+- Work claims released on merge.
+
+work-claim: released file:qnfo-ops/wrangler.toml (PR #10553 merged)
+work-claim: released file:qnfo-ops/worker.js (PR #10553 merged)
+work-claim: released file:qnfo-ai/wrangler.toml (PR #10553 merged)
+work-claim: released file:qnfo-ai/worker.js (PR #10553 merged)
+work-claim: released file:qnfo-infra/wrangler.toml (PR #10553 merged)
+work-claim: released file:qnfo-infra/worker.js (PR #10553 merged)
+work-claim: released file:docs/handoff/issue-8024.md (PR #10553 merged)
