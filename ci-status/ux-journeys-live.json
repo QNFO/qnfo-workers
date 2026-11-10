@@ -1,7 +1,7 @@
 {
  "mode": "live",
- "at": "2026-11-10T02:37:06.965Z",
- "sha": "14a74d79765721ffbca315a420e879ed685c5d67",
+ "at": "2026-11-10T04:07:21.831Z",
+ "sha": "76f7191b8ae9dee6dc3bb91075bd007cdb8eea46",
  "apps": [
   {
    "app": "ask-qwav",
@@ -30,7 +30,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 2413,
+     "ms": 2254,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -59,7 +59,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 2435,
+     "ms": 1969,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -90,7 +90,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1587,
+     "ms": 1444,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -126,7 +126,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 8786,
+     "ms": 8727,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -155,7 +155,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1157,
+     "ms": 1229,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -182,7 +182,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 2160,
+     "ms": 1945,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -209,7 +209,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 432,
+     "ms": 332,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -255,7 +255,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 2186,
+     "ms": 2209,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -392,7 +392,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 3806,
+     "ms": 4230,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -522,7 +522,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 4385,
+     "ms": 4075,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -554,7 +554,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1853,
+     "ms": 1850,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -595,7 +595,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 8044,
+     "ms": 7744,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -615,7 +615,7 @@
      "ok": false,
      "error": "expected to see \"Order size\" on https://markets.q08.org/",
      "attempts": 2,
-     "ms": 11884,
+     "ms": 11733,
      "grade": {
       "status": "broken",
       "reasons": [
@@ -646,7 +646,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1129,
+     "ms": 1167,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -682,7 +682,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 8541,
+     "ms": 8424,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -880,7 +880,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 4013,
+     "ms": 3872,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -1038,7 +1038,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 3933,
+     "ms": 4990,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -1112,7 +1112,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 13770,
+     "ms": 14166,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -1141,7 +1141,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 8551,
+     "ms": 8516,
      "grade": {
       "status": "new",
       "reasons": [
@@ -1174,7 +1174,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 3796,
+     "ms": 3589,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -1205,7 +1205,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1558,
+     "ms": 1515,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -1236,7 +1236,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 6987,
+     "ms": 6476,
      "grade": {
       "status": "new",
       "reasons": [
@@ -1273,7 +1273,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 8882,
+     "ms": 8718,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -1415,7 +1415,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1816,
+     "ms": 1742,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -2768,7 +2768,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 2299,
+     "ms": 2723,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -2893,7 +2893,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1757,
+     "ms": 1471,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -2924,7 +2924,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 13818,
+     "ms": 12356,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3041,7 +3041,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 9192,
+     "ms": 9093,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3072,7 +3072,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 9267,
+     "ms": 9183,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3101,7 +3101,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 964,
+     "ms": 917,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3223,7 +3223,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1577,
+     "ms": 1576,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3252,7 +3252,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 8700,
+     "ms": 8786,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3282,7 +3282,7 @@
      "taps": 1,
      "typing": 0,
      "steps": [
-      "tap The captain, the co-pilot, and the machine that waited"
+      "tap The warning that was posted, and the morning it described"
      ],
      "screens": [
       {
@@ -3308,7 +3308,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 4503,
+     "ms": 3901,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3339,7 +3339,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 3535,
+     "ms": 3388,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3370,7 +3370,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 3334,
+     "ms": 3442,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3412,7 +3412,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1026,
+     "ms": 1010,
      "grade": {
       "status": "ok",
       "reasons": []
