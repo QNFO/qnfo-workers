@@ -9,7 +9,7 @@
 // JOBSEARCH-CV-1 (1.5.0): the CV is part of this worker (page /cv): a yes/no interview that builds the claim bank, review of unconfirmed claims, roles, achievements and publications edited in D1, a resume per job (summary, roles, selected work, education, skills) and a cover note, history and backup. The search is tied to that bank (evidence the owner can back up weighs more; what the CV lacks is shown as a gap), decided postings (rejected, applied, approved) never come back under another id, rejections carry a reason the search learns from, and a wider net: stretch matches outside the stated preferences, more boards and aggregators.
 // Routes: GET / (web UI) | GET /api | GET /api/matches | GET /api/matches/:id | GET /api/runs | GET /api/ledger | POST /api/run | POST /api/matches/:id/status | GET /health
 // Port of the jobsearch/ Python modules (tests: jobsearch/test_jobsearch.py, qnfo-jobsearch/worker.test.mjs).
-var VERSION = "1.18.1-codeagent";
+var VERSION = "1.19.0-codeagent";
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -702,6 +702,7 @@ const SURVEY = [
   ["fam_climate", "Work", "Sustainability, climate and energy-transition roles?", null],
   ["fam_autonomy", "Work", "Autonomous and AI systems research: agentic systems, AI evaluation and assurance, AI oversight and socio-technical systems research?", true],   // JOBSEARCH-AUTONOMY-1 (owner direction 2026-11-09): the lead target
   ["fam_ai", "Work", "AI and machine-learning product, governance, safety and research-integrity roles?", true],
+  ["fam_strategy", "Work", "Founder-in-residence, AI strategy and product strategy roles for autonomous systems (roles that hire for systems thinking, not coding)?", true],   // JOBSEARCH-ULTRASTABLE-1 (owner, 2026-11-10): "I'm a thinker. I'm a systems person"
   ["fam_sysmodel", "Work", "Systems modelling, simulation and decision-science roles (network models, travel-demand models, digital twins, operations research)?", true],   // JOBSEARCH-FIT-1
   ["fam_quantum", "Work", "Quantum computing roles?", false],   // JOBSEARCH-AUTONOMY-1: quantum is no longer a target (owner, 2026-11-09); a yes brings it back
   ["fam_edu", "Work", "Teaching, training and academic roles?", null],
@@ -738,6 +739,9 @@ const FAMILIES = {
   // JOBSEARCH-FIT-1: systems modelling and decision science, the owner's 20-year thread (network models, FHWA tour-based model, simulation) as a role family of its own
   fam_sysmodel: ["simulation", "network model*", "network modelling", "network modeling", "systems model*", "systems analyst", "systems analysis", "decision science", "decision scientist", "decision analyst", "decision support", "operations research",
     "transport model*", "transportation model*", "travel demand", "digital twin", "system dynamics", "modelling lead", "modeling lead", "agent-based", "verkeersmodel*", "modelleur"],
+  // JOBSEARCH-ULTRASTABLE-1 (2026-11-10): roles that value high-level systems design and direction; the founder and director of Ultrastable is in this lane
+  fam_strategy: ["founder in residence", "founder-in-residence", "entrepreneur in residence", "entrepreneur-in-residence", "venture builder", "venture partner", "chief ai officer", "head of ai", "director of ai", "vp of ai", "ai strategy", "ai transformation",
+    "head of automation", "automation strategy", "product strategy", "head of strategy", "strategy lead", "strategy director", "chief of staff", "head of innovation", "innovation lead", "ai adoption", "platform strategy", "operating model", "head of platform"],
   fam_quantum: ["quantum"],
   fam_edu: ["lecturer", "professor", "teaching fellow", "instructor", "trainer", "education manager", "learning manager", "curriculum"],
   fam_science: ["research scientist", "applied scientist", "quantitative researcher", "quantitative analyst", "physicist", "economist", "statistician", "computational scientist", "research associate", "postdoctoral", "principal investigator", "data scientist", "scientist"],
@@ -756,6 +760,8 @@ const CLUSTER_KW = {
   research_integrity: ["research integrity", "reproducib*", "peer review", "scientific integrity", "open science", "provenance", "responsible ai", "ai governance", "ai safety", "audit", "trustworthy"],
   data_product: ["data product", "data platform", "analytics", "dashboard", "data strategy", "data governance"],
   autonomous_systems: ["autonomous system*", "autonomy", "agentic", "multi-agent", "multi agent", "ai agent*", "agent-based", "ai safety", "alignment", "ai assurance", "oversight", "failure mode*", "socio-technical", "sociotechnical"],
+  platform_strategy: ["founder", "0 to 1", "zero to one", "0-to-1", "platform strategy", "product strategy", "ai strategy", "ai transformation", "ai adoption", "operating model", "systems thinking", "coding agents", "ai coding", "developer productivity",
+    "autonomous development", "self-governing", "agent orchestration", "agentops", "ai operations", "governance of agents", "agent oversight", "venture"],   // JOBSEARCH-ULTRASTABLE-1
   systems_modeling: ["systems modeling", "systems modelling", "system dynamics", "complex systems", "network model*", "network analysis", "simulation model*", "decision support", "operations research", "systems thinking"],
   quantum_energy: ["quantum", "energy efficiency", "benchmark"],
   nonprofit: ["nonprofit", "non-profit", "civil society", "ngo", "foundation", "philanthrop*"],
@@ -792,7 +798,7 @@ const REGION_WIDE = ["europe", "emea", "european", "eu ", "eu-", "worldwide", "a
 const EUROPE_OTHER = ["germany", "berlin", "munich", "france", "paris", "london", "uk", "united kingdom", "ireland", "dublin", "spain", "madrid", "barcelona", "portugal", "lisbon", "italy", "belgium", "brussels", "denmark", "copenhagen", "sweden", "stockholm", "norway", "oslo", "finland", "helsinki", "austria", "vienna", "switzerland", "zurich", "poland", "warsaw", "czech", "prague", "luxembourg", "estonia", "latvia", "lithuania", "hungary", "romania", "greece", "croatia", "slovenia", "slovakia", "bulgaria", "malta", "cyprus"];
 const US_RE = /\b(us|usa|united states|san francisco|new york|seattle|washington|boston|austin|chicago|los angeles|palo alto|mountain view|menlo park|sf|nyc|dc)\b|, (ca|ny|wa|ma|tx|il|dc)\b/;
 const CORE = new Set(["federal", "policy_research", "transport_modeling", "research_mgmt", "urban_planning", "social_policy", "contracting"]);
-const FRONTIER = new Set(["ai_systems", "research_integrity", "autonomous_systems"]);
+const FRONTIER = new Set(["ai_systems", "research_integrity", "autonomous_systems", "platform_strategy"]);
 const DATA_SIDE = new Set(["data_product", "data_science", "survey_methods", "ai_systems", "gis", "systems_modeling"]);
 const escRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const EUROPE_OTHER_RE = EUROPE_OTHER.map((k) => new RegExp("\\b" + escRe(k) + "\\b"));
@@ -924,6 +930,7 @@ const LINKEDIN_SEARCHES = [
   { id: "autonomy", label: "Autonomous and agentic systems research", why: "QNFO: you run an autonomous research system in production", q: '("autonomous systems" OR "agentic" OR "multi-agent" OR "AI systems") AND (researcher OR "research lead" OR "research manager") NOT (engineer OR developer)' },
   { id: "sysmodel", label: "Systems modelling and simulation", why: "Network models at DVRPC and IBI; the FHWA Tour-Based Model System", q: '("systems modelling" OR "systems modeling" OR "simulation" OR "network modelling" OR "network modeling" OR "digital twin") AND (lead OR senior OR principal) NOT (engineer OR developer)' },
   { id: "mobility", label: "Transport and mobility AI", why: "20 years of transportation network modelling; co-directed the $10M NHTS", q: '(mobility OR transport OR transportation OR "travel demand") AND (AI OR modelling OR modeling OR analytics) AND (lead OR senior OR principal OR manager) NOT (engineer OR developer)' },
+  { id: "strategy", label: "AI strategy and founder-in-residence", why: "You founded and direct Ultrastable, an autonomous development platform: systems design and direction, not coding", q: '("founder in residence" OR "entrepreneur in residence" OR "AI strategy" OR "head of AI" OR "AI transformation" OR "product strategy") NOT (engineer OR developer)' },
   { id: "decision", label: "Decision science", why: "AARP Livability Index: decision support built from 50+ data sources", q: '("decision science" OR "decision scientist" OR "decision support" OR "operations research") NOT (engineer OR developer)' },
   { id: "research_lead", label: "Research program and portfolio leadership", why: "You directed national research programs and contractor teams", q: '("research program manager" OR "research programme manager" OR "head of research" OR "research director" OR "research portfolio" OR "AI research manager")' },
   { id: "ai_policy_nl", label: "AI policy in Dutch government (in Dutch)", why: "Dutch ministries and regulators post AI governance roles on LinkedIn", q: '("AI" OR "algoritme" OR "algoritmes") AND (beleidsadviseur OR "strategisch adviseur" OR toezicht OR governance)' },
@@ -1115,6 +1122,7 @@ const TAG_TO_CLUSTERS = {
   gis: ["gis"], leadership: ["program_mgmt"], nonprofit: ["nonprofit"], research_integrity: ["research_integrity"], consulting: ["consulting"],
   data_eng: ["data_product"], software: ["software"], physics_theory: ["physics_theory"], high_dim_stats: ["high_dim_stats", "survey_methods"],
   numerics: ["numerics"], teaching: ["teaching"], writing: ["writing"],
+  founder: ["platform_strategy", "autonomous_systems", "program_mgmt"],   // JOBSEARCH-ULTRASTABLE-1: founder and director of an autonomous development platform
 };
 const clustersOf = (tags) => [...new Set((tags || []).flatMap((t) => TAG_TO_CLUSTERS[t] || []))];
 const REFERRAL_ASK = "Would you be open to a short chat about the team, or to passing my application to the hiring manager? I understand if not.";
@@ -2066,6 +2074,7 @@ async function run(env) {
     .bind(started, JSON.stringify(["run did not finish: closed by the next run"]), iso(t0 - 15 * 60 * 1000), rid).run().catch((e) => logErr("self-heal", e));
   try {
     await ensureAutonomyBrand(env).catch((e) => logErr("autonomy-brand", e));
+    await ensureUltrastableBrand(env).catch((e) => logErr("ultrastable-brand", e));   // JOBSEARCH-ULTRASTABLE-1
     await ensureResearchPubs(env).catch((e) => logErr("research-pubs", e));   // before loadCtx so the context sees the merged bank
     const ctx = await loadCtx(env);
     const prefsHash = await sha256hex(JSON.stringify([RANK_RULES, ctx.a, [...ctx.learned.boost].sort(), [...ctx.learned.block].sort(), [...OWNED].sort(), [...ctx.learned.coPen].sort(), [...ctx.learned.coDrop].sort()]));
@@ -2218,6 +2227,35 @@ async function ensureAutonomyBrand(env) {
   }, { keepVerified: true });
   await setMeta(env, "autonomy_brand_v1", "done");
   return true;
+}
+// JOBSEARCH-ULTRASTABLE-1 (owner, 2026-11-10, Personal Brand project: "I'm now launching this as its own platform or its own startup ... I'm not an engineer.
+// I'm not a coder. I'm a thinker. I'm a systems person."; recorded in rwnq8/resume docs/BRAND.md section 9 and CV v5.1). Adds the Ultrastable role, its facts
+// (numbers from the live claims at ultrastable.io on 2026-11-10) and the summary that names it, once, to the live bank.
+const ULTRASTABLE_ROLE = { id: "R00", title: "Founder and Director", org: "Ultrastable (autonomous development platform)", location: "", start: "2026", end: "present", tags: ["founder", "llm", "research_integrity", "leadership", "product"] };
+const ULTRASTABLE_FACTS = [
+  ["Launching the system that runs QNFO as its own autonomous development platform, Ultrastable (ultrastable.io): it finds its own work in its metrics and failures, hands each change to coding agents from several vendors, proves every deploy with live probes and automatic rollback, and scores its decisions against the predictions it logged first.", ["founder", "llm", "research_integrity", "product"],
+    "I founded and direct Ultrastable (ultrastable.io), an autonomous development platform that chooses its own work, proves each change live and scores its own predictions."],
+  ["Set the platform's goals, standing directives and limits and evaluate how it behaves; coding agents write the code (systems design and direction, not hands-on coding).", ["founder", "leadership", "research_integrity"],
+    "My role at Ultrastable is systems design and direction: I set its goals, standing directives and limits and evaluate how it behaves, while coding agents write the code."],
+  ["Live, re-checked evidence: 3,880 merged changes since August 2026; 774 of 1,059 scored decisions matched their logged prediction; 0 silent drops across 6,000+ closed issues; one installation so far (QNFO).", ["founder", "llm", "research_integrity"],
+    "Its claims are re-checked by the running system and published live: 774 of 1,059 scored decisions matched the prediction logged first, with 0 silent drops across 6,000+ closed issues."],
+];
+const ULTRASTABLE_S1 = "Systems researcher studying autonomous AI systems: how they behave, fail and can be audited and governed. Founder and director of Ultrastable (ultrastable.io), an autonomous development platform that chooses its own work, proves each change live and scores its own predictions; I direct it and coding agents write the code. 20 years of systems work behind it: transportation network models from 2004, the national Tour-Based Model System at the U.S. Federal Highway Administration, and the AARP Livability Index, a decision-support system built from 50+ data sources. Open to autonomous and AI systems research and strategy, AI evaluation and assurance, AI governance and oversight, research leadership for AI, and founder-in-residence or product strategy roles.";
+async function ensureUltrastableBrand(env) {
+  if ((await getMeta(env, "ultrastable_brand_v1")) === "done") return false;
+  await mutateBank(env, (b) => ultrastableBank(b), { keepVerified: true });
+  await setMeta(env, "ultrastable_brand_v1", "done");
+  return true;
+}
+function ultrastableBank(b) {
+  b.roles = b.roles || []; b.facts = b.facts || []; b.summaries = b.summaries || []; b.skills = b.skills || [];
+  if (!b.roles.some((r) => r.id === ULTRASTABLE_ROLE.id)) b.roles.unshift({ ...ULTRASTABLE_ROLE, tags: [...ULTRASTABLE_ROLE.tags] });
+  for (const [text, tags, pitch] of ULTRASTABLE_FACTS)
+    if (!b.facts.some((f) => f.role === ULTRASTABLE_ROLE.id && f.text === text)) b.facts.push({ id: nextFactId(b), role: ULTRASTABLE_ROLE.id, text, tags: [...tags], source: "owner:2026-11-10", status: "verified", pitch });
+  const s1 = b.summaries.find((x) => x.id === "S1");
+  if (s1 && !/Ultrastable/.test(s1.text)) s1.text = ULTRASTABLE_S1; else if (!s1) b.summaries.unshift({ id: "S1", tags: [], text: ULTRASTABLE_S1 });
+  if (!b.skills.some((k) => /autonomous development platform/i.test(k.name))) b.skills.unshift({ name: "Directing autonomous development platforms", tags: ["founder", "llm"] });
+  return b;
 }
 async function ensureResearchPubs(env) {
   if ((await getMeta(env, "research_pubs_v1")) === "done") return false;
@@ -2829,7 +2867,7 @@ const handler = {
     return J({ error: "not found", see: "/api" }, 404);
   },
 };
-handler.__test = { linkedinSearches, LINKEDIN_SEARCHES, codingLoad, CANDIDATE_BOARDS, collectAndRank, cosine, bestSim, semanticLens, scoreJob, exploreOverlap, recordTerms, diversifyRows, recallGaps, recallQuestion, recallAnswer, recallQueue, RECALL_SEED, loadCtx, referralKit, referralList, STAGES, judgeTop, buildResume, verify, headlineVerdict, outcomes, pdfOf, pdfClean, checkAnswer, jsonLoose, PROTECTED_Q, draftAnswers, prepBrief, quizFeedback, judgeJob, calibrate, calibration, followups, atsOf, keywordReport, docxOf, resumeHtml, plainOf, applyKit, matchKit, stripTags, postingTerms, evaluate, rank, buildResume, buildNote, verify, stripHtml, locationGate, has, LEDGER, dedupeKey, feedPrefix, makeCtx, scoreJob, scoreFeatures, featuresFromWhy, applicationSnapshot, parseApplicationSnapshot, outcomeScoreWeights, loadCtx, SURVEY, BOARDS, normKey, applyBank, BANK_SEED, QUESTIONS, TAG_TO_CLUSTERS, clustersOf, cvAnswer, cvFact, cvReview, cvSet, cvImport, mutateBank, loadBank, decidedKeys, FETCHERS, getBank: () => BANK, llmRerank, llmRerankRun, ensureResearchPubs, ensureAutonomyBrand, RESEARCH_PUBS, FAMILIES, CLUSTER_KW, headline, pubLine, parseRerank, reasonOk, rerankMessages, artifactsFor, titleCandidate, sitemapUrls, slugTitle, PUBLIC_SECTOR, opsReport };
+handler.__test = { linkedinSearches, LINKEDIN_SEARCHES, codingLoad, CANDIDATE_BOARDS, collectAndRank, cosine, bestSim, semanticLens, scoreJob, exploreOverlap, recordTerms, diversifyRows, recallGaps, recallQuestion, recallAnswer, recallQueue, RECALL_SEED, loadCtx, referralKit, referralList, STAGES, judgeTop, buildResume, verify, headlineVerdict, outcomes, pdfOf, pdfClean, checkAnswer, jsonLoose, PROTECTED_Q, draftAnswers, prepBrief, quizFeedback, judgeJob, calibrate, calibration, followups, atsOf, keywordReport, docxOf, resumeHtml, plainOf, applyKit, matchKit, stripTags, postingTerms, evaluate, rank, buildResume, buildNote, verify, stripHtml, locationGate, has, LEDGER, dedupeKey, feedPrefix, makeCtx, scoreJob, scoreFeatures, featuresFromWhy, applicationSnapshot, parseApplicationSnapshot, outcomeScoreWeights, loadCtx, SURVEY, BOARDS, normKey, applyBank, BANK_SEED, QUESTIONS, TAG_TO_CLUSTERS, clustersOf, cvAnswer, cvFact, cvReview, cvSet, cvImport, mutateBank, loadBank, decidedKeys, FETCHERS, getBank: () => BANK, llmRerank, llmRerankRun, ensureResearchPubs, ensureAutonomyBrand, ensureUltrastableBrand, ultrastableBank, ULTRASTABLE_S1, RESEARCH_PUBS, FAMILIES, CLUSTER_KW, headline, pubLine, parseRerank, reasonOk, rerankMessages, artifactsFor, titleCandidate, sitemapUrls, slugTitle, PUBLIC_SECTOR, opsReport };
 export default handler;
 
 // ------------------------------------------------------------------ client script shared by both pages (JOBSEARCH-APPLY-1): kit handling and the Fill application bookmark
