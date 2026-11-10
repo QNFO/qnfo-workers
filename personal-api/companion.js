@@ -3162,6 +3162,28 @@ async function readCapture(request) {
 }
 function unb64(t) { const bin = atob(String(t).replace(/^data:[^,]+,/, "")); const o = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) o[i] = bin.charCodeAt(i); return o; }
 
+// COMPANION-TRAVEL-OFFLINE-1: local emergency numbers for the country he is actually in, read from the last saved position (replaces fixed text in the care panel).
+const CMP_EMERGENCY = { "US": "911", "CA": "911", "MX": "911", "GB": "999", "IE": "112", "DE": "112", "FR": "112", "NL": "112", "BE": "112", "ES": "112", "IT": "112", "PT": "112", "AT": "112", "CH": "112", "SE": "112", "NO": "112", "DK": "112", "FI": "112", "PL": "112", "CZ": "112", "GR": "112", "TR": "112", "AU": "000", "NZ": "111", "JP": "110", "KR": "112", "SG": "995", "IN": "112", "BR": "190", "ZA": "10111" };
+async function cmpEmergency(env, deps) {
+  const row = await one(env.PERSONAL, "SELECT lat, lon FROM cmp_moments WHERE lat IS NOT NULL AND lon IS NOT NULL ORDER BY ts DESC LIMIT 1").catch(() => null);
+  if (!row) return { country: null, numbers: null };
+  const w = await cmpWhere(env, deps, { lat: row.lat, lon: row.lon }).catch(() => null);
+  const cc = w && w.country ? String(w.country).toUpperCase() : null;
+  return { country: cc, numbers: cc ? CMP_EMERGENCY[cc] || "112" : null };
+}
+
+// COMPANION-TRAVEL-OFFLINE-1: offline-queued check-ins keep their real time and their saved position; once online the nearby-place name is backfilled from that position.
+async function moBackfillPlaces(env, deps) {
+  try { await env.PERSONAL.prepare("ALTER TABLE cmp_moments ADD COLUMN lat REAL").run(); } catch (e) { /* column already there */ }
+  try { await env.PERSONAL.prepare("ALTER TABLE cmp_moments ADD COLUMN lon REAL").run(); } catch (e) { /* column already there */ }
+  const rows = await all(env.PERSONAL, "SELECT id, lat, lon FROM cmp_moments WHERE place IS NULL AND lat IS NOT NULL AND lon IS NOT NULL ORDER BY ts DESC LIMIT 200").catch(() => []);
+  for (const row of rows) {
+    const near = await moNearby(row.lat, row.lon).catch(() => []);
+    const name = near && near.length ? s((near[0] && (near[0].name || near[0].title)) || "", 120) : "";
+    if (name) await env.PERSONAL.prepare("UPDATE cmp_moments SET place = ? WHERE id = ? AND place IS NULL").bind(name, row.id).run().catch(() => null);
+  }
+}
+
 // OpenAI-compatible speech-to-text (POST /v1/audio/transcriptions, multipart "file"), so any client that speaks the
 // OpenAI audio API can talk to the companion. ?capture=1 (or form field capture=1) also files the words in the inbox.
 export async function handleTranscription(request, env, ctx, deps) {
@@ -3220,13 +3242,21 @@ export async function handleCompanion(request, env, ctx, deps) {
       return J(out, out.ok ? 200 : 400);
     }
     // COMPANION-MOMENTS-1: check-ins by place, the moments log and the insights read model.
+    // COMPANION-DWELL-1: prompting a check-in after dwelling needs background location, which the web page cannot read. Decision record (issue #1002247): under the owner's no-keys rule (sign-in by e-mailed code only) the smallest working path is a native location service in the Android app (android-me) reusing that same session; a Tasker/Shortcuts geofence on a signed-in route is the fallback. Until one ships, check-ins stay manual and this route only names nearby places.
     if (r === "moments/nearby" && m === "GET") {
       const lat = Number(url.searchParams.get("lat")), lon = Number(url.searchParams.get("lon"));
       if (!Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) return J({ ok: false, error: "lat and lon required" }, 400);
       const [places, w] = await Promise.all([moNearby(lat, lon), cmpWhere(env, deps, { lat, lon }).catch(() => null)]);
       return J({ ok: true, places, city: w && w.city || null });
     }
-    if (r === "moments" && m === "POST") { const out = await moSave(env, deps, await body()); return J(out, out.ok ? 200 : 400); }
+    // COMPANION-TRAVEL-OFFLINE-1: queued offline check-ins keep their real time; the day key follows the existing travel time-zone logic, and missing place names are backfilled from the saved position once online.
+    if (r === "moments" && m === "POST") {
+      const b = await body();
+      await moBackfillPlaces(env, deps).catch(() => null);
+      if (b && b.at) { try { b.day = await localDay(env, b.at); } catch (e) { /* keep the stored key */ } }
+      const out = await moSave(env, deps, b);
+      return J(out, out.ok ? 200 : 400);
+    }
     if (r === "moments" && m === "GET") {
       await moEnsure(env);
       const items = (await all(env.PERSONAL, "SELECT id, ts, kind, city, place, place_kind, valence, energy, feelings, tags, loved, note FROM cmp_moments ORDER BY ts DESC LIMIT 40")).map((x) => Object.assign({}, x, { feelings: moJ(x.feelings, []), tags: moJ(x.tags, []) }));
@@ -3271,7 +3301,7 @@ export async function handleCompanion(request, env, ctx, deps) {
     if (r === "where" && m === "POST") { const out = await cmpWhere(env, deps, await body()); return J(out, out.ok ? 200 : 400); }
     if (r === "events/remove" && m === "POST") { const b = await body(); const out = await deps.calDelete(env, s(b.id, 80)); return J(out, out.ok ? 200 : 400); }
     if (r === "to-fleet" && m === "POST") { const b = await body(); const out = await sendToFleet(env, b.id); return J(out, out.ok ? 200 : 400); }
-    if (r === "selfcheck" && m === "GET") { await ensureSchema(env.PERSONAL); return J(Object.assign({ ok: true }, await selfCheckState(env))); }
+    if (r === "selfcheck" && m === "GET") { await ensureSchema(env.PERSONAL); await moBackfillPlaces(env, deps).catch(() => null); return J(Object.assign({ ok: true }, await selfCheckState(env))); }
     if (r === "feedback" && m === "POST") { const out = await recordFeedback(env, await body()); return J(out, out.ok ? 200 : 400); }
     if (r === "feedback" && m === "GET") { await ensureSchema(env.PERSONAL); return J(await tasteSummary(env)); }
     if (r === "inbox" && m === "GET") return J({ ok: true, items: await all(env.PERSONAL, "SELECT id, ts, kind, raw_text, media_key, status, result_json FROM cmp_inbox ORDER BY ts DESC LIMIT 50") });
@@ -3292,7 +3322,7 @@ export async function handleCompanion(request, env, ctx, deps) {
     if (r === "activities" && m === "GET") return J({ ok: true, activities: await activityBank(env), categories: ACTIVITY_CATEGORIES });
     if (r === "activities" && m === "POST") { const out = await addActivity(env, await body()); return J(out, out.ok ? 200 : 400); }
     if (r === "helps" && m === "GET") return J(await whatHelps(env, 90));
-    if (r === "safety-plan" && m === "GET") return J(Object.assign({ ok: true, fields: SAFETY_PLAN_FIELDS }, normalizeSafetyPlan((await loadCfg(env)).safety_plan)));
+    if (r === "safety-plan" && m === "GET") return J(Object.assign({ ok: true, fields: SAFETY_PLAN_FIELDS, emergency: await cmpEmergency(env, deps) }, normalizeSafetyPlan((await loadCfg(env)).safety_plan)));
     if (r === "safety-plan" && m === "POST") return J(await saveSafetyPlan(env, await body()));
     if (r === "who5" && m === "GET") return J(Object.assign({ ok: true, items: WHO5_ITEMS, scale: WHO5_SCALE }, await who5Status(env, await loadCfg(env))));
     if (r === "who5" && m === "POST") { const b = await body(); const out = await recordWho5(env, b.items); return J(out, out.ok ? 200 : 400); }
