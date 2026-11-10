@@ -1,4 +1,4 @@
-var VERSION = "1.20.2-codeagent";
+var VERSION = "1.20.3-codeagent";
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -3184,6 +3184,10 @@ async function plProbationGoal(env, L, proposal, now) {
   if (!goal || goal.source !== source) return null;
   return { id: goal.id, key: goalKey, alignment: alignment };
 }
+// PAPER-LEARN-RETRIAGE-1: when a probation learning settles (in place, rejected or lapsed) its adopted PAPER-LEARN goal settles with it, so no goal sits open past the 96h autonomy gap.
+async function plCloseProbationGoal(env, learningId) {
+  await env.QNFO_AUDIT.prepare("UPDATE goals SET status = 'completed' WHERE goal_key = ?1 AND status = 'adopted'").bind("PAPER-LEARN-" + Number(learningId)).run();
+}
 async function plTriageTick(env, opts) {
   var o = opts || {}, out = { marker: PL_TRIAGE_MARK, examined: 0, in_place: 0, rejected: 0, apply: 0, goals: 0, kept: 0 };
   try {
@@ -3253,6 +3257,7 @@ async function plRetriage(env, o, mechs, now, out) {
     if (hit) {
       await env.QNFO_AUDIT.prepare("UPDATE paper_learnings SET fleet_status = 'already-in-place', status_note = ?2, updated_at = ?3 WHERE id = ?1 AND fleet_status = 'probation'")
         .bind(R.id, (PL_TRIAGE_MARK + " in place (" + now + "): " + hit.mech_key + " - " + hit.citation + " (evidence probe ok)").slice(0, 600), now).run();
+      await plCloseProbationGoal(env, R.id);
       out.in_place++;
       continue;
     }
@@ -3261,12 +3266,14 @@ async function plRetriage(env, o, mechs, now, out) {
     var v = await plTriageModel(env, R, mechs, now);
     if (v.settled) {
       await env.QNFO_AUDIT.prepare("UPDATE paper_learnings SET fleet_status = ?2, status_note = ?3, updated_at = ?4 WHERE id = ?1 AND fleet_status = 'probation'").bind(R.id, v.status, v.note.slice(0, 700), now).run();
+      await plCloseProbationGoal(env, R.id);
       if (v.status === "rejected") out.rejected++; else out.in_place++;
     } else if (v.apply) {
       passes++;
       if (passes >= PL_RETRIAGE_PASSES) {
         var lapse = ("PL-TRIAGE-2 rejected (lapsed; " + passes + " triage passes by two model families over " + (PL_RETRIAGE_GAP_H * (passes - 1)) + " hours or more found no covering mechanism and no taker for the apply signal, " + now + "): last signal " + plStr(v.apply.model, 60) + ": " + plStr(v.apply.reason, 300) + " Re-propose with a measured fleet gap.").slice(0, 700);
         await env.QNFO_AUDIT.prepare("UPDATE paper_learnings SET fleet_status = 'rejected', status_note = ?2, updated_at = ?3 WHERE id = ?1 AND fleet_status = 'probation'").bind(R.id, lapse, now).run();
+      await plCloseProbationGoal(env, R.id);
         out.lapsed++;
       } else {
         await env.QNFO_AUDIT.prepare("UPDATE paper_learnings SET status_note = ?2, updated_at = ?3 WHERE id = ?1 AND fleet_status = 'probation'")
