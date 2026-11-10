@@ -46,7 +46,7 @@ ok(asked > 150, "most of the vocabulary can be asked", asked);
 ok(unlabeled.length === 0, "every non-software keyword has a noun phrase in TOPIC_LABEL", unlabeled);
 for (const s of T.RECALL_SEED) {
   const q = T.recallQuestion("seed:" + s.id);
-  ok(q && looksOk(q.ask) && Object.values(q.drafts).every(looksOk) && Object.values(q.drafts).every((d) => !d.includes("(")), "seed question and drafts are clean: " + s.id, q && q.drafts);
+  ok(q && looksOk(q.ask) && Object.values(q.drafts).every(looksOk) && (s.yes || Object.values(q.drafts).every((d) => !d.includes("("))), "seed question and drafts are clean: " + s.id, q && q.drafts);
 }
 ok(T.recallQuestion("term:stakeholder").ask === "Does your experience include stakeholder engagement?", "a bare keyword becomes a noun phrase");
 ok(T.recallQuestion("term:stakeholder").drafts.hands === "Hands-on experience with stakeholder engagement.", "and a professional bullet");

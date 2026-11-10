@@ -735,7 +735,7 @@ const FAMILIES = {
   fam_ai: ["ai governance", "ai policy", "applied ai", "ai product", "ml product", "responsible ai", "ai safety", "trust and safety", "ai evaluation", "ai ethics", "ai strategy", "ai program", "ai programme", "research integrity", "scientific integrity", "open science",
     "ai risk", "model risk", "operational risk", "ai assurance", "ai audit", "algorithmic audit", "ai standards", "ai regulation", "ai act", "ai compliance", "ai policy researcher", "technology policy", "tech policy", "digital policy"],   // JOBSEARCH-FIT-1 (2026-11-09): AI governance, policy, risk and assurance titles
   fam_autonomy: ["autonomous systems", "autonomous system", "autonomy", "agentic", "multi-agent", "ai systems", "systems research", "systems researcher", "ai research", "ai assurance", "ai evaluation", "model evaluation", "evaluations",
-    "ai oversight", "socio-technical", "sociotechnical", "complex systems", "ai safety", "alignment", "red team", "red teaming", "frontier risk", "safety research", "evals lead", "evaluation lead", "evaluation scientist"],
+    "ai oversight", "agent governance", "agent oversight", "agentops", "ai operations", "human oversight", "socio-technical", "sociotechnical", "complex systems", "ai safety", "alignment", "red team", "red teaming", "frontier risk", "safety research", "evals lead", "evaluation lead", "evaluation scientist"],
   // JOBSEARCH-FIT-1: systems modelling and decision science, the owner's 20-year thread (network models, FHWA tour-based model, simulation) as a role family of its own
   fam_sysmodel: ["simulation", "network model*", "network modelling", "network modeling", "systems model*", "systems analyst", "systems analysis", "decision science", "decision scientist", "decision analyst", "decision support", "operations research",
     "transport model*", "transportation model*", "travel demand", "digital twin", "system dynamics", "modelling lead", "modeling lead", "agent-based", "verkeersmodel*", "modelleur"],
@@ -761,7 +761,8 @@ const CLUSTER_KW = {
   data_product: ["data product", "data platform", "analytics", "dashboard", "data strategy", "data governance"],
   autonomous_systems: ["autonomous system*", "autonomy", "agentic", "multi-agent", "multi agent", "ai agent*", "agent-based", "ai safety", "alignment", "ai assurance", "oversight", "failure mode*", "socio-technical", "sociotechnical"],
   platform_strategy: ["founder", "0 to 1", "zero to one", "0-to-1", "platform strategy", "product strategy", "ai strategy", "ai transformation", "ai adoption", "operating model", "systems thinking", "coding agents", "ai coding", "developer productivity",
-    "autonomous development", "self-governing", "agent orchestration", "agentops", "ai operations", "governance of agents", "agent oversight", "venture"],   // JOBSEARCH-ULTRASTABLE-1
+    "autonomous development", "self-governing", "agent orchestration", "agentops", "ai operations", "governance of agents", "agent oversight", "venture",
+    "agent platform", "agent governance", "governance framework", "operating doctrine", "human oversight", "human-in-the-loop", "red team*", "evaluation design", "verification", "ai risk", "nist ai rmf", "eu ai act", "iso/iec 42001", "iso 42001"],   // JOBSEARCH-SKILLS-1   // JOBSEARCH-ULTRASTABLE-1
   systems_modeling: ["systems modeling", "systems modelling", "system dynamics", "complex systems", "network model*", "network analysis", "simulation model*", "decision support", "operations research", "systems thinking"],
   quantum_energy: ["quantum", "energy efficiency", "benchmark"],
   nonprofit: ["nonprofit", "non-profit", "civil society", "ngo", "foundation", "philanthrop*"],
@@ -1194,6 +1195,7 @@ function copyLint(md) {
     const body = l.replace(/^- /, "").replace(/\*\*/g, "").replace(/(?:https?:\/\/|www\.)\S+|\b[\w.+-]+@[\w-]+\.[\w.-]+|\b10\.\d{4,9}\/\S+/g, "URL");
     const prose = sec === "" || sec === "Experience" || sec === "Other experience";
     if (/  /.test(body)) out.push(`L${n}: double space`);
+    if (prose && /^- /.test(l) && /\b(?:I|me|my|mine)\b/.test(body)) out.push(`L${n}: first person in a resume bullet: ${body.slice(0, 50)}`);
     if (/\s[,.;:!?]/.test(body) || /[a-z],[A-Za-z]/.test(body)) out.push(`L${n}: comma or period spacing: ${body.slice(0, 50)}`);
     if (/["']/.test(body)) out.push(`L${n}: straight quote: ${body.slice(0, 50)}`);
     if (/\b(?:19|20)\d{2}\s*-\s*(?:(?:19|20)\d{2}|present)\b/i.test(body)) out.push(`L${n}: hyphen in a year range`);
@@ -2161,6 +2163,8 @@ async function run(env) {
   try {
     await ensureAutonomyBrand(env).catch((e) => logErr("autonomy-brand", e));
     await ensureUltrastableBrand(env).catch((e) => logErr("ultrastable-brand", e));   // JOBSEARCH-ULTRASTABLE-1
+    await ensureUltrastableSkills(env).catch((e) => logErr("ultrastable-skills", e));   // JOBSEARCH-SKILLS-1
+    await syncSkillAsks(env).catch((e) => logErr("skill-asks", e));   // JOBSEARCH-SKILLS-1: taps on fleet.qnfo.org/focus reach the CV bank
     await ensureResearchPubs(env).catch((e) => logErr("research-pubs", e));   // before loadCtx so the context sees the merged bank
     const ctx = await loadCtx(env);
     const prefsHash = await sha256hex(JSON.stringify([RANK_RULES, ctx.a, [...ctx.learned.boost].sort(), [...ctx.learned.block].sort(), [...OWNED].sort(), [...ctx.learned.coPen].sort(), [...ctx.learned.coDrop].sort()]));
@@ -2343,6 +2347,107 @@ function ultrastableBank(b) {
   if (!b.skills.some((k) => /autonomous development platform/i.test(k.name))) b.skills.unshift({ name: "Directing autonomous development platforms", tags: ["founder", "llm"] });
   return b;
 }
+/* JOBSEARCH-SKILLS-1 (owner, 2026-11-10: "the skills required to build this are the skills that should be on my resume"). What the record shows Rowan
+   directed while building Ultrastable, each backed by owner directives recorded verbatim in the public QNFO/qnfo-workers repository (CLAUDE.md,
+   docs/AUTONOMOUS-OPERATION-DOCTRINE.md, docs/PROMPTED-RECALL.md) and by owner_asks answers. Worded as systems design and direction, never as coding,
+   and outcome-level only: no mechanism named in the unfiled patent (ultrastable docs/CONFIDENTIALITY.md). Skills the record cannot back are asked as
+   prompted-recall cards instead (RECALL_SEED entries with ask: true), shown on fleet.qnfo.org/focus and jobs.q08.org. */
+const ULTRASTABLE_SKILL_FACTS = [
+  ["Wrote and revised the operating doctrine for an autonomous agent fleet: the standing rules for what agents decide on their own, what needs a person, how every item is accounted for, and the limits no agent may cross (five revisions in October 2026, published verbatim in the public QNFO/qnfo-workers repository).", ["founder", "research_integrity", "writing", "leadership"],
+    "I wrote the operating doctrine that governs Ultrastable's agents: what they decide alone, what needs a person, and the limits none may cross."],
+  ["Defined the human-oversight boundary: agents proceed on reversible work, and only irreversible, identity-bound steps (money, legal or signing acts, the owner's own accounts) come to a person.", ["founder", "llm", "research_integrity", "policy"],
+    "I defined where a person must stay in the loop: agents proceed on reversible work, and only irreversible, identity-bound steps come to a human."],
+  ["Set the verification and evaluation requirements: no change counts until a live check proves it, every problem found is fixed, deployed and verified, and output quality is judged by outcomes rather than proxy scores.", ["founder", "research_integrity", "llm"],
+    "I set Ultrastable's verification rules: nothing counts until a live check proves it, and quality is judged by outcomes, not proxy scores."],
+  ["Directed coding agents from several vendors (Claude Code, GitHub Copilot, OpenAI Codex) under one written operating agreement that routes each kind of work to the agent best suited to it.", ["founder", "llm", "leadership"],
+    "I direct coding agents from several vendors under one written operating agreement that decides which agent takes which work."],
+  ["Set the fleet's operating targets: service levels measured in minutes, an owner and an automatic trigger for every metric, and AI spend caps that steer model choice instead of stopping work.", ["founder", "leadership", "product"],
+    "I set the platform's operating targets: service levels in minutes, a trigger behind every metric, and spend caps that steer model choice."],
+  ["Reframed an internal research fleet as a product, Ultrastable, with QNFO as its first installation, and set the rule that every public product claim is backed by a live check.", ["founder", "product"],
+    "I turned an internal research fleet into a product, Ultrastable, and required every public claim about it to be backed by a live check."],
+  ["Set the interaction standards for every screen the platform shows people: one primary action, tap-to-answer questions instead of typing, and accessible contrast and tap sizes.", ["founder", "product"],
+    "I set the platform's interaction standards: one primary action per screen and tap-to-answer questions instead of typing."],
+];
+const ULTRASTABLE_SKILLS = [
+  ["Autonomous systems governance and doctrine design", ["founder", "research_integrity"]],
+  ["Human oversight and approval-boundary design for AI agents", ["llm", "research_integrity"]],
+  ["Verification and evaluation design for AI agents", ["llm", "research_integrity"]],
+  ["Failure-mode and risk analysis for autonomous systems", ["research_integrity", "founder"]],
+  ["Multi-vendor AI agent orchestration and oversight", ["llm", "founder"]],
+  ["Operating metrics, service levels and AI cost governance", ["leadership", "founder"]],
+  ["Product and platform strategy for autonomous systems", ["product", "founder"]],
+  ["Writing machine-checkable specifications and requirements", ["writing", "research_integrity"]],
+  ["Research program direction", ["research_mgmt", "leadership"]],
+];
+function ultrastableSkillsBank(b) {
+  b.facts = b.facts || []; b.skills = b.skills || [];
+  const role = (b.roles || []).some((r) => r.id === ULTRASTABLE_ROLE.id) ? ULTRASTABLE_ROLE.id : "R01";
+  for (const [text, tags, pitch] of ULTRASTABLE_SKILL_FACTS)
+    if (!b.facts.some((f) => f.text === text)) b.facts.push({ id: nextFactId(b), role, text, tags: [...tags], source: "record:qnfo-workers owner directives 2026-10", status: "verified", pitch });
+  // appended: a tailored resume orders skills by the posting's tags, so these lead for autonomy roles and leave other roles' skill lines as they were
+  for (const [name, tags] of ULTRASTABLE_SKILLS) if (!b.skills.some((k) => k.name.toLowerCase() === name.toLowerCase())) b.skills.push({ name, tags: [...tags] });
+  return b;
+}
+async function ensureUltrastableSkills(env) {
+  if ((await getMeta(env, "ultrastable_skills_v1")) === "done") return false;
+  await mutateBank(env, (b) => ultrastableSkillsBank(b), { keepVerified: true });
+  await setMeta(env, "ultrastable_skills_v1", "done");
+  return true;
+}
+/* The cards for skills the record cannot back: each is one row in qnfo-audit.owner_asks (kind cv-skill, ref the seed id), so fleet.qnfo.org/focus and
+   the companion ask it by tap. Each hourly run copies a tap from there into the CV bank through recallAnswer (a yes writes the seed's own sentence as a
+   verified fact, a no or a change removes it), and copies a tap made on jobs.q08.org back to the row so the question is not asked twice. Not sure
+   comes back after RECALL_UNSURE_DAYS. */
+function skillAskOptions(s) {
+  const yes = s.where ? s.where.map((w) => ({ key: w.role, label: w.label })) : [{ key: "yes", label: "Yes" }];
+  return yes.concat([{ key: "no", label: "No" }, { key: "unsure", label: "Not sure" }]);
+}
+const SKILL_ASKS = () => RECALL_SEED.filter((s) => s.ask);
+async function syncSkillAsks(env) {
+  const asks = SKILL_ASKS(), out = { seeded: 0, applied: 0, mirrored: 0, reopened: 0 };
+  for (const s of asks) {
+    const r = await env.JOBS_DB.prepare("INSERT OR IGNORE INTO owner_asks (plane, kind, ref, question, cue, options_json, priority) VALUES ('jobs','cv-skill',?1,?2,?3,?4,2)")
+      .bind(s.id, s.ask, s.cue, JSON.stringify(skillAskOptions(s))).run();
+    out.seeded += (r.meta && r.meta.changes) || 0;
+  }
+  const rows = (await env.JOBS_DB.prepare("SELECT id, ref, answer, answered_at FROM owner_asks WHERE kind='cv-skill'").all()).results || [];
+  await loadBank(env);
+  const recall = BANK.recall || {}, todo = [];
+  for (const row of rows) {
+    const s = asks.find((x) => x.id === row.ref);
+    if (!s) continue;
+    const key = "seed:" + s.id, rec = recall[key];
+    if (row.answer && row.answered_at) {
+      if (row.answer === "unsure" && Date.now() - Date.parse(row.answered_at) > RECALL_UNSURE_DAYS * 86400000) {
+        await env.JOBS_DB.prepare("UPDATE owner_asks SET answer=NULL, answer_label=NULL, answered_at=NULL, answered_via=NULL WHERE id=?1").bind(row.id).run(); out.reopened++; continue;
+      }
+      if (rec && (rec.ask_at === row.answered_at || Date.parse(rec.at || 0) >= Date.parse(row.answered_at))) continue;   // the bank already holds this tap, or a newer one from jobs.q08.org
+      const placed = s.where ? (s.where.find((w) => w.role === row.answer) || {}).role : null;
+      const answer = placed || row.answer === "yes" ? "yes" : row.answer === "no" ? "no" : "unsure";
+      todo.push({ key, answer, role: placed || (s.roles || [])[0], depth: "led", ask_at: row.answered_at });
+    } else if (rec && rec.answer) {
+      const label = rec.answer === "yes" ? "Yes" : rec.answer === "no" ? "No" : "Not sure";
+      await env.JOBS_DB.prepare("UPDATE owner_asks SET answer=?1, answer_label=?2, answered_at=?3, answered_via='jobs.q08.org' WHERE id=?4 AND answered_at IS NULL")
+        .bind(rec.answer === "yes" ? (rec.role && s.where ? rec.role : "yes") : rec.answer, label, rec.at || new Date().toISOString(), row.id).run();
+      out.mirrored++;
+    }
+  }
+  if (todo.length) { await mutateBank(env, (b) => { for (const d of todo) { recallAnswer(b, d); b.recall[d.key].ask_at = d.ask_at; b.recall[d.key].via = "fleet.qnfo.org/focus"; } return b; }); out.applied = todo.length; }
+  return out;
+}
+// GET /api/cv-skills (open): the skills on the CV, the evidenced ones and those the owner confirmed by tap, for rwnq8/resume's sync workflow
+async function cvSkills(env) {
+  await loadBank(env);
+  const b = BANK, recall = b.recall || {};
+  const confirmed = SKILL_ASKS().map((s) => {
+    const rec = recall["seed:" + s.id];
+    if (!rec || rec.answer !== "yes") return null;
+    const f = (b.facts || []).find((x) => x.id === rec.fact);
+    return f ? { key: s.id, skill: s.skill, text: f.text, confirmed_at: String(rec.at || "").slice(0, 10) } : null;
+  }).filter(Boolean);
+  const open = SKILL_ASKS().filter((s) => !recall["seed:" + s.id]).map((s) => s.id);
+  return { schema_version: "cv-skills/v1", skills: (b.skills || []).map((s) => s.name), evidenced: ULTRASTABLE_SKILL_FACTS.map(([t]) => t), confirmed, open_questions: open };
+}
 async function ensureResearchPubs(env) {
   if ((await getMeta(env, "research_pubs_v1")) === "done") return false;
   await mutateBank(env, (b) => {
@@ -2470,6 +2575,17 @@ const RECALL_SEED = [
   { id: "llm_evaluation", what: "evaluating large language model output (scoring answers, calibrating a model's judgment against a person's)", cue: "Model evals, judge-versus-owner calibration, checking generated text against a source.", roles: ["R01", "R02"], tags: ["llm", "research_integrity"] },
   { id: "human_in_loop", what: "human-in-the-loop workflows where people approve or correct what an automated system proposes", cue: "Owner approval cards, review queues, a person signing off before anything is sent.", roles: ["R01", "R05", "R03"], tags: ["llm", "product"] },
   { id: "feedback_loops", what: "systems with feedback loops, where measured results automatically change what the system does next", cue: "Metrics that re-rank work, self-tuning limits, a model re-run after new counts arrive.", roles: ["R01", "R08"], tags: ["llm", "numerics"] },
+  // JOBSEARCH-SKILLS-1: skills the Ultrastable build suggests but the record cannot back; ask: true puts each on fleet.qnfo.org/focus (owner_asks kind cv-skill)
+  { id: "ip_strategy", ask: "Did you direct the IP work for Ultrastable: the invention disclosure that names you as inventor and the draft provisional patent (November 2026)?", what: "intellectual-property strategy for an autonomous platform", cue: "Think of ultrastable/ip: the invention disclosure, the provisional specification and the 100-page limit you set for it.", roles: ["R00", "R01"], tags: ["founder"], skill: "IP strategy for an autonomous platform", yes: "Directed intellectual-property strategy for Ultrastable: the invention disclosure (named inventor) and preparation of a provisional patent application (not yet filed)." },
+  { id: "venture_plan", ask: "Did you direct the Ultrastable venture plan: target customers, competitors, pitch and funding options (November 2026)?", what: "venture and go-to-market planning", cue: "Think of ultrastable/business/plan: the customer and competition notes, the pitch kit, the Google for Startups kit, the funding tracks.", roles: ["R00", "R01"], tags: ["founder", "product"], skill: "Venture and go-to-market planning", yes: "Directed the Ultrastable venture plan: target customers, a competitive map, pitch materials and funding options." },
+  { id: "prompt_design", ask: "Did you write or tune the instructions and prompts the fleet's agents run on (the paper writer, the referee, the code loop, the CLAUDE.md rules), 2024 to 2026?", what: "designing instructions and prompts for AI agents", cue: "Rewording a rule after an agent misread it, a prompt you changed because papers came out wrong, the standing rules the agents load.", roles: ["R01", "R00"], tags: ["llm", "writing"], skill: "Prompt and agent-instruction design", yes: "Designed and tuned the instructions and prompts that steer an autonomous agent fleet (writers, referees and the code loop)." },
+  { id: "red_team", ask: "Did you test AI agents adversarially yourself: trying to make them fail, or catching claims that did not match the real output (2024 to 2026)?", what: "red-teaming AI agents", cue: "Catching a 'done' that was never deployed, the self-audit rule you wrote, The Universal Ignorance Audit.", roles: ["R00", "R01"], tags: ["research_integrity", "llm"], skill: "Red-teaming and adversarial testing of AI agents", yes: "Red-teamed autonomous AI agents: tested their claims against real output and turned each failure found into a standing rule or check." },
+  { id: "model_selection", ask: "Did you choose which AI models do which jobs by cost and quality (cheap models versus premium ones, reviewers from different model families), 2025 to 2026?", what: "choosing AI models by cost and quality", cue: "Moving work to cheaper Workers AI models, keeping reviewers from different model families, the spend caps that steer model choice.", roles: ["R00", "R01"], tags: ["llm"], skill: "AI model selection and cost-quality trade-offs", yes: "Chose AI models for each job by cost and quality, including reviewers from different model families so their errors do not line up." },
+  { id: "nist_ai_rmf", ask: "Have you worked with the NIST AI Risk Management Framework (reading it to design limits, mapping controls to it, or advising on it)?", what: "the NIST AI Risk Management Framework", cue: "Govern, Map, Measure, Manage; the 2023 NIST AI 100-1 document; a client or Empowering Change risk review.", roles: ["R00", "R02"], tags: ["research_integrity", "policy"], skill: "NIST AI Risk Management Framework", yes: "Applied the NIST AI Risk Management Framework to the limits and oversight of an AI system." },
+  { id: "eu_ai_act", ask: "Have you worked with the EU AI Act (risk tiers, obligations for general-purpose or high-risk AI) in a design, policy or advisory task?", what: "the EU AI Act", cue: "Risk tiers, transparency duties, a compliance read for a product, policy work in the Netherlands.", roles: ["R00", "R02"], tags: ["research_integrity", "policy"], skill: "EU AI Act", yes: "Worked with the EU AI Act's risk tiers and obligations in the design and governance of an AI product." },
+  { id: "people_mgmt", ask: "Have you managed people who reported to you (hired, set goals and reviewed their work)? Where?", what: "managing people who reported to me", cue: "Analysts at AARP, a contractor team at FHWA, staff or volunteers at Empowering Change.", roles: ["R05", "R08", "R02"], tags: ["leadership"], skill: "People management", yes: "Managed direct reports: hired staff, set goals and reviewed their work.",
+    where: [{ role: "R05", label: "Yes, at AARP" }, { role: "R08", label: "Yes, at FHWA" }, { role: "R02", label: "Yes, at Empowering Change" }] },
+  { id: "ai_briefing", ask: "Have you presented on AI agents or autonomous systems to an outside audience (a talk, a client or investor briefing, a meetup) in 2025 or 2026?", what: "presenting on autonomous AI systems", cue: "A meetup talk, a demo for a possible partner, a briefing on the fleet for an investor or employer.", roles: ["R01", "R00"], tags: ["writing"], skill: "Briefing audiences on autonomous AI systems", yes: "Presented on autonomous AI systems and how they fail to outside audiences." },
   { id: "explain_models", what: "explaining technical models to non-technical decision makers (agency leaders, legislators or executives)", cue: "Briefings for FHWA leadership, AARP policy staff, client executives at Deloitte.", roles: ["R08", "R05", "R07"], tags: ["writing", "policy"] },
 ];
 const RECALL_DEPTHS = [["led", "I led it"], ["hands", "I did it hands-on"], ["team", "I was on the team"]];
@@ -2502,6 +2618,7 @@ const TOPIC_LABEL = {
   sustainab: "sustainability", climate: "climate-related work", "energy transition": "the energy transition", "net zero": "net-zero planning", decarbon: "decarbonization", "software engineering": "software engineering", serverless: "serverless architectures", "distributed systems": "distributed systems", "cloud infrastructure": "cloud infrastructure",
   "theoretical physics": "theoretical physics", "quantum field theory": "quantum field theory", renormali: "renormalization", "effective field theory": "effective field theory", "statistical mechanics": "statistical mechanics", "perturbation theory": "perturbation theory", "path integral": "path-integral methods", "condensed matter": "condensed-matter physics", "particle physics": "particle physics", "high energy physics": "high-energy physics", "high-dimensional": "high-dimensional data analysis", "high dimensional": "high-dimensional data analysis", regulari: "regularization methods", lasso: "lasso regression", "dimensionality reduction": "dimensionality reduction", shrinkage: "shrinkage estimation", penali: "penalized regression", numerical: "numerical methods", simulation: "simulation", "monte carlo": "Monte Carlo methods", optimization: "optimization", "scientific computing": "scientific computing", "linear algebra": "linear algebra", "differential equations": "differential equations",
   teaching: "teaching", lecturer: "lecturing", instructor: "instruction", curriculum: "curriculum development", tutor: "tutoring", "technical writing": "technical writing", "peer-reviewed": "peer-reviewed publishing", "scientific writing": "scientific writing", publications: "scientific publishing", "report writing": "report writing",
+  "agent platform": "agent platforms", "agent governance": "governance of AI agents", "governance framework": "governance frameworks", "operating doctrine": "operating-doctrine design", "human oversight": "human oversight of AI systems", "human-in-the-loop": "human-in-the-loop workflows", "red team": "red-teaming", "evaluation design": "evaluation design", verification: "verification and validation", "ai risk": "AI risk assessment", "nist ai rmf": "the NIST AI Risk Management Framework", "eu ai act": "the EU AI Act", "iso/iec 42001": "ISO/IEC 42001 management systems", "iso 42001": "ISO/IEC 42001 management systems",
   agile: "Agile delivery", scrum: "Scrum delivery", okr: "OKR planning and tracking", kpi: "KPI definition and tracking", "stakeholder management": "stakeholder management", "grant writing": "grant writing", "six sigma": "Six Sigma methods", prince2: "PRINCE2 project management", pmp: "project management", gdpr: "GDPR compliance", wcag: "WCAG accessibility standards",
 };
 // labels that name organizations, not work: they take "work with" in the question and the resume sentence
@@ -2539,7 +2656,7 @@ function recallRoles(ids, tags) {
 function recallQuestion(key, extra = {}) {
   let what, ask, cue = extra.cue || "", tags, roles, kind = "topic", label, frame, skillName = "";
   const seed = key.startsWith("seed:") && RECALL_SEED.find((s) => "seed:" + s.id === key);
-  if (seed) { what = seed.what; label = SEED_LABEL[seed.id]; frame = RECALL_FRAMES.seed; ask = "Have you worked on " + seed.what + "?"; cue = seed.cue; tags = seed.tags; roles = recallRoles(seed.roles, seed.tags); }
+  if (seed) { what = seed.what; label = SEED_LABEL[seed.id] || (seed.yes ? seed.what : ""); frame = RECALL_FRAMES.seed; ask = seed.ask || "Have you worked on " + seed.what + "?"; cue = seed.cue; tags = seed.tags; roles = recallRoles(seed.roles, seed.tags); }
   else if (key.startsWith("term:")) {
     const term = clean(key.slice(5), 80).toLowerCase();
     if (!term || !vocabulary().has(term)) return null;
@@ -2554,8 +2671,8 @@ function recallQuestion(key, extra = {}) {
     }
   } else return null;
   if (!label) return null;
-  const drafts = Object.fromEntries(RECALL_DEPTHS.map(([d]) => [d, polishProse(frame[d](label))]));
-  return { key, ask: polishProse(ask, { sentence: false }), cue, what, kind, skillName, tags, roles, depths: RECALL_DEPTHS.map(([id, lab]) => ({ id, label: lab, draft: drafts[id] })), drafts, ...(extra.count ? { count: extra.count, example: extra.example } : {}) };
+  const drafts = Object.fromEntries(RECALL_DEPTHS.map(([d]) => [d, polishProse(seed && seed.yes ? seed.yes : frame[d](label))]));   // JOBSEARCH-SKILLS-1: a skill card saves its own sentence
+  return { key, ask: polishProse(ask, { sentence: false }), cue, what, kind, skillName, tags, roles, skill: (seed && seed.skill) || null, depths: RECALL_DEPTHS.map(([id, lab]) => ({ id, label: lab, draft: drafts[id] })), drafts, ...(extra.count ? { count: extra.count, example: extra.example } : {}) };
 }
 function recallOpen(key) {
   const a = (BANK.recall || {})[key];
@@ -2604,7 +2721,8 @@ function recallAnswer(b, d) {
     const id = nextFactId(b);
     b.facts.push({ id, role, text: q.drafts[depth], tags, source: "recall:" + q.key, status: "verified" });
     Object.assign(rec, { role, depth, fact: id });
-    if (q.skillName && !(b.skills || []).some((s) => s.name.toLowerCase() === q.skillName.toLowerCase())) { (b.skills = b.skills || []).push({ name: q.skillName, tags }); rec.skill = q.skillName; }
+    const sk = q.skillName || q.skill;
+    if (sk && !(b.skills || []).some((s) => s.name.toLowerCase() === sk.toLowerCase())) { (b.skills = b.skills || []).push({ name: sk, tags }); rec.skill = sk; }
   }
   b.recall[q.key] = rec;
 }
@@ -2777,7 +2895,7 @@ const INDEX = {
   worker: WORKER, version: VERSION,
   routes: {
     "GET /": "web UI", "GET /api/matches?tier=A|B&status=&q=&limit=": "ranked matches without artifacts; default lists only undecided ones, status=mine lists your applications, status=all everything", "GET /api/matches/:id": "one match with resume_md and note_md",
-    "GET /api/linkedin": "what to search on LinkedIn: boolean searches for the owner's target roles with LinkedIn, Google and Indeed links (JOBSEARCH-LINKEDIN-1)", "GET /api/runs": "recent pipeline runs", "GET /api/funnel": "applications to replies, interviews and offers by board kind and score band", "GET /api/ledger": "the claim ledger every output sentence must come from", "GET /api/ops": "operational self-report: the fm-jobsearch-* checks, feed health, counts", "GET /api/prefs": "the yes/no search survey with your answers; POST {answers:{id:true|false|null}} saves and re-runs the search", "POST /api/analyze": "{input: link or pasted posting text, title?, company?} -> fit, strengths, gaps, whether it would appear in your search, verified draft", "POST /api/feedback": "{title, company, verdict: like|dislike} teaches the search", "GET /api/outcomes": "funnel (matches, approved, applied, replies, interviews, offers), reply rate of applications older than 21 days, by tier", "POST /api/auth/request": "e-mail a 6-digit sign-in code to the owner", "POST /api/auth/verify": "{code} -> owner session (cookie jobs_session, 12 h)", "GET /api/auth/me": "signed-in state", "POST /api/auth/logout": "revoke the session", "POST /api/run": "trigger a run (10-minute cooldown)",
+    "GET /api/cv-skills": "open: the CV skills, the evidenced Ultrastable facts and the skills the owner confirmed by tap, read by rwnq8/resume (JOBSEARCH-SKILLS-1)", "GET /api/linkedin": "what to search on LinkedIn: boolean searches for the owner's target roles with LinkedIn, Google and Indeed links (JOBSEARCH-LINKEDIN-1)", "GET /api/runs": "recent pipeline runs", "GET /api/funnel": "applications to replies, interviews and offers by board kind and score band", "GET /api/ledger": "the claim ledger every output sentence must come from", "GET /api/ops": "operational self-report: the fm-jobsearch-* checks, feed health, counts", "GET /api/prefs": "the yes/no search survey with your answers; POST {answers:{id:true|false|null}} saves and re-runs the search", "POST /api/analyze": "{input: link or pasted posting text, title?, company?} -> fit, strengths, gaps, whether it would appear in your search, verified draft", "POST /api/feedback": "{title, company, verdict: like|dislike} teaches the search", "GET /api/outcomes": "funnel (matches, approved, applied, replies, interviews, offers), reply rate of applications older than 21 days, by tier", "POST /api/auth/request": "e-mail a 6-digit sign-in code to the owner", "POST /api/auth/verify": "{code} -> owner session (cookie jobs_session, 12 h)", "GET /api/auth/me": "signed-in state", "POST /api/auth/logout": "revoke the session", "POST /api/run": "trigger a run (10-minute cooldown)",
     "GET /api/referrals": "the best open matches with a referral kit link each", "GET /api/matches/:id/referral": "people-search links and a verified-facts message to ask someone you know for a referral (owner session)", "POST /api/matches/:id/stage": "record an interview stage {stage: recruiter_screen|hiring_manager|technical|take_home|panel|final|reference_check, note} (owner session)",
     "POST /api/matches/:id/status": "owner decision or outcome {status: approved|rejected|applied|replied|interview|offer|no_reply|pending_owner_approval}, logged as an event; needs an owner session or x-loop-token", "POST /api/answers": "draft free-response application answers {input, questions[]} from the verified record; pay, authorization and demographic questions come back owner_only", "POST /api/prep": "interview brief for a posting {input}: role summary, offer, gaps, STAR story picks, likely questions", "POST /api/prep/quiz": "feedback on one spoken answer {question, answer, role}", "POST /api/calibrate": "record your verdict {owner: qualified|stretch|not_qualified, title, company, rubric_fit, judge_fit}", "GET /api/calibration": "how often the rubric and the model reading agree with you", "GET /api/matches/:id/resume.pdf": "text PDF of the tailored resume (one column, selectable text)", "GET /health": "version", "GET /prep": "phone page: check fit with calibration, draft answers, interview brief and quiz", "GET /cv": "the CV page: interview, review, edit, resume per job, history", "GET /api/cv": "the CV bank, questions with answers, review queue (owner session)", "POST /api/cv/answer|fact|review|set|import": "edit the CV bank (owner session); GET /api/cv/export is the backup", "GET /api/cv/history": "resumes built for jobs", "GET /api/recall?match=": "prompted recall: yes/no/not sure questions about what a posting asks for and the CV cannot back yet (owner session); without match, the queue across open matches", "POST /api/recall/answer": "{key, answer: yes|no|unsure, role, depth: led|hands|team} -> a yes adds the shown sentence to the CV as a verified fact (owner session)",
   },
@@ -2849,6 +2967,7 @@ const handler = {
       } catch (e) { return J({ error: e.message }, e.status || 422); }
     }
     if (p === "/api/calibration" && m === "GET") { if (!(await ownerSession(request, env))) return J({ error: "sign in first: POST /api/auth/request, then POST /api/auth/verify" }, 401); await ensure(env); return J(await calibration(env)); }
+    if (p === "/api/cv-skills" && m === "GET") { await ensure(env); return J(await cvSkills(env)); }   // JOBSEARCH-SKILLS-1, open read for rwnq8/resume
     if (p === "/api/recall" || p === "/api/recall/answer") {
       // RECALL-CARD-1: the fleet dashboard card calls these through a service binding with the loop token, after its own owner-session check; a visitor gets 401
       if (!(await ownerSession(request, env)) && !(await tokenOk(request, env))) return J({ error: "sign in first: POST /api/auth/request, then POST /api/auth/verify" }, 401);
@@ -2993,7 +3112,7 @@ const handler = {
     return J({ error: "not found", see: "/api" }, 404);
   },
 };
-handler.__test = { refreshRecallFacts, polishProse, polishBank, copyLint, toolCase, vocabulary, TOPIC_LABEL, SOFTWARE, PROSE_CASE, linkedinSearches, LINKEDIN_SEARCHES, codingLoad, CANDIDATE_BOARDS, collectAndRank, cosine, bestSim, semanticLens, scoreJob, exploreOverlap, recordTerms, diversifyRows, recallGaps, recallQuestion, recallAnswer, recallQueue, RECALL_SEED, loadCtx, referralKit, referralList, STAGES, judgeTop, buildResume, verify, headlineVerdict, outcomes, pdfOf, pdfClean, checkAnswer, jsonLoose, PROTECTED_Q, draftAnswers, prepBrief, quizFeedback, judgeJob, calibrate, calibration, followups, atsOf, keywordReport, docxOf, resumeHtml, plainOf, applyKit, matchKit, stripTags, postingTerms, evaluate, rank, buildResume, buildNote, verify, stripHtml, locationGate, has, LEDGER, dedupeKey, feedPrefix, makeCtx, scoreJob, scoreFeatures, featuresFromWhy, applicationSnapshot, parseApplicationSnapshot, outcomeScoreWeights, loadCtx, SURVEY, BOARDS, normKey, applyBank, BANK_SEED, QUESTIONS, TAG_TO_CLUSTERS, clustersOf, cvAnswer, cvFact, cvReview, cvSet, cvImport, mutateBank, loadBank, decidedKeys, FETCHERS, getBank: () => BANK, llmRerank, llmRerankRun, ensureResearchPubs, ensureAutonomyBrand, ensureUltrastableBrand, ultrastableBank, ULTRASTABLE_S1, RESEARCH_PUBS, FAMILIES, CLUSTER_KW, headline, pubLine, parseRerank, reasonOk, rerankMessages, artifactsFor, titleCandidate, sitemapUrls, slugTitle, PUBLIC_SECTOR, opsReport };
+handler.__test = { refreshRecallFacts, polishProse, polishBank, copyLint, toolCase, vocabulary, TOPIC_LABEL, SOFTWARE, PROSE_CASE, linkedinSearches, LINKEDIN_SEARCHES, codingLoad, CANDIDATE_BOARDS, collectAndRank, cosine, bestSim, semanticLens, scoreJob, exploreOverlap, recordTerms, diversifyRows, recallGaps, recallQuestion, recallAnswer, recallQueue, RECALL_SEED, loadCtx, referralKit, referralList, STAGES, judgeTop, buildResume, verify, headlineVerdict, outcomes, pdfOf, pdfClean, checkAnswer, jsonLoose, PROTECTED_Q, draftAnswers, prepBrief, quizFeedback, judgeJob, calibrate, calibration, followups, atsOf, keywordReport, docxOf, resumeHtml, plainOf, applyKit, matchKit, stripTags, postingTerms, evaluate, rank, buildResume, buildNote, verify, stripHtml, locationGate, has, LEDGER, dedupeKey, feedPrefix, makeCtx, scoreJob, scoreFeatures, featuresFromWhy, applicationSnapshot, parseApplicationSnapshot, outcomeScoreWeights, loadCtx, SURVEY, BOARDS, normKey, applyBank, BANK_SEED, QUESTIONS, TAG_TO_CLUSTERS, clustersOf, cvAnswer, cvFact, cvReview, cvSet, cvImport, mutateBank, loadBank, decidedKeys, FETCHERS, getBank: () => BANK, llmRerank, llmRerankRun, ensureResearchPubs, ensureAutonomyBrand, ensureUltrastableBrand, ultrastableBank, ultrastableSkillsBank, ULTRASTABLE_SKILL_FACTS, ULTRASTABLE_SKILLS, syncSkillAsks, skillAskOptions, cvSkills, ULTRASTABLE_S1, RESEARCH_PUBS, FAMILIES, CLUSTER_KW, headline, pubLine, parseRerank, reasonOk, rerankMessages, artifactsFor, titleCandidate, sitemapUrls, slugTitle, PUBLIC_SECTOR, opsReport };
 export default handler;
 
 // ------------------------------------------------------------------ client script shared by both pages (JOBSEARCH-APPLY-1): kit handling and the Fill application bookmark
