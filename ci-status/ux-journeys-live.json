@@ -1,7 +1,7 @@
 {
  "mode": "live",
- "at": "2026-11-10T00:23:38.371Z",
- "sha": "28a3d685bd6f19e340e2b8d9bd6221938b1af369",
+ "at": "2026-11-10T00:30:34.735Z",
+ "sha": "656a3e95ec6942c5adc8e6f2daff931b9ded211d",
  "apps": [
   {
    "app": "ask-qwav",
@@ -30,7 +30,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 2156,
+     "ms": 3378,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -59,7 +59,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 2138,
+     "ms": 3240,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -90,7 +90,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1530,
+     "ms": 1630,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -126,7 +126,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 8753,
+     "ms": 8639,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -155,7 +155,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1247,
+     "ms": 1182,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -182,7 +182,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 2735,
+     "ms": 3853,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -209,7 +209,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 369,
+     "ms": 430,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -255,7 +255,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 2399,
+     "ms": 3242,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -282,86 +282,6 @@
        "emptyOverlays": [],
        "smallTargets": [
         {
-         "name": "Same search on Google",
-         "w": 166,
-         "h": 22
-        },
-        {
-         "name": "On Indeed",
-         "w": 72,
-         "h": 22
-        },
-        {
-         "name": "Same search on Google",
-         "w": 166,
-         "h": 22
-        },
-        {
-         "name": "On Indeed",
-         "w": 72,
-         "h": 22
-        },
-        {
-         "name": "Same search on Google",
-         "w": 166,
-         "h": 22
-        },
-        {
-         "name": "On Indeed",
-         "w": 72,
-         "h": 22
-        },
-        {
-         "name": "Same search on Google",
-         "w": 166,
-         "h": 22
-        },
-        {
-         "name": "On Indeed",
-         "w": 72,
-         "h": 22
-        },
-        {
-         "name": "Same search on Google",
-         "w": 166,
-         "h": 22
-        },
-        {
-         "name": "On Indeed",
-         "w": 72,
-         "h": 22
-        },
-        {
-         "name": "Same search on Google",
-         "w": 166,
-         "h": 22
-        },
-        {
-         "name": "On Indeed",
-         "w": 72,
-         "h": 22
-        },
-        {
-         "name": "Same search on Google",
-         "w": 166,
-         "h": 22
-        },
-        {
-         "name": "On Indeed",
-         "w": 72,
-         "h": 22
-        },
-        {
-         "name": "Same search on Google",
-         "w": 166,
-         "h": 22
-        },
-        {
-         "name": "On Indeed",
-         "w": 72,
-         "h": 22
-        },
-        {
          "name": "Apply and prepare",
          "w": 138,
          "h": 23
@@ -386,16 +306,34 @@
        "axe": []
       }
      ],
-     "consoleErrors": [],
-     "pageErrors": [],
-     "badResponses": [],
+     "consoleErrors": [
+      "Failed to load resource: the server responded with a status of 500 ()",
+      "Failed to load resource: the server responded with a status of 500 ()",
+      "Failed to load resource: the server responded with a status of 500 ()",
+      "Failed to load resource: the server responded with a status of 500 ()",
+      "Failed to load resource: the server responded with a status of 500 ()"
+     ],
+     "pageErrors": [
+      "500",
+      "500"
+     ],
+     "badResponses": [
+      "500 https://jobs.q08.org/api/prefs",
+      "500 https://jobs.q08.org/api/followups",
+      "500 https://jobs.q08.org/api/matches?",
+      "500 https://jobs.q08.org/api/linkedin",
+      "500 https://jobs.q08.org/api/outcomes"
+     ],
      "ok": true,
      "error": null,
-     "attempts": 1,
-     "ms": 4575,
+     "attempts": 2,
+     "ms": 2825,
      "grade": {
-      "status": "ok",
-      "reasons": []
+      "status": "broken",
+      "reasons": [
+       "page error: 500",
+       "page error: 500"
+      ]
      }
     },
     {
@@ -521,8 +459,8 @@
      "badResponses": [],
      "ok": true,
      "error": null,
-     "attempts": 1,
-     "ms": 4184,
+     "attempts": 2,
+     "ms": 5349,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -554,7 +492,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1935,
+     "ms": 1782,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -562,7 +500,13 @@
     }
    ],
    "screenFindings": [
-    "home: 20 tap target(s) under 24px, e.g. \"Same search on Google\" 166x22, \"On Indeed\" 72x22, \"Same search on Google\" 166x22",
+    "home: 4 tap target(s) under 24px, e.g. \"Apply and prepare\" 138x23, \"Claim ledger\" 95x23, \"Operations\" 82x23",
+    "console error in apply-controls-visible: Failed to load resource: the server responded with a status of 500 ()",
+    "HTTP 500 https://jobs.q08.org/api/prefs during apply-controls-visible",
+    "HTTP 500 https://jobs.q08.org/api/followups during apply-controls-visible",
+    "HTTP 500 https://jobs.q08.org/api/matches? during apply-controls-visible",
+    "HTTP 500 https://jobs.q08.org/api/linkedin during apply-controls-visible",
+    "HTTP 500 https://jobs.q08.org/api/outcomes during apply-controls-visible",
     "home-recall: 20 tap target(s) under 24px, e.g. \"Same search on Google\" 166x22, \"On Indeed\" 72x22, \"Same search on Google\" 166x22"
    ]
   },
@@ -595,7 +539,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 8130,
+     "ms": 10284,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -615,7 +559,7 @@
      "ok": false,
      "error": "expected to see \"Order size\" on https://markets.q08.org/",
      "attempts": 2,
-     "ms": 11853,
+     "ms": 14170,
      "grade": {
       "status": "broken",
       "reasons": [
@@ -646,7 +590,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1221,
+     "ms": 1121,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -682,7 +626,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 8485,
+     "ms": 8398,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -880,7 +824,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 4163,
+     "ms": 7085,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -1038,7 +982,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 4342,
+     "ms": 5704,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -1112,7 +1056,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 14525,
+     "ms": 13347,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -1141,7 +1085,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 8470,
+     "ms": 8460,
      "grade": {
       "status": "new",
       "reasons": [
@@ -1174,7 +1118,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 3863,
+     "ms": 5611,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -1205,7 +1149,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1500,
+     "ms": 1520,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -1236,7 +1180,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 6538,
+     "ms": 9062,
      "grade": {
       "status": "new",
       "reasons": [
@@ -1273,7 +1217,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 8786,
+     "ms": 8814,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -1415,7 +1359,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1826,
+     "ms": 2302,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -2768,7 +2712,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 2967,
+     "ms": 3163,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -2893,7 +2837,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1572,
+     "ms": 2467,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -2924,7 +2868,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 11280,
+     "ms": 14834,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3041,7 +2985,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 9285,
+     "ms": 9458,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3072,7 +3016,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 9364,
+     "ms": 9557,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3101,7 +3045,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 956,
+     "ms": 916,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3223,7 +3167,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1668,
+     "ms": 2081,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3252,7 +3196,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 8818,
+     "ms": 8985,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3308,7 +3252,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 4272,
+     "ms": 5008,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3339,7 +3283,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 3261,
+     "ms": 3795,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3370,7 +3314,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 3287,
+     "ms": 4125,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3412,7 +3356,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 983,
+     "ms": 1096,
      "grade": {
       "status": "ok",
       "reasons": []
