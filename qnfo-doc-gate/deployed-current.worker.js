@@ -1,5 +1,5 @@
 // WORKER-SOURCE-IN-REPO-1 (issue 9713): tracked copy of the deployed script (fetched through the Cloudflare API on 2026-11-09), plus /health.
-var VERSION = "1.0.3-codeagent";
+var VERSION = "1.0.4-codeagent";
 const SCOPES=[["AUDIT","handoffs/"],["AUDIT","audits/"],["AUDIT","closeouts/"],["AUDIT","fleet-consolidation/"],["AUDIT","audit/"],["AUDIT","install-dir-cleanup/"],["PALIMPSEST","docs/"],["QNFO","governance/"]];
 const CUTOFF="2026-11-06T18:00:00.000Z";
 const MAX_LISTED=50;
@@ -42,7 +42,7 @@ async function extractItems(env){
     }
     for(const it of items) await q(env,"INSERT INTO doc_action_items (bucket,key,section,line) VALUES (?1,?2,?3,?4)",[d.bucket,d.key,it[0],it[1]]);
     await q(env,"UPDATE doc_audit SET items_scanned=?1 WHERE bucket=?2 AND key=?3",[new Date().toISOString(),d.bucket,d.key]);
-    if(items.length&&filed<3){
+    if(items.length){
       const pid="DOC-ITEMS-"+d.key.replace(/[^A-Za-z0-9]/g,"").slice(-40);
       const ex=await q(env,"SELECT id FROM agent_issues WHERE predicate_id=?1 LIMIT 1",[pid]);
       if(!ex.length){
