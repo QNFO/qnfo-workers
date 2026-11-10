@@ -3667,7 +3667,7 @@ async function platformProfile(env) {
   try {
     var rows = (await env.AUDIT.prepare("SELECT key, value FROM product_profile WHERE product = 'ultrastable'").all()).results || [];
     rows.forEach(function(r) { if (r && r.key && r.value != null && Object.prototype.hasOwnProperty.call(PLATFORM_PROFILE_DEFAULT, r.key)) p[r.key] = String(r.value); });
-  } catch (e) {}
+  } catch (e) { console.error(JSON.stringify({ event: "platform-profile-read-failed", error: String(e && e.message || e) })); }
   ["home_url", "repo_url", "creator_url"].forEach(function(k) { if (!/^https:\/\//.test(p[k])) p[k] = PLATFORM_PROFILE_DEFAULT[k]; });
   p.creator_same_as = String(p.creator_same_as).split(/\s+/).filter(function(u) { return /^https:\/\//.test(u); });
   return p;
