@@ -1378,6 +1378,11 @@
       "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-8023.md"
     },
     {
+      "path": "docs/handoff/issue-8024.md",
+      "title": "Handoff: [#1001990] ROADMAP-1: QNFO.INFRA FLEET-BUDGET-W3W4-1: drop the two stale Vectorize indexes (qnfo-tasks, qnfo-notes) and fold or document qnfo-pdf and qnfo-containers-pilot (vectorize_indexes 10 -> 8)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-8024.md"
+    },
+    {
       "path": "docs/handoff/issues/COST-DECISION-OWNER-LOCAL-TEXT-1.md",
       "title": "COST-DECISION-OWNER-LOCAL-TEXT-1: owner-local sentence contradicts the $0 spend and the credit runway divides by unbilled third-party list cost",
       "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issues/COST-DECISION-OWNER-LOCAL-TEXT-1.md"
