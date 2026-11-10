@@ -57,6 +57,13 @@
       "contains": [
         "sign in first"
       ]
+    },
+    {
+      "url": "https://qnfo-jobsearch.q08.workers.dev/api/cv-skills",
+      "contains": [
+        "\"schema_version\":\"cv-skills/v1\"",
+        "Wrote and revised the operating doctrine"
+      ]
     }
   ]
 }
