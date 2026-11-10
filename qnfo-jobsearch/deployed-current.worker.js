@@ -1204,9 +1204,19 @@ function copyLint(md) {
   });
   return out;
 }
+// A fact saved by an earlier recall answer keeps the owner's tapped depth but takes today's wording (JOBSEARCH-COPY-1): the old frames wrote "Hands-on work on stakeholder."
+function refreshRecallFacts(b) {
+  for (const [key, rec] of Object.entries(b.recall || {})) {
+    if (!rec || rec.answer !== "yes" || !rec.fact || !rec.depth) continue;
+    let q = null; try { q = recallQuestion(key); } catch (e) { return; }   // the recall tables are defined further down the file: the seed bank has no answers, so this is skipped at load
+    const f = q && (b.facts || []).find((x) => x.id === rec.fact && x.source === "recall:" + key);
+    if (f && q.drafts[rec.depth] && f.text !== q.drafts[rec.depth]) f.text = q.drafts[rec.depth];
+  }
+}
 function applyBank(b, rev) {
   polishBank(b);
   BANK = b; BANK_REV = rev || 0;
+  refreshRecallFacts(b);
   const roles = Object.fromEntries((b.roles || []).map((r) => [r.id, r]));
   const rec = (f) => (roles[f.role] ? endYr(roles[f.role]) : 0);
   LEDGER.facts = (b.facts || []).filter((f) => f.status !== "rejected").map((f) => {
@@ -2983,7 +2993,7 @@ const handler = {
     return J({ error: "not found", see: "/api" }, 404);
   },
 };
-handler.__test = { polishProse, polishBank, copyLint, toolCase, vocabulary, TOPIC_LABEL, SOFTWARE, PROSE_CASE, linkedinSearches, LINKEDIN_SEARCHES, codingLoad, CANDIDATE_BOARDS, collectAndRank, cosine, bestSim, semanticLens, scoreJob, exploreOverlap, recordTerms, diversifyRows, recallGaps, recallQuestion, recallAnswer, recallQueue, RECALL_SEED, loadCtx, referralKit, referralList, STAGES, judgeTop, buildResume, verify, headlineVerdict, outcomes, pdfOf, pdfClean, checkAnswer, jsonLoose, PROTECTED_Q, draftAnswers, prepBrief, quizFeedback, judgeJob, calibrate, calibration, followups, atsOf, keywordReport, docxOf, resumeHtml, plainOf, applyKit, matchKit, stripTags, postingTerms, evaluate, rank, buildResume, buildNote, verify, stripHtml, locationGate, has, LEDGER, dedupeKey, feedPrefix, makeCtx, scoreJob, scoreFeatures, featuresFromWhy, applicationSnapshot, parseApplicationSnapshot, outcomeScoreWeights, loadCtx, SURVEY, BOARDS, normKey, applyBank, BANK_SEED, QUESTIONS, TAG_TO_CLUSTERS, clustersOf, cvAnswer, cvFact, cvReview, cvSet, cvImport, mutateBank, loadBank, decidedKeys, FETCHERS, getBank: () => BANK, llmRerank, llmRerankRun, ensureResearchPubs, ensureAutonomyBrand, ensureUltrastableBrand, ultrastableBank, ULTRASTABLE_S1, RESEARCH_PUBS, FAMILIES, CLUSTER_KW, headline, pubLine, parseRerank, reasonOk, rerankMessages, artifactsFor, titleCandidate, sitemapUrls, slugTitle, PUBLIC_SECTOR, opsReport };
+handler.__test = { refreshRecallFacts, polishProse, polishBank, copyLint, toolCase, vocabulary, TOPIC_LABEL, SOFTWARE, PROSE_CASE, linkedinSearches, LINKEDIN_SEARCHES, codingLoad, CANDIDATE_BOARDS, collectAndRank, cosine, bestSim, semanticLens, scoreJob, exploreOverlap, recordTerms, diversifyRows, recallGaps, recallQuestion, recallAnswer, recallQueue, RECALL_SEED, loadCtx, referralKit, referralList, STAGES, judgeTop, buildResume, verify, headlineVerdict, outcomes, pdfOf, pdfClean, checkAnswer, jsonLoose, PROTECTED_Q, draftAnswers, prepBrief, quizFeedback, judgeJob, calibrate, calibration, followups, atsOf, keywordReport, docxOf, resumeHtml, plainOf, applyKit, matchKit, stripTags, postingTerms, evaluate, rank, buildResume, buildNote, verify, stripHtml, locationGate, has, LEDGER, dedupeKey, feedPrefix, makeCtx, scoreJob, scoreFeatures, featuresFromWhy, applicationSnapshot, parseApplicationSnapshot, outcomeScoreWeights, loadCtx, SURVEY, BOARDS, normKey, applyBank, BANK_SEED, QUESTIONS, TAG_TO_CLUSTERS, clustersOf, cvAnswer, cvFact, cvReview, cvSet, cvImport, mutateBank, loadBank, decidedKeys, FETCHERS, getBank: () => BANK, llmRerank, llmRerankRun, ensureResearchPubs, ensureAutonomyBrand, ensureUltrastableBrand, ultrastableBank, ULTRASTABLE_S1, RESEARCH_PUBS, FAMILIES, CLUSTER_KW, headline, pubLine, parseRerank, reasonOk, rerankMessages, artifactsFor, titleCandidate, sitemapUrls, slugTitle, PUBLIC_SECTOR, opsReport };
 export default handler;
 
 // ------------------------------------------------------------------ client script shared by both pages (JOBSEARCH-APPLY-1): kit handling and the Fill application bookmark

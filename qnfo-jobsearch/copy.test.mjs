@@ -79,5 +79,15 @@ ok(bank.facts.every((f) => P(f.text) === f.text), "the bank is already polished 
   const pdf2 = Buffer.from(T.pdfOf("# N\n\n## Experience\n**Product Manager and Senior Methods Advisor**, AARP Public Policy Institute, Washington, DC | 2016\u20132021\n- Led the Index.\n", "T")).toString("latin1");
   ok(/\(2016\x962021\) Tj/.test(pdf2) && !pdf2.includes("| 2016"), "role dates are drawn flush right, without the pipe");
 }
+{
+  // a fact an earlier recall answer saved with the old wording is rewritten when the bank loads, keeping the depth the owner tapped
+  const old = JSON.parse(JSON.stringify(T.BANK_SEED));
+  old.facts.push({ id: "F99", role: "R05", text: "Hands-on work on stakeholder.", tags: [], source: "recall:term:stakeholder", status: "verified" });
+  old.recall = { "term:stakeholder": { answer: "yes", role: "R05", depth: "hands", fact: "F99", at: "2026-11-09T00:00:00Z" } };
+  T.applyBank(old, 7);
+  const f99 = T.LEDGER.facts.find((x) => x.id === "F99");
+  ok(f99 && f99.text === "Hands-on experience with stakeholder engagement.", "an old recall fact takes today's wording", f99);
+  T.applyBank(JSON.parse(JSON.stringify(T.BANK_SEED)), 0);
+}
 console.log(`copy: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
