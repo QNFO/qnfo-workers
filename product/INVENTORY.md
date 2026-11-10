@@ -2,7 +2,7 @@
 
 This is the full record of the work that defined Ultrastable, gave it a live claims page, linked it to Rowan's personal brand and put it on its own domain. Everything below is committed and merged. Nothing exists only in a chat.
 
-Copy target: `C:\Users\LENOVO\Dev\ultrastable`, the owner's local Ultrastable folder. To build it, copy the files listed here from `QNFO/qnfo-workers` main.
+Copy target: `C:\Users\LENOVO\Dev\ultrastable` (the owner's local Ultrastable folder), then private repositories in https://github.com/ultrastable (owner, 2026-11-10). To build it, copy the files listed here from `QNFO/qnfo-workers` main.
 
 ## Pull requests (all merged)
 
@@ -30,6 +30,7 @@ Copy target: `C:\Users\LENOVO\Dev\ultrastable`, the owner's local Ultrastable fo
 - `migrations/2026-11-10-ultrastable-product.sql`: owner_asks product questions, owner cards ultrastable-domain-1, -trademark-1, -github-org-1 and -entity-1.
 - `migrations/2026-11-10-ultrastable-claims.sql`: the `product_claims` table (7 claims) and the `claim-ultrastable-*` remediation contracts.
 - `migrations/2026-11-10-ultrastable-claims-semicolon.sql`: the probe fix.
+- `migrations/2026-11-10-ultrastable-owner-answers.sql`: records the owner's answers given by action: the name Ultrastable, its own domain, and the GitHub organisation ultrastable (`product_profile.org_url`). repo_url stays public until those repositories are public.
 - `migrations/2026-11-10-ultrastable-profile.sql`: the `product_profile` table (name, home, repo, creator and credit), three owner_asks rows, and the trigger `owner_asks_product_profile_au`.
 
 **Web page code (qnfo-gateway worker)**
