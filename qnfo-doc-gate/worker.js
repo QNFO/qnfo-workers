@@ -1,5 +1,5 @@
 // WORKER-SOURCE-IN-REPO-1 (issue 9713): tracked copy of the deployed script (fetched through the Cloudflare API on 2026-11-09), plus /health.
-var VERSION = "1.0.1";
+var VERSION = "1.0.2-codeagent";
 const SCOPES=[["AUDIT","handoffs/"],["AUDIT","audits/"],["AUDIT","closeouts/"],["AUDIT","fleet-consolidation/"],["AUDIT","audit/"],["AUDIT","install-dir-cleanup/"],["PALIMPSEST","docs/"],["QNFO","governance/"]];
 const CUTOFF="2026-11-06T18:00:00.000Z";
 const MAX_LISTED=50;
@@ -141,7 +141,7 @@ async function run(env){
   return {ts:now,total:s.total,traced:s.traced||0,clustered:s.clustered||0,orphans:s.orphans||0,new_docs:newDocs,lint_hits:lint};
 }
 export default {
-  async scheduled(ev,env,ctx){ ctx.waitUntil(run(env)); },
+  async scheduled(ev, env, ctx) { ctx.waitUntil(run(env).catch(e => console.error('Scheduled run error:', e))); },
   async fetch(req,env){
     const u=new URL(req.url);
     if(u.pathname==="/health"){
