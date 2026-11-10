@@ -213,6 +213,7 @@ and [the machine-readable catalog](agent-catalog.json).
 - [Handoff: DEPLOY-NON-CANONICAL-DEPLOY: fleet](handoff/issue-1675.md) - `docs/handoff/issue-1675.md`
 - [Handoff: METRIC-TRIGGER-5079-WORKERS-BP-FINDINGS-OPEN: Workers standards debt: anti-patterns the CI guard refuses are still on main](handoff/issue-1695.md) - `docs/handoff/issue-1695.md`
 - [Handoff: OBJECTIVE-CONSTRAINT-BREACH-1: capability_contract_conformance](handoff/issue-1812.md) - `docs/handoff/issue-1812.md`
+- [Handoff: METRIC-TRIGGER-5108-WORKERS-COMPAT-DATE-BEHIND: Live workers run at a compatibility date older than a Cloudflare default change](handoff/issue-1818.md) - `docs/handoff/issue-1818.md`
 - [Handoff: VERIFICATION-DEFERRAL-STALL-1: 431 contracts defer forever with no escalation and no owner](handoff/issue-1965.md) - `docs/handoff/issue-1965.md`
 - [Handoff: METRIC-TRIGGER-3059-STUCK-ITEMS-OVER-SLA: Queue SLA breach: an item is stuck past its SLA (minutes)](handoff/issue-2051.md) - `docs/handoff/issue-2051.md`
 - [Handoff: METRIC-TRIGGER-8581-PORTFOLIO-DRIFT: Portfolio drift: projects, issues or roadmap disagree with GitHub](handoff/issue-2052.md) - `docs/handoff/issue-2052.md`
@@ -222,6 +223,7 @@ and [the machine-readable catalog](agent-catalog.json).
 - [Handoff: METRIC-TRIGGER-2934-SESSION-DEPENDENT-ISSUES-OPEN: Autonomy-first gap: open issues still wait on a Claude session](handoff/issue-2283.md) - `docs/handoff/issue-2283.md`
 - [Handoff: METRIC-TRIGGER-537-Q08-GATE-PASS-RATE-7D: q08 quality gate rejects most drafts (7d pass rate under 50%)](handoff/issue-2334.md) - `docs/handoff/issue-2334.md`
 - [Handoff: METRIC-TRIGGER-538-Q08-NEURONS-PER-PUBLISHED-PIECE-7D: q08 compose cost per published piece regressed (over 6000 neurons)](handoff/issue-2335.md) - `docs/handoff/issue-2335.md`
+- [Handoff: METRIC-TRIGGER-3077-SPOFS-TOTAL: Single points of failure remain registered](handoff/issue-2338.md) - `docs/handoff/issue-2338.md`
 - [Handoff: METRIC-TRIGGER-3454-OWNER-DISPATCH-7D: Owner dispatch: more than 5 cards in 7 days asked the owner to act](handoff/issue-2339.md) - `docs/handoff/issue-2339.md`
 - [Handoff: METRIC-TRIGGER-3464-MTTR-H-7D: Doctrine breach: issues take more than a day to close on average](handoff/issue-2340.md) - `docs/handoff/issue-2340.md`
 - [Handoff: METRIC-TRIGGER-3689-MONTHLY-COST-RUN-RATE-USD: Cost: all-billing 7-day run rate over 650/30d](handoff/issue-2365.md) - `docs/handoff/issue-2365.md`
@@ -249,19 +251,26 @@ and [the machine-readable catalog](agent-catalog.json).
 - [Handoff: WORKFLOW-FAILED-1: deploy-gate](handoff/issue-3441.md) - `docs/handoff/issue-3441.md`
 - [Handoff: METRIC-TRIGGER-10820-FLEET-COST-PACE-30D-USD: Cost: fleet 30-day pace above USD 300 all-in (owner 2026-10-21)](handoff/issue-3460.md) - `docs/handoff/issue-3460.md`
 - [Handoff: Q08-GATE-ECONOMICS: gate_pass_rate_7d 0.032 drives 27.7x neuron overrun and a stalled publication cadence](handoff/issue-3487.md) - `docs/handoff/issue-3487.md`
+- [Handoff: METRIC-TRIGGER-1924-WORKER-COUNT-DISAGREEMENT: Core gap: the live scripts census and service_registry disagree on which workers](handoff/issue-3544.md) - `docs/handoff/issue-3544.md`
 - [Handoff: METRIC-TRIGGER-10930-FLEET-COST-BOUND-MONTH-USD: Cost: the configured daily caps allow more than USD 300/month (owner 2026-10-21)](handoff/issue-3988.md) - `docs/handoff/issue-3988.md`
+- [Handoff: METRIC-TRIGGER-13747-SEO-INDEXNOW-ENGINES-OK: SEO: fewer than 3 IndexNow engines accepted the last submission](handoff/issue-4035.md) - `docs/handoff/issue-4035.md`
 - [Handoff: REMEDIATION-CONTRACT-DEAD-PATH-1: 1138 superseded contracts (337 never attempted) leave critical issues with no doer](handoff/issue-4039.md) - `docs/handoff/issue-4039.md`
 - [Handoff: fleet_budget caps breached: workers 35>30, d1 11>10, ai_spend:workers-ai 787.72>95; cost sources disagree (787.72 vs metric_registry workers_ai_cost_30d_usd 287.74)](handoff/issue-4059.md) - `docs/handoff/issue-4059.md`
+- [Handoff: METRIC-TRIGGER-14017-PRD-FUNNEL-MISSING-TRANSITIONS: PRD-FUNNEL-TRANSITION-1: publication evidence missing](handoff/issue-4153.md) - `docs/handoff/issue-4153.md`
 - [Handoff: BREACH-DOCTOR-1: the fleet does not diagnose and remediate its own unowned breaches (owner directive 2026-10-26: FLEET IS NOT SELF-DIAGNOSING ITS OWN BREACHES AND AUTOMATICALLY REMEDIATING)](handoff/issue-4289.md) - `docs/handoff/issue-4289.md`
 - [Handoff: METRIC-TRIGGER-14349-PUBLISH-RATE-RATIO-24H: Publishing fell under 40% of its 7-day rate](handoff/issue-4301.md) - `docs/handoff/issue-4301.md`
 - [Handoff: ROOT-CAUSE-1: LOOP-BREAKER-1 keeps recurring](handoff/issue-4359.md) - `docs/handoff/issue-4359.md`
+- [Handoff: METRIC-TRIGGER-14457-PR-OPEN-OVER-10M: Pull requests open more than 10 minutes](handoff/issue-4386.md) - `docs/handoff/issue-4386.md`
 - [Handoff: BP26-CORRECTIONS-FEED-1: Public corrections and retractions feed per property following COPE Retraction Guidelines v3](handoff/issue-4410.md) - `docs/handoff/issue-4410.md`
 - [Handoff: BP26-FORECAST-HYGIENE-1: Forecast hygiene: complete resolution criteria, immutable timestamps, updates as new rows, Brier plus log score and a calibration page](handoff/issue-4413.md) - `docs/handoff/issue-4413.md`
+- [Handoff: BP26-PAPER-PIDS-1: Reproducible living papers: immutable version URLs, content hashes, CITATION.cff/BibTeX/CSL exports, OAI-PMH validation, PID route](handoff/issue-4414.md) - `docs/handoff/issue-4414.md`
+- [Handoff: BP26-AI-ACT-ART50-1: EU AI Act Article 50: visible AI labels on all AI-generated public content and AI disclosure at first interaction](handoff/issue-4417.md) - `docs/handoff/issue-4417.md`
 - [Handoff: BP26-RETENTION-1: Data minimisation and retention: TTL sweeps, payload logging off for mail, no raw emails in logs](handoff/issue-4420.md) - `docs/handoff/issue-4420.md`
 - [Handoff: BP26-AI-GATEWAY-BUDGETS-1: Every model call through AI Gateway with caching, rate limits, spend limits and per-loop hard budgets](handoff/issue-4427.md) - `docs/handoff/issue-4427.md`
 - [Handoff: BP26-GRADUAL-DEPLOYS-1: Versions, health-gated gradual deployments and automatic rollback on error-rate regression](handoff/issue-4428.md) - `docs/handoff/issue-4428.md`
 - [Handoff: BP26-EDGE-SECURITY-1: Edge security baseline: secure headers on every public host, Turnstile on public forms, Durable Object rate limit on OTP](handoff/issue-4452.md) - `docs/handoff/issue-4452.md`
 - [Handoff: BP26-SLO-ERROR-BUDGETS-1: SLOs and error budgets per user-facing surface with automatic blameless postmortems](handoff/issue-4453.md) - `docs/handoff/issue-4453.md`
+- [Handoff: \[#1001986\] WORK-CLAIM-MERGED-RELEASE-1: a claim whose pull request merged is released at the merge, not at its TTL](handoff/issue-8023.md) - `docs/handoff/issue-8023.md`
 - [COST-DECISION-OWNER-LOCAL-TEXT-1: owner-local sentence contradicts the $0 spend and the credit runway divides by unbilled third-party list cost](handoff/issues/COST-DECISION-OWNER-LOCAL-TEXT-1.md) - `docs/handoff/issues/COST-DECISION-OWNER-LOCAL-TEXT-1.md`
 - [COST-FEED-7D-WINDOW-1: /api/cost by_model_7d and by_worker_7d sum 8 UTC day buckets (today partial) under a 7d label, with est_usd unlabelled as list price](handoff/issues/by-window-8-buckets.md) - `docs/handoff/issues/by-window-8-buckets.md`
 - [RUM-ZERO-DAY-1: a stored false zero for 2026-10-13 understates the 7- and 28-day pageviews, and the dashboard top pages read the unfiltered source](handoff/issues/rum-zero-13.md) - `docs/handoff/issues/rum-zero-13.md`
