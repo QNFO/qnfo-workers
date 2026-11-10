@@ -587,7 +587,7 @@ def freshness_row(ctx):
     dl = desk_deadline(ctx.now)
     tag = "deadline " + iso_utc(dl)
     try:
-        if ctx.d1("SELECT COUNT(*) AS n FROM bp26_probe_results WHERE metric = 'slo_attainment_28d_min' AND subject = ?1 AND detail LIKE ?2", [DESK_SUBJECT, tag + "%"])[0]["n"]:
+        if ctx.d1("SELECT COUNT(*) AS n FROM bp26_probe_results WHERE metric = 'desk_freshness' AND subject = ?1 AND detail LIKE ?2", [DESK_SUBJECT, tag + "%"])[0]["n"]:
             return None
     except Exception:  # noqa: BLE001
         pass  # the dedupe read failed: take the sample, a duplicate row for one deadline is harmless
@@ -669,11 +669,13 @@ def collect_web(ctx):
         avail_rows.append(("avail:" + h, up, detail))
         g, n, first = (hist or {}).get(h, (0, 0, None))
         per_host[h] = (g + up, n + 1, first)
-    # BP26-SLO-FRESHNESS-1: latency of every public surface and the research desk's freshness, recorded beside availability (other subjects; the availability figure ignores them)
-    avail_rows = avail_rows + latency_rows(homes, HTML_HOSTS)
+    # BP26-SLO-FRESHNESS-1: latency of every public surface and the research desk's freshness, recorded under the desk-freshness metric's own registry key so the
+    # 0/1 deadline sample and the latency rows stop being written as subjects of slo_attainment_28d_min, whose min-across-subjects aggregate must span avail:<host> only
+    extra_rows = latency_rows(homes, HTML_HOSTS)
     fr = freshness_row(ctx)
     if fr:
-        avail_rows.append(fr)
+        extra_rows.append(fr)
+    results.append(Result("desk_freshness", fr[1] if fr else None, fr[2] if fr else "no new deadline to sample", extra_rows))
     if hist is None:
         results.append(Result("slo_attainment_28d_min", None, "the availability history could not be read: no verdict", avail_rows))
     else:
