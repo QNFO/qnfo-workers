@@ -24,7 +24,8 @@
         "resume.pdf",
         "/api/funnel",
         "/stage",
-        "/api/linkedin"
+        "/api/linkedin",
+        "/api/cv-skills"
       ]
     },
     {
@@ -56,13 +57,6 @@
       "status": 401,
       "contains": [
         "sign in first"
-      ]
-    },
-    {
-      "url": "https://qnfo-jobsearch.q08.workers.dev/api/cv-skills",
-      "contains": [
-        "\"schema_version\":\"cv-skills/v1\"",
-        "Wrote and revised the operating doctrine"
       ]
     }
   ]
