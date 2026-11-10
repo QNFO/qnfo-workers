@@ -15,7 +15,19 @@
 // public page is never pointed at the owner's private surfaces and a private page is never decorated (personal/research separation, DOMAIN-PLANE-1). Only
 // 200 text/html GET answers are changed; JSON, feeds, PDFs, previews inside frames, API paths, unsubscribe and confirm pages pass through. Every link is tagged
 // utm_medium=explore-rail so utm_clicks measures which doors people take (clicks are not readers: READER-YIELD-1).
-var ER_VERSION = "1.0.0";
+var ER_VERSION = "1.1.0";
+// ULTRASTABLE-FOOTER-1 (2026-11-10, owner directive: the whole autonomous system runs on Ultrastable, so say so in the footer of every page, with more cross-product links).
+// One strip at the foot of every rail (full and compact): the platform line plus the doors that prove and show it. Public links only.
+var ER_PLATFORM = [
+  { t: "Ultrastable", u: "https://ultrastable.io/" },
+  { t: "Proof", u: "https://ultrastable.io/proof" },
+  { t: "How QNFO runs", u: "https://qnfo.org/platform" },
+  { t: "Live fleet", u: "https://fleet.qnfo.org/" },
+  { t: "Paper library", u: "https://papers.qnfo.org/papers" },
+  { t: "Ask the corpus", u: "https://ask.qwav.org/" },
+  { t: "Archive", u: "https://archive.qnfo.org/" },
+  { t: "QWAV", u: "https://qwav.org/" }
+];
 // key, host, path, title, one line a visitor can act on, call to action. `next` is the ordered list of the most useful doors from that property.
 var ER_PROPS = [
   { k: "qnfo", hosts: ["qnfo.org", "www.qnfo.org", "legal.qnfo.org"], url: "https://qnfo.org/", t: "QNFO", d: "The research imprint: open papers, an assistant that cites them, and an ideas feed.", cta: "Start here", next: ["papers", "ask", "ideas", "qwav", "ipatent"] },
@@ -55,12 +67,12 @@ var ER_CSS = ".er{box-sizing:border-box;max-width:960px;margin:32px auto 0;paddi
   + ".er-card{display:flex;flex-direction:column;gap:4px;min-height:44px;padding:14px;border:1px solid #c9d0e6;border-radius:12px;background:#fff;color:#14182e;text-decoration:none}"
   + ".er-card:hover{border-color:#1b3fd1}.er-card:focus-visible,.er-all a:focus-visible,.er-all summary:focus-visible{outline:3px solid #1b3fd1;outline-offset:2px}"
   + ".er-card b{font-size:17px}.er-card span{font-size:15px;color:#3a4160}.er-card small{font-size:15px;font-weight:650;color:#1b3fd1}"
-  + ".er-all{margin-top:12px}.er-all summary{cursor:pointer;min-height:44px;display:flex;align-items:center;font-weight:650;color:#1b3fd1}"
+  + ".er-plat{margin:18px 0 0;padding-top:14px;border-top:1px solid #c9d0e6;font-size:15px;color:#3a4160}.er-plat b{color:#14182e}.er-plat ul{list-style:none;margin:6px 0 0;padding:0;display:flex;flex-wrap:wrap;gap:0 16px}.er-plat a{display:inline-flex;align-items:center;min-height:44px;color:#1b3fd1;font-weight:650}.er-plat a:focus-visible{outline:3px solid #1b3fd1;outline-offset:2px}.er-all{margin-top:12px}.er-all summary{cursor:pointer;min-height:44px;display:flex;align-items:center;font-weight:650;color:#1b3fd1}"
   + ".er-all ul{list-style:none;margin:6px 0 0;padding:0;display:grid;gap:2px;grid-template-columns:repeat(auto-fit,minmax(230px,1fr))}"
   + ".er-all li a{display:flex;flex-direction:column;min-height:44px;justify-content:center;padding:6px 4px;color:#14182e;text-decoration:none;font-size:16px}"
   + ".er-all li a:hover b{text-decoration:underline}.er-all li span{font-size:14px;color:#3a4160}.er-all [aria-current]{opacity:.75}"
   + "@media (prefers-color-scheme:dark){.er{background:#141a33;border-color:#3a4270;color:#eef1fb}.er h2{color:#eef1fb}.er p,.er-card span,.er-all li span{color:#c5cbe6}"
-  + ".er-card{background:#1b2142;border-color:#3a4270;color:#eef1fb}.er-card small,.er-all summary{color:#aebfff}.er-card:hover{border-color:#aebfff}.er-all li a{color:#eef1fb}"
+  + ".er-plat{border-color:#3a4270;color:#c5cbe6}.er-plat b{color:#eef1fb}.er-plat a{color:#aebfff}.er-plat a:focus-visible{outline-color:#aebfff}.er-card{background:#1b2142;border-color:#3a4270;color:#eef1fb}.er-card small,.er-all summary{color:#aebfff}.er-card:hover{border-color:#aebfff}.er-all li a{color:#eef1fb}"
   + ".er-card:focus-visible,.er-all a:focus-visible,.er-all summary:focus-visible{outline-color:#aebfff}}"
   + "@media (prefers-reduced-motion:reduce){.er *{transition:none!important}}";
 // compact: the page already has a Keep exploring section, so list only the doors it does not carry.
@@ -83,7 +95,10 @@ function erRailHtml(host, path, day, compact) {
   }
   var h = compact ? "Also in the Qniverse" : "Keep exploring the Qniverse";
   var s = compact ? "More places that build on the same research." : "Pick one: each opens a different part of the same body of work.";
-  return '<aside class="er" data-explore-rail="' + ER_VERSION + '" aria-labelledby="er-h"><style>' + ER_CSS + '</style><h2 id="er-h">' + h + "</h2><p>" + s + '</p><div class="er-row">' + cards + "</div>" + all + "</aside>";
+  var plat = '<div class="er-plat" data-ultrastable-footer><b>QNFO runs on Ultrastable,</b> the autonomous development platform behind every paper, page and answer here.<ul>' + ER_PLATFORM.map(function (l) {
+    return '<li><a href="' + erEsc(l.u + (l.u.indexOf("?") >= 0 ? "&" : "?") + "utm_source=" + encodeURIComponent(fromHost) + "&utm_medium=explore-rail&utm_campaign=ultrastable-footer") + '">' + erEsc(l.t) + "</a></li>";
+  }).join("") + "</ul></div>";
+  return '<aside class="er" data-explore-rail="' + ER_VERSION + '" aria-labelledby="er-h"><style>' + ER_CSS + '</style><h2 id="er-h">' + h + "</h2><p>" + s + '</p><div class="er-row">' + cards + "</div>" + all + plat + "</aside>";
 }
 // Pure: (html, page URL, day) -> html with the rail added once. Returns the input unchanged when the page is not eligible.
 function erInject(html, pageUrl, day) {
