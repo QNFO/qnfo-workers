@@ -1,3 +1,4 @@
+-- Fixes MIGRATION-APPLY-FAILED-1 (issue 10164): the trigger statement is replaced by a view and a sweep issue.
 -- ULTRASTABLE-PRODUCT-1 (2026-11-10, charter pillar autonomy; PROMPTED-RECALL-1, RECALL-LOOP-1). Owner, 2026-11-10: "what is this actual product called
 --   that we might be able to sell as a startup ... how do we actually spin that off into a separate idea where QNFO and the Qniverse are powered by this product?"
 -- Design: docs/PRODUCT-ULTRASTABLE.md; split: product/boundary.json, checked by scripts/product_boundary.mjs (ULTRASTABLE-BOUNDARY-1).
