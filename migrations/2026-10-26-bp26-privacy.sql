@@ -92,7 +92,7 @@ UPDATE metric_registry SET last_refreshed = strftime('%Y-%m-%dT%H:%M:%SZ', 'now'
   WHERE metric = 'records_past_retention' AND instr(source_of_truth, '[BP26]') > 0 AND NOT EXISTS (SELECT 1 FROM retention_policy WHERE measured_by = 'd1-trigger' AND checked_at IS NULL);
 
 -- Hourly refresh on the heavy heartbeat (one trigger, one gated statement per qnfo-audit policy, then the metric).
-CREATE TRIGGER IF NOT EXISTS bp26_retention_heavy_tick AFTER INSERT ON fleet_tick_heavy
+CREATE TRIGGER bp26_retention_heavy_tick AFTER INSERT ON fleet_tick_heavy
 BEGIN
   -- Sweep old email bodies if retention pruning is enabled
 UPDATE emails SET body_text=NULL, body_html=NULL, headers_json=NULL
