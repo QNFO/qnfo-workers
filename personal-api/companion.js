@@ -3221,10 +3221,13 @@ export async function handleCompanion(request, env, ctx, deps) {
     }
     // COMPANION-MOMENTS-1: check-ins by place, the moments log and the insights read model.
     if (r === "moments/nearby" && m === "GET") {
+      // COMPANION-PRIVACY-1: removed third‑party reverse‑geocode and nearby‑places calls.
       const lat = Number(url.searchParams.get("lat")), lon = Number(url.searchParams.get("lon"));
       if (!Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) return J({ ok: false, error: "lat and lon required" }, 400);
-      const [places, w] = await Promise.all([moNearby(lat, lon), cmpWhere(env, deps, { lat, lon }).catch(() => null)]);
-      return J({ ok: true, places, city: w && w.city || null });
+      // Return empty results; any location‑based lookup must be performed locally without sending coordinates to external services.
+      const places = [];
+      const city = null;
+      return J({ ok: true, places, city });
     }
     if (r === "moments" && m === "POST") { const out = await moSave(env, deps, await body()); return J(out, out.ok ? 200 : 400); }
     if (r === "moments" && m === "GET") {
@@ -3233,9 +3236,43 @@ export async function handleCompanion(request, env, ctx, deps) {
       return J({ ok: true, items });
     }
     if (r === "moments/delete" && m === "POST") { await moEnsure(env); const b = await body(); await env.PERSONAL.prepare("DELETE FROM cmp_moments WHERE id = ?").bind(Number(b.id) || 0).run(); return J({ ok: true }); }
+    // COMPANION-DWELL-1: prompt a check‑in after dwelling at a place.
+    if (r === "dwelling" && m === "POST") {
+      const b = await body();
+      const lat = Number(b.lat), lon = Number(b.lon), seconds = Number(b.seconds);
+      if (!Number.isFinite(lat) || !Number.isFinite(lon) || !Number.isFinite(seconds)) return J({ ok: false, error: "lat, lon and seconds required" }, 400);
+      // Threshold for “dwelling” – e.g. 30 minutes.
+      if (seconds < 1800) return J({ ok: false, error: "Not enough dwell time" }, 400);
+      // Use local nearby lookup (privacy‑preserving) – here we simply return an empty placeholder.
+      const places = [];
+      const suggestedPlace = places[0] || null;
+      const prompt = suggestedPlace && suggestedPlace.name ? `You have been at ${suggestedPlace.name} for a while. Would you like to check in?` : "You have been at this location for a while. Would you like to check in?";
+      return J({ ok: true, prompt, suggested_place: suggestedPlace });
+    }
     if (r === "insights" && m === "GET") return J(await moInsights(env, Math.min(Math.max(Number(url.searchParams.get("days")) || 60, 7), 365)));
     // COMPANION-FORYOU-1: the ranked feed, its one-tap actions, and a manual rebuild.
-    if (r === "foryou" && m === "GET") return J(await fyFeed(env, deps));
+    if (r === "foryou" && m === "GET") {
+      // COMPANION-FORYOU-2: away‑aware and city‑aware ranking.
+      // Hide cards for Amsterdam when the user is marked as away, and only show cards for the city the user is currently in.
+      let feed = await fyFeed(env, deps);
+      // Retrieve current city and away window from personal state (if present).
+      const curCityRow = await env.PERSONAL.prepare("SELECT val FROM cmp_state WHERE key = 'current_city'").get();
+      const awayUntilRow = await env.PERSONAL.prepare("SELECT val FROM cmp_state WHERE key = 'away_until'").get();
+      const now = Date.now();
+      const away = awayUntilRow && Number(awayUntilRow.val) > now;
+      const curCity = curCityRow ? curCityRow.val : null;
+      if (Array.isArray(feed.cards)) {
+        if (away) {
+          // When away, hide Amsterdam cards.
+          feed.cards = feed.cards.filter(c => c.city !== "Amsterdam");
+        }
+        if (curCity) {
+          // Only keep cards for the current city.
+          feed.cards = feed.cards.filter(c => c.city === curCity);
+        }
+      }
+      return J(feed);
+    }
     if (r === "foryou/act" && m === "POST") { const out = await fyAct(env, deps, await body()); return J(out, out.ok ? 200 : 400); }
     if (r === "foryou/interest" && m === "POST") {
       const b = await body(); const lab = s(b.label, 40);
