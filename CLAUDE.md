@@ -736,6 +736,11 @@ because each one was broken at least once; the linked issue holds the evidence.
 - A reply, a note or the assistant is never the guard against a problem. An unclosed loop is a defect closed in code (guard, probe, metric, migration), never described.
 - Canonical copy of the standing rules: KV qnfo-fleet-config key standing/CLAUDE.md (rules 1-10). This section mirrors rules 8-10 (STANDING-INSTRUCTIONS-1).
 
+## Draft PR for every issue, build it, merge it (ISSUE-DRAFT-BUILD-MERGE-1, owner directive 2026-11-10)
+- Owner, verbatim: "The system shall always create draft PRs for all new issues, then shall always build code and always merge all PRs created to main production; automatically, now and always in future work."
+- Every new issue gets a draft PR at once (DRAFT-PR-PER-ISSUE-1, qnfo-github-steward). A session or loop then builds the code in that PR, marks it ready and merges it to main on green checks (MERGE-ALL-AUTO-1); a handoff-shell PR that holds only `docs/handoff` is a start, never the finish, and the issue stays open until code lands (CODE-CHANGE-REQUIRED-1).
+- It moves no limit: the harness's permission checks, the secret lock, live work claims, `HOLD:` comments and required checks keep their precedence. `ops_config OWNER_DIRECTIVE_2026_11_10_ISSUE_DRAFT_BUILD_MERGE_1` records it (migrations/2026-11-10-issue-draft-build-merge.sql).
+
 ## Close every issue, merge every change (CLOSE-MERGE-ALWAYS-1, owner directive 2026-11-09, every repo)
 - Owner, verbatim in substance: "You shall always close all open issues and merge all code changes automatically." The target of every session and every loop is zero open issues and zero open pull requests it owns.
 - Merge: every PR a session opens is brought to green and merged by the lane or the fleet bot in the same session (merge main in on a conflict, fix a red check, answer a review gate finding, then watch to the merge). A branch is deleted after the merge; no PR is parked as a draft except for a handoff when usage is running out.
