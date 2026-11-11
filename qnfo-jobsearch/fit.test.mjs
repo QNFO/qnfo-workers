@@ -39,13 +39,15 @@ ok(li.searches.every((s) => /site%3Alinkedin\.com%2Fjobs%2Fview/.test(s.links[0]
 ok(!JSON.stringify(li).match(/quantum|software engineer|developer role/i), "no quantum or engineer framing in the searches");
 // sources
 ok(typeof T.FETCHERS.workable === "function" && T.feedPrefix("workable:tno") === "wk:tno:", "Workable boards are read");
-ok(Object.values(T.CANDIDATE_BOARDS).flat().length >= 40, "at least 40 candidate employer boards are probed");
+ok(Object.values(T.CANDIDATE_BOARDS).flat().length === 0, "candidate board probing is retired after live slugs were promoted");
+ok(T.BOARDS.workable.includes("rand-europe") && T.BOARDS.greenhouse.includes("thoughtworks") && T.BOARDS.ashby.includes("meter"), "live candidate slugs moved into BOARDS");
 { // a failing candidate board is silent: no error, no feed result
+  T.CANDIDATE_BOARDS.workable = ["dead-slug"];
   const orig = T.FETCHERS.workable; T.FETCHERS.workable = async () => { throw new Error("HTTP 404"); };
-  const origG = { ...T.FETCHERS }; for (const k of Object.keys(T.CANDIDATE_BOARDS)) if (k !== "workable") T.FETCHERS[k] = async () => [];
   const r = await T.collectAndRank(owner, ["candidates"]);
   ok(r.errors.length === 0 && r.feedResults.length === 0, "candidate failures never count as feed outages");
-  Object.assign(T.FETCHERS, origG); T.FETCHERS.workable = orig;
+  T.FETCHERS.workable = orig;
+  delete T.CANDIDATE_BOARDS.workable;
 }
 console.log(`qnfo-jobsearch fit: ${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);
