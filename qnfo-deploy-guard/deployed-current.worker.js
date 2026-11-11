@@ -4,7 +4,7 @@
 // NOTE: source of truth is this file; GET /workers/scripts/<name> TRUNCATES large bodies - never patch from a GET.
 // Trivial change to trigger Workers build check for PR #8592 layer 6 migration
 var LEDGER_GRACE_MS = 180000;
-var VERSION = "1.7.1-codeagent";
+var VERSION = "1.7.2-codeagent";
 /* SCHEDULED-FLEET-PROBE-SHARING-1 (#6669): reuse the same scheduled fleet probe across scan and capability snapshot. */ /* OPS-PROBE-TIMEOUT-RECOVERY-1 (#6429): bounded retry and request cleanup. */ /* 1.4.1 DEPLOY-LEDGER-EVENT-ORDER-1: use deploy event time, not ledger insertion order, when choosing the last code deploy. 1.4.0 BP26-LEASES-KILLSWITCH-1 (2026-10-28, pillar autonomy, agent_issues 1000361; minor: two capabilities and a decision this worker now takes on its own). (a) Global kill switch: ops_config fleet_kill_switch = on makes workAcquire (fresh claims and renewals) and POST /lock/acquire (deploy locks and secret leases) answer 503 reason kill-switch, so no new claim, deploy or secret write starts while it is on; releases, reads, the sweep and /health keep working; the first refusal in five minutes writes one cloud_ops_events row of kind kill-switch.observed; GET /kill-switch reads the state. The flag is read with a 30 second cache, off when the row or table is absent. (b) Fencing tokens: every fresh work claim takes the next fence number for its path (work_claims.fence, migration 2026-10-28-bp26-leases-killswitch.sql; the claim still works while the column is absent), acquire and renew return it, and POST /work-lock/check {key, token, fence} answers valid only when the token holds the live claim and the fence is the live one, so a writer that lost its lease cannot pass. docs/KILL-SWITCH-DRILL.md and docs/LEASES-FENCING.md. prior 1.3.34-codeagent */ /* LEASE-EXPIRY-SWEEP-1 (2026-10-26, orphaned_leases 215): a work_claims row past expires_at and never released is closed with outcome expired on every acquire and on the 20-minute tick, so the BP26 lease metric counts sessions that died holding a claim and then settles. */ /* COMPAT-RISK-TIMER-NAME-1 (2026-10-25, unblocks red main): the four fetch-timeout blocks named their setTimeout handle `t`, and a DIFFERENT `t` (a timestamp from ms(row.ts)) in another function is compared numerically within 60 lines, so scripts/compat-risk-scan.mjs linked them by name across function scopes and reported timer-ids for a worker that never reads a timer id as a number. Renamed to timerId; scan is clean and the guard keeps its full meaning. */ /* WORKERS-BUILDS-TOMBSTONE-1 (2026-10-25, agent_issues 1000142): a Workers Builds rebuild of the retired repository-root stub is ledgered, not filed. CLAIM-TERMINAL-RELEASE-1 (2026-10-18): CODE_TASK_DONE now includes superseded, so the guard stops counting a superseded task as live work on its file. */
 var WORKER = "qnfo-deploy-guard";
 var LOCK_PREFIX = "deploylock:";
@@ -569,7 +569,22 @@ async function acquireLease(env, b, quiet) {
   // expected_version optimistic-concurrency check (registry-as-truth): reject a deploy that
   // assumes a stale current version. Enforced only when the worker is registered.
   if (b.expected_version) {
-    var reg = await auditAll(env, "SELECT version FROM service_registry WHERE service=?1 LIMIT 1", [w4]);
+    let reg;
+    let __attempts = 0;
+    while (true) {
+      try {
+        reg = await auditAll(env, "SELECT version FROM service_registry WHERE service=?1 LIMIT 1", [w4]);
+        break;
+      } catch (e) {
+        __attempts++;
+        if (String(e && e.message).includes("The operation was aborted") && __attempts < 3) {
+          // exponential backoff: 100ms, then 200ms
+          await new Promise(r => setTimeout(r, __attempts * 100));
+          continue;
+        }
+        throw e;
+      }
+    }
     var curVer = reg && reg.length ? reg[0].version : null;
     if (curVer && String(curVer) !== String(b.expected_version)) {
       return [409, { acquired: false, reason: "version-mismatch", worker: w4, expected_version: String(b.expected_version), current_version: curVer }];
