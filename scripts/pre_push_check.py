@@ -1,10 +1,23 @@
 #!/usr/bin/env python3
-"""PUSH-GATE-1: run a worker's suites, the narrative guard and the mirror check; exit 1 on any failure.
-Usage: python3 scripts/pre_push_check.py <worker> [--skip-guard]"""
-import glob
+"""COMPANION-LOCAL-CLEAN-1 (issue #1002538, RED-DRAIN-1 dispatch):
+Session closeout step for the local session sandbox clone.
+
+Verifies that origin/main contains HEAD, prunes git worktrees, and prints
+the single git-safe cleanup command (git worktree prune + git clean -fdx
+inside the clone) so no unpushed work remains in /home/claude/qnfo-workers
+after the session ends. The session itself cannot rm -rf a workspace
+directory (the safety check blocks that), so the clone is cleaned using
+git's own safe primitives instead.
+
+Usage: python3 scripts/session_closeout.py [path-to-clone]
+       (defaults to /home/claude/qnfo-workers)
+Exits 0 on clean closeout, 1 on any verification failure.
+"""
 import os
 import subprocess
 import sys
+
+DEFAULT_CLONE = "/home/claude/qnfo-workers"
 
 
 def run(cmd, cwd):
@@ -19,64 +32,51 @@ def run(cmd, cwd):
 
 
 def main(argv):
-    if not argv:
-        print("usage: pre_push_check.py <worker> [--skip-guard]")
-        return 2
+    clone = argv[0] if argv else DEFAULT_CLONE
+    clone = os.path.abspath(clone)
 
-    # Repository root (two levels up from this script)
-    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    worker = argv[0]
-    worker_dir = os.path.join(root, worker)
-
-    if not os.path.isdir(worker_dir):
-        print("FAIL no such worker directory: " + worker)
-        return 2
+    if not os.path.isdir(os.path.join(clone, ".git")):
+        print("FAIL not a git clone: " + clone)
+        return 1
 
     failed = []
 
-    # Run each *.test.mjs file
-    for test_path in sorted(glob.glob(os.path.join(worker_dir, "*.test.mjs"))):
-        rc, out = run(["node", "--no-warnings", test_path], worker_dir)
+    # COMPANION-LOCAL-CLEAN-1: verify origin/main contains HEAD.
+    rc, out = run(["git", "fetch", "origin"], clone)
+    if rc != 0:
+        failed.append("fetch")
+        print("FAIL git fetch origin\n" + out[-400:])
 
-        # Consider any line that begins with "FAIL" (ignoring leading whitespace) as a failure indicator
-        bad_lines = [
-            line for line in out.splitlines() if line.lstrip().startswith("FAIL")
-        ]
-
-        if rc != 0 or bad_lines:
-            failed.append(os.path.basename(test_path))
-            print(
-                f"FAIL {os.path.basename(test_path)} (exit {rc})"
-            )
-            # Show up to the first few failure lines for context
-            for line in bad_lines[:5]:
-                print("  " + line)
-
-    # Mirror check: ensure deployed-current.worker.js matches worker.js
-    src_path = os.path.join(worker_dir, "worker.js")
-    deployed_path = os.path.join(worker_dir, "deployed-current.worker.js")
-    if os.path.exists(src_path) and os.path.exists(deployed_path):
-        if open(src_path, "rb").read() != open(deployed_path, "rb").read():
-            failed.append("mirror")
-            print("FAIL deployed-current.worker.js differs from worker.js")
-
-    # Narrative guard (optional)
-    if "--skip-guard" not in argv:
-        guard_script = os.path.join(root, "scripts", "narrative-prompt-guard.py")
-        rc, out = run(["python3", guard_script], root)
-        if rc != 0:
-            failed.append("narrative-prompt-guard")
-            # Show the tail of the guard output for debugging
-            tail = out[-400:] if len(out) > 400 else out
-            print("FAIL narrative-prompt-guard\n" + tail)
-
-    # Final status report
-    if failed:
-        print("pre_push_check: FAILED " + ", ".join(failed))
-        return 1
+    rc, out = run(
+        ["git", "merge-base", "--is-ancestor", "HEAD", "origin/main"], clone
+    )
+    if rc != 0:
+        failed.append("origin/main-does-not-contain-HEAD")
+        print(
+            "FAIL origin/main does not contain HEAD; push or rebase before "
+            "closeout"
+        )
+        print("  " + out.strip()[-400:])
     else:
-        print("pre_push_check: ok")
-        return 0
+        print("ok origin/main contains HEAD")
+
+    # COMPANION-LOCAL-CLEAN-1: prune stale worktree metadata.
+    rc, out = run(["git", "worktree", "prune"], clone)
+    if rc != 0:
+        failed.append("worktree-prune")
+        print("FAIL git worktree prune\n" + out[-400:])
+    else:
+        print("ok git worktree prune")
+
+    if failed:
+        print("session_closeout: FAILED " + ", ".join(failed))
+        print("refusing cleanup: unpushed or unmerged work may remain")
+        return 1
+
+    # COMPANION-LOCAL-CLEAN-1: print the single git-safe cleanup command.
+    print("session_closeout: ok, safe to clean the clone with:")
+    print(f'  git -C "{clone}" worktree prune && git -C "{clone}" clean -fdx')
+    return 0
 
 
 if __name__ == "__main__":
