@@ -84,7 +84,7 @@ function infraManifestRoute(url, env) {
 }
 __name(infraManifestRoute, "infraManifestRoute");
 __name2(infraManifestRoute, "infraManifestRoute");
-var VERSION = "1.17.9-codeagent";
+var VERSION = "1.17.10-codeagent";
 // D1-RESULT-CAP-1 (#9794, DATA-SPINE-W0-1): D1 refuses a result payload over 50 MB. d1ReadAll runs a read; a statement that fails with a result-size
 // error is retried once as LIMIT/OFFSET pages over the same statement, and a payload at or over D1_RESULT_NEAR_BYTES is logged either way as a
 // cloud_ops_events row of kind d1_result_cap_near (fail-soft, never blocks the read).
@@ -1259,7 +1259,36 @@ const chunks = [];
             const b = await env.LIVING_PAPER.prepare("SELECT COUNT(*) AS c FROM index_state i JOIN papers p ON p.slug = i.slug WHERE p.status NOT IN " + CORPUS_IN).first();
             const s = await env.LIVING_PAPER.prepare("SELECT COUNT(*) AS c FROM index_state i LEFT JOIN papers p ON p.slug = i.slug WHERE p.slug IS NULL").first();
             const o = await env.LIVING_PAPER.prepare("SELECT COUNT(*) AS c FROM papers p WHERE p.body_md IS NOT NULL AND p.body_md != '' AND p.status NOT IN " + CORPUS_IN).first();
-            return json({ count: c ? c.c : 0, corpus_total: g ? g.c : 0, contaminated: b ? b.c : 0, stale: s ? s.c : 0, orphan_contaminated: o ? o.c : 0, worker: "qnfo-paper-indexer", version: VERSION });
+
+            // Related‑reading blocks: count citation links present in corpus papers.
+            const linkRe = /\]\(([^)\s]+)\)/g;
+            const citeRe = /^(?:https?:\/\/papers\.qnfo\.org)?\/?(?:paper|papers|p)\/([a-z0-9]+(?:-[a-z0-9]+)*)(?:[?#][^)]*)?$/i;
+            let relatedBlocks = 0;
+            try {
+              const rows = await env.LIVING_PAPER.prepare(
+                "SELECT slug, body_md FROM papers WHERE " + CORPUS_WHERE + " AND body_md IS NOT NULL AND body_md != ''"
+              ).all();
+              for (const r of rows.results || []) {
+                const body = String(r.body_md || "");
+                let m;
+                while ((m = linkRe.exec(body)) !== null) {
+                  if (citeRe.test(m[1])) relatedBlocks++;
+                }
+              }
+            } catch (e) {
+              console.error("[qnfo-paper-indexer] related‑reading count error:", e);
+            }
+
+            return json({
+              count: c ? c.c : 0,
+              corpus_total: g ? g.c : 0,
+              contaminated: b ? b.c : 0,
+              stale: s ? s.c : 0,
+              orphan_contaminated: o ? o.c : 0,
+              related_reading_blocks: relatedBlocks,
+              worker: "qnfo-paper-indexer",
+              version: VERSION
+            });
           }
           case "/manifest": {
             const workers = await env.QNFO_AUDIT.prepare("SELECT * FROM worker_registry").all();
