@@ -1,7 +1,7 @@
 {
  "mode": "live",
- "at": "2026-11-11T12:03:57.528Z",
- "sha": "7a7d1f19918d77c1c52f316e6dbef411e083f440",
+ "at": "2026-11-11T12:10:40.487Z",
+ "sha": "9ee27ca5a0f315e5b2fd34a5f9b94e2b2d21b399",
  "apps": [
   {
    "app": "ask-qwav",
@@ -30,7 +30,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 2456,
+     "ms": 3360,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -59,7 +59,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 2485,
+     "ms": 1259,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -90,7 +90,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1355,
+     "ms": 1613,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -126,7 +126,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 8514,
+     "ms": 8679,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -155,7 +155,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1037,
+     "ms": 1134,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -176,20 +176,29 @@
      "typing": 0,
      "steps": [],
      "screens": [],
-     "consoleErrors": [],
+     "consoleErrors": [
+      "Failed to load resource: the server responded with a status of 500 ()"
+     ],
      "pageErrors": [],
-     "badResponses": [],
-     "ok": true,
-     "error": null,
-     "attempts": 1,
-     "ms": 3550,
+     "badResponses": [
+      "500 https://fleet.qnfo.org/api/cmd/lee/health"
+     ],
+     "ok": false,
+     "error": "fleet.qnfo.org has no Cloudflare token for Lee (cf_token_set undefined)",
+     "attempts": 2,
+     "ms": 316,
      "grade": {
-      "status": "ok",
-      "reasons": []
+      "status": "broken",
+      "reasons": [
+       "did not finish: fleet.qnfo.org has no Cloudflare token for Lee (cf_token_set undefined)"
+      ]
      }
     }
    ],
-   "screenFindings": []
+   "screenFindings": [
+    "console error in lee-health-live: Failed to load resource: the server responded with a status of 500 ()",
+    "HTTP 500 https://fleet.qnfo.org/api/cmd/lee/health during lee-health-live"
+   ]
   },
   {
    "app": "fleet",
@@ -209,7 +218,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 289,
+     "ms": 352,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -255,7 +264,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1990,
+     "ms": 2255,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -282,96 +291,6 @@
        "emptyOverlays": [],
        "smallTargets": [
         {
-         "name": "Same search on Google",
-         "w": 166,
-         "h": 22
-        },
-        {
-         "name": "On Indeed",
-         "w": 72,
-         "h": 22
-        },
-        {
-         "name": "Same search on Google",
-         "w": 166,
-         "h": 22
-        },
-        {
-         "name": "On Indeed",
-         "w": 72,
-         "h": 22
-        },
-        {
-         "name": "Same search on Google",
-         "w": 166,
-         "h": 22
-        },
-        {
-         "name": "On Indeed",
-         "w": 72,
-         "h": 22
-        },
-        {
-         "name": "Same search on Google",
-         "w": 166,
-         "h": 22
-        },
-        {
-         "name": "On Indeed",
-         "w": 72,
-         "h": 22
-        },
-        {
-         "name": "Same search on Google",
-         "w": 166,
-         "h": 22
-        },
-        {
-         "name": "On Indeed",
-         "w": 72,
-         "h": 22
-        },
-        {
-         "name": "Same search on Google",
-         "w": 166,
-         "h": 22
-        },
-        {
-         "name": "On Indeed",
-         "w": 72,
-         "h": 22
-        },
-        {
-         "name": "Same search on Google",
-         "w": 166,
-         "h": 22
-        },
-        {
-         "name": "On Indeed",
-         "w": 72,
-         "h": 22
-        },
-        {
-         "name": "Same search on Google",
-         "w": 166,
-         "h": 22
-        },
-        {
-         "name": "On Indeed",
-         "w": 72,
-         "h": 22
-        },
-        {
-         "name": "Same search on Google",
-         "w": 166,
-         "h": 22
-        },
-        {
-         "name": "On Indeed",
-         "w": 72,
-         "h": 22
-        },
-        {
          "name": "Apply and prepare",
          "w": 138,
          "h": 23
@@ -396,16 +315,36 @@
        "axe": []
       }
      ],
-     "consoleErrors": [],
-     "pageErrors": [],
-     "badResponses": [],
+     "consoleErrors": [
+      "Failed to load resource: the server responded with a status of 500 ()",
+      "Failed to load resource: the server responded with a status of 500 ()",
+      "Failed to load resource: the server responded with a status of 500 ()",
+      "Failed to load resource: the server responded with a status of 500 ()",
+      "Failed to load resource: the server responded with a status of 500 ()",
+      "Failed to load resource: the server responded with a status of 500 ()"
+     ],
+     "pageErrors": [
+      "500",
+      "500"
+     ],
+     "badResponses": [
+      "500 https://jobs.q08.org/api/followups",
+      "500 https://jobs.q08.org/api/matches?",
+      "500 https://jobs.q08.org/api/prefs",
+      "500 https://jobs.q08.org/api/runs",
+      "500 https://jobs.q08.org/api/linkedin",
+      "500 https://jobs.q08.org/api/outcomes"
+     ],
      "ok": true,
      "error": null,
-     "attempts": 1,
-     "ms": 4295,
+     "attempts": 2,
+     "ms": 1328,
      "grade": {
-      "status": "ok",
-      "reasons": []
+      "status": "broken",
+      "reasons": [
+       "page error: 500",
+       "page error: 500"
+      ]
      }
     },
     {
@@ -422,96 +361,6 @@
        "emptyOverlays": [],
        "smallTargets": [
         {
-         "name": "Same search on Google",
-         "w": 166,
-         "h": 22
-        },
-        {
-         "name": "On Indeed",
-         "w": 72,
-         "h": 22
-        },
-        {
-         "name": "Same search on Google",
-         "w": 166,
-         "h": 22
-        },
-        {
-         "name": "On Indeed",
-         "w": 72,
-         "h": 22
-        },
-        {
-         "name": "Same search on Google",
-         "w": 166,
-         "h": 22
-        },
-        {
-         "name": "On Indeed",
-         "w": 72,
-         "h": 22
-        },
-        {
-         "name": "Same search on Google",
-         "w": 166,
-         "h": 22
-        },
-        {
-         "name": "On Indeed",
-         "w": 72,
-         "h": 22
-        },
-        {
-         "name": "Same search on Google",
-         "w": 166,
-         "h": 22
-        },
-        {
-         "name": "On Indeed",
-         "w": 72,
-         "h": 22
-        },
-        {
-         "name": "Same search on Google",
-         "w": 166,
-         "h": 22
-        },
-        {
-         "name": "On Indeed",
-         "w": 72,
-         "h": 22
-        },
-        {
-         "name": "Same search on Google",
-         "w": 166,
-         "h": 22
-        },
-        {
-         "name": "On Indeed",
-         "w": 72,
-         "h": 22
-        },
-        {
-         "name": "Same search on Google",
-         "w": 166,
-         "h": 22
-        },
-        {
-         "name": "On Indeed",
-         "w": 72,
-         "h": 22
-        },
-        {
-         "name": "Same search on Google",
-         "w": 166,
-         "h": 22
-        },
-        {
-         "name": "On Indeed",
-         "w": 72,
-         "h": 22
-        },
-        {
          "name": "Apply and prepare",
          "w": 138,
          "h": 23
@@ -536,16 +385,36 @@
        "axe": []
       }
      ],
-     "consoleErrors": [],
-     "pageErrors": [],
-     "badResponses": [],
+     "consoleErrors": [
+      "Failed to load resource: the server responded with a status of 500 ()",
+      "Failed to load resource: the server responded with a status of 500 ()",
+      "Failed to load resource: the server responded with a status of 500 ()",
+      "Failed to load resource: the server responded with a status of 500 ()",
+      "Failed to load resource: the server responded with a status of 500 ()",
+      "Failed to load resource: the server responded with a status of 500 ()"
+     ],
+     "pageErrors": [
+      "500",
+      "500"
+     ],
+     "badResponses": [
+      "500 https://jobs.q08.org/api/linkedin",
+      "500 https://jobs.q08.org/api/outcomes",
+      "500 https://jobs.q08.org/api/matches?",
+      "500 https://jobs.q08.org/api/prefs",
+      "500 https://jobs.q08.org/api/runs",
+      "500 https://jobs.q08.org/api/followups"
+     ],
      "ok": true,
      "error": null,
-     "attempts": 1,
-     "ms": 4251,
+     "attempts": 2,
+     "ms": 1090,
      "grade": {
-      "status": "ok",
-      "reasons": []
+      "status": "broken",
+      "reasons": [
+       "page error: 500",
+       "page error: 500"
+      ]
      }
     },
     {
@@ -574,7 +443,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1696,
+     "ms": 1864,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -582,8 +451,22 @@
     }
    ],
    "screenFindings": [
-    "home: 22 tap target(s) under 24px, e.g. \"Same search on Google\" 166x22, \"On Indeed\" 72x22, \"Same search on Google\" 166x22",
-    "home-recall: 22 tap target(s) under 24px, e.g. \"Same search on Google\" 166x22, \"On Indeed\" 72x22, \"Same search on Google\" 166x22"
+    "home: 4 tap target(s) under 24px, e.g. \"Apply and prepare\" 138x23, \"Claim ledger\" 95x23, \"Operations\" 82x23",
+    "console error in apply-controls-visible: Failed to load resource: the server responded with a status of 500 ()",
+    "HTTP 500 https://jobs.q08.org/api/followups during apply-controls-visible",
+    "HTTP 500 https://jobs.q08.org/api/matches? during apply-controls-visible",
+    "HTTP 500 https://jobs.q08.org/api/prefs during apply-controls-visible",
+    "HTTP 500 https://jobs.q08.org/api/runs during apply-controls-visible",
+    "HTTP 500 https://jobs.q08.org/api/linkedin during apply-controls-visible",
+    "HTTP 500 https://jobs.q08.org/api/outcomes during apply-controls-visible",
+    "home-recall: 4 tap target(s) under 24px, e.g. \"Apply and prepare\" 138x23, \"Claim ledger\" 95x23, \"Operations\" 82x23",
+    "console error in recall-card-is-quiet-when-signed-out: Failed to load resource: the server responded with a status of 500 ()",
+    "HTTP 500 https://jobs.q08.org/api/linkedin during recall-card-is-quiet-when-signed-out",
+    "HTTP 500 https://jobs.q08.org/api/outcomes during recall-card-is-quiet-when-signed-out",
+    "HTTP 500 https://jobs.q08.org/api/matches? during recall-card-is-quiet-when-signed-out",
+    "HTTP 500 https://jobs.q08.org/api/prefs during recall-card-is-quiet-when-signed-out",
+    "HTTP 500 https://jobs.q08.org/api/runs during recall-card-is-quiet-when-signed-out",
+    "HTTP 500 https://jobs.q08.org/api/followups during recall-card-is-quiet-when-signed-out"
    ]
   },
   {
@@ -615,7 +498,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 8355,
+     "ms": 10350,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -635,7 +518,7 @@
      "ok": false,
      "error": "expected to see \"Order size\" on https://markets.q08.org/",
      "attempts": 2,
-     "ms": 12458,
+     "ms": 14189,
      "grade": {
       "status": "broken",
       "reasons": [
@@ -666,7 +549,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 972,
+     "ms": 1275,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -702,7 +585,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 8359,
+     "ms": 8539,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -885,7 +768,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 4711,
+     "ms": 6432,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -1043,7 +926,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 3464,
+     "ms": 5454,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -1117,7 +1000,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 14429,
+     "ms": 16002,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -1146,7 +1029,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 8387,
+     "ms": 8471,
      "grade": {
       "status": "new",
       "reasons": [
@@ -1179,7 +1062,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 3922,
+     "ms": 5116,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -1210,7 +1093,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1284,
+     "ms": 1450,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -1241,7 +1124,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 7093,
+     "ms": 9038,
      "grade": {
       "status": "new",
       "reasons": [
@@ -1278,7 +1161,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 8651,
+     "ms": 9106,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -1420,7 +1303,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1655,
+     "ms": 2022,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -2773,7 +2656,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 2365,
+     "ms": 3391,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -2898,7 +2781,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1578,
+     "ms": 2712,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -2929,7 +2812,7 @@
      "ok": true,
      "error": null,
      "attempts": 2,
-     "ms": 11339,
+     "ms": 11618,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3046,7 +2929,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 9021,
+     "ms": 9316,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3077,7 +2960,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 9189,
+     "ms": 9547,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3106,7 +2989,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 812,
+     "ms": 1178,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3228,7 +3111,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1476,
+     "ms": 1710,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3257,7 +3140,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 8564,
+     "ms": 8844,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3313,7 +3196,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 4330,
+     "ms": 6307,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3344,7 +3227,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 3369,
+     "ms": 4447,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3375,7 +3258,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 2830,
+     "ms": 4774,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3417,7 +3300,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 889,
+     "ms": 1069,
      "grade": {
       "status": "ok",
       "reasons": []
