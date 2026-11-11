@@ -84,7 +84,7 @@ function infraManifestRoute(url, env) {
 }
 __name(infraManifestRoute, "infraManifestRoute");
 __name2(infraManifestRoute, "infraManifestRoute");
-var VERSION = "1.17.8-codeagent";
+var VERSION = "1.17.9-codeagent";
 // D1-RESULT-CAP-1 (#9794, DATA-SPINE-W0-1): D1 refuses a result payload over 50 MB. d1ReadAll runs a read; a statement that fails with a result-size
 // error is retried once as LIMIT/OFFSET pages over the same statement, and a payload at or over D1_RESULT_NEAR_BYTES is logged either way as a
 // cloud_ops_events row of kind d1_result_cap_near (fail-soft, never blocks the read).
@@ -952,7 +952,7 @@ const chunks = [];
     if (existing && existing.body_hash === hash) {
       return json({ success: true, indexed: false, skipped: true, reason: "unchanged" });
     }
-    const chunks = chunkText(paper.body_md);
+    const chunks = chunkText(cleanedBody);
     const vectors = await embedVectors(env, slug, chunks);
     for (let i = 0; i < vectors.length; i += VZ_BATCH) {
       await env.PAPER_VZ.upsert(vectors.slice(i, i + VZ_BATCH));
@@ -960,6 +960,7 @@ const chunks = [];
     await env.LIVING_PAPER.prepare(
       "INSERT OR REPLACE INTO index_state (slug, chunks, body_hash, body_len, indexed_at, errors) VALUES (?1, ?2, ?3, ?4, datetime('now'), 0)"
     ).bind(slug, chunks.length, hash, cleanedBody.length).run();
+    await handlePurge(env, false);
     return json({ success: true, indexed: true, skipped: false, chunks: chunks.length, body_len: cleanedBody.length, errors: 0 });
   }
 
@@ -989,7 +990,7 @@ const chunks = [];
           skipped++;
           continue;
         }
-        const chunks = chunkText(row.body_md);
+        const chunks = chunkText(cleanedRowBody);
         const vs = await embedVectors(env, row.slug, chunks);
         for (const v of vs) allVectors.push(v);
         await env.LIVING_PAPER.prepare(
@@ -1004,6 +1005,7 @@ const chunks = [];
     for (let i = 0; i < allVectors.length; i += VZ_BATCH) {
       await env.PAPER_VZ.upsert(allVectors.slice(i, i + VZ_BATCH));
     }
+    await handlePurge(env, false);
     const done = offset + limit >= totalCount;
     return json({
       success: true,
