@@ -1,4 +1,4 @@
-var VERSION = "1.20.4-codeagent";
+var VERSION = "1.20.5-codeagent";
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -3186,7 +3186,24 @@ async function plProbationGoal(env, L, proposal, now) {
 }
 // PAPER-LEARN-RETRIAGE-1: when a probation learning settles (in place, rejected or lapsed) its adopted PAPER-LEARN goal settles with it, so no goal sits open past the 96h autonomy gap.
 async function plCloseProbationGoal(env, learningId) {
-  await env.QNFO_AUDIT.prepare("UPDATE goals SET status = 'completed' WHERE goal_key = ?1 AND status = 'adopted'").bind("PAPER-LEARN-" + Number(learningId)).run();
+  // Close the goal and also mark the learning as rejected due to staleness,
+  // preventing an autonomy gap where a probationary learning lingers indefinitely.
+  const now = new Date().toISOString();
+  await env.QNFO_AUDIT.prepare(
+    "UPDATE goals SET status = 'completed' WHERE goal_key = ?1 AND status = 'adopted'"
+  )
+    .bind("PAPER-LEARN-" + Number(learningId))
+    .run();
+  // If the learning is still on probation, mark it as rejected with a note.
+  await env.QNFO_AUDIT.prepare(
+    "UPDATE paper_learnings SET fleet_status = 'rejected', status_note = ?2, updated_at = ?3 WHERE id = ?1 AND fleet_status = 'probation'"
+  )
+    .bind(
+      learningId,
+      ("PL-TRIAGE-2 rejected (stale goal closed after 96h): " + now).slice(0, 700),
+      now
+    )
+    .run();
 }
 async function plTriageTick(env, opts) {
   var o = opts || {}, out = { marker: PL_TRIAGE_MARK, examined: 0, in_place: 0, rejected: 0, apply: 0, goals: 0, kept: 0 };
