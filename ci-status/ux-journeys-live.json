@@ -1,7 +1,7 @@
 {
  "mode": "live",
- "at": "2026-11-11T04:23:52.366Z",
- "sha": "657c5584d0a2059fc971d4a2ac71ff83d08a6eff",
+ "at": "2026-11-11T04:33:48.185Z",
+ "sha": "ce0e6a1fd32a04dbdf51aa2c4a773abc35e9adf9",
  "apps": [
   {
    "app": "ask-qwav",
@@ -30,7 +30,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 2919,
+     "ms": 1402,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -59,7 +59,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 3631,
+     "ms": 1091,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -90,7 +90,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1469,
+     "ms": 1449,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -126,7 +126,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 8627,
+     "ms": 8639,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -155,7 +155,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1106,
+     "ms": 1100,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -182,7 +182,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 2486,
+     "ms": 2746,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -209,7 +209,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 376,
+     "ms": 318,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -255,7 +255,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 2689,
+     "ms": 2415,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -402,7 +402,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 5301,
+     "ms": 4654,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -542,7 +542,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 5081,
+     "ms": 4476,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -574,7 +574,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1844,
+     "ms": 1792,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -615,7 +615,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 10372,
+     "ms": 8231,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -635,7 +635,7 @@
      "ok": false,
      "error": "expected to see \"Order size\" on https://markets.q08.org/",
      "attempts": 2,
-     "ms": 14196,
+     "ms": 12029,
      "grade": {
       "status": "broken",
       "reasons": [
@@ -666,7 +666,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1107,
+     "ms": 1096,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -702,7 +702,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 8390,
+     "ms": 8425,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -885,7 +885,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 6489,
+     "ms": 5132,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -1043,7 +1043,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 4517,
+     "ms": 4445,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -1117,7 +1117,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 15421,
+     "ms": 14528,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -1146,7 +1146,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 8456,
+     "ms": 8497,
      "grade": {
       "status": "new",
       "reasons": [
@@ -1179,7 +1179,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 4088,
+     "ms": 3642,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -1210,7 +1210,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1347,
+     "ms": 1524,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -1241,7 +1241,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 8966,
+     "ms": 6856,
      "grade": {
       "status": "new",
       "reasons": [
@@ -1278,7 +1278,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 8839,
+     "ms": 8686,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -1420,7 +1420,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1891,
+     "ms": 1784,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -2773,7 +2773,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 2858,
+     "ms": 2596,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -2898,7 +2898,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 2038,
+     "ms": 1729,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -2929,7 +2929,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 14698,
+     "ms": 12701,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3046,7 +3046,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 9166,
+     "ms": 9181,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3077,7 +3077,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 9362,
+     "ms": 9301,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3106,7 +3106,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 938,
+     "ms": 894,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3228,7 +3228,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1786,
+     "ms": 1487,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3257,7 +3257,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 8675,
+     "ms": 8689,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3287,7 +3287,7 @@
      "taps": 1,
      "typing": 0,
      "steps": [
-      "tap A small student model for animal calls"
+      "tap The quiet assistant at the bar table"
      ],
      "screens": [
       {
@@ -3313,7 +3313,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 5002,
+     "ms": 4277,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3344,7 +3344,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 4881,
+     "ms": 3362,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3375,7 +3375,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 4095,
+     "ms": 2742,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3417,7 +3417,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 973,
+     "ms": 960,
      "grade": {
       "status": "ok",
       "reasons": []
