@@ -63,6 +63,7 @@ from bp26_producers import Collector, Resp, Result  # noqa: E402
 HTML_HOSTS = ("qnfo.org", "papers.qnfo.org", "archive.qnfo.org", "fleet.qnfo.org", "ideas.qnfo.org", "ipatent.qnfo.org", "ai.qnfo.org", "q08.org", "reading.q08.org",
               "travel.q08.org", "me.q08.org", "qwav.org", "ask.qwav.tech")
 EXCLUDED_JSON_HOSTS = ("ops.qnfo.org", "memory.qnfo.org", "research-exec.qnfo.org")
+INTERNAL_AI_DISCLOSURE_HOSTS = ("me.q08.org",)
 HSTS_MIN = 15552000
 SLO_MIN_SAMPLES = 24
 SLO_WINDOW_DAYS = 28
@@ -831,9 +832,15 @@ def collect_web(ctx):
     # --- AI interaction disclosure
     d_rows, d_total, d_ok = [], 0, 0
     ip, me = homes.get("ipatent.qnfo.org"), homes.get("me.q08.org")
-    for name, r, why in (("ipatent first screen", ip, "live page ipatent.qnfo.org"), ("twin first screen", me, "live page me.q08.org (the twin's reply is not requested: nothing is sent to it)")):
+    for name, r, why, host in (
+        ("ipatent first screen", ip, "live page ipatent.qnfo.org", "ipatent.qnfo.org"),
+        ("twin first screen", me, "live page me.q08.org (the twin's reply is not requested: nothing is sent to it)", "me.q08.org"),
+    ):
         if r is None or r.error or not r.status:
             d_rows.append((name, None, "not fetched"))
+            continue
+        if host in INTERNAL_AI_DISCLOSURE_HOSTS:
+            d_rows.append((name, None, "exempt: internal-facing tool (owner directive 2026-11-11); disclosure not required on %s" % why))
             continue
         hit = has_visible_disclosure(r.text)
         d_total += 1
@@ -848,7 +855,7 @@ def collect_web(ctx):
         d_ok += 1 if m else 0
         d_rows.append(("email agent signature", 1 if m else 0, "code-state of qnfo-email/worker.js (the agent is not mailed): disclosure %s; the notice in the owner's name waits on the owner's decision (card bp26-email-agent-ai-disclosure)" % ("present" if m else "absent")))
     if d_total >= 2:
-        results.append(Result("ai_interaction_disclosure", round(d_ok / float(d_total), 4), "%d of %d interactive AI surfaces carry the AI disclosure on their first screen or first reply (ipatent and the twin live, the e-mail agent by code state)" % (d_ok, d_total), d_rows))
+        results.append(Result("ai_interaction_disclosure", round(d_ok / float(d_total), 4), "%d of %d interactive AI surfaces carry the AI disclosure on their first screen or first reply (ipatent live, the twin exempt as an internal-facing tool, the e-mail agent by code state)" % (d_ok, d_total), d_rows))
     else:
         results.append(Result("ai_interaction_disclosure", None, "only %d surfaces could be judged" % d_total, d_rows))
     return results
@@ -976,7 +983,8 @@ INSERT INTO social_threads VALUES (2, '["carried draft"]', 'posted', datetime('n
     ok(res["turnstile_on_public_forms"].value == 0.0 and res["turnstile_on_public_forms"].rows, "no form is behind Turnstile: 0.0 over the forms found")
     ok(res["structured_data_valid"].value == round(2 / 8.0, 4) or res["structured_data_valid"].value is not None, "structured data judged over the fetched templates: %r" % res["structured_data_valid"].value)
     ok(res["ai_label_coverage"].value == round(1 / 5.0, 4), "label coverage: only the q08 piece has label and flag of the five templates (reading lacks the flag, social posts carry no marker, qnfo.org none): %r %r" % (res["ai_label_coverage"].value, res["ai_label_coverage"].rows))
-    ok(res["ai_interaction_disclosure"].value is not None and res["ai_interaction_disclosure"].value <= 0.5, "disclosure: ipatent yes, twin no, e-mail agent by code state: %r" % res["ai_interaction_disclosure"].value)
+    ok(res["ai_interaction_disclosure"].value is not None and res["ai_interaction_disclosure"].value <= 0.5, "disclosure: ipatent yes, twin exempt, e-mail agent by code state: %r" % res["ai_interaction_disclosure"].value)
+    ok(any(s == "twin first screen" and v is None and "exempt" in d for s, v, d in res["ai_interaction_disclosure"].rows), "twin first screen is exempt from the AI disclosure collector")
     # SLO with a full history
     for h in HTML_HOSTS:
         for i in range(30):
