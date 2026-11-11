@@ -198,6 +198,7 @@ def fetch_deployments(ctx, acc, rows):
 
 
 def incident_workers(title):
+    """RM-BS-FLEET-TWIN-1.3: workers named by a CONTROL-PLANE/DEPLOY-PROBE REVERTED or CANARY-FAILED title."""
     """RM-BS-FLEET-TWIN-1.3: workers named by a CONTROL-PLANE/DEPLOY-PROBE REVERTED or CANARY-FAILED title.
     Forms: "... reverted, a, b deploy canary failed", "... revert opened as a pull request, a, b ...", "... failed, a"."""
     m = re.search(r"(?:reverted|failed|pull request),\s+(.+)", title, re.IGNORECASE)
