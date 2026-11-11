@@ -296,7 +296,7 @@ function clampMaxTokens(requested, isReason) {
 __name(clampMaxTokens, "clampMaxTokens");
 __name2(clampMaxTokens, "clampMaxTokens");
 __name22(clampMaxTokens, "clampMaxTokens");
-var VERSION = "4.42.1";
+var VERSION = "4.42.2";
 // 4.37.2 KERNEL-PERSONAL-PRIVACY-1: preserve all ten registered reply categories across the content-free telemetry boundary.
 // 4.37.1 KERNEL-PERSONAL-PRIVACY-1: classify twin replies inside the personal plane; AUDIT receives only fixed categories and random event ids, never reply text or excerpts.
 // 4.37.0 KERNEL-EVERYWHERE-1 (2026-11-06, owner directive "IMPLEMENT EVERYWHERE ACROSS ALL AI APPS AND SERVICES AND SURFACES", pillar personal): the twin SYSTEM_PROMPT carries the DOCTRINE-1 kernel 8.2.1 reply recognitions (KERNEL-REPLY-4): end every reply on the answer or result, never on a question, conditional offer or menu; ambiguity gets a stated assumption; a refusal or limit with its reason is a disposition stated declaratively; reversible tool actions are taken and reported in the same reply, and a requested change is made with the tool, not described. Each twin reply is also mirrored to qnfo-audit.personal_replies so the kernel false-stop scan covers this surface. prior 4.36.2
@@ -4525,7 +4525,9 @@ function applyTaste(items, rows, labelOf, opts) {
     kept.push({ it, i, rank: (up.has(k) ? 100 : 0) + sc });
   });
   if (suggest) kept.sort((a, b) => b.rank - a.rank || a.i - b.i);
-  return kept.map((x) => x.it);
+  const out = kept.map((x) => x.it);
+  out.hidden = (items || []).length - out.length;
+  return out;
 }
 async function loadFeedback(env) { return all(env.PERSONAL, "SELECT key, kind, label, vote, ref, ts FROM cmp_feedback ORDER BY ts DESC LIMIT 2000").catch(() => []); }
 async function recordFeedback(env, b) {
