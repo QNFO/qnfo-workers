@@ -296,7 +296,7 @@ function clampMaxTokens(requested, isReason) {
 __name(clampMaxTokens, "clampMaxTokens");
 __name2(clampMaxTokens, "clampMaxTokens");
 __name22(clampMaxTokens, "clampMaxTokens");
-var VERSION = "4.42.0";
+var VERSION = "4.42.1";
 // 4.37.2 KERNEL-PERSONAL-PRIVACY-1: preserve all ten registered reply categories across the content-free telemetry boundary.
 // 4.37.1 KERNEL-PERSONAL-PRIVACY-1: classify twin replies inside the personal plane; AUDIT receives only fixed categories and random event ids, never reply text or excerpts.
 // 4.37.0 KERNEL-EVERYWHERE-1 (2026-11-06, owner directive "IMPLEMENT EVERYWHERE ACROSS ALL AI APPS AND SERVICES AND SURFACES", pillar personal): the twin SYSTEM_PROMPT carries the DOCTRINE-1 kernel 8.2.1 reply recognitions (KERNEL-REPLY-4): end every reply on the answer or result, never on a question, conditional offer or menu; ambiguity gets a stated assumption; a refusal or limit with its reason is a disposition stated declaratively; reversible tool actions are taken and reported in the same reply, and a requested change is made with the tool, not described. Each twin reply is also mirrored to qnfo-audit.personal_replies so the kernel false-stop scan covers this surface. prior 4.36.2
@@ -9077,3 +9077,20 @@ function vxAttach(target, workerName) {
 // ---- VOICE-INPUT-1:END ----
 // ---- VOICE-INPUT-1:ATTACH personal-api ----
 vxAttach(api_default, "personal-api");
+// COMPANION-LOCATION-1: the voice block above defaults Permissions-Policy to geolocation=(), which made the browser refuse the companion's
+// own location prompt (Today "where am I" and nearby moments). Own origin may ask; every other origin stays blocked.
+(function (t) {
+  var inner = t.fetch;
+  t.fetch = async function (request, env, ctx) {
+    var res = await inner.call(this, request, env, ctx);
+    try {
+      if (!res || res.status === 101 || (res.headers.get("Content-Type") || "").toLowerCase().indexOf("text/html") !== 0) return res;
+      var pp = res.headers.get("Permissions-Policy") || "";
+      var fixed = /geolocation\s*=/i.test(pp) ? pp.replace(/geolocation\s*=\s*\(\s*\)/i, "geolocation=(self)") : (pp ? pp + ", " : "") + "geolocation=(self)";
+      if (fixed === pp) return res;
+      var out = new Response(res.body, res);
+      out.headers.set("Permissions-Policy", fixed);
+      return out;
+    } catch (e) { return res; }
+  };
+})(api_default);
