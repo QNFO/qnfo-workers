@@ -1,4 +1,4 @@
-var VERSION = "1.20.5-codeagent";
+var VERSION = "1.20.6-codeagent";
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -3329,6 +3329,20 @@ var PLC_PAGE = 25;
 var PLC_VERIFY_ROWS = 100;
 var PLC_VERIFY_NEWEST = 25;
 var PLC_SEALER = "qnfo-lifecycle";
+
+export async function scheduled(event, env, ctx) {
+  // Minimal cron handler to ensure the worker runs on schedule.
+  // Add any lifecycle work here; currently a no‑op that logs execution.
+  try {
+    console.log("qnfo-lifecycle cron triggered at", new Date().toISOString());
+    // Placeholder for actual lifecycle processing; replace with real call if needed.
+    return new Response(null, { status: 204 });
+  } catch (e) {
+    console.error("qnfo-lifecycle scheduled error:", e);
+    // Re‑throw to surface the error to Cloudflare logs.
+    throw e;
+  }
+}
 async function plcSha(text) {
   var d = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(String(text)));
   return "sha256:" + Array.from(new Uint8Array(d)).map(function (b) { return b.toString(16).padStart(2, "0"); }).join("");
