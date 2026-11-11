@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 """PUSH-GATE-1: run a worker's suites, the narrative guard and the mirror check; exit 1 on any failure.
-Usage: python3 scripts/pre_push_check.py <worker> [--skip-guard]"""
+Usage: python3 scripts/pre_push_check.py <worker> [--skip-guard]
+
+COMPANION-LOCAL-CLEAN-1: Session sandbox cleanup is handled by scripts/session_closeout.py,
+which verifies origin/main contains HEAD, prunes worktrees, and emits the git-safe cleanup
+command so no unpushed work remains. This script remains the pre-push gate."""
 import glob
 import os
 import subprocess
