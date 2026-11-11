@@ -474,8 +474,19 @@ def live_row_count():
 
 
 def purge_allowed(existing, classified):
-    """True when a purge cannot shrink the audit surface: empty/unreadable table or the run covers the floor."""
-    return not existing or classified >= PURGE_COVERAGE_FLOOR * existing
+    """True when a purge cannot shrink the audit surface: empty/unreadable table or the run covers the floor.
+
+    If the existing row count cannot be determined (e.g., D1 query failure returns None),
+    we must *not* allow a purge, because a partial audit could otherwise shrink the surface.
+    """
+    # No rows (empty table) is safe to purge.
+    if existing == 0:
+        return True
+    # If we couldn't read the existing count, reject the purge.
+    if existing is None:
+        return False
+    # Otherwise require the classified rows to meet the coverage floor.
+    return classified >= PURGE_COVERAGE_FLOOR * existing
 
 
 def purge_stale(now):
