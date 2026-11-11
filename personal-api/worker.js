@@ -296,7 +296,7 @@ function clampMaxTokens(requested, isReason) {
 __name(clampMaxTokens, "clampMaxTokens");
 __name2(clampMaxTokens, "clampMaxTokens");
 __name22(clampMaxTokens, "clampMaxTokens");
-var VERSION = "4.42.1";
+var VERSION = "4.42.2";
 // 4.37.2 KERNEL-PERSONAL-PRIVACY-1: preserve all ten registered reply categories across the content-free telemetry boundary.
 // 4.37.1 KERNEL-PERSONAL-PRIVACY-1: classify twin replies inside the personal plane; AUDIT receives only fixed categories and random event ids, never reply text or excerpts.
 // 4.37.0 KERNEL-EVERYWHERE-1 (2026-11-06, owner directive "IMPLEMENT EVERYWHERE ACROSS ALL AI APPS AND SERVICES AND SURFACES", pillar personal): the twin SYSTEM_PROMPT carries the DOCTRINE-1 kernel 8.2.1 reply recognitions (KERNEL-REPLY-4): end every reply on the answer or result, never on a question, conditional offer or menu; ambiguity gets a stated assumption; a refusal or limit with its reason is a disposition stated declaratively; reversible tool actions are taken and reported in the same reply, and a requested change is made with the tool, not described. Each twin reply is also mirrored to qnfo-audit.personal_replies so the kernel false-stop scan covers this surface. prior 4.36.2
@@ -5558,7 +5558,6 @@ table{width:100%;border-collapse:collapse;font-size:.92rem}td,th{text-align:left
 .tip{background:var(--acc2);border-radius:10px;padding:10px 12px;margin-top:8px}
 </style></head><body><main>
 <h1>Your companion</h1>
-<p class="mute">Your companion is an AI system: an AI language model writes every reply, not a person.</p>
 <p class="mute">One page. What it is, how to set it up once, and how to use it in under two minutes a day.</p>
 <p><a class="go" href="/companion">Open my companion</a></p>
 
@@ -5664,7 +5663,6 @@ a{display:inline-block;padding:4px 0;min-height:24px}
 #composer .mic.sel{background:var(--warn2);border-color:var(--warn)}
 nav .sec{display:none}nav.open{flex-wrap:wrap}nav.open .sec{display:block;flex:1 0 20%}
 </style></head><body><main>
-<p class="mute" id="ai-note" style="margin:.2rem 0 .6rem;font-size:.9rem">Your companion is an AI system: an AI language model writes every reply, not a person.</p>
 <div id="q-note"></div>
 <div id="gp-print" class="hide"></div>
 <div id="login" class="card hide"><h1>Hi, Rowan.</h1><p>To open your companion on this device, I'll e-mail you a 6-digit code. After that this device stays signed in for six months.</p><div class="row"><button class="p" id="li-send" onclick="sendCode()">E-mail me a code</button></div><div id="li-step" class="hide" style="margin-top:10px"><div class="row"><input id="li-code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="6-digit code" class="grow"><button class="p" onclick="verifyCode()">Open</button></div></div><div id="li-out"></div></div>
@@ -6163,10 +6161,10 @@ function finalizeText(text, rounds) {
   return looksLikeToolText(t) ? summarizeToolRounds(rounds) : t;
 }
 __name(finalizeText, "finalizeText");
-var TWIN_AI_DISCLOSURE = "Your companion is an AI system: an AI language model writes every reply, not a person.";
+var TWIN_AI_DISCLOSURE = "";
 function discloseTwinAi(text) {
   const reply = String(text || "");
-  return reply.startsWith(TWIN_AI_DISCLOSURE) ? reply : TWIN_AI_DISCLOSURE + (reply ? "\n\n" + reply : "");
+  return reply;
 }
 __name(discloseTwinAi, "discloseTwinAi");
 async function runTool(env, name, args) {

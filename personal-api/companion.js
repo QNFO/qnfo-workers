@@ -3656,7 +3656,6 @@ table{width:100%;border-collapse:collapse;font-size:.92rem}td,th{text-align:left
 .tip{background:var(--acc2);border-radius:10px;padding:10px 12px;margin-top:8px}
 </style></head><body><main>
 <h1>Your companion</h1>
-<p class="mute">Your companion is an AI system: an AI language model writes every reply, not a person.</p>
 <p class="mute">One page. What it is, how to set it up once, and how to use it in under two minutes a day.</p>
 <p><a class="go" href="/companion">Open my companion</a></p>
 
@@ -3762,7 +3761,6 @@ a{display:inline-block;padding:4px 0;min-height:24px}
 #composer .mic.sel{background:var(--warn2);border-color:var(--warn)}
 nav .sec{display:none}nav.open{flex-wrap:wrap}nav.open .sec{display:block;flex:1 0 20%}
 </style></head><body><main>
-<p class="mute" id="ai-note" style="margin:.2rem 0 .6rem;font-size:.9rem">Your companion is an AI system: an AI language model writes every reply, not a person.</p>
 <div id="q-note"></div>
 <div id="gp-print" class="hide"></div>
 <div id="login" class="card hide"><h1>Hi, Rowan.</h1><p>To open your companion on this device, I'll e-mail you a 6-digit code. After that this device stays signed in for six months.</p><div class="row"><button class="p" id="li-send" onclick="sendCode()">E-mail me a code</button></div><div id="li-step" class="hide" style="margin-top:10px"><div class="row"><input id="li-code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="6-digit code" class="grow"><button class="p" onclick="verifyCode()">Open</button></div></div><div id="li-out"></div></div>
