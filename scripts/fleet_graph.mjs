@@ -719,6 +719,8 @@ export function addLive(g, snap) {
 // ---------------------------------------------------------------------------------------------------------------------------
 // Findings (need both scopes for the drift kinds; each kind is skipped when its inputs are missing).
 // ---------------------------------------------------------------------------------------------------------------------------
+export const PLATFORM_ENV = new Set(["CF_PAGES", "CF_VERSION_METADATA"]);
+
 export function computeFindings(ctx) {
   const { codeWorkers, snap, triggersByDb, codeSql, liveTables } = ctx;
   const out = [];
@@ -743,11 +745,15 @@ export function computeFindings(ctx) {
       if (missing.length || extra.length) add("cron-drift", name, "warn", "declared " + JSON.stringify([...dc]) + " live " + JSON.stringify([...lc]));
       for (const [env, line] of cw.envReads) {
         if (live.has(env) || cw.declared.has(env)) continue;
-        if (["CF_PAGES", "CF_VERSION_METADATA"].includes(env)) continue;
+        if (PLATFORM_ENV.has(env)) continue;
         // Demote optional config reads to info env-optional-unset (FLEET-GRAPH-FINDINGS-1):
         // a read with a code-level default is optional config, not a dead reference, so accept the
-        // flag from either the per-worker optionalEnv set or the per-read default-value marker.
-        const optional = !!(cw.optionalEnv && cw.optionalEnv.has(env)) || !!(cw.envOptionalDefaults && cw.envOptionalDefaults.has(env));
+        // flag from any of the per-worker optionalEnv set, the per-read default-value marker,
+        // or a per-read optional marker keyed by env name and line.
+        const optional =
+          !!(cw.optionalEnv && cw.optionalEnv.has(env)) ||
+          !!(cw.envOptionalDefaults && cw.envOptionalDefaults.has(env)) ||
+          !!(cw.envReadOptional && (cw.envReadOptional.has(env) || cw.envReadOptional.has(env + ":" + line)));
         add(
           optional ? "env-optional-unset" : "env-undeclared",
           name + "." + env,
