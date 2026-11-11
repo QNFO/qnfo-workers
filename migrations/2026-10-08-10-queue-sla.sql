@@ -93,7 +93,7 @@ SELECT
 -- stuck_total is the headline: every stuck type that has an automatic fix or a measured breach, summed.
 INSERT OR IGNORE INTO metric_registry (metric, layer, kind, formula, source_of_truth, baseline, target, owner, disposition_actor, refresh_cadence, warning_band, kill_band, last_value, last_refreshed, state, refresh_class) VALUES
  ('stuck_items_over_sla', 'operational', 'target',
-  'Sum of v_stuck_summary columns except issues_unprobed_60m (its own metric) and research_queued_180m (measured, structural: the 120-minute admission-limited research queue, RESEARCH-BACKPRESSURE-1 triage 2026-10-19, issue #2971): queue items past their queue_sla.sla_min plus open issues with no doer after 180 minutes (QUEUE-SLA-1).',
+  'Sum of v_stuck_summary columns except issues_unprobed_60m (its own metric): queue items past their queue_sla.sla_min plus open issues with no doer after 180 minutes (QUEUE-SLA-1).',
   'qnfo-audit.v_stuck_summary + queue_sla (migrations/2026-10-08-10-queue-sla.sql), refreshed every 10 minutes by trigger queue_sla_tick_10m',
   '13 on 2026-10-08 before the first fix (2 intents, 2 outreach, 9 issues without a doer)', '0', 'qnfo-fleet-control',
   'trigger gt 0 -> one METRIC-TRIGGER issue naming the stuck type and its fix', '10m', '> 0', '> 5',
