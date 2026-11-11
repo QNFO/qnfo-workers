@@ -549,7 +549,7 @@ check("a later failed read clears the stamp and records why (a stamp never outli
 _hput({"worker": "w", "http": 200, "live": "1.0.1", "before": "1.0.1", "match": 1, "note": "SYNC"}, "2026-11-05 03:00:00")
 check("a recovered read stamps again with the new version", _hdb.execute("SELECT live_version, health_probed_at, health_error FROM worker_live_audit WHERE worker = 'w'").fetchone() == ("1.0.1", "2026-11-05 03:00:00", None))
 
-check("purge floor: empty or unreadable table allows the purge", fa.purge_allowed(0, 3) and fa.purge_allowed(None, 3))
+check("purge floor: an empty table allows the purge, an unreadable one (None) refuses it", fa.purge_allowed(0, 3) and not fa.purge_allowed(None, 3))
 check("purge floor: a 4-row partial run against 114 rows is refused", not fa.purge_allowed(114, 4))
 check("purge floor: a run covering 80 percent of the table purges", fa.purge_allowed(100, 80) and not fa.purge_allowed(100, 79))
 check("purge floor: a purge-skipped warning is an actionable finding", any("purge skipped" in x for x in fa.actionable({}, {}, [], "purge skipped: run classified 4 workers")))
