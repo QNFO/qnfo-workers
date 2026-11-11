@@ -71,7 +71,7 @@ const isWorkListRead = (sql) => sql.includes("substr(worker,1,5)='work:'");
   ok(r.status === 503, "B1 a lasting refusal of the lock INSERT answers 503, not 500", r.status);
   ok(r.j && r.j.acquired === false && r.j.reason === "lock_db_unavailable" && r.j.retry_after_sec === 5, "B2 the body says acquired:false, why, and when to ask again", r.j);
   ok(r.retryAfter === "5", "B3 the Retry-After header is set", r.retryAfter);
-  ok(fault.hits === 4, "B4 one attempt and three retries, no more (a retry storm would add to the overload)", fault.hits);
+  ok(fault.hits === 5, "B4 one attempt and four retries, no more (a retry storm would add to the overload)", fault.hits);
   ok(!("token" in (r.j || {})), "B5 no token is issued");
 
   const { env: env2, fault: f2 } = mk();
@@ -90,17 +90,17 @@ const isWorkListRead = (sql) => sql.includes("substr(worker,1,5)='work:'");
   ok(r.status === 503 && r.j && r.j.acquired === false, "C2 and still answers a structured 503", r);
 }
 
-// D. the open read retries a refusal three times, and a lasting refusal is a 503 with Retry-After, never a false list (work-lock.test.mjs E1 keeps the contract)
+// D. the open read retries through the full 10-second overload window, and a lasting refusal is a 503 with Retry-After, never a false list (work-lock.test.mjs E1 keeps the contract)
 {
   const { env, fault } = mk();
   await post(env, "/work-lock/acquire", { key: "file:qnfo-ai/worker.js", owner: "session-A", ttl_sec: 3600 });
-  fault.match = isWorkListRead; fault.left = 3; fault.hits = 0;
+  fault.match = isWorkListRead; fault.left = 4; fault.hits = 0;
   const absorbed = await get(env, "/work-locks");
-  ok(absorbed.status === 200 && absorbed.j.count === 1 && fault.hits === 3 && absorbed.j.claims[0].holder === "session-A", "D1 three overload refusals of the read are absorbed and the live list is returned", { s: absorbed.status, hits: fault.hits });
+  ok(absorbed.status === 200 && absorbed.j.count === 1 && fault.hits === 4 && absorbed.j.claims[0].holder === "session-A", "D1 four overload refusals spanning the 10-second window are absorbed and the live list is returned", { s: absorbed.status, hits: fault.hits });
   fault.left = 99; fault.hits = 0;
   const lasting = await get(env, "/work-locks");
   ok(lasting.status === 503 && lasting.j.error === "lock_db_unavailable" && lasting.retryAfter === "5" && !("claims" in lasting.j), "D2 a lasting refusal is a 503 with Retry-After and no list", lasting);
-  ok(fault.hits === 4, "D3 one attempt and three retries", fault.hits);
+  ok(fault.hits === 5, "D3 one attempt and four retries", fault.hits);
   fault.left = 0;
   const live = await get(env, "/work-locks");
   ok(live.status === 200 && live.j.count === 1 && !/token/i.test(live.t), "D4 the next read is live again and shows no token", live.j);
