@@ -3732,7 +3732,7 @@ var __name22 = __name2;
 // line below (VERSION-LINE-NOTES-1, 2026-10-19). Its older trailing notes stay until length-lede.test.mjs stops pinning "LENGTH-LEDE-1" on that line.
 // VERSION-NOTES-MOVED-1: release notes live in the block below
 // W-META-1 (agent_issues 1002316/1002317/1002318): aiRunAttr records in_tok/out_tok/neurons per purpose.
-var VERSION = "1.48.5-codeagent";
+var VERSION = "1.48.6-codeagent";
 // 1.46.0 KERNEL-EVERYWHERE-1 (2026-11-06, owner directive "IMPLEMENT EVERYWHERE ACROSS ALL AI APPS AND SERVICES AND SURFACES", pillar personal): the travel planner CHAT_SYSTEM carries the DOCTRINE-1 kernel 8.2.1 reply recognitions (KERNEL-REPLY-4, scoped to the planner's one designed question): end on the plan or proposal, never a conditional offer or questionnaire; refusals and limits are dispositions with their reason; reversible steps are taken and reported in the same reply. prior 1.45.8-codeagent
 /* 1.44.14 COMPANION-LENGTH-HEADROOM-1 (issue 1000633, pillar personal; patch): repeated length failures alongside exhausted retry budgets expose too little headroom for model output variation. Length-only repairs now target 500 words below the unchanged ceiling while remaining inside each form's normal writer band. */
 /* 1.43.6 BP26-AI-ACT-ART50-1 and BP26-STRUCTURED-DATA-1 (2026-10-26, agent_issues 1000341 and 1000336, pillar core; patch): the visible AI-generated label of every reading.q08.org piece now has its machine-readable half. A piece page carries an Article JSON-LD block (headline, datePublished, url, an Organization as author, never an AI or invented persona, and creditText saying it was written by AI and that no human reviews pieces before they appear) and the index page a Blog block. Measured before: the reading pages carried the visible label and no JSON-LD at all. */
@@ -5872,27 +5872,33 @@ __name(extractLede, "extractLede");
 __name2(extractLede, "extractLede");
 __name22(extractLede, "extractLede");
 function sourceDiversityOk(srcs) {
-  if (!Array.isArray(srcs) || srcs.length < 3) return false;
+  // Exclude Wikipedia anchors from counting toward source diversity.
+  var filtered = (Array.isArray(srcs) ? srcs : []).filter(function (a) {
+    var ref = String(a.ref || "").toLowerCase();
+    return ref.indexOf("wikipedia.org") === -1;
+  });
+  // Need at least 3 independent, full‑text sources after exclusion.
+  if (filtered.length < 3) return false;
   // All sources must have full‑text content
-  var hasFullText = srcs.every(function (a) { return String(a.text || "").trim().length > 0; });
+  var hasFullText = filtered.every(function (a) { return String(a.text || "").trim().length > 0; });
   if (!hasFullText) return false;
   // All sources must have a citation reference (ref) to be checkable
-  var hasRef = srcs.every(function (a) { return String(a.ref || "").trim().length > 0; });
+  var hasRef = filtered.every(function (a) { return String(a.ref || "").trim().length > 0; });
   if (!hasRef) return false;
   // Every source must declare a viewpoint (to guarantee cross‑viewpoint coverage)
-  var allHaveViewpoint = srcs.every(function (a) { return typeof a.viewpoint === "string" && a.viewpoint.trim().length > 0; });
+  var allHaveViewpoint = filtered.every(function (a) { return typeof a.viewpoint === "string" && a.viewpoint.trim().length > 0; });
   if (!allHaveViewpoint) return false;
   // At least one source must be from a non‑US country
-  var hasNonUS = srcs.some(function (a) { return a.sourceCountry && a.sourceCountry.toUpperCase() !== "US"; });
+  var hasNonUS = filtered.some(function (a) { return a.sourceCountry && a.sourceCountry.toUpperCase() !== "US"; });
   if (!hasNonUS) return false;
   // Need at least two distinct viewpoints across the sources
   var vpSet = {};
-  srcs.forEach(function (a) { vpSet[a.viewpoint] = true; });
+  filtered.forEach(function (a) { vpSet[a.viewpoint] = true; });
   if (Object.keys(vpSet).length < 2) return false;
   // EK-2: the 3 sources must be independent - distinct refs, not the same anchor counted twice.
   var seen = {};
   var independent = true;
-  srcs.forEach(function (a) {
+  filtered.forEach(function (a) {
     var k = String(a.ref || a.title || "").trim();
     if (!k || seen[k]) independent = false;
     seen[k] = true;
