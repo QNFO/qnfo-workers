@@ -2623,7 +2623,9 @@ export function applyTaste(items, rows, labelOf, opts) {
     kept.push({ it, i, rank: (up.has(k) ? 100 : 0) + sc });
   });
   if (suggest) kept.sort((a, b) => b.rank - a.rank || a.i - b.i);
-  return kept.map((x) => x.it);
+  const out = kept.map((x) => x.it);
+  out.hidden = (items || []).length - out.length;
+  return out;
 }
 export async function loadFeedback(env) { return all(env.PERSONAL, "SELECT key, kind, label, vote, ref, ts FROM cmp_feedback ORDER BY ts DESC LIMIT 2000").catch(() => []); }
 export async function recordFeedback(env, b) {
