@@ -382,7 +382,8 @@ export function addWorkerCode(g, worker, src, path, ctx) {
     // OPTIONAL-ENV-1 pre-pass (acorn-walk's `full` visits children before parents, so a read cannot see its parent): the left side of
     // `a ?? d` / `a || d` is a defaulted read when d is a real fallback, including through a guard (`(env && env.X) || d`) and a
     // chain (`env.A ?? env.B ?? "x"` defaults both). A fallback that is itself an env read (`env.A ?? env.B`) is not one, and
-    // neither is the undefined identifier. A coercion wrapper (`Number(env.X) || 5`) is not recognised: such a name stays a finding.
+    // neither is the undefined identifier. A coercion wrapper (`Number(env.X) || 5`) now marks its inner env read as defaulted
+    // (OPTIONAL-ENV-1, issue 100084): markDefaulted descends into call arguments, so such a name demotes when not credential-shaped.
     const envLike = (x) => { if (x && x.type === "ChainExpression") x = x.expression; return !!x && x.type === "MemberExpression" && isEnvObject(x.object); };
     const isLogical = (x) => !!x && x.type === "LogicalExpression";
     const isFallbackOp = (x) => isLogical(x) && (x.operator === "??" || x.operator === "||");
@@ -398,6 +399,8 @@ export function addWorkerCode(g, worker, src, path, ctx) {
       defaulted.add(x);
       if (x.type === "ChainExpression") defaulted.add(x.expression);
       if (isLogical(x)) { markDefaulted(x.left); markDefaulted(x.right); }
+      if (x.type === "CallExpression") for (const a of x.arguments) markDefaulted(a);
+      if (x.type === "UnaryExpression" && x.operator !== "delete") markDefaulted(x.argument);
     };
     walk.full(u.node, (n) => { if (isFallbackOp(n) && isFallback(n.right)) markDefaulted(n.left); });
     walk.full(u.node, (n) => {
