@@ -16,7 +16,9 @@ Every value is measured; a collector that cannot measure returns None and writes
         Cloudflare GraphQL over 7 days. ai_cache_hit_rate = cached / requests of the EMBEDDING models in the AI Gateway log (the catalogue defines the metric on deterministic-prompt routes;
         an embedding is deterministic, a generation call is not; AI-CACHE-DETERMINISTIC-1, the all-routes figure stays in the note and the rows). gateway_coverage = gateway requests / (gateway requests + Workers AI inferences that bypassed the gateway), the second term being Workers AI
         inferences minus the non-cached Workers AI requests the gateway logged. A provider called directly from a Worker (not Workers AI) leaves no trace in Cloudflare: the figure is an
-        upper bound and the note says so.
+        upper bound and the note says so. collect_ai_gateway also emits, alongside the ratio, the per-route breakdown computed by ai_gateway_bypass_routes: every aiInferenceAdaptiveGroups row
+        with no gateway id is aggregated as (route, model, count) and written to the rows and the note, so the direct-call surfaces that bypass the AI Gateway are named and can be routed
+        through the gateway (BP26-AI-GATEWAY-BUDGETS, issue 1000529).
   collect_queues        dlq_depth
         Cloudflare Queues API: every dead-letter queue named by a consumer, its backlog and oldest message. The value is the backlog of DLQs whose oldest message is older than 120 minutes
         (an upper bound: the API cannot split the backlog by age). A queue consumer WITHOUT a dead-letter queue discards its failures: it is listed in the rows and the note, never hidden.
