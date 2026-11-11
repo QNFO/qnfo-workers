@@ -1032,7 +1032,7 @@ INSERT INTO q08_retractions VALUES ('retracted-piece');
     fctx = P.Ctx(d1=d1, d1_db=d1_db, http=fake_http, root=td_root, now=win)
     fr = freshness_row(fctx)
     ok(fr and fr[0] == "fresh:q08.org" and fr[1] == 1 and fr[2].startswith("deadline 2026-11-04T08:00:00Z: 1 piece(s)") and "newest 2026-11-04T03:36:17" in fr[2], "one piece in the 24 h before the deadline: fresh: %r" % (fr,))
-    c.execute("INSERT INTO bp26_probe_results (run_at, metric, subject, ok, detail) VALUES (?, 'slo_attainment_28d_min', 'fresh:q08.org', 1, ?)", ("2026-11-04T09:10:00Z", fr[2]))
+    c.execute("INSERT INTO bp26_probe_results (run_at, metric, subject, ok, detail) VALUES (?, 'desk_freshness_24h', 'fresh:q08.org', 1, ?)", ("2026-11-04T09:10:00Z", fr[2]))
     ok(freshness_row(fctx) is None, "the same deadline is sampled once")
     q.execute("DELETE FROM published_pieces WHERE slug = 'fresh-piece'")
     c.execute("DELETE FROM bp26_probe_results")
