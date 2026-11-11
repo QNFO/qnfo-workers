@@ -156,6 +156,27 @@ def p95(values):
     return v[min(len(v) - 1, max(0, int(-(-0.95 * len(v) // 1)) - 1))]
 
 
+def ai_gateway_bypass_routes(qs_rows):
+    """BP26-AI-GATEWAY-BUDGETS (metric gateway_coverage, issue 1000529): per-route breakdown of aiInferenceAdaptiveGroups
+    rows that carry no gateway id (route, model, count), so the direct-call surfaces that bypass the AI Gateway are named
+    in the rows and the note instead of hiding in the coverage denominator."""
+    out = {}
+    for r in qs_rows:
+        if not isinstance(r, dict):
+            continue
+        dims = r.get("dimensions") or {}
+        if dims.get("gatewayId") or dims.get("gateway_id"):
+            continue
+        route = str(dims.get("route") or dims.get("scriptName") or dims.get("scriptId") or "unknown")
+        model = str(dims.get("model") or dims.get("modelId") or "unknown")
+        try:
+            count = int(r.get("requests") or r.get("sum") or r.get("count") or 0)
+        except (TypeError, ValueError):
+            count = 0
+        out[(route, model)] = out.get((route, model), 0) + count
+    return sorted(((route, model, count) for (route, model), count in out.items()), key=lambda x: -x[2])
+
+
 def fetch_deployments(ctx, acc, rows):
     """Live: every script's latest deployments (bounded by the time budget). Returns (events, scripts seen, error | None)."""
     r = ctx.cf("/accounts/%s/workers/scripts" % acc)
