@@ -1,6 +1,6 @@
 {
  "mode": "live",
- "at": "2026-11-11T18:09:43.091Z",
+ "at": "2026-11-11T18:17:13.438Z",
  "sha": "65c52f33f17a56e401ee810a9ba3013ed2b2e3b3",
  "apps": [
   {
@@ -30,7 +30,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 3036,
+     "ms": 3079,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -59,7 +59,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 3263,
+     "ms": 3463,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -90,7 +90,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1805,
+     "ms": 1552,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -126,7 +126,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 9130,
+     "ms": 9046,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -155,7 +155,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1405,
+     "ms": 1325,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -182,7 +182,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 9227,
+     "ms": 2375,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -209,7 +209,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 482,
+     "ms": 334,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -255,7 +255,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 2438,
+     "ms": 2514,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -402,7 +402,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 5962,
+     "ms": 5816,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -542,7 +542,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 4483,
+     "ms": 5230,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -574,7 +574,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 2072,
+     "ms": 1893,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -594,31 +594,22 @@
      "app": "markets",
      "id": "paper-dashboard",
      "title": "Open the paper-trading dashboard and run a tick",
-     "taps": 1,
+     "taps": 0,
      "typing": 0,
-     "steps": [
-      "tap Run tick now"
-     ],
-     "screens": [
-      {
-       "label": "paper-dashboard",
-       "overflowPx": 0,
-       "emptyOverlays": [],
-       "smallTargets": [],
-       "narrowOverflowPx": 0,
-       "axe": []
-      }
-     ],
+     "steps": [],
+     "screens": [],
      "consoleErrors": [],
      "pageErrors": [],
      "badResponses": [],
-     "ok": true,
-     "error": null,
-     "attempts": 1,
-     "ms": 10504,
+     "ok": false,
+     "error": "the account line shows no equity on https://markets.q08.org/",
+     "attempts": 2,
+     "ms": 8304,
      "grade": {
-      "status": "ok",
-      "reasons": []
+      "status": "broken",
+      "reasons": [
+       "did not finish: the account line shows no equity on https://markets.q08.org/"
+      ]
      }
     },
     {
@@ -635,7 +626,7 @@
      "ok": false,
      "error": "expected to see \"Order size\" on https://markets.q08.org/",
      "attempts": 2,
-     "ms": 12607,
+     "ms": 14339,
      "grade": {
       "status": "broken",
       "reasons": [
@@ -665,8 +656,8 @@
      "badResponses": [],
      "ok": true,
      "error": null,
-     "attempts": 2,
-     "ms": 1176,
+     "attempts": 1,
+     "ms": 1199,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -702,7 +693,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 8743,
+     "ms": 8742,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -885,7 +876,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 6704,
+     "ms": 7075,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -1043,7 +1034,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 4902,
+     "ms": 5915,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -1117,7 +1108,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 13074,
+     "ms": 12937,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -1146,7 +1137,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 8887,
+     "ms": 8721,
      "grade": {
       "status": "new",
       "reasons": [
@@ -1179,7 +1170,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 4728,
+     "ms": 4542,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -1210,7 +1201,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1671,
+     "ms": 1662,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -1241,7 +1232,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 9034,
+     "ms": 13208,
      "grade": {
       "status": "new",
       "reasons": [
@@ -1278,7 +1269,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 8965,
+     "ms": 8819,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -1420,7 +1411,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 2549,
+     "ms": 2107,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -2773,7 +2764,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 3046,
+     "ms": 3111,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -2898,7 +2889,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 2196,
+     "ms": 2409,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -2929,7 +2920,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 14580,
+     "ms": 15038,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3046,7 +3037,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 9281,
+     "ms": 9449,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3077,7 +3068,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 9415,
+     "ms": 9538,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3106,7 +3097,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1228,
+     "ms": 1439,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3228,7 +3219,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 2221,
+     "ms": 1820,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3257,7 +3248,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 8896,
+     "ms": 9510,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3313,7 +3304,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 5637,
+     "ms": 5089,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3344,7 +3335,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 5332,
+     "ms": 4298,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3375,7 +3366,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 4381,
+     "ms": 5751,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3417,7 +3408,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1138,
+     "ms": 1119,
      "grade": {
       "status": "ok",
       "reasons": []
