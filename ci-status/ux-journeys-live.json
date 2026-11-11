@@ -1,7 +1,7 @@
 {
  "mode": "live",
- "at": "2026-11-11T01:10:38.900Z",
- "sha": "67a9200e699118533d505ba21a635230d1171f3f",
+ "at": "2026-11-11T03:53:44.810Z",
+ "sha": "888cd800a4f60ac88feacdeb62fdf5526f294a91",
  "apps": [
   {
    "app": "ask-qwav",
@@ -30,7 +30,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1824,
+     "ms": 2329,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -59,7 +59,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1243,
+     "ms": 2227,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -90,7 +90,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1538,
+     "ms": 1494,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -126,7 +126,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 8654,
+     "ms": 8723,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -155,7 +155,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1149,
+     "ms": 1118,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -182,7 +182,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 2756,
+     "ms": 2726,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -209,7 +209,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 364,
+     "ms": 307,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -255,7 +255,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 2296,
+     "ms": 2152,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -402,7 +402,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 6254,
+     "ms": 4618,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -542,7 +542,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 5677,
+     "ms": 2310,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -574,7 +574,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1864,
+     "ms": 1817,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -615,7 +615,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 10365,
+     "ms": 8177,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -635,7 +635,7 @@
      "ok": false,
      "error": "expected to see \"Order size\" on https://markets.q08.org/",
      "attempts": 2,
-     "ms": 14184,
+     "ms": 12040,
      "grade": {
       "status": "broken",
       "reasons": [
@@ -666,7 +666,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1248,
+     "ms": 1133,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -702,7 +702,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 8499,
+     "ms": 8425,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -731,7 +731,7 @@
        "emptyOverlays": [
         {
          "name": "#rp",
-         "w": 412,
+         "w": 487,
          "h": 3
         },
         {
@@ -772,8 +772,8 @@
          "h": 20
         },
         {
-         "name": "AI & knowledge",
-         "w": 93,
+         "name": "Numbers & p-adics",
+         "w": 116,
          "h": 20
         },
         {
@@ -787,34 +787,29 @@
          "h": 20
         },
         {
-         "name": "Assessments",
-         "w": 78,
+         "name": "Category theory",
+         "w": 90,
          "h": 20
         },
         {
-         "name": "Statistical audits",
-         "w": 95,
+         "name": "Anyons & topology",
+         "w": 110,
          "h": 20
         },
         {
-         "name": "Knowledge integrity",
-         "w": 112,
-         "h": 20
-        },
-        {
-         "name": "Replication",
-         "w": 65,
-         "h": 20
-        },
-        {
-         "name": "Foresight",
-         "w": 53,
+         "name": "Error correction",
+         "w": 88,
          "h": 20
         },
         {
          "name": "report it here",
          "w": 84,
          "h": 22
+        },
+        {
+         "name": "Computo Ergo Sum",
+         "w": 132,
+         "h": 20
         },
         {
          "name": "RSS",
@@ -878,7 +873,7 @@
         {
          "id": "scrollable-region-focusable",
          "impact": "serious",
-         "nodes": 12,
+         "nodes": 11,
          "help": "Scrollable region must have keyboard access"
         }
        ]
@@ -890,7 +885,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 6574,
+     "ms": 5065,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -1048,7 +1043,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 5455,
+     "ms": 4161,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -1056,11 +1051,11 @@
     }
    ],
    "screenFindings": [
-    "paper: 25 tap target(s) under 24px, e.g. \"QNFO\" 31x19, \"QWAV\" 34x19, \"q08\" 21x19",
-    "paper: an empty 412x3 bar (#rp) floats over the page",
+    "paper: 24 tap target(s) under 24px, e.g. \"QNFO\" 31x19, \"QWAV\" 34x19, \"q08\" 21x19",
+    "paper: an empty 487x3 bar (#rp) floats over the page",
     "paper: an empty 32x20 bar (#q-toast) floats over the page",
     "paper: accessibility serious color-contrast (1x): Elements must meet minimum color contrast ratio thresholds",
-    "paper: accessibility serious scrollable-region-focusable (12x): Scrollable region must have keyboard access",
+    "paper: accessibility serious scrollable-region-focusable (11x): Scrollable region must have keyboard access",
     "paper-short: 22 tap target(s) under 24px, e.g. \"QNFO\" 31x19, \"QWAV\" 34x19, \"q08\" 21x19",
     "paper-short: an empty 516x3 bar (#rp) floats over the page",
     "paper-short: an empty 32x20 bar (#q-toast) floats over the page",
@@ -1122,7 +1117,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 15636,
+     "ms": 14211,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -1151,7 +1146,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 8574,
+     "ms": 8546,
      "grade": {
       "status": "new",
       "reasons": [
@@ -1184,7 +1179,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 4396,
+     "ms": 3715,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -1215,7 +1210,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1482,
+     "ms": 1418,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -1246,7 +1241,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 9164,
+     "ms": 6864,
      "grade": {
       "status": "new",
       "reasons": [
@@ -1283,7 +1278,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 9016,
+     "ms": 8814,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -1425,7 +1420,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 2082,
+     "ms": 1726,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -1481,6 +1476,31 @@
          "name": "All 41 tags →",
          "w": 74,
          "h": 20
+        },
+        {
+         "name": "Read",
+         "w": 34,
+         "h": 20
+        },
+        {
+         "name": "Quick read",
+         "w": 71,
+         "h": 20
+        },
+        {
+         "name": "Ask about it",
+         "w": 77,
+         "h": 20
+        },
+        {
+         "name": "Category theory",
+         "w": 106,
+         "h": 21
+        },
+        {
+         "name": "Anyons & topology",
+         "w": 120,
+         "h": 21
         },
         {
          "name": "Read",
@@ -2693,31 +2713,6 @@
          "h": 21
         },
         {
-         "name": "Read",
-         "w": 34,
-         "h": 20
-        },
-        {
-         "name": "Quick read",
-         "w": 71,
-         "h": 20
-        },
-        {
-         "name": "Ask about it",
-         "w": 77,
-         "h": 20
-        },
-        {
-         "name": "Knowledge integrity",
-         "w": 128,
-         "h": 21
-        },
-        {
-         "name": "Research operations",
-         "w": 131,
-         "h": 21
-        },
-        {
          "name": "RSS",
          "w": 24,
          "h": 20
@@ -2778,7 +2773,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 3204,
+     "ms": 2846,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -2903,7 +2898,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 2485,
+     "ms": 1795,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -2934,7 +2929,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 14945,
+     "ms": 14299,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3051,7 +3046,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 9326,
+     "ms": 9211,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3082,7 +3077,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 9531,
+     "ms": 9223,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3111,7 +3106,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1098,
+     "ms": 929,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3233,7 +3228,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1738,
+     "ms": 1590,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3262,7 +3257,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 8784,
+     "ms": 8725,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3318,7 +3313,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 5601,
+     "ms": 4286,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3349,7 +3344,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 3776,
+     "ms": 3748,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3380,7 +3375,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 4103,
+     "ms": 3191,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3422,7 +3417,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1010,
+     "ms": 934,
      "grade": {
       "status": "ok",
       "reasons": []
