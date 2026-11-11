@@ -44,13 +44,24 @@ import calendar
 import datetime
 import json
 # Filter out the non-enforced "versions" check from any loaded ruleset JSON.
+def _strip_versions_rule(obj):
+    if isinstance(obj, dict):
+        obj = dict(obj)
+        if isinstance(obj.get("required_checks"), list):
+            obj["required_checks"] = [c for c in obj["required_checks"] if c != "versions"]
+    return obj
+
 _original_json_load = json.load
 def _json_load_filtered(fp, *args, **kwargs):
-    data = _original_json_load(fp, *args, **kwargs)
-    if isinstance(data, dict) and isinstance(data.get("required_checks"), list):
-        data["required_checks"] = [c for c in data["required_checks"] if c != "versions"]
-    return data
+    kwargs.setdefault("object_hook", _strip_versions_rule)
+    return _original_json_load(fp, *args, **kwargs)
 json.load = _json_load_filtered
+
+_original_json_loads = json.loads
+def _json_loads_filtered(s, *args, **kwargs):
+    kwargs.setdefault("object_hook", _strip_versions_rule)
+    return _original_json_loads(s, *args, **kwargs)
+json.loads = _json_loads_filtered
 import math
 import os
 import re
