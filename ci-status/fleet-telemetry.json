@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-11-11T00:45:23Z",
+ "generated_at": "2026-11-11T00:46:04Z",
  "account": "edb167b78c9fb901ea5bca3ce58ccc4b",
  "errors_24h": {
   "qnfo-infra": {
@@ -81,8 +81,8 @@
     "2026-11-10T12:00:00Z": 1,
     "2026-11-10T02:00:00Z": 1,
     "2026-11-10T11:00:00Z": 2,
-    "2026-11-10T01:00:00Z": 1,
     "2026-11-10T10:00:00Z": 1,
+    "2026-11-10T01:00:00Z": 1,
     "2026-11-10T08:00:00Z": 1
    }
   },
@@ -154,7 +154,7 @@
    {
     "script": "qnfo-gateway",
     "errors": 630,
-    "requests": 741760,
+    "requests": 741770,
     "subrequests": 107300,
     "cpuTimeP50": 4635,
     "cpuTimeP99": 315956,
@@ -163,7 +163,7 @@
    {
     "script": "qnfo-fleet-control",
     "errors": 0,
-    "requests": 160980,
+    "requests": 160990,
     "subrequests": 655310,
     "cpuTimeP50": 1612,
     "cpuTimeP99": 1062881,
@@ -190,7 +190,7 @@
    {
     "script": "qnfo-deploy-guard",
     "errors": 0,
-    "requests": 101040,
+    "requests": 101050,
     "subrequests": 15750,
     "cpuTimeP50": 2123,
     "cpuTimeP99": 48702,
@@ -217,7 +217,7 @@
    {
     "script": "qnfo-lifecycle",
     "errors": 10,
-    "requests": 72440,
+    "requests": 72450,
     "subrequests": 38660,
     "cpuTimeP50": 617,
     "cpuTimeP99": 141631,
@@ -560,12 +560,12 @@
  },
  "workers_ai": {
   "window": "30d",
-  "neurons_total": 52760377.417610176,
+  "neurons_total": 52761619.11517426,
   "models": [
    {
     "model": "@cf/openai/gpt-oss-120b",
-    "requests": 57665,
-    "neurons": 18522652.63862382
+    "requests": 57669,
+    "neurons": 18523025.001187906
    },
    {
     "model": "@cf/zai-org/glm-5.3-flash",
@@ -594,8 +594,8 @@
    },
    {
     "model": "@cf/nvidia/nemotron-3-120b-a12b",
-    "requests": 5122,
-    "neurons": 1215993.7010000001
+    "requests": 5124,
+    "neurons": 1216863.036
    },
    {
     "model": "@cf/deepseek-ai/deepseek-v4-flash-0731",
@@ -625,7 +625,7 @@
    {
     "model": "@cf/baai/bge-base-en-v1.5",
     "requests": 18409,
-    "neurons": 206180.9265775
+    "neurons": 206180.92657749995
    },
    {
     "model": "@cf/qwen/qwen2.5-coder-32b-instruct",
@@ -650,7 +650,7 @@
    {
     "model": "@cf/zai-org/glm-4.7-flash",
     "requests": 3058,
-    "neurons": 21832.62819999995
+    "neurons": 21832.628199999952
    },
    {
     "model": "@cf/meta/llama-3.2-3b-instruct",
@@ -665,7 +665,7 @@
    {
     "model": "@cf/cloudflare/clef-flash",
     "requests": 1207,
-    "neurons": 4070.5115025600003
+    "neurons": 4070.5115025600007
    },
    {
     "model": "@cf/black-forest-labs/flux-1-schnell",
@@ -680,7 +680,7 @@
    {
     "model": "@cf/deepseek-ai/deepseek-r1-distill-qwen-32b",
     "requests": 15,
-    "neurons": 1906.3781842506473
+    "neurons": 1906.3781842506469
    },
    {
     "model": "@cf/openai/whisper-large-v3-turbo",
@@ -700,12 +700,12 @@
    {
     "model": "@cf/cloudflare/clef",
     "requests": 45,
-    "neurons": 167.58544058
+    "neurons": 167.58544057999998
    },
    {
     "model": "@cf/cloudflare/clef-omni",
     "requests": 49,
-    "neurons": 113.91823498
+    "neurons": 113.91823498000001
    },
    {
     "model": "@cf/mistralai/mistral-small-3.1-24b-instruct",
@@ -715,7 +715,7 @@
    {
     "model": "@cf/aisingapore/gemma-sea-lion-v4-27b-it",
     "requests": 40,
-    "neurons": 90.94130799999999
+    "neurons": 90.941308
    },
    {
     "model": "@cf/myshell-ai/melotts",
@@ -811,7 +811,7 @@
    "provider": "workers-ai",
    "requests": 193,
    "cachedRequests": 0,
-   "cost": 3.999698308833599,
+   "cost": 3.9996983088335987,
    "erroredRequests": 0
   },
   {
@@ -847,7 +847,7 @@
    "provider": "workers-ai",
    "requests": 288,
    "cachedRequests": 0,
-   "cost": 2.8757088846988674,
+   "cost": 2.875708884698868,
    "erroredRequests": 0
   },
   {
@@ -856,7 +856,7 @@
    "provider": "deepseek",
    "requests": 3884,
    "cachedRequests": 2,
-   "cost": 1.8370214954000001,
+   "cost": 1.8370214954,
    "erroredRequests": 0
   },
   {
@@ -874,7 +874,7 @@
    "provider": "workers-ai",
    "requests": 407,
    "cachedRequests": 123,
-   "cost": 1.055888279657791,
+   "cost": 1.0558882796577915,
    "erroredRequests": 0
   },
   {
@@ -892,16 +892,16 @@
    "provider": "workers-ai",
    "requests": 367,
    "cachedRequests": 1,
-   "cost": 0.7465078741741181,
+   "cost": 0.746507874174118,
    "erroredRequests": 0
   },
   {
    "gateway": "default",
    "model": "@cf/baai/bge-base-en-v1.5",
    "provider": "workers-ai",
-   "requests": 2746,
+   "requests": 2744,
    "cachedRequests": 511,
-   "cost": 0.7132518799999996,
+   "cost": 0.7131154799999999,
    "erroredRequests": 0
   },
   {
@@ -910,7 +910,7 @@
    "provider": "workers-ai",
    "requests": 87,
    "cachedRequests": 0,
-   "cost": 0.4528113756866455,
+   "cost": 0.45281137568664553,
    "erroredRequests": 0
   },
   {
@@ -919,7 +919,7 @@
    "provider": "workers-ai",
    "requests": 457,
    "cachedRequests": 22,
-   "cost": 0.36764456364953507,
+   "cost": 0.3676445636495351,
    "erroredRequests": 3
   },
   {
@@ -928,7 +928,7 @@
    "provider": "workers-ai",
    "requests": 95,
    "cachedRequests": 1,
-   "cost": 0.13320492121124267,
+   "cost": 0.13320492121124264,
    "erroredRequests": 2
   },
   {
@@ -937,7 +937,7 @@
    "provider": "workers-ai",
    "requests": 107,
    "cachedRequests": 0,
-   "cost": 0.1066474456100464,
+   "cost": 0.10664744561004641,
    "erroredRequests": 0
   },
   {
@@ -973,7 +973,7 @@
    "provider": "workers-ai",
    "requests": 54,
    "cachedRequests": 0,
-   "cost": 0.010674649340569975,
+   "cost": 0.010674649340569971,
    "erroredRequests": 0
   },
   {
@@ -982,7 +982,7 @@
    "provider": "workers-ai",
    "requests": 38,
    "cachedRequests": 0,
-   "cost": 0.00987908215996944,
+   "cost": 0.009879082159969441,
    "erroredRequests": 0
   },
   {
@@ -1016,7 +1016,7 @@
    "gateway": "default",
    "model": "@cf/zai-org/glm-4.7-flash",
    "provider": "workers-ai",
-   "requests": 1454,
+   "requests": 1453,
    "cachedRequests": 0,
    "cost": 0,
    "erroredRequests": 0
@@ -1061,7 +1061,7 @@
    "gateway": "default",
    "model": "@cf/meta/llama-3.2-3b-instruct",
    "provider": "workers-ai",
-   "requests": 64,
+   "requests": 63,
    "cachedRequests": 0,
    "cost": 0,
    "erroredRequests": 0
@@ -1128,7 +1128,7 @@
   {
    "gateway": "default",
    "model": "@cf/baai/bge-base-en-v1.5",
-   "requests_7d": 2746,
+   "requests_7d": 2744,
    "logs": []
   },
   {
