@@ -744,8 +744,10 @@ export function computeFindings(ctx) {
       for (const [env, line] of cw.envReads) {
         if (live.has(env) || cw.declared.has(env)) continue;
         if (["CF_PAGES", "CF_VERSION_METADATA"].includes(env)) continue;
-        // Demote optional config reads to info env-optional-unset.
-        const optional = !!(cw.optionalEnv && cw.optionalEnv.has(env));
+        // Demote optional config reads to info env-optional-unset (FLEET-GRAPH-FINDINGS-1):
+        // a read with a code-level default is optional config, not a dead reference, so accept the
+        // flag from either the per-worker optionalEnv set or the per-read default-value marker.
+        const optional = !!(cw.optionalEnv && cw.optionalEnv.has(env)) || !!(cw.envOptionalDefaults && cw.envOptionalDefaults.has(env));
         add(
           optional ? "env-optional-unset" : "env-undeclared",
           name + "." + env,
