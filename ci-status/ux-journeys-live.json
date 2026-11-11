@@ -1,7 +1,7 @@
 {
  "mode": "live",
- "at": "2026-11-11T19:00:21.815Z",
- "sha": "f5e7b926f51b41b6c6009463e61073319781fa58",
+ "at": "2026-11-11T19:33:42.025Z",
+ "sha": "00e1a7370a8a367190b9e1889d2207126dbca1cd",
  "apps": [
   {
    "app": "ask-qwav",
@@ -30,7 +30,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 2651,
+     "ms": 1649,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -59,7 +59,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 3239,
+     "ms": 1266,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -90,7 +90,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1625,
+     "ms": 1636,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -126,7 +126,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 8970,
+     "ms": 8667,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -155,7 +155,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1117,
+     "ms": 1033,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -182,7 +182,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 3290,
+     "ms": 2779,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -209,7 +209,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 493,
+     "ms": 377,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -255,7 +255,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 2626,
+     "ms": 2098,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -402,7 +402,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 4599,
+     "ms": 4264,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -421,6 +421,96 @@
        "overflowPx": 0,
        "emptyOverlays": [],
        "smallTargets": [
+        {
+         "name": "Same search on Google",
+         "w": 166,
+         "h": 22
+        },
+        {
+         "name": "On Indeed",
+         "w": 72,
+         "h": 22
+        },
+        {
+         "name": "Same search on Google",
+         "w": 166,
+         "h": 22
+        },
+        {
+         "name": "On Indeed",
+         "w": 72,
+         "h": 22
+        },
+        {
+         "name": "Same search on Google",
+         "w": 166,
+         "h": 22
+        },
+        {
+         "name": "On Indeed",
+         "w": 72,
+         "h": 22
+        },
+        {
+         "name": "Same search on Google",
+         "w": 166,
+         "h": 22
+        },
+        {
+         "name": "On Indeed",
+         "w": 72,
+         "h": 22
+        },
+        {
+         "name": "Same search on Google",
+         "w": 166,
+         "h": 22
+        },
+        {
+         "name": "On Indeed",
+         "w": 72,
+         "h": 22
+        },
+        {
+         "name": "Same search on Google",
+         "w": 166,
+         "h": 22
+        },
+        {
+         "name": "On Indeed",
+         "w": 72,
+         "h": 22
+        },
+        {
+         "name": "Same search on Google",
+         "w": 166,
+         "h": 22
+        },
+        {
+         "name": "On Indeed",
+         "w": 72,
+         "h": 22
+        },
+        {
+         "name": "Same search on Google",
+         "w": 166,
+         "h": 22
+        },
+        {
+         "name": "On Indeed",
+         "w": 72,
+         "h": 22
+        },
+        {
+         "name": "Same search on Google",
+         "w": 166,
+         "h": 22
+        },
+        {
+         "name": "On Indeed",
+         "w": 72,
+         "h": 22
+        },
         {
          "name": "Apply and prepare",
          "w": 138,
@@ -452,7 +542,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 9292,
+     "ms": 1886,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -484,7 +574,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1917,
+     "ms": 1802,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -493,7 +583,7 @@
    ],
    "screenFindings": [
     "home: 22 tap target(s) under 24px, e.g. \"Same search on Google\" 166x22, \"On Indeed\" 72x22, \"Same search on Google\" 166x22",
-    "home-recall: 4 tap target(s) under 24px, e.g. \"Apply and prepare\" 138x23, \"Claim ledger\" 95x23, \"Operations\" 82x23"
+    "home-recall: 22 tap target(s) under 24px, e.g. \"Same search on Google\" 166x22, \"On Indeed\" 72x22, \"Same search on Google\" 166x22"
    ]
   },
   {
@@ -525,7 +615,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 7800,
+     "ms": 8388,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -545,7 +635,7 @@
      "ok": false,
      "error": "expected to see \"Order size\" on https://markets.q08.org/",
      "attempts": 2,
-     "ms": 12254,
+     "ms": 12387,
      "grade": {
       "status": "broken",
       "reasons": [
@@ -576,7 +666,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1305,
+     "ms": 1056,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -612,7 +702,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 8549,
+     "ms": 8423,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -795,7 +885,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 5616,
+     "ms": 5061,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -953,7 +1043,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 4674,
+     "ms": 3550,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -1027,7 +1117,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 14039,
+     "ms": 11770,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -1056,7 +1146,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 8643,
+     "ms": 8397,
      "grade": {
       "status": "new",
       "reasons": [
@@ -1089,7 +1179,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 3684,
+     "ms": 3339,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -1120,7 +1210,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1857,
+     "ms": 1538,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -1151,7 +1241,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 6352,
+     "ms": 7017,
      "grade": {
       "status": "new",
       "reasons": [
@@ -1188,7 +1278,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 8861,
+     "ms": 8825,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -1330,7 +1420,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 2209,
+     "ms": 1904,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -1451,6 +1541,16 @@
          "name": "Ask about it",
          "w": 77,
          "h": 20
+        },
+        {
+         "name": "Formal verification",
+         "w": 118,
+         "h": 21
+        },
+        {
+         "name": "LLM systems",
+         "w": 87,
+         "h": 21
         },
         {
          "name": "Read",
@@ -2673,7 +2773,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 3923,
+     "ms": 2374,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -2798,7 +2898,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1838,
+     "ms": 1779,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -2829,7 +2929,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 13315,
+     "ms": 13095,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -2946,7 +3046,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 9348,
+     "ms": 9174,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -2977,7 +3077,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 9830,
+     "ms": 9273,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3006,7 +3106,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1006,
+     "ms": 1060,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3128,7 +3228,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1958,
+     "ms": 1677,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3157,7 +3257,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 8906,
+     "ms": 8749,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3168,7 +3268,7 @@
     "home q08.org: 5 tap target(s) under 24px, e.g. \"QNFO\" 34x20, \"QWAV\" 36x20, \"q08\" 22x20",
     "home travel.q08.org: 1 tap target(s) under 24px, e.g. \"Email me a code\" 115x21",
     "home qnfo.org: 22 tap target(s) under 24px, e.g. \"QNFO\" 37x20, \"QWAV\" 36x20, \"q08\" 22x20",
-    "home papers.qnfo.org: 261 tap target(s) under 24px, e.g. \"QNFO\" 31x19, \"QWAV\" 34x19, \"q08\" 21x19",
+    "home papers.qnfo.org: 263 tap target(s) under 24px, e.g. \"QNFO\" 31x19, \"QWAV\" 34x19, \"q08\" 21x19",
     "home papers.qnfo.org: an empty 32x20 bar (#q-toast) floats over the page",
     "home archive.qnfo.org: 19 tap target(s) under 24px, e.g. \"QNFO\" 37x20, \"QWAV\" 36x20, \"q08\" 22x20",
     "home ideas.qnfo.org: 17 tap target(s) under 24px, e.g. \"QNFO\" 37x20, \"QWAV\" 36x20, \"q08\" 22x20",
@@ -3213,7 +3313,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 4549,
+     "ms": 3945,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3244,7 +3344,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 3092,
+     "ms": 3046,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3275,7 +3375,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 2989,
+     "ms": 2862,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3317,7 +3417,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 997,
+     "ms": 918,
      "grade": {
       "status": "ok",
       "reasons": []
