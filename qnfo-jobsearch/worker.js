@@ -9,7 +9,7 @@
 // JOBSEARCH-CV-1 (1.5.0): the CV is part of this worker (page /cv): a yes/no interview that builds the claim bank, review of unconfirmed claims, roles, achievements and publications edited in D1, a resume per job (summary, roles, selected work, education, skills) and a cover note, history and backup. The search is tied to that bank (evidence the owner can back up weighs more; what the CV lacks is shown as a gap), decided postings (rejected, applied, approved) never come back under another id, rejections carry a reason the search learns from, and a wider net: stretch matches outside the stated preferences, more boards and aggregators.
 // Routes: GET / (web UI) | GET /api | GET /api/matches | GET /api/matches/:id | GET /api/runs | GET /api/ledger | POST /api/run | POST /api/matches/:id/status | GET /health
 // Port of the jobsearch/ Python modules (tests: jobsearch/test_jobsearch.py, qnfo-jobsearch/worker.test.mjs).
-var VERSION = "1.21.1-codeagent";
+var VERSION = "1.21.2-codeagent";
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -406,9 +406,9 @@ const dedupeKey = (j) => `${j.company}|${j.title}|${j.location}`.toLowerCase().r
 const BOARDS = {
   greenhouse: ["anthropic", "scaleai", "mongodb", "elastic", "gitlab", "databricks", "stripe", "adyen", "bird", "datadog", "cloudflare", "canonical", "grafanalabs", "mozilla", "wikimedia", "khanacademy",
     "codeforamerica", "givewell", "dataiku", "fivetran", "nesta", "gallup", "rti", "ideo", "waymo", "nuro", "lyft",
-    "givedirectly", "goodfire", "turing", "via", "catawiki", "labelbox"],   // JOBSEARCH-AUTONOMY-1: ionq, psiquantum and riverlane (quantum) dropped
+    "givedirectly", "goodfire", "turing", "via", "catawiki", "labelbox", "isomorphiclabs", "kodiak", "motional", "thoughtworks"],   // JOBSEARCH-AUTONOMY-1: ionq, psiquantum and riverlane (quantum) dropped
   lever: ["palantir", "mendix", "brookings", "oliverwyman", "zoox", "apolloresearch", "metr"],   // JS-7 (2026-11-05): mistral left Lever (HTTP 404 on Lever, Ashby and Greenhouse, 0 postings on SmartRecruiters) and held fm-jobsearch-feed-down red at 3 failed runs
-  ashby: ["openai", "cohere", "notion", "elevenlabs", "mollie", "mapbox", "perplexity", "snowflake", "faculty", "wayve", "cerebras", "anyscale", "modal", "fireworks", "redwoodresearch", "pinecone", "runway", "miro"],
+  ashby: ["openai", "cohere", "notion", "elevenlabs", "mollie", "mapbox", "perplexity", "snowflake", "faculty", "wayve", "cerebras", "anyscale", "modal", "fireworks", "redwoodresearch", "pinecone", "runway", "miro", "meter"],
   recruitee: ["bunq", "msf", "solvinity", "sweco"],   // sweco: transport, urban and water planning consultancy (probed 2026-11-05: 179 offers, Netherlands among them)
   smartrecruiters: ["oecd"],                           // JOBSEARCH-SOURCES-1 (JS-7): OECD policy research and statistics roles (probed 2026-11-05: 22 postings)
   remotive: ["data", "product", "all-others", "q=research", "q=policy", "q=scientist", "q=autonomous", "q=ai safety", "q=program manager", "q=analyst",
@@ -420,17 +420,14 @@ const BOARDS = {
   hn: [true],
   arbeitnow: true,
   publicsector: ["werkenvoornederland", "academictransfer", "euraxess"],
+  workable: ["rand-europe"],
 };
 // JOBSEARCH-FIT-1 (2026-11-09): employers that post the owner's target roles (AI governance, evaluation and assurance, autonomous-systems research, mobility modelling)
 // and whose roles are often seen only on LinkedIn. These slugs could not be probed from the session (its egress proxy refuses the ATS hosts), so the worker probes
 // them itself: a candidate board that answers is ranked like any board and recorded in jobsearch_feeds; one that answers 404 or fails is skipped silently and never
 // counts as a feed outage. GET /api/ops lists which candidates answered ("candidates_live"); a live one moves into BOARDS by a later change.
-const CANDIDATE_BOARDS = {
-  greenhouse: ["deepmind", "appliedintuition", "aurorainnovation", "motional", "kodiak", "zipline", "credoai", "epochai", "partnershiponai", "isomorphiclabs", "here", "tomtom", "bosch", "arcadis", "thoughtworks", "humanloop", "anthropicpolicy"],
-  lever: ["holisticai", "arthur", "fiddlerai", "farai", "conjecture", "aisafety", "governanceai", "oxa", "einride", "volocopter", "lilium"],
-  ashby: ["patronus-ai", "haize-labs", "grayswan", "apollo-research", "lakera", "transluce", "epoch", "far-ai", "safe-ai", "aisi", "goodfire", "meter", "metr"],
-  workable: ["holistic-ai", "saidot", "trail-ml", "tno", "royal-haskoningdhv", "goudappel", "deltares", "rand-europe", "ada-lovelace-institute", "the-alan-turing-institute", "alan-turing-institute", "turing", "govai", "centre-for-the-governance-of-ai"],
-};
+// JOBSEARCH-FIT-1 (2026-11-09): candidate board probing ran for 371 hours; live slugs were promoted into BOARDS and dead slugs removed.
+const CANDIDATE_BOARDS = {};
 const ACTIVE_FEEDS = new Set(Object.entries(BOARDS).flatMap(([kind, args]) =>
   kind === "arbeitnow" ? ["arbeitnow"] : args.map((arg) => `${kind}:${arg}`)
 ));
