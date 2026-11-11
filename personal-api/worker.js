@@ -296,7 +296,7 @@ function clampMaxTokens(requested, isReason) {
 __name(clampMaxTokens, "clampMaxTokens");
 __name2(clampMaxTokens, "clampMaxTokens");
 __name22(clampMaxTokens, "clampMaxTokens");
-var VERSION = "4.42.2";
+var VERSION = "4.42.1";
 // 4.37.2 KERNEL-PERSONAL-PRIVACY-1: preserve all ten registered reply categories across the content-free telemetry boundary.
 // 4.37.1 KERNEL-PERSONAL-PRIVACY-1: classify twin replies inside the personal plane; AUDIT receives only fixed categories and random event ids, never reply text or excerpts.
 // 4.37.0 KERNEL-EVERYWHERE-1 (2026-11-06, owner directive "IMPLEMENT EVERYWHERE ACROSS ALL AI APPS AND SERVICES AND SURFACES", pillar personal): the twin SYSTEM_PROMPT carries the DOCTRINE-1 kernel 8.2.1 reply recognitions (KERNEL-REPLY-4): end every reply on the answer or result, never on a question, conditional offer or menu; ambiguity gets a stated assumption; a refusal or limit with its reason is a disposition stated declaratively; reversible tool actions are taken and reported in the same reply, and a requested change is made with the tool, not described. Each twin reply is also mirrored to qnfo-audit.personal_replies so the kernel false-stop scan covers this surface. prior 4.36.2
@@ -1426,8 +1426,21 @@ async function emailSearch(env, args) {
   const limit = Math.min(Math.max(Number(args && args.limit || 8), 1), 25);
   const since = new Date(Date.now() - days * 864e5).toISOString();
   const like = "%" + q + "%";
-  const rows = await env.PERSONAL.prepare("SELECT message_id, store, folder, sender, subject, received_at, category, summary FROM email_index WHERE received_at >= ?1 AND (subject LIKE ?2 OR sender LIKE ?2 OR summary LIKE ?2) ORDER BY received_at DESC LIMIT ?3").bind(since, like, limit).all();
-  return { ok: true, count: (rows.results || []).length, emails: rows.results || [] };
+  const idx = await env.PERSONAL.prepare("SELECT message_id, store, folder, sender, subject, received_at, category, summary FROM email_index WHERE received_at >= ?1 AND (subject LIKE ?2 OR sender LIKE ?2 OR summary LIKE ?2) ORDER BY received_at DESC LIMIT ?3").bind(since, like, limit).all();
+  const emails = idx.results || [];
+  // OWNER-ASK-2026-11-11-email-previews-truncated-mid-sentence-assistant-ne / EMAIL-SEARCH-FULL-BODY-1 (#10886):
+  // the index summary is a 300-character preview; assistants need the complete body_text to summarise and draft replies.
+  if (env.AUDIT && emails.length) {
+    const ids = emails.map(function (e) { return e.message_id; }).filter(Boolean);
+    if (ids.length) {
+      const marks = ids.map(function (_, i) { return "?" + (i + 1); }).join(",");
+      const bodies = await env.AUDIT.prepare("SELECT message_id, body_text FROM emails WHERE message_id IN (" + marks + ")").bind(...ids).all();
+      const map = {};
+      for (const r of bodies.results || []) map[r.message_id] = r.body_text;
+      for (const e of emails) e.body_text = map[e.message_id] || null;
+    }
+  }
+  return { ok: true, count: emails.length, emails: emails };
 }
 __name(emailSearch, "emailSearch");
 __name2(emailSearch, "emailSearch");
@@ -4525,9 +4538,7 @@ function applyTaste(items, rows, labelOf, opts) {
     kept.push({ it, i, rank: (up.has(k) ? 100 : 0) + sc });
   });
   if (suggest) kept.sort((a, b) => b.rank - a.rank || a.i - b.i);
-  const out = kept.map((x) => x.it);
-  out.hidden = (items || []).length - out.length;
-  return out;
+  return kept.map((x) => x.it);
 }
 async function loadFeedback(env) { return all(env.PERSONAL, "SELECT key, kind, label, vote, ref, ts FROM cmp_feedback ORDER BY ts DESC LIMIT 2000").catch(() => []); }
 async function recordFeedback(env, b) {
