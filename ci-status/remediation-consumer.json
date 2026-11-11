@@ -1,12 +1,12 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@86588120978e",
+ "verifier": "remediation-consumer@40219fdc24b7",
  "due": 640,
- "pass": 427,
- "fail": 207,
- "skipped": 6,
- "deferred": 6,
+ "pass": 539,
+ "fail": 93,
+ "skipped": 8,
+ "deferred": 8,
  "contracts": [
   {
    "class": "rt-page-papers-index",
@@ -73,8 +73,8 @@
    "written": true
   },
   {
-   "class": "fm-reader-history-navigation-control",
-   "issue_id": null,
+   "class": "issue-1002050",
+   "issue_id": 1002050,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
@@ -89,6 +89,14 @@
    "written": true
   },
   {
+   "class": "rt-page-fleet-queue",
+   "issue_id": 1001440,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
    "class": "issue-1000140",
    "issue_id": 1000140,
    "verdict": "fail",
@@ -97,16 +105,8 @@
    "written": true
   },
   {
-   "class": "issue-1002014",
-   "issue_id": 1002014,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "issue-1002050",
-   "issue_id": 1002050,
+   "class": "fm-reader-history-navigation-control",
+   "issue_id": null,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
@@ -121,19 +121,19 @@
    "written": true
   },
   {
-   "class": "rt-page-fleet-queue",
-   "issue_id": 1001440,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
    "class": "issue-1001983",
    "issue_id": 1001983,
    "verdict": "fail",
    "expected": "ok",
    "observed": "status=404",
+   "written": true
+  },
+  {
+   "class": "issue-1002014",
+   "issue_id": 1002014,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
    "written": true
   },
   {
@@ -153,14 +153,6 @@
    "written": true
   },
   {
-   "class": "fm-mcp-front-door-open-memory",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
    "class": "fm-capability-tokens-live",
    "issue_id": null,
    "verdict": "pass",
@@ -170,6 +162,14 @@
   },
   {
    "class": "rt-page-q08-sitemap",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "fm-mcp-front-door-open-memory",
    "issue_id": null,
    "verdict": "pass",
    "expected": "ok",
@@ -225,22 +225,6 @@
    "written": true
   },
   {
-   "class": "rt-page-fleet-api-cost",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "fm-mcp-front-door-open",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
    "class": "rt-live-idea-hub",
    "issue_id": null,
    "verdict": "pass",
@@ -257,8 +241,8 @@
    "written": true
   },
   {
-   "class": "issue-1000647",
-   "issue_id": 1000647,
+   "class": "rt-page-fleet-api-cost",
+   "issue_id": null,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
@@ -273,7 +257,31 @@
    "written": true
   },
   {
+   "class": "fm-mcp-front-door-open",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-1000647",
+   "issue_id": 1000647,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
    "class": "fm-mcp-front-door-open-ops",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-live-personal-companion",
    "issue_id": null,
    "verdict": "pass",
    "expected": "ok",
@@ -289,35 +297,11 @@
    "written": true
   },
   {
-   "class": "rt-live-personal-companion",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
    "class": "issue-1002971",
    "issue_id": 1002971,
    "verdict": "fail",
    "expected": "ok",
    "observed": "status=404",
-   "written": true
-  },
-  {
-   "class": "issue-1002049",
-   "issue_id": 1002049,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "missing-marker",
-   "written": true
-  },
-  {
-   "class": "issue-1002970",
-   "issue_id": 1002970,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "missing-marker",
    "written": true
   },
   {
@@ -329,6 +313,22 @@
    "written": true
   },
   {
+   "class": "issue-1002970",
+   "issue_id": 1002970,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "missing-marker",
+   "written": true
+  },
+  {
+   "class": "issue-1002049",
+   "issue_id": 1002049,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "missing-marker",
+   "written": true
+  },
+  {
    "class": "rt-fleet-dashboard",
    "issue_id": null,
    "verdict": "pass",
@@ -337,7 +337,7 @@
    "written": true
   },
   {
-   "class": "rt-page-reading-feed",
+   "class": "rt-gateway",
    "issue_id": null,
    "verdict": "pass",
    "expected": "ok",
@@ -361,6 +361,14 @@
    "written": true
   },
   {
+   "class": "rt-page-reading-feed",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
    "class": "issue-1001982",
    "issue_id": 1001982,
    "verdict": "pass",
@@ -369,8 +377,8 @@
    "written": true
   },
   {
-   "class": "rt-gateway",
-   "issue_id": null,
+   "class": "issue-1001339",
+   "issue_id": 1001339,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
@@ -385,7 +393,7 @@
    "written": true
   },
   {
-   "class": "fm-kpi-route-500",
+   "class": "rt-page-fleet-api-kpi",
    "issue_id": null,
    "verdict": "pass",
    "expected": "ok",
@@ -401,15 +409,7 @@
    "written": true
   },
   {
-   "class": "issue-1001339",
-   "issue_id": 1001339,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-page-fleet-api-kpi",
+   "class": "fm-kpi-route-500",
    "issue_id": null,
    "verdict": "pass",
    "expected": "ok",
@@ -422,3 +422,4 @@
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
+ 
