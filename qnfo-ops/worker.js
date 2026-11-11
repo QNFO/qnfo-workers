@@ -552,7 +552,7 @@ __name222(gateAudit1CfWorkerDeploy, "gateAudit1CfWorkerDeploy");
 __name2222(gateAudit1CfWorkerDeploy, "gateAudit1CfWorkerDeploy");
 __name22222(gateAudit1CfWorkerDeploy, "gateAudit1CfWorkerDeploy");
 __name222222(gateAudit1CfWorkerDeploy, "gateAudit1CfWorkerDeploy");
-var VERSION = "2.71.2-codeagent";
+var VERSION = "2.71.3-codeagent";
 /* 2.62.20 OPS-ARG-ALIAS-1 (issues 5775, 5780, 6173, 6193, 6671, 6792, 6767, 6826, 6015, 6860, pillar autonomy; patch). Caller-input mistakes are no longer fleet failures: workspace_grep accepts query/regex/search for pattern, cf_worker_read/deploy/bindings accept name/script for worker, fleet_graph infers a missing op from its other arguments and accepts filter/q/name for query; a still-missing argument answers arg_error with a hint, and an arg_error or an exception thrown by the caller own run_code or run_code_net JavaScript (user_code_error) is logged as status rejected, so it files no TOOL-FAILURE or LOOP-BREAKER issue. errorDetailCapture writes worker_logs in batches of 25 and records a D1 overload as a deferral, not an error. qnfo-ops/tool-arg-alias.test.mjs. */
 /* 2.62.11 WORKER-LOAD-GATE-1 (issue #6518, pillar autonomy; patch): inline the OAuth broker in the deployable single-module worker. */
 /* 2.62.1 CONTAINER-WORKSPACE-TIMEOUT-1 (#3922, issue 1000117, pillar autonomy; patch): container_workspace_exec allows 120 seconds for cold-start initialization while preserving its 300-second ceiling. */
@@ -9006,14 +9006,63 @@ async function handleChatCore(env, body, ua, ctx, pub) {
             // mirroring the verified hand-insert for NCM (id ca978a95..., status='queued'). Best effort - the
             // tool result is still returned to the model either way.
             if (name === "research_queue" && execRes.ok) {
+              // RESEARCH-QUEUE-DUAL-WRITE-1 (2026-11-08, issue 1002487): the ops research feed is a single-path
+              // write - the intent orchestrator accepts the note-type intent and closes it status='done' without
+              // triaging (triaged_at NULL), so the idea never reaches research_queue even though the tool returned
+              // ok:true persisted:true. This violates the two-paths doctrine: a success response must not be able
+              // to kill the idea. Second path: after the orchestrator accepts the intent, ALSO insert the
+              // research_queue row here (source='chat', source_id=<intent id>, decision='ACCEPT', status='queued'),
+              // mirroring the verified hand-insert for NCM (id ca978a95..., status='queued'). The insert is
+              // idempotent (INSERT OR IGNORE on a fresh uuid + source_id check below), and the promoted intent is
+              // marked triaged so it stops counting as an untriaged done intent.
               try {
                 const _rqTxt = String(execRes.text || "");
+                let _iid = null;
                 const _iidM = _rqTxt.match(/int-[a-z0-9]+/i);
-                if (_iidM) {
-                  const _iid = _iidM[0];
-                  const _rqDb = env.DB || env.QNFO_DB || null;
-                  if (_rqDb) {
-                    await _rqDb.prepare("INSERT OR IGNORE INTO research_queue (id, source, source_id, decision, status, created_at) VALUES (?, 'chat', ?, 'ACCEPT', 'queued', ?)").bind(crypto.randomUUID(), _iid, iso()).run();
+                if (_iidM) _iid = _iidM[0];
+                const _rqDb = env.DB || env.QNFO_DB || null;
+                if (!_iid && _rqDb) {
+                  // The tool text may not echo the intent id; fall back to the most recent untriaged
+                  // done research-feed intent (this very call, created seconds ago).
+                  try {
+                    const _lastI = await _rqDb.prepare("SELECT id FROM intents WHERE source = 'qnfo-ops-research-feed' AND type = 'note' AND status = 'done' AND triaged_at IS NULL ORDER BY created_at DESC LIMIT 1").first();
+                    if (_lastI && _lastI.id) _iid = _lastI.id;
+                  } catch (e2) {
+                  }
+                }
+                if (_iid && _rqDb) {
+                  const _now = iso();
+                  const _ex = await _rqDb.prepare("SELECT id FROM research_queue WHERE source_id = ?").bind(_iid).first();
+                  if (!_ex) await _rqDb.prepare("INSERT OR IGNORE INTO research_queue (id, source, source_id, decision, status, created_at) VALUES (?, 'chat', ?, 'ACCEPT', 'queued', ?)").bind(crypto.randomUUID(), _iid, _now).run();
+                  try {
+                    await _rqDb.prepare("UPDATE intents SET triaged_at = ?, triage_decision = 'promote', triage_score = COALESCE(triage_score, 0) WHERE id = ? AND triaged_at IS NULL").bind(_now, _iid).run();
+                  } catch (e3) {
+                  }
+                  // RESEARCH-QUEUE-BACKFILL-1 (issue 1002487): the 6 leaked intents created 2026-10-18..2026-11-08
+                  // (NCM 2610.14162, PCB signal-propagation falsification audit, consilience synthesis, 3 others) sit
+                  // as status='done' AND triaged_at IS NULL with no research_queue row. Backfill every such leaked
+                  // research-feed intent here (idempotent via the source_id existence check) and close its triage.
+                  try {
+                    const _leaks = await _rqDb.prepare("SELECT id FROM intents WHERE source = 'qnfo-ops-research-feed' AND status = 'done' AND triaged_at IS NULL AND id != ?").bind(_iid).all();
+                    for (const _li of (_leaks && _leaks.results) || []) {
+                      try {
+                        const _lx = await _rqDb.prepare("SELECT id FROM research_queue WHERE source_id = ?").bind(_li.id).first();
+                        if (!_lx) await _rqDb.prepare("INSERT OR IGNORE INTO research_queue (id, source, source_id, decision, status, created_at) VALUES (?, 'chat', ?, 'ACCEPT', 'queued', ?)").bind(crypto.randomUUID(), _li.id, _now).run();
+                        await _rqDb.prepare("UPDATE intents SET triaged_at = ?, triage_decision = 'promote', triage_score = COALESCE(triage_score, 0) WHERE id = ? AND triaged_at IS NULL").bind(_now, _li.id).run();
+                      } catch (e4) {
+                      }
+                    }
+                  } catch (e5) {
+                  }
+                  // RESEARCH-QUEUE-GUARD-1 (issue 1002487): guard metric untriaged_done_intents - breach when > 0
+                  // for 6h. Emitted on every research_queue tool call so a regression (orchestrator closing intents
+                  // done without triage and no second path) is visible instead of silent.
+                  try {
+                    const _rem = await _rqDb.prepare("SELECT COUNT(*) AS n FROM intents WHERE status = 'done' AND triaged_at IS NULL").first();
+                    const _n = (_rem && _rem.n) || 0;
+                    if (_n > 0) console.log("UNTRIAGED_DONE_INTENTS " + _n);
+                    ctx.waitUntil(logRouterMetric(env, { worker: WORKER, task_class: "research-queue-guard", model: "none", in_tokens: 0, out_tokens: 0, cost_usd: 0, latency_ms: 0, cache_hit: 0, escalations: 0, tool_calls: 0, tool_calls_ok: 0, success: _n === 0 ? 1 : 0, untriaged_done_intents: _n }));
+                  } catch (e6) {
                   }
                 } else {
                   console.log("RESEARCH_QUEUE_DUAL_WRITE_NO_INTENT_ID " + snippet(_rqTxt, 120));
