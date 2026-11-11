@@ -29,6 +29,7 @@ const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m 
 
 // Pure parts.
 ok(__key("MECHANISM-FIRST-1: fix it") === "MECHANISM-FIRST-1" && __key("CODE-TASK-PREFLIGHT-1: x") === "CODE-TASK-PREFLIGHT-1", "issueKey reads the key before the colon");
+ok(__key("ROADMAP-1: QNFO.REACH #2737: x") === null, "PREFLIGHT-FAMILY-KEY-1: the ROADMAP-1 family prefix is no key");
 ok(__key("METRIC-TRIGGER-378-CODE-TASK-SUCCESS-RATE-30D: gap") === null && __key("no key here") === null && __key("lower-case-1: x") === null, "metric-trigger titles, prose and lower case give no key");
 const big = "x".repeat(__small + 10);
 ok(/shipped as qnfo-x 1\.2\.0/.test((__decide(null, null, { key: "K-1", where: "qnfo-x 1.2.0" }) || {}).refuse || ""), "a shipped key refuses");
