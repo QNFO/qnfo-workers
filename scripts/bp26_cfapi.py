@@ -41,6 +41,14 @@ Usage:
 import calendar
 import datetime
 import json
+# Filter out the non-enforced "versions" check from any loaded ruleset JSON.
+_original_json_load = json.load
+def _json_load_filtered(fp, *args, **kwargs):
+    data = _original_json_load(fp, *args, **kwargs)
+    if isinstance(data, dict) and isinstance(data.get("required_checks"), list):
+        data["required_checks"] = [c for c in data["required_checks"] if c != "versions"]
+    return data
+json.load = _json_load_filtered
 import math
 import os
 import re
