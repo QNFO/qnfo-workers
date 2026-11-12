@@ -74,6 +74,14 @@ def main(argv):
             tail = out[-400:] if len(out) > 400 else out
             print("FAIL narrative-prompt-guard\n" + tail)
 
+    # SELF-CLOSED-LOOPS-1: no added text that waits on a person, instruction files carry the rule
+    lint = os.path.join(root, "scripts", "self_closed_lint.py")
+    if os.path.exists(lint):
+        rc, out = run(["python3", lint], root)
+        if rc != 0:
+            failed.append("self-closed-loops")
+            print("FAIL self-closed-loops\n" + out[-400:])
+
     # Final status report
     if failed:
         print("pre_push_check: FAILED " + ", ".join(failed))

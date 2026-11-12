@@ -4,7 +4,7 @@ export const liveBase = "https://markets.q08.org";
 export const journeys = [
   { id: "paper-dashboard", title: "Open the paper-trading dashboard and run a tick", modes: ["live"],
     async run(u) {
-      await u.open("/");
+      await u.open("/paper");
       await u.see("Simulated money only");
       await u.see("Predictions");
       await u.see("Does the information beat the market?");
@@ -15,7 +15,7 @@ export const journeys = [
     } },
   { id: "order-form", title: "See the manual paper order form and its Buy buttons on a phone", modes: ["live"],
     async run(u) {
-      await u.open("/");
+      await u.open("/paper");
       await u.see("Order size");
       await u.page.getByRole("button", { name: "Buy YES" }).first().waitFor({ state: "visible", timeout: 15000 }).catch(() => { throw new Error("no Buy YES button on " + u.page.url()); });
       await u.screen("order-form");
@@ -27,5 +27,12 @@ export const journeys = [
       await u.see("What this paper does not claim");
       await u.see("References");
       await u.screen("whitepaper");
+    } },
+  { id: "forecasts", title: "Read the consequential forecasts on a phone", modes: ["live"],
+    async run(u) {
+      await u.open("/forecasts");
+      await u.see("Forecasts that move money");
+      await u.see("Value added vs crowd");
+      await u.screen("forecasts");
     } }
 ];

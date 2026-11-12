@@ -32,7 +32,7 @@ const order = [];
 const waits = [];
 const sqlLog = [];
 const fakeDB = { prepare: (sql) => { sqlLog.push(sql); const st = { bind: () => st, first: async () => (/MAX\(published_at\)/.test(sql) ? { t: "2026-10-10T06:04:59Z" } : /MAX\(ran_at\)/.test(sql) ? { t: "2026-10-12 15:06:52" } : null), all: async () => ({ results: [] }), run: async () => ({ meta: {} }) }; return st; } };
-const fullEnv = { DB: fakeDB, AUDIT: { prepare: () => ({ bind() { return this; }, first: async () => null, all: async () => ({ results: [] }), run: async () => ({}) }) }, AI: { run: async () => { order.push("ai"); throw new Error("offline"); } } };
+const fullEnv = { Q08_MODE: "full", DB: fakeDB, AUDIT: { prepare: () => ({ bind() { return this; }, first: async () => null, all: async () => ({ results: [] }), run: async () => ({}) }) }, AI: { run: async () => { order.push("ai"); throw new Error("offline"); } } };
 await mod.default.scheduled({ cron: "30 * * * *" }, fullEnv, { waitUntil: (p) => waits.push(p) });
 await Promise.allSettled(waits);
 check("the :30 tick reaches generation when stalled (it reads the published and run times)", sqlLog.some((q) => /MAX\(published_at\)/.test(q)), sqlLog.slice(0, 8));

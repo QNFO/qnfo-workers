@@ -103,7 +103,7 @@ const AI = { run: async (model, input) => {
   if (/busy, intelligent reader/.test(c)) return { response: readerQueue.length ? readerQueue.shift() : '{"would_read_to_end":true,"score":5,"slop_tells":[],"fix":"none"}' };
   return { response: draft() };
 } };
-const env = { DB: shim, AUDIT: audit, AI, Q08_SOCIAL_FORECASTS: "1" };
+const env = { DB: shim, AUDIT: audit, AI, Q08_SOCIAL_FORECASTS: "1", Q08_MODE: "full" };
 const origFetch = globalThis.fetch;
 globalThis.fetch = async (u) => {
   const url = String(u);
