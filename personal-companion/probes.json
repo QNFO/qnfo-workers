@@ -76,7 +76,8 @@
         "\"engine\":\"pipeline-engine",
         "\"pipeline\":\"personal\"",
         "\"pipeline\":\"research\"",
-        "\"pipeline\":\"jobs\""
+        "\"pipeline\":\"jobs\"",
+        "\"pipeline\":\"job-application\""
       ]
     }
   ]
