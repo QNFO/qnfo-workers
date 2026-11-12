@@ -369,16 +369,17 @@ export async function statusAll(env, nowMs = Date.now()) {
       const rows = (await env.AUDIT.prepare("SELECT " + s.status + " AS status, COUNT(*) AS n, MIN(" + s.ts + ") AS oldest FROM " + s.table + " GROUP BY " + s.status).all()).results || [];
       const view = PE.projectStatus(def, rows, nowMs);
       // PIPELINE-ENGINE-PORT-1: an executed funnel carries its runs (counts only), read without DDL from the plane that owns them
-      if (def.runs === "job-application") {
-        try { const r = await PE.statusOf(env.AUDIT, PD.jobApplicationPipeline(PE), nowMs, { ensure: false }); view.runs = { pipeline: r.pipeline, total: r.total, by_state: r.by_state, stages: r.stages, done_24h: r.done_24h, failed_24h: r.failed_24h, stuck: r.stuck }; }
-        catch (e) { view.runs = { pipeline: "job-application", total: 0, by_state: {}, note: "no runs yet" }; }
+      const rdef = def.runs ? PD.runsDef(PE, def.runs) : null;
+      if (rdef) {
+        try { const r = await PE.statusOf(env.AUDIT, rdef, nowMs, { ensure: false }); view.runs = { pipeline: r.pipeline, total: r.total, by_state: r.by_state, stages: r.stages, done_24h: r.done_24h, failed_24h: r.failed_24h, stuck: r.stuck }; }
+        catch (e) { view.runs = { pipeline: rdef.name, total: 0, by_state: {}, note: "no runs yet" }; }
       }
       out.pipelines.push(view);
     } catch (e) { out.pipelines.push({ pipeline: def.name, error: String(e && e.message || e).slice(0, 200) }); }
   }
   const p = out.pipelines[0] || {};
-  const jr = (out.pipelines.find((x) => x.runs) || {}).runs || {};
-  out.healthy = !p.error && (p.failed_24h || 0) === 0 && (p.stuck || 0) === 0 && (jr.failed_24h || 0) === 0 && (jr.stuck || 0) === 0;
+  const runsBad = out.pipelines.some((x) => x.error || (x.runs && ((x.runs.failed_24h || 0) > 0 || (x.runs.stuck || 0) > 0)));
+  out.healthy = !p.error && (p.failed_24h || 0) === 0 && (p.stuck || 0) === 0 && !runsBad;
   return out;
 }
 
@@ -392,11 +393,11 @@ export function statusPage(st, head) {
     if (p.runs) {
       const rs = (p.runs.stages || []).filter((s) => s.active).map((s) => esc(s.label) + " " + s.active).join(" · ");
       const done = (p.runs.by_state && p.runs.by_state.done) || 0;
-      extra += '<p class="pp-mute">Application runs: ' + (p.runs.total || 0) + " in total, " + done + " finished" + (rs ? ", now " + rs : "") + ". "
+      extra += '<p class="pp-mute">' + (p.plane === "jobs" ? "Application" : "Idea") + ' runs: ' + (p.runs.total || 0) + " in total, " + done + " finished" + (rs ? ", now " + rs : "") + ". "
         + (p.runs.failed_24h || 0) + " failed and " + (p.runs.stuck || 0) + " stuck in 24 hours.</p>";
     }
     const how = p.mode === "observed" ? "Runs in its own worker; stages read from its status."
-      : p.runs ? "Each application runs on Cloudflare Workflows; earlier stages read from its status." : "Runs on Cloudflare Workflows, inline when needed.";
+      : p.runs ? (p.plane === "jobs" ? "Each application runs on Cloudflare Workflows; earlier stages read from its status." : "Each claimed idea runs on Cloudflare Workflows; the queue before it is read from its status.") : "Runs on Cloudflare Workflows, inline when needed.";
     return '<section class="ds-card"><h2>' + esc(p.label) + '</h2><p class="pp-mute">' + how + "</p>"
       + '<ol class="pp-stages">' + stages + "</ol><p class=\"pp-mute\">" + p.total + " in total: " + states + "</p>" + extra + "</section>";
   };
