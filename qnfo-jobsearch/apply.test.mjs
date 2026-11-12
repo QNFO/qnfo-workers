@@ -106,12 +106,11 @@ const bm = home.match(/async function FILL\(\)\{[\s\S]*?\n\}\nfunction bookmarkH
 ok(bm, "FILL source found");
 new vm.Script("(" + bm[0].replace(/\nfunction bookmarkHref$/, "").split("\n").join(" ") + ")");
 
-// 6. follow-ups: applied 8 days ago with no reply is listed with a note that states only role, employer and date
+// 6. FOLLOWUP-ONLY-INTERVIEW-1 (owner 2026-11-12): no follow-up for a web form that went into an applicant tracking system; one only after an interview, to a known contact
 db.prepare("UPDATE jobsearch_matches SET status='applied' WHERE id='gh:acme:1'").run();
 db.prepare("INSERT INTO jobsearch_events (match_id, event, ts, note) VALUES ('gh:acme:1','applied',?, 'owner')").run(new Date(Date.now() - 8 * 86400000).toISOString());
+ok((await (await req("/api/followups")).json()).count === 0, "8 days of silence after applying lists no follow-up");
+await T.applyJobMail(env, { from: "Jane Doe <jane.doe@acme.example>", subject: "Interview invitation", body: "We would like to invite you to an interview for the Senior Policy Advisor role at Acme." });
 const fu = await (await req("/api/followups")).json();
-ok(fu.count === 1 && fu.items[0].days_waiting >= 8 && fu.items[0].note.includes("Senior Policy Advisor role at Acme"), "follow-up listed: " + JSON.stringify(fu).slice(0, 200));
-db.prepare("INSERT INTO jobsearch_events (match_id, event, ts, note) VALUES ('gh:acme:1','replied',?, 'owner')").run(new Date().toISOString());
-db.prepare("UPDATE jobsearch_matches SET status='replied' WHERE id='gh:acme:1'").run();
-ok((await (await req("/api/followups")).json()).count === 0, "a reply removes it");
+ok(fu.count === 1 && fu.items[0].to === "jane.doe@acme.example" && fu.items[0].note.includes("Senior Policy Advisor"), "after an interview mail the follow-up goes to the person who wrote: " + JSON.stringify(fu).slice(0, 200));
 console.log(`qnfo-jobsearch apply: ${pass} passed, 0 failed`);
