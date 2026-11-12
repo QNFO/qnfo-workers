@@ -37,7 +37,7 @@
 // Q08-ASCII-SOURCE-1 (2026-10-01): this file is ASCII-only; every typographic character is a \uXXXX escape. The deploy path
 // double-encoded raw UTF-8, so live pages read "... \u00e2 q08" and posts "\u00e2\u0080\u0094". Keep new literals escaped.
 // VERSION-NOTES-MOVED-1: release notes live in the block below
-var VERSION = "0.52.1";
+var VERSION = "0.52.2";
 /* 0.43.0 Q08-TICK-ALLOWANCE-1 (2026-11-04, pillar cost; minor: the engine now decides on its own whether a tick starts an attempt; BUDGET-SOFT-ROUTE-1, attempts slow down and never stop): ai_call_counters showed 119,552, 129,547 and 110,450 neurons on 2026-11-01..03 against the 50,000 target (ops_config q08_daily_neurons) because q08Budget() only steered the first writer model and nothing bounded the attempts a tick starts (40 a day, the attempt cap, at about 2,760 neurons each). Now the :00 cron and the :30 stall retry go through governedGenerate: tick k of 48 starts an attempt only while the day is under the pace line budget x (k + 1) / 48, an essay after a forecast attempt that spent model calls starts only while the day is still under it, and 150 minutes without an attempt starts one whatever the line says (8 a day at least). No row is written for a tick that waits. The writer gate, reader panels, fact-check, final read and accuracy audit are unchanged, and an attempt already started runs all its rounds. ops_config q08_tick_governor = off restores the old behaviour. tick-allowance.test.mjs replays a UTC day. */
 /* 0.42.0 RM-FORECAST-UPDATE-SCORING-1 (#5578; research): score the last valid update before the horizon with the resolved outcome. */
 /* 0.41.6 FORECAST-CALIBRATION-BUCKET-COVERAGE-1 (#5576, charter pillar research; patch): calibration buckets include probabilities across the full [0,1] range, including the tails, rather than silently omitting forecasts below 5% or above 96%. */
@@ -581,7 +581,7 @@ var SIG_SEEDS = [
   ["rss:bleeping", "rss", "https://www.bleepingcomputer.com/feed/", "security"],
   ["rss:cisa", "rss", "https://www.cisa.gov/cybersecurity-advisories/all.xml", "security"]
 ].concat(SIG_TOPIC_KEYS.map(function (t) { return ["gnews:" + t, "gnews", "", t]; }), SIG_TOPIC_KEYS.map(function (t) { return ["gdelt:" + t, "gdelt", "", t]; }));
-var SIG_FETCH_PER_TICK = 24, SIG_GDELT_PER_TICK = 1, SIG_DEMAND_PER_TICK = 3, SIG_DISCOVER_PER_TICK = 2, SIG_DISCOVER_MIN_SEEN = 3;
+var SIG_FETCH_PER_TICK = 24, SIG_GDELT_PER_TICK = 1, SIG_GNEWS_PER_TICK = 2, SIG_DEMAND_PER_TICK = 3, SIG_DISCOVER_PER_TICK = 2, SIG_DISCOVER_MIN_SEEN = 3;
 var SIG_ITEMS_PER_SOURCE = 10, SIG_ITEMS_PER_PUBLISHER = 12, SIG_MAX_SHARE = 0.35, SIG_MIN_ACTIVE = 20, SIG_MIN_TOPICS = 8, SIG_MIN_ITEMS_24H = 60;
 var SIG_INTERVAL_MIN = 50, SIG_FETCH_TIMEOUT_MS = 12000, SIG_MAX_FEED_BYTES = 1500000;
 var SIG_AGGREGATOR_HOSTS = /(^|\.)(news\.google\.com|google\.com|youtube\.com|youtu\.be|x\.com|twitter\.com|facebook\.com|instagram\.com|reddit\.com|msn\.com|linkedin\.com|t\.co|bit\.ly|wikipedia\.org|archive\.org|medium\.com|substack\.com|github\.com|apple\.news)$/i;
@@ -676,7 +676,7 @@ function sigNextState(row, ok, added, nowMs) {
 }
 // Pick this tick's sources: due, not retired, ordered by quality x (1 + topic deficit), searches (gdelt) bounded separately.
 function sigSchedule(rows, topicShare, nowMs, opts) {
-  var o = opts || {}, perTick = o.perTick || SIG_FETCH_PER_TICK, gdelt = o.gdelt == null ? SIG_GDELT_PER_TICK : o.gdelt, boost = o.boostTopics || {};
+  var o = opts || {}, perTick = o.perTick || SIG_FETCH_PER_TICK, gdelt = o.gdelt == null ? SIG_GDELT_PER_TICK : o.gdelt, gnews = o.gnews == null ? SIG_GNEWS_PER_TICK : o.gnews, boost = o.boostTopics || {};
   var target = 1 / SIG_TOPIC_KEYS.length;
   var due = (rows || []).filter(function (r) { return r.state !== "retired" && (!r.next_at || Date.parse(r.next_at) <= nowMs); });
   due.forEach(function (r) {
@@ -686,9 +686,11 @@ function sigSchedule(rows, topicShare, nowMs, opts) {
     r._prio = (r.state === "probation" ? Math.max(q, 0.6) : q) * (1 + deficit + (boost[r.topic] ? 1 : 0));
   });
   due.sort(function (a, b) { return b._prio - a._prio || String(a.id).localeCompare(String(b.id)); });
-  var out = [], g = 0;
+  // Search endpoints are rate limited (GDELT: one request in 5 seconds; Google News answered 503 to 11 parallel searches), so each kind has its own per-tick bound.
+  var out = [], g = 0, gn = 0;
   for (var i = 0; i < due.length && out.length < perTick; i++) {
     if (due[i].kind === "gdelt") { if (g >= gdelt) continue; g++; }
+    if (due[i].kind === "gnews") { if (gn >= gnews) continue; gn++; }
     out.push(due[i]);
   }
   return out;
@@ -764,9 +766,9 @@ async function sigSeed(env) {
   }
   return n;
 }
-async function sigFetchText(env, url, accept) {
+async function sigFetchText(env, url, accept, timeoutMs) {
   var f = (env && env.__sigFetch) || fetch;
-  var r = await f(url, { headers: { "User-Agent": SIG_UA, "Accept": accept || "application/rss+xml, application/atom+xml, application/xml, text/xml, application/json, text/html;q=0.8" }, redirect: "follow", signal: AbortSignal.timeout(SIG_FETCH_TIMEOUT_MS) });
+  var r = await f(url, { headers: { "User-Agent": SIG_UA, "Accept": accept || "application/rss+xml, application/atom+xml, application/xml, text/xml, application/json, text/html;q=0.8" }, redirect: "follow", signal: AbortSignal.timeout(timeoutMs || SIG_FETCH_TIMEOUT_MS) });
   var text = await r.text();
   return { ok: r.ok, status: r.status, text: text.length > SIG_MAX_FEED_BYTES ? text.slice(0, SIG_MAX_FEED_BYTES) : text };
 }
@@ -783,7 +785,7 @@ async function sigFetchSource(env, src, domains) {
   if (kind === "gnews" || kind === "demand") url = "https://news.google.com/rss/search?hl=en-US&gl=US&ceid=US:en&q=" + encodeURIComponent((src.query || (SIG_TOPICS[src.topic] || {}).q || src.topic) + " when:2d");
   if (kind === "gdelt") url = "https://api.gdeltproject.org/api/v2/doc/doc?mode=artlist&format=json&maxrecords=40&sort=datedesc&timespan=24h&query=" + encodeURIComponent((src.query || (SIG_TOPICS[src.topic] || {}).q || src.topic) + " sourcelang:english");
   if (!url) throw new Error("no url");
-  var r = await sigFetchText(env, url);
+  var r = await sigFetchText(env, url, null, kind === "gdelt" ? 28000 : 0);
   if (!r.ok) throw new Error("http " + r.status);
   if (kind === "gdelt") { parsed = sigParseGdelt(r.text); if (parsed == null) throw new Error("gdelt: " + r.text.slice(0, 80)); }
   else { parsed = sigParseFeed(r.text); if (!parsed.length && !/<(rss|feed|rdf:RDF)[\s>]/i.test(r.text)) throw new Error("not a feed"); }
@@ -879,18 +881,19 @@ async function sigTick(env) {
   } catch (e) { console.error("q08 sig demand: " + String(e && e.message || e).slice(0, 120)); }
   var cited = await sigCitedHosts(env);
   var recentKeys = new Set(((await env.DB.prepare("SELECT title_key FROM signal_log WHERE created_at > datetime('now','-3 days') AND title_key IS NOT NULL").all()).results || []).map(function (r) { return r.title_key; }));
-  var pubCount = {}, fetched = 0, added = 0, domainSeen = {}, gdeltDone = 0;
+  var pubCount = {}, fetched = 0, added = 0, domainSeen = {}, searchDone = 0;
   var all = picked.concat(demand);
   // feeds in parallel batches of 6; GDELT sequential (one request per 5 seconds is its rule)
   async function one(src) {
     var res = { src: src, ok: false, items: [], error: "" };
     try {
-      if (src.kind === "gdelt") { if (gdeltDone++) await new Promise(function (r) { setTimeout(r, 5500); }); }
+      if (src.kind === "gdelt" || src.kind === "gnews" || src.kind === "demand") { if (searchDone++) await new Promise(function (r) { setTimeout(r, src.kind === "gdelt" ? 5500 : 1500); }); }
       res.items = await sigFetchSource(env, src, domains); res.ok = true;
     } catch (e) { res.error = String(e && e.message || e).slice(0, 200); }
     return res;
   }
-  var results = [], feeds = all.filter(function (s) { return s.kind !== "gdelt"; }), gd = all.filter(function (s) { return s.kind === "gdelt"; });
+  var isSearch = function (s) { return s.kind === "gdelt" || s.kind === "gnews" || s.kind === "demand"; };
+  var results = [], feeds = all.filter(function (s) { return !isSearch(s); }), gd = all.filter(isSearch);
   for (var b = 0; b < feeds.length; b += 6) results = results.concat(await Promise.all(feeds.slice(b, b + 6).map(one)));
   for (var gi = 0; gi < gd.length; gi++) results.push(await one(gd[gi]));
   for (var ri = 0; ri < results.length; ri++) {

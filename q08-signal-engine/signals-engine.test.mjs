@@ -62,6 +62,8 @@ const sch = S.sigSchedule(rows, { technology: 0.8, energy: 0, macro: 0, health: 
 const ids = sch.map((r) => r.id);
 check("under-covered energy outranks over-covered technology", ids.indexOf("rss:b") < ids.indexOf("rss:a"), ids);
 check("only one GDELT search a tick", ids.filter((i) => i.startsWith("gdelt")).length === 1, ids);
+const many = [].concat(...[1, 2, 3, 4, 5].map((i) => [{ id: "gnews:" + i, kind: "gnews", topic: "macro", state: "active", quality: 0.9 }]));
+check("at most two Google News searches a tick", S.sigSchedule(many, {}, now, { perTick: 10 }).length === 2);
 check("retired and not-due sources are not fetched", !ids.includes("rss:dead") && !ids.includes("rss:later"), ids);
 
 // ---------- health: the measured 2026-11-12 stream is degraded ----------
