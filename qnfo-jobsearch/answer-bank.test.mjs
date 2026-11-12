@@ -19,7 +19,7 @@ const cases = [
   ["Is there anything else you want to share?", "anything-else"],
 ];
 for (const [q, t] of cases) { const b = bankAnswerFor(q); ok(b && b.type === t, `"${q}" -> ${t} (got ${b && b.type})`); }
-for (const q of ["What is your expected salary?", "Are you authorized to work in the US?", "Describe your experience with Kubernetes."]) ok(!bankAnswerFor(q), `"${q}" is not matched`);
+for (const q of ["Tell us about a time your evaluation of a system went well, and one where it did not.", "What is your expected salary?", "Are you authorized to work in the US?", "Describe your experience with Kubernetes."]) ok(!bankAnswerFor(q), `"${q}" is not matched`);
 ok(ANSWER_BANK.length === 4, "four banked answers");
 for (const b of ANSWER_BANK) { ok(b.answer.length > 120 && !/\bI will\b/.test(b.answer), b.type + " holds a full answer"); ok(!/software engineer|developer|programmer/i.test(b.answer), b.type + " never calls Rowan an engineer"); }
 console.log(`answer-bank: ${pass} passed, ${fail} failed`);
