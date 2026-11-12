@@ -552,7 +552,7 @@ __name222(gateAudit1CfWorkerDeploy, "gateAudit1CfWorkerDeploy");
 __name2222(gateAudit1CfWorkerDeploy, "gateAudit1CfWorkerDeploy");
 __name22222(gateAudit1CfWorkerDeploy, "gateAudit1CfWorkerDeploy");
 __name222222(gateAudit1CfWorkerDeploy, "gateAudit1CfWorkerDeploy");
-var VERSION = "2.71.4-codeagent";
+var VERSION = "2.72.0-codeagent";
 /* 2.62.20 OPS-ARG-ALIAS-1 (issues 5775, 5780, 6173, 6193, 6671, 6792, 6767, 6826, 6015, 6860, pillar autonomy; patch). Caller-input mistakes are no longer fleet failures: workspace_grep accepts query/regex/search for pattern, cf_worker_read/deploy/bindings accept name/script for worker, fleet_graph infers a missing op from its other arguments and accepts filter/q/name for query; a still-missing argument answers arg_error with a hint, and an arg_error or an exception thrown by the caller own run_code or run_code_net JavaScript (user_code_error) is logged as status rejected, so it files no TOOL-FAILURE or LOOP-BREAKER issue. errorDetailCapture writes worker_logs in batches of 25 and records a D1 overload as a deferral, not an error. qnfo-ops/tool-arg-alias.test.mjs. */
 /* 2.62.11 WORKER-LOAD-GATE-1 (issue #6518, pillar autonomy; patch): inline the OAuth broker in the deployable single-module worker. */
 /* 2.62.1 CONTAINER-WORKSPACE-TIMEOUT-1 (#3922, issue 1000117, pillar autonomy; patch): container_workspace_exec allows 120 seconds for cold-start initialization while preserving its 300-second ceiling. */
@@ -5611,7 +5611,10 @@ async function installDeclaredBindings(env, worker) {
       else if (s.name === "vectorize" && k.index_name) decl.push({ type: "vectorize", name: nm, index_name: k.index_name });
       else if (s.name === "durable_objects.bindings" && k.class_name) decl.push({ type: "durable_object_namespace", name: nm, class_name: k.class_name });
       else if (s.name === "queues" && k.queue_name) decl.push({ type: "queue", name: nm, queue_name: k.queue_name });
-      else if (s.name === "workflows" && k.class_name) decl.push({ type: "workflow", name: nm, class_name: k.class_name });
+      // WORKFLOW-NAME-BIND-1 (2026-11-12): the binding carries the Workflow's own name (wrangler `name`); without it the upload
+      // stored workflow_name "" and every create() answered "Workflow does not exist" (personal-companion
+      // PERSONAL_FLOW, JOB_FLOW, RESEARCH_FLOW). script_name is kept when the class lives in another worker.
+      else if (s.name === "workflows" && k.class_name) { const _wf = { type: "workflow", name: nm, class_name: k.class_name }; if (k.name) _wf.workflow_name = k.name; if (k.script_name) _wf.script_name = k.script_name; decl.push(_wf); }
       else if (s.name === "send_email") decl.push(Object.assign({ type: "send_email", name: nm }, sendEmailRestrictions(k)));
       else if (s.name === "browser") decl.push({ type: "browser", name: nm });
       else if (s.name === "ai_search") decl.push({ type: "ai_search", name: nm });
