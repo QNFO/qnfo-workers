@@ -11,7 +11,7 @@ var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target,
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
 // 1.77.2 ERRATA-CHAIN-DISPATCH-1 (pillar research): wake the folded errata consumer and retry its legacy parked receipts.
 // VERSION-LINE-SPLIT-1 (agent_issues 100220): the release notes sit one per line below this statement, newest first, so a VERSION bump is a one-line patch; add a new note as the first line under it.
-var VERSION = "1.107.4";
+var VERSION = "1.108.1";
 // 1.89.0 NOW-NORTH-1 and HOME-MORE-1 (pillar core; minor): the Now screen opens with four numbers tied to the owner goals (readers, fleet cost, owner load, reliability) and drops the count of metrics off target (95 of 297; nothing can be done with it); a quiet footer on the home links the full dashboard, changelog, data index and managers.
 // 1.89.0 (cont.) MONEY-FIX-1 (pillar cost; patch): the Money card subtracted the subscription figure from a pace that never included it (fleet scope of v_cost_forecast), so it showed the fleet at 701 instead of 1151 a month; it now shows the fleet line, the subscriptions line and both together.
 // 1.85.0 (cont.) NOW-REVIEW-1: independent review fixes: Snooze and Not needed hide the card; a tap removes the card at once and reloads fresh, and the hand-back claims the card before filing (no duplicate tickets); strangers get no card keys or raw error text; only the signed-in owner (not the loop token) can run commands or hand work back; bound cards are read first; an unrefreshed metric reads n/a, not 0; one refresh in flight at a time and a failed refresh retries in 10 s; the Code poll says when the executor does not answer.
@@ -4798,6 +4798,11 @@ if (path === "/health") {
     return json(rP);
   }
   // MANAGEMENT-PERSONAS-1 (1.63.0): the portfolio and program manager decisions, open and read-only (OPEN-ACCESS-1).
+  if (path === "/api/site-engagement" && request.method === "GET") {
+    let row = null;
+    try { row = await env.AUDIT.prepare("SELECT value FROM ops_config WHERE key = 'site_engagement_top'").first(); } catch (e) { row = null; }
+    return new Response(row && row.value ? row.value : '{"paths":[]}', { headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*", "Cache-Control": "public, max-age=300" } });
+  }
   if ((path === "/managers" || path === "/managers/" || path === "/api/managers") && request.method === "GET") {
     const mv = await managersView(env);
     if (path === "/api/managers") return rtRead(request, url, mv, { schema: "fleet-managers/v1" });
@@ -5667,6 +5672,15 @@ async function refreshHumanAudience(env, nowMs) {
     let brand = 0;
     for (const g of groups || []) { const d = (g && g.dimensions) || {}; if (String(d.requestHost || "").toLowerCase().trim() === "rwnq8.github.io") brand += Number(g && g.count) || 0; }
     await A.prepare("UPDATE metric_registry SET last_value = ?1, last_refreshed = ?2, state = 'MEASURED' WHERE metric = 'brand_site_pageviews_7d'").bind(String(brand), nowIso).run();
+    // SITE-ENGAGEMENT-LOOP-1: which pages readers reach, bot-filtered, for the site's own build (rwnq8.github.io reads /api/site-engagement).
+    const pr = await reachGf(env, reachRumQuery("requestHost requestPath", new Date(now - HA_DAYS * DAY_MS).toISOString(), nowIso, "bot: 0"));
+    const pg = pr.err ? null : reachRumGroups(pr.data);
+    if (pg) {
+      const top = {};
+      for (const g of pg) { const d = (g && g.dimensions) || {}; if (String(d.requestHost || "").toLowerCase().trim() === "rwnq8.github.io") { const k = String(d.requestPath || "/").slice(0, 120); top[k] = (top[k] || 0) + (Number(g && g.count) || 0); } }
+      const rows = Object.keys(top).map(function (k) { return { path: k, views: top[k] }; }).sort(function (x, y) { return y.views - x.views; }).slice(0, 12);
+      await A.prepare("INSERT INTO ops_config (key, value, note, updated_at) VALUES ('site_engagement_top', ?1, 'SITE-ENGAGEMENT-LOOP-1: top paths of rwnq8.github.io by bot-filtered page loads; read by the site build', datetime('now')) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at").bind(JSON.stringify({ at: nowIso, days: HA_DAYS, paths: rows })).run();
+    }
   } catch (e) {
     console.error("brand-site-pageviews:", String(e && e.message || e));
   }
