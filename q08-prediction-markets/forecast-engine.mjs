@@ -1184,7 +1184,10 @@ export function parseFeed(text) {
     const tag = (n) => { const m = b.match(new RegExp("<" + n + "[^>]*>([\\s\\S]*?)</" + n + ">", "i")); return m ? decodeFeedTextX(m[1]) : ""; };
     const href = (b.match(/<link[^>]*href="([^"]+)"/i) || [])[1] || tag("link") || tag("id");
     const title = tag("title");
-    if (title && /^https?:/.test(href || "")) out.push({ title: title.slice(0, 240), url: href, summary: (tag("summary") || tag("description") || tag("content")).slice(0, 600) });
+    // Feed text is data, never a directive: no control characters, no line starting a code-task or code-anchor line, and a URL with no whitespace.
+    const clean = (x) => String(x || "").replace(/[\u0000-\u001f\u007f]+/g, " ").replace(/code-(task|anchor|probe)\s*:/gi, "$1 -").replace(/\s+/g, " ").trim();
+    const url = String(href || "").trim();
+    if (title && /^https?:\/\/[^\s<>"']+$/.test(url)) out.push({ title: clean(title).slice(0, 240), url, summary: clean(tag("summary") || tag("description") || tag("content")).slice(0, 600) });
   }
   return out;
 }
@@ -1224,8 +1227,8 @@ export async function researchLane(env, fetchText, nowMs, { sources = RESEARCH_S
     for (const c of cands) {
       if (res.filed.length >= maxFiled) break;
       const need = RESEARCH_NEEDS.find((n) => n.key === c.need), key = "Q08-RESEARCH-" + c.need.toUpperCase() + "-1";
-      const open = await env.AUDIT.prepare("SELECT id FROM agent_issues WHERE status = 'open' AND substr(title, 1, ?) = ? LIMIT 1").bind(key.length + 1, key + ":").first().catch(() => null);
-      if (open) continue;
+      const open = await env.AUDIT.prepare("SELECT id FROM agent_issues WHERE status = 'open' AND substr(title, 1, ?) = ? LIMIT 1").bind(key.length + 1, key + ":").first().catch(() => ({ lookup_failed: true }));
+      if (open) continue; // an open issue, or a failed lookup: never file blind
       const t = Date.now();
       const r = await env.AUDIT.prepare("INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at) VALUES (?,?,?,?,?,'open',?,?)")
         .bind(key + ": " + c.title.slice(0, 110), `Research lane (Q08-RESEARCH-1) found a practice from ${c.source} that matches the q08 need "${need.label}" (score ${c.score}): ${c.title}\n${c.url}\n${c.summary}\nBuild the smallest version of it that q08 can measure (a recorded metric or a fe_config knob the product manager can revert), covered by q08-prediction-markets/growth.test.mjs.\ncode-task: repo=qnfo-workers path=${need.path}\ncode-anchor: ${need.anchor}\nAfter editing run node q08-prediction-markets/inline-forecast-engine.mjs.\nFiled by the q08 markets product manager at ${now}.`, "q08-prediction-markets", "optimization", "medium", t, t).run().catch((err) => ({ error: String(err && err.message || err) }));
