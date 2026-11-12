@@ -33,6 +33,23 @@ ok(!T.laneGate(row({ score: 54 })).pass, "score under 55 does not");
 ok(!T.laneGate(row({ tier: "C" })).pass, "stretch matches do not");
 ok(!T.laneGate(row({ title: "Domain Researcher, Legal", why: ["AI read: fit 28 (8 of your facts match)"] })).pass, "a low model reading does not");
 ok(!T.laneGate(row({ title: "Contract Manager", why: [] })).pass, "no lane no pass");
+// APPROVED-AUTO-1: the owner's approval is the gate for an approved match; a quantum role stays out
+ok(T.autoGateOk(row({ status: "approved", score: 48, title: "Research Manager, Interpretability" })), "an approved match under the score bar still reaches auto-apply");
+ok(!T.autoGateOk(row({ status: "approved", score: 75, title: "System Modeling Lead (Quantum Systems)" })), "an approved quantum role does not");
+ok(!T.autoGateOk(row({ status: "pending_owner_approval", score: 58 })), "an undecided match needs the auto-apply bar of 60");
+// EMPLOYER-FORM-1 (issue 11175): a job-board match finds the employer's own ATS form by company slug and title
+ok(T.FORM_SLUGS("Anthropic, Inc.").includes("anthropic"), "company suffixes are dropped from the slug");
+ok(T.FORM_SLUGS("Code for America").includes("codeforamerica") && T.FORM_SLUGS("Code for America").includes("code-for-america"), "joined and hyphenated slugs are tried");
+ok(T.sameTitle("Senior Product Manager, AI Platform & Ecosystem", "Senior Product Manager - AI Platform and Ecosystem"), "punctuation does not break a title match");
+ok(!T.sameTitle("Senior Product Manager", "Staff Data Engineer"), "different roles do not match");
+{
+  const calls = [];
+  const fake = async (u) => { calls.push(u); if (u.includes("greenhouse.io/v1/boards/acme/")) return { jobs: [{ title: "Director of AI Governance", absolute_url: "https://job-boards.greenhouse.io/acme/jobs/123456" }] }; throw new Error("HTTP 404"); };
+  const f = await T.findEmployerForm("Acme", "Director of AI Governance (Remote)", fake);
+  ok(f && f.ats === "greenhouse" && f.url.endsWith("/jobs/123456"), "the employer's Greenhouse posting is found", f);
+  const g = await T.findEmployerForm("Nobody Here", "Director of AI Governance", async () => { throw new Error("HTTP 404"); });
+  ok(g === null, "no board, no form: the match keeps its board link");
+}
 
 // ---- mail parsing
 ok(T.parseJobMail("no-reply@turing.com", "Turing: Thank you for your interest, Rowan Brad", "Thanks for applying to Turing. We are happy to see that you are interested").event === "applied", "confirmation mail = applied");

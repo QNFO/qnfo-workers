@@ -9,7 +9,7 @@
 // JOBSEARCH-CV-1 (1.5.0): the CV is part of this worker (page /cv): a yes/no interview that builds the claim bank, review of unconfirmed claims, roles, achievements and publications edited in D1, a resume per job (summary, roles, selected work, education, skills) and a cover note, history and backup. The search is tied to that bank (evidence the owner can back up weighs more; what the CV lacks is shown as a gap), decided postings (rejected, applied, approved) never come back under another id, rejections carry a reason the search learns from, and a wider net: stretch matches outside the stated preferences, more boards and aggregators.
 // Routes: GET / (web UI) | GET /api | GET /api/matches | GET /api/matches/:id | GET /api/runs | GET /api/ledger | POST /api/run | POST /api/matches/:id/status | GET /health
 // Port of the jobsearch/ Python modules (tests: jobsearch/test_jobsearch.py, qnfo-jobsearch/worker.test.mjs).
-var VERSION = "1.28.0-codeagent";
+var VERSION = "1.29.0-codeagent";
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -2315,7 +2315,7 @@ async function run(env) {
       stmts.push(env.JOBS_DB.prepare(
         `INSERT INTO jobsearch_matches (id, first_seen, last_seen, run_id, company, title, location, url, tier, score, why_json, flags_json, verified, blocked_reason, resume_md, note_md, status, gaps_json, desc_text, resume_rev)
          VALUES (?1,?2,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,'pending_owner_approval',?16,?17,?18)
-         ON CONFLICT(id) DO UPDATE SET last_seen=?2, run_id=?3, tier=?8, score=?9, why_json=?10, flags_json=?11, verified=?12, blocked_reason=?13, title=?5, location=?6, url=?7, gaps_json=?16, desc_text=?17,
+         ON CONFLICT(id) DO UPDATE SET last_seen=?2, run_id=?3, tier=?8, score=?9, why_json=?10, flags_json=?11, verified=?12, blocked_reason=?13, title=?5, location=?6, url=CASE WHEN jobsearch_matches.url GLOB '*greenhouse.io/*' OR jobsearch_matches.url GLOB '*lever.co/*' OR jobsearch_matches.url GLOB '*ashbyhq.com/*' OR jobsearch_matches.url GLOB '*workable.com/*' OR jobsearch_matches.url GLOB '*recruitee.com/*' THEN jobsearch_matches.url ELSE ?7 END, gaps_json=?16, desc_text=?17,
            resume_md=CASE WHEN jobsearch_matches.status IN ('pending_owner_approval','approved','saved','expired') THEN ?14 ELSE jobsearch_matches.resume_md END,
            note_md=CASE WHEN jobsearch_matches.status IN ('pending_owner_approval','approved','saved','expired') THEN ?15 ELSE jobsearch_matches.note_md END,
            resume_rev=CASE WHEN jobsearch_matches.status IN ('pending_owner_approval','approved','saved','expired') THEN ?18 ELSE jobsearch_matches.resume_rev END`
@@ -3081,6 +3081,56 @@ async function shortlist(env, n = SHORTLIST_SIZE) {
   const items = rows.filter((r) => laneGate(r).pass).slice(0, n).map((r) => ({ id: r.id, title: r.title, company: r.company, location: r.location, url: r.url, score: r.score, tier: r.tier, why_it_fits: fitLine(r), checks: r.flags }));
   return { size: items.length, max: n, bar: "score " + SHORTLIST_MIN + " or more, not a stretch, in a lane, no hands-on coding or sales titles", items };
 }
+// EMPLOYER-FORM-1 (CLOCKWORK-1 follow-up, issue 11175, owner 2026-11-12): job boards (Himalayas, Jobicy, RemoteOK, Arbeitnow) hide the employer's form
+// behind their own sign-up, so auto-apply could fill none of the matches that clear the gate. For each such match the employer's public ATS board is looked up
+// by company-name slug (Greenhouse, Lever, Ashby) and the posting with the same title becomes the match's url; the upsert keeps it on later sweeps.
+const FORM_SLUGS = (company) => {
+  const base = String(company || "").toLowerCase().replace(/\b(inc|llc|ltd|gmbh|b\.?v|co|corp|corporation|limited|plc|ag|sa)\b\.?/g, " ").replace(/&/g, "and").trim();
+  const words = base.replace(/[^a-z0-9 ]+/g, " ").split(/\s+/).filter(Boolean);
+  return [...new Set([words.join(""), words.join("-"), words[0] || ""].filter((x) => x.length >= 3))].slice(0, 3);
+};
+const normTitle = (t) => String(t || "").toLowerCase().replace(/\([^)]*\)/g, " ").replace(/[^a-z0-9]+/g, " ").trim();
+function sameTitle(a, b) {
+  const x = normTitle(a), y = normTitle(b);
+  if (!x || !y) return false;
+  if (x === y || x.startsWith(y) || y.startsWith(x)) return true;
+  const A = new Set(x.split(" ")), B = new Set(y.split(" ")), inter = [...A].filter((w) => B.has(w)).length;
+  return inter / Math.max(A.size, B.size) >= 0.8;
+}
+const FORM_BOARDS = [
+  ["greenhouse", (s) => `https://boards-api.greenhouse.io/v1/boards/${s}/jobs`, (d) => (d.jobs || []).map((j) => [j.title, j.absolute_url])],
+  ["lever", (s) => `https://api.lever.co/v0/postings/${s}?mode=json`, (d) => (Array.isArray(d) ? d : []).map((j) => [j.text, j.hostedUrl])],
+  ["ashby", (s) => `https://api.ashbyhq.com/posting-api/job-board/${s}`, (d) => (d.jobs || []).map((j) => [j.title, j.jobUrl])],
+];
+async function findEmployerForm(company, title, fetchJson = getJson) {
+  for (const slug of FORM_SLUGS(company)) for (const [ats, url, pick] of FORM_BOARDS) {
+    let d; try { d = await fetchJson(url(slug)); } catch (e) { if (!/HTTP 404/.test(String(e && e.message))) logErr("employer-form", e); continue; }   // a slug that is not this employer's board answers 404: try the next one
+    const hit = pick(d).find(([t, u]) => u && sameTitle(t, title));
+    if (hit && atsOf(hit[1]).ats !== "other") return { ats, url: hit[1], slug };
+  }
+  return null;
+}
+async function resolveEmployerForms(env, max = 12) {
+  await ensure(env);
+  const rows = (await env.JOBS_DB.prepare("SELECT id, status, title, company, url, tier, score, why_json FROM jobsearch_matches WHERE status IN ('pending_owner_approval','approved') AND verified=1 AND (status='approved' OR score >= ?1) ORDER BY CASE status WHEN 'approved' THEN 0 ELSE 1 END, score DESC LIMIT 200").bind(SHORTLIST_MIN).all()).results || [];
+  const tried = JSON.parse((await getMeta(env, "employer_form_tried")) || "{}"), now = Date.now(), out = { checked: 0, resolved: 0, items: [] };
+  for (const r of rows) {
+    if (out.checked >= max) break;
+    if (atsOf(r.url).ats !== "other" || !(r.status === "approved" ? autoGateOk(r) : laneGate(r).pass)) continue;
+    if (tried[r.id] && now - tried[r.id] < 7 * 86400000) continue;   // a miss is retried after a week, not every hour
+    out.checked++; tried[r.id] = now;
+    const f = await findEmployerForm(r.company, r.title);
+    if (!f) continue;
+    await env.JOBS_DB.batch([
+      env.JOBS_DB.prepare("UPDATE jobsearch_matches SET url=?2 WHERE id=?1").bind(r.id, f.url),
+      env.JOBS_DB.prepare("INSERT INTO jobsearch_events (match_id, event, ts, note) VALUES (?1,'note',?2,?3)").bind(r.id, new Date().toISOString(), ("employer form found on " + f.ats + " (" + f.slug + "); was " + r.url).slice(0, 200)),
+    ]);
+    out.resolved++; out.items.push({ id: r.id, ats: f.ats });
+  }
+  for (const k of Object.keys(tried)) if (now - tried[k] > 30 * 86400000) delete tried[k];
+  await setMeta(env, "employer_form_tried", JSON.stringify(tried));
+  return out;
+}
 // hides what fails the gate (status expired + an event that says why); never touches a job the owner decided on
 async function relevanceSweep(env) {
   if (env.RELEVANCE_GATE === "off") return { checked: 0, hidden: 0, kept: 0, off: true };   // ops_config-style kill switch: set the variable to off to show everything again
@@ -3526,6 +3576,13 @@ async function autopilotModes(env) {
   for (const a of AUTO_ATS) out[a] = (await getMeta(env, "autopilot_mode_" + a)) || "dry";
   return out;
 }
+// APPROVED-AUTO-1 (issue 11175): the owner's own approval is the gate for an approved match; the relevance gate's score bar applies only to matches nobody decided on.
+// On 2026-11-12 two approved Greenhouse roles (Scale AI 53, Anthropic 48) never reached auto-apply because their score was under 55. A quantum role stays out
+// (owner decision 2026-11-09: quantum is a dead end), however it was approved.
+function autoGateOk(r) {
+  if (r.status === "approved") return !/quantum/i.test(String(r.title || ""));
+  return laneGate(r).pass && Number(r.score) >= AUTO_MIN_SCORE;
+}
 async function autopilotQueue(env, n = 4) {
   await ensure(env);
   await loadGrowthKnobs(env);
@@ -3542,7 +3599,7 @@ async function autopilotQueue(env, n = 4) {
   for (const r of rows) {
     if (items.length >= n) break;
     if (done.has(r.id)) continue;
-    if (!laneGate(r).pass || (r.status !== "approved" && Number(r.score) < AUTO_MIN_SCORE)) continue;   // an approval made before the lane rules (a quantum role) is not applied to
+    if (!autoGateOk(r)) continue;
     const a = atsOf(r.url); if (!AUTO_ATS.includes(a.ats)) continue;
     const mode = modes[a.ats];
     if (mode === "dry" && rehearsed.has(r.id)) continue;
@@ -3713,7 +3770,7 @@ async function autopilotStatus(env) {
 const handler = {
   async scheduled(event, env, ctx) {
     env = __aiAttrEnv(env, "qnfo-jobsearch", "AI", "JOBS_DB");
-    ctx.waitUntil(run(env).then(() => relevanceSweep(env)).then(() => notifyOwner(env)).catch((e) => console.log("[jobsearch] run failed " + e.message)));   // JOBS-PIPELINE-1: what fails the relevance gate is hidden after every run
+    ctx.waitUntil(run(env).then(() => relevanceSweep(env)).then(() => resolveEmployerForms(env)).then(() => notifyOwner(env)).catch((e) => console.log("[jobsearch] run failed " + e.message)));   // JOBS-PIPELINE-1: what fails the relevance gate is hidden after every run
   },
   // JOBS-PIPELINE-1: Cloudflare Email Routing hands application confirmations, interview invitations and rejections to this address; they update the pipeline
   async email(message, env, ctx) {
@@ -3809,7 +3866,7 @@ const handler = {
     if (p === "/api/shortlist" && m === "GET") return J(await shortlist(env, Math.min(20, +url.searchParams.get("n") || SHORTLIST_SIZE)));   // JOBS-PIPELINE-1
     if (p === "/api/pipeline" && m === "GET") { if (!(await ownerSession(request, env))) return J({ error: "sign in first: POST /api/auth/request, then POST /api/auth/verify" }, 401); return J(await pipeline(env)); }   // answers and notes: owner only
     if (p === "/add" && m === "GET") return Response.redirect(new URL("/?add=" + encodeURIComponent(JSON.stringify({ url: url.searchParams.get("url") || "", title: url.searchParams.get("title") || "", company: url.searchParams.get("company") || "", text: url.searchParams.get("text") || "" })), url).toString(), 302);   // share target and bookmarklet land here
-    if (["/api/intake", "/api/qa", "/api/qa/match", "/api/mail", "/api/sweep"].includes(p) || /^\/api\/matches\/.+\/(event|qa)$/.test(p)) {
+    if (["/api/intake", "/api/qa", "/api/qa/match", "/api/mail", "/api/sweep", "/api/employer-forms"].includes(p) || /^\/api\/matches\/.+\/(event|qa)$/.test(p)) {
       if (!(await ownerSession(request, env)) && !(await tokenOk(request, env))) return J({ error: "sign in first: POST /api/auth/request, then POST /api/auth/verify" }, 401);
       let b = {}; if (m === "POST") { try { b = await request.json(); } catch (e) { logErr("bad-json-body", e); } }
       try {
@@ -3818,6 +3875,7 @@ const handler = {
         if (p === "/api/qa/match" && m === "POST") return J(await matchQuestions(env, b.questions || b.question));
         if (p === "/api/mail" && m === "POST") return J(await applyJobMail(env, b));
         if (p === "/api/sweep" && m === "POST") return J(await relevanceSweep(env));
+        if (p === "/api/employer-forms" && m === "POST") return J(await resolveEmployerForms(env));
         const ev = p.match(/^\/api\/matches\/(.+?)\/(event|qa)$/);
         if (ev && m === "POST") {
           const id = decodeURIComponent(ev[1]);
@@ -3981,7 +4039,7 @@ const handler = {
     return J({ error: "not found", see: "/api" }, 404);
   },
 };
-handler.__test = { resumeElements, resumeOutcomeWeights, outcomeRowsOf, resumeRowsOf, orgKind, resumeSkeleton, canonicalSkeleton, tailoredResume, resumeConsistency, resolveQuestion, autopilotQueue, autopilotResolve, autopilotResult, autopilotStatus, githubOidcOk, parseRss, notifyOwner, followups, missionSources, saveMissionProbes, sourceCoverage, FETCHERS, styleLint, laneGate, fitLine, shortlist, relevanceSweep, intakeJob, setPipeStatus, saveQa, answerLibrary, matchQuestions, pipeline, parseJobMail, applyJobMail, linkedinJobUrl, ANSWER_BANK, bankAnswerFor, credentialBacked, dropUnbackedCredentials, ensureCredentialEvidence, refreshRecallFacts, polishProse, polishBank, copyLint, toolCase, vocabulary, TOPIC_LABEL, SOFTWARE, PROSE_CASE, linkedinSearches, LINKEDIN_SEARCHES, codingLoad, CANDIDATE_BOARDS, collectAndRank, cosine, bestSim, semanticLens, scoreJob, exploreOverlap, recordTerms, diversifyRows, recallGaps, recallQuestion, recallAnswer, recallQueue, RECALL_SEED, loadCtx, referralKit, referralList, STAGES, judgeTop, buildResume, verify, headlineVerdict, outcomes, pdfOf, pdfClean, checkAnswer, jsonLoose, PROTECTED_Q, draftAnswers, prepBrief, quizFeedback, judgeJob, calibrate, calibration, followups, atsOf, keywordReport, docxOf, resumeHtml, plainOf, applyKit, matchKit, stripTags, postingTerms, evaluate, rank, buildResume, buildNote, verify, stripHtml, locationGate, has, LEDGER, dedupeKey, feedPrefix, makeCtx, scoreJob, scoreFeatures, featuresFromWhy, applicationSnapshot, parseApplicationSnapshot, outcomeScoreWeights, loadCtx, SURVEY, BOARDS, normKey, applyBank, BANK_SEED, QUESTIONS, TAG_TO_CLUSTERS, clustersOf, cvAnswer, cvFact, cvReview, cvSet, cvImport, mutateBank, loadBank, decidedKeys, FETCHERS, getBank: () => BANK, llmRerank, llmRerankRun, ensureResearchPubs, ensureAutonomyBrand, ensureUltrastableBrand, ultrastableBank, ultrastableSkillsBank, ULTRASTABLE_SKILL_FACTS, ULTRASTABLE_SKILLS, syncSkillAsks, skillAskOptions, cvSkills, ULTRASTABLE_S1, RESEARCH_PUBS, FAMILIES, CLUSTER_KW, headline, pubLine, parseRerank, reasonOk, rerankMessages, artifactsFor, titleCandidate, sitemapUrls, slugTitle, PUBLIC_SECTOR, opsReport };
+handler.__test = { findEmployerForm, FORM_SLUGS, sameTitle, autoGateOk, resumeElements, resumeOutcomeWeights, outcomeRowsOf, resumeRowsOf, orgKind, resumeSkeleton, canonicalSkeleton, tailoredResume, resumeConsistency, resolveQuestion, autopilotQueue, autopilotResolve, autopilotResult, autopilotStatus, githubOidcOk, parseRss, notifyOwner, followups, missionSources, saveMissionProbes, sourceCoverage, FETCHERS, styleLint, laneGate, fitLine, shortlist, relevanceSweep, intakeJob, setPipeStatus, saveQa, answerLibrary, matchQuestions, pipeline, parseJobMail, applyJobMail, linkedinJobUrl, ANSWER_BANK, bankAnswerFor, credentialBacked, dropUnbackedCredentials, ensureCredentialEvidence, refreshRecallFacts, polishProse, polishBank, copyLint, toolCase, vocabulary, TOPIC_LABEL, SOFTWARE, PROSE_CASE, linkedinSearches, LINKEDIN_SEARCHES, codingLoad, CANDIDATE_BOARDS, collectAndRank, cosine, bestSim, semanticLens, scoreJob, exploreOverlap, recordTerms, diversifyRows, recallGaps, recallQuestion, recallAnswer, recallQueue, RECALL_SEED, loadCtx, referralKit, referralList, STAGES, judgeTop, buildResume, verify, headlineVerdict, outcomes, pdfOf, pdfClean, checkAnswer, jsonLoose, PROTECTED_Q, draftAnswers, prepBrief, quizFeedback, judgeJob, calibrate, calibration, followups, atsOf, keywordReport, docxOf, resumeHtml, plainOf, applyKit, matchKit, stripTags, postingTerms, evaluate, rank, buildResume, buildNote, verify, stripHtml, locationGate, has, LEDGER, dedupeKey, feedPrefix, makeCtx, scoreJob, scoreFeatures, featuresFromWhy, applicationSnapshot, parseApplicationSnapshot, outcomeScoreWeights, loadCtx, SURVEY, BOARDS, normKey, applyBank, BANK_SEED, QUESTIONS, TAG_TO_CLUSTERS, clustersOf, cvAnswer, cvFact, cvReview, cvSet, cvImport, mutateBank, loadBank, decidedKeys, FETCHERS, getBank: () => BANK, llmRerank, llmRerankRun, ensureResearchPubs, ensureAutonomyBrand, ensureUltrastableBrand, ultrastableBank, ultrastableSkillsBank, ULTRASTABLE_SKILL_FACTS, ULTRASTABLE_SKILLS, syncSkillAsks, skillAskOptions, cvSkills, ULTRASTABLE_S1, RESEARCH_PUBS, FAMILIES, CLUSTER_KW, headline, pubLine, parseRerank, reasonOk, rerankMessages, artifactsFor, titleCandidate, sitemapUrls, slugTitle, PUBLIC_SECTOR, opsReport };
 export default handler;
 
 // ------------------------------------------------------------------ client script shared by both pages (JOBSEARCH-APPLY-1): kit handling and the Fill application bookmark
