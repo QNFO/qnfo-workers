@@ -1,4 +1,4 @@
-var VERSION="2.14.0-codeagent";
+var VERSION="2.15.0-codeagent";
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -1264,11 +1264,27 @@ async function itinCancel(env, subject, body, emailId) {
   }
   return out;
 }
+/* TRAVEL-MAIL-1 (2026-11-12, pillar personal): a gated mail (same booking-domain or owner-forward DMARC gate as the itinerary
+   ingest) that reads like a delay, cancellation, reschedule or fare alert is posted to personal-companion /api/travel/mail
+   over the COMPANION service binding (props.caller = qnfo-email). The planner parses it with plain patterns and moves the plan
+   or lists the deal; it books nothing. Mail that is not gated is never forwarded, so a fake "delayed" mail cannot move the plan. */
+var TRAVEL_MAIL_RE = /\b(delay(?:ed)?|cancel+(?:ed|ation)|re-?scheduled|re-?timed|new departure|fare alert|price drop|deal alert|flight deal)\b/i;
+async function travelMailForward(env, x, parsedItems) {
+  try {
+    if (!env.COMPANION || !itinGate(env, x.from, x.authResults)) return { skipped: true };
+    var text = String(x.subject || "") + "\n" + String(x.bodyText || String(x.bodyHtml || "").replace(/<[^>]*>/g, " ")).slice(0, 6000);
+    if (!TRAVEL_MAIL_RE.test(text)) return { skipped: true };
+    var r = await env.COMPANION.fetch("https://personal-companion/api/travel/mail", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: text }) });
+    console.log("travel-mail", JSON.stringify({ email: x.emailId, status: r.status, items: parsedItems }));
+    return { status: r.status };
+  } catch (err) { console.error("travelMailForward", err && err.message || err); return { error: String(err && err.message || err) }; }
+}
 async function itineraryIngest(env, x) {
   try {
     var gate = itinGate(env, x.from, x.authResults);
     if (!gate) return { skipped: "not-gated" };
     var items = itinParse(x.subject, x.bodyText, x.bodyHtml, x.from);
+    await travelMailForward(env, x, items.length);
     if (itinCancelIntent(x.subject, x.bodyText || String(x.bodyHtml || "").replace(/<[^>]*>/g, " "), items.length)) {
       var cr = await itinCancel(env, x.subject, x.bodyText || String(x.bodyHtml || "").replace(/<[^>]*>/g, " "), x.emailId);
       console.log("itinerary-cancel", JSON.stringify({ email: x.emailId, gate: gate, matched: cr.matched, cancelled: cr.cancelled, ambiguous: cr.ambiguous, error: cr.error || null }));

@@ -6,7 +6,7 @@ import fs from "node:fs";
 import { stripWorkerDefaultExport } from "../scripts/worker-source-test.mjs";
 const src = stripWorkerDefaultExport(fs.readFileSync(new URL("./worker.js", import.meta.url), "utf8"));
 const api = new Function(src.replace(/export default\{/, "const __handler={") +
-  "\nreturn {itinParse,itinGate,itinWrite,itineraryIngest,freshnessGuard,itinOffset,itinLooksLikeBooking,VERSION};")();
+  "\nreturn {itinParse,itinGate,itinWrite,itineraryIngest,travelMailForward,freshnessGuard,itinOffset,itinLooksLikeBooking,VERSION};")();
 const fail = [];
 const eq = (l, g, w) => { if (JSON.stringify(g) !== JSON.stringify(w)) fail.push(l + ": got " + JSON.stringify(g) + " want " + JSON.stringify(w)); };
 const ok = (l, c) => { if (!c) fail.push(l); };
@@ -200,4 +200,19 @@ ok("an eSky ticket subject counts as a booking (a miss files ITINERARY-PARSE-MIS
 eq("klm layout unchanged", api.itinParse("Your booking confirmation", KLM, "", "KLM <no-reply@klm.com>").length, 2);
 
 console.log(JSON.stringify({ version: api.VERSION, failures: fail }));
+
+// TRAVEL-MAIL-1
+{
+  const calls = [];
+  const env = { COMPANION: { fetch: async (u, init) => { calls.push({ u, body: JSON.parse(init.body) }); return { status: 200 }; } }, OWNER_ADDRESSES: "" };
+  const gatedFrom = "KLM <noreply@klm.com>", auth = "dmarc=pass header.from=klm.com";
+  const r1 = await api.travelMailForward(env, { emailId: 9, from: gatedFrom, subject: "Flight delayed", bodyText: "Delayed by 14 hours. New departure Nov 15.", bodyHtml: "", authResults: auth }, 0);
+  ok("a gated delay mail is posted to the planner", r1.status === 200 && calls.length === 1 && /delayed/i.test(calls[0].body.text) && calls[0].u.endsWith("/api/travel/mail"));
+  const r2 = await api.travelMailForward(env, { emailId: 10, from: "evil@example.net", subject: "Flight delayed", bodyText: "Delayed by 14 hours", bodyHtml: "", authResults: "dmarc=fail" }, 0);
+  ok("a non-gated sender is never forwarded", r2.skipped && calls.length === 1);
+  const r3 = await api.travelMailForward(env, { emailId: 11, from: gatedFrom, subject: "Welcome aboard", bodyText: "enjoy", bodyHtml: "", authResults: auth }, 0);
+  ok("mail that is not about a change or a deal is not forwarded", r3.skipped && calls.length === 1);
+  const r4 = await api.travelMailForward({}, { emailId: 12, from: gatedFrom, subject: "Flight delayed", bodyText: "x", bodyHtml: "", authResults: auth }, 0);
+  ok("no COMPANION binding is a quiet skip", r4.skipped === true);
+}
 if (fail.length) process.exit(1);

@@ -74,6 +74,30 @@ export const DDL = [
      used INTEGER NOT NULL DEFAULT 0,
      created_at TEXT NOT NULL
    )`,
+  // TRAVEL-BUDGET-1 / TRAVEL-WATCH-1
+  `CREATE TABLE IF NOT EXISTS travel_budget (
+     trip TEXT PRIMARY KEY,
+     cap REAL NOT NULL,
+     currency TEXT NOT NULL,
+     updated_at TEXT NOT NULL
+   )`,
+  `CREATE TABLE IF NOT EXISTS travel_spend (
+     id TEXT PRIMARY KEY,
+     trip TEXT NOT NULL,
+     label TEXT NOT NULL,
+     amount REAL NOT NULL,
+     currency TEXT NOT NULL,
+     day TEXT NOT NULL,
+     created_at TEXT NOT NULL
+   )`,
+  `CREATE TABLE IF NOT EXISTS travel_watch (
+     id TEXT PRIMARY KEY,
+     city TEXT NOT NULL,
+     price REAL,
+     currency TEXT,
+     note TEXT,
+     seen_at TEXT NOT NULL
+   )`,
   `CREATE TABLE IF NOT EXISTS travel_secrets (
      k TEXT PRIMARY KEY,
      v TEXT NOT NULL
@@ -570,7 +594,7 @@ const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (ch) => ({ "&"
 
 function page(title, inner, status) {
   // TRAVEL-DESIGN-1 (DESIGN-SYSTEM-3, #9929): the sign-in and approval pages use the shared design system; buttons are the ds buttons, one primary per screen.
-  const html = "<!doctype html><html lang=\"en\"><head><meta name=\"robots\" content=\"noindex\">" + trvHead(title, "", "body.ds{max-width:34rem;margin:0 auto;padding:24px 16px}.ds button{font:inherit;min-height:44px;min-width:44px;padding:10px 16px;margin:4px 8px 4px 0;border-radius:var(--ds-r-m);border:1px solid var(--ds-line-strong);background:var(--ds-surface);color:var(--ds-ink);cursor:pointer}.ds button.pick{background:var(--ds-accent);color:var(--ds-on-accent);border-color:var(--ds-accent)}.ds .muted{color:var(--ds-ink-2)}") + "</head><body class=\"ds\">" + inner + "</body></html>";
+  const html = "<!doctype html><html lang=\"en\"><head><meta name=\"robots\" content=\"noindex\"><link rel=\"manifest\" href=\"/travel/manifest.webmanifest\">" + trvHead(title, "", "body.ds{max-width:34rem;margin:0 auto;padding:24px 16px}.ds button{font:inherit;min-height:44px;min-width:44px;padding:10px 16px;margin:4px 8px 4px 0;border-radius:var(--ds-r-m);border:1px solid var(--ds-line-strong);background:var(--ds-surface);color:var(--ds-ink);cursor:pointer}.ds button.pick{background:var(--ds-accent);color:var(--ds-on-accent);border-color:var(--ds-accent)}.ds .muted{color:var(--ds-ink-2)}") + "</head><body class=\"ds\">" + inner + "</body></html>";
   return new Response(html, { status: status || 200, headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store", "X-Robots-Tag": "noindex", "Referrer-Policy": "no-referrer" } });
 }
 
@@ -1215,7 +1239,18 @@ function renderTrip(t) {
     r.appendChild(b); dl.appendChild(r);
   }
 }
-async function loadTrip() { try { const t = await api("/travel/api/trip"); if (t.ok) renderTrip(t); $("#fwd").textContent = t.forward_to ? "Or forward the confirmation email to " + t.forward_to + " and it lands here on its own." : ""; } catch (e) { $("#days").textContent = "Could not load the trip: " + e.message; } }
+async function addSpend(label, amount) { try { await api("/travel/api/spend", { label, amount: Number(amount) }); loadTrip(); } catch (e) { $("#bud").textContent = e.message; } }
+function renderBudget(t) {
+  const d = $("#bud"); if (!d || !t.budget) return; d.textContent = "";
+  const b = t.budget;
+  d.appendChild(el("strong", "", b.cap == null ? "Budget: not set" : "Budget: " + b.spent + " of " + b.cap + " " + b.currency + " (" + b.pct + "%), " + b.left + " left"));
+  for (const x of b.items || []) d.appendChild(el("div", "", x.day + " " + x.label + " " + x.amount + " " + x.currency));
+  (t.deals || []).forEach((x) => d.appendChild(el("div", "", "Deal alert: " + x.city + " from " + x.price + " " + x.currency)));
+  const l = document.createElement("input"), a = document.createElement("input"); l.placeholder = "Spent on"; a.placeholder = "Amount"; a.inputMode = "decimal";
+  d.append(l, a, btn("Add", () => { if (l.value && a.value) addSpend(l.value, a.value); }));
+  if (b.cap == null) d.appendChild(btn("Set cap", () => { const v = prompt("Trip budget, e.g. 6000 EUR"); const m = /^(\d+(?:\.\d+)?)\s*([A-Za-z]{3})$/.exec(v || ""); if (m) api("/travel/api/budget", { cap: Number(m[1]), currency: m[2] }).then(loadTrip); }));
+}
+async function loadTrip() { try { const t = await api("/travel/api/trip"); if (t.ok) renderTrip(t); $("#fwd").textContent = t.forward_to ? "Or forward the confirmation email to " + t.forward_to + " and it lands here on its own." : ""; if ("serviceWorker" in navigator) navigator.serviceWorker.register("/travel/sw.js").catch(() => {}); if (!$("#shr")) { const b = document.createElement("a"); b.id = "shr"; b.href = "#"; b.style.display = "block"; b.textContent = "Make a read-only link to share (30 days)"; b.onclick = async (ev) => { ev.preventDefault(); try { const r = await api("/travel/api/share", {}); b.textContent = r.url; b.href = r.url; b.onclick = null; } catch (e) { b.textContent = "Could not make a link: " + e.message; } }; $("#fwd").after(b); } if (!$("#bud")) { const d = document.createElement("div"); d.id = "bud"; $("#fwd").after(d); } renderBudget(t); if (!$("#ics")) { const a = document.createElement("a"); a.id = "ics"; a.href = "/travel/trip.ics"; a.textContent = "Add the plan to your calendar (.ics)"; a.style.display = "block"; $("#fwd").after(a); } } catch (e) { $("#days").textContent = "Could not load the trip: " + e.message; } }
 let addOpen = null;
 $("#addstop").onclick = () => { if (addOpen) addOpen.remove(); addOpen = editor(STOP_FIELDS, {}, (x) => api("/travel/api/stop", x)); $("#stops").appendChild(addOpen); };
 $("#addvisa").onclick = () => { if (addOpen) addOpen.remove(); addOpen = editor(VISA_FIELDS, {}, (x) => api("/travel/api/permit", x)); $("#visa").appendChild(addOpen); };
@@ -1307,13 +1342,21 @@ const sessionCookie = (v, maxAge) => "trv=" + v + "; Path=/travel; Max-Age=" + m
 export async function handleTravel(request, env, deps = {}) {
   const u = new URL(request.url);
   const p = u.pathname;
-  if (p !== "/travel" && !p.startsWith("/travel/") && p !== "/api/travel" && p !== "/api/travel/run" && p !== "/api/travel/today") return null;
+  if (p !== "/travel" && !p.startsWith("/travel/") && p !== "/api/travel" && p !== "/api/travel/run" && p !== "/api/travel/today" && p !== "/api/travel/mail") return null;
   const db = env.PERSONAL;
   if (!db) return jsonRes({ ok: false, error: "no PERSONAL binding" }, 503);
   await ensureTravelCheap(db);
   const nowMs = deps.now || Date.now();
   const nowIso = new Date(nowMs).toISOString();
 
+  if (p === "/api/travel/mail") {
+    // TRAVEL-MAIL-1: qnfo-email posts gated delay/cancel/deal mail here over a service binding (props.caller), or with the companion key.
+    if (request.method !== "POST") return jsonRes({ ok: false, error: "POST only" }, 405);
+    if (!(deps.caller === "qnfo-email" || bearerOk(request, env))) return jsonRes({ ok: false, error: "unauthorized" }, 401);
+    let b = {};
+    try { b = await request.json(); } catch (e) { return jsonRes({ ok: false, error: "bad JSON" }, 400); }
+    return jsonRes(await ingestMail(db, nowIso, localParts(nowMs, (await cfg(db)).tz).day, String(b.text || "").slice(0, 12000)));
+  }
   if (p === "/api/travel" || p === "/api/travel/run" || p === "/api/travel/today") {
     if (!bearerOk(request, env)) return jsonRes({ ok: false, error: "unauthorized" }, 401);
     // TRAVEL-TRIP-STATE-1: the compact trip card the companion's Today screen reads.
@@ -1403,7 +1446,22 @@ export async function handleTravel(request, env, deps = {}) {
         extra["Set-Cookie"] = sessionCookie(await makeToken(key, "sess", Math.floor(nowMs / 1000) + SESSION_DAYS * 86400), SESSION_DAYS * 86400);
       }
     }
-    return htmlRes(chatPage(nonce), 200, { ...extra, "Content-Security-Policy": "default-src 'none'; script-src 'nonce-" + nonce + "'; style-src 'nonce-" + nonce + "'; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'" });
+    return htmlRes(chatPage(nonce), 200, { ...extra, "Content-Security-Policy": "default-src 'none'; script-src 'nonce-" + nonce + "'; style-src 'nonce-" + nonce + "'; connect-src 'self'; worker-src 'self'; manifest-src 'self'; img-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'" });
+  }
+  if (p === "/travel/manifest.webmanifest") return new Response(MANIFEST, { headers: { "Content-Type": "application/manifest+json", "Cache-Control": "public, max-age=3600" } });
+  if (p === "/travel/icon.svg") return new Response(ICON_SVG, { headers: { "Content-Type": "image/svg+xml", "Cache-Control": "public, max-age=86400" } });
+  if (p === "/travel/sw.js") return new Response(SW_JS, { headers: { "Content-Type": "text/javascript; charset=utf-8", "Cache-Control": "no-cache", "Service-Worker-Allowed": "/travel" } });
+  if (p.startsWith("/travel/share/") && request.method === "GET") {
+    const key = deps.key !== undefined ? deps.key : await authKey(env, db);
+    if (!key || !(await tokenOk(key, "share", p.slice("/travel/share/".length), nowMs))) return page("Link expired", "<p>This link is not valid any more.</p>", 404);
+    const sp = sharePage(await planState(db, c, nowMs, deps));
+    sp.headers.set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'");
+    return sp;
+  }
+  if (p === "/travel/trip.ics" && request.method === "GET") {
+    if (!who) return jsonRes({ ok: false, error: "unauthorized" }, 401);
+    const body = icsFor(await planState(db, c, nowMs, deps), nowIso);
+    return new Response(body, { status: 200, headers: { "Content-Type": "text/calendar; charset=utf-8", "Content-Disposition": 'attachment; filename="trip.ics"', "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" } });
   }
   if (!p.startsWith("/travel/api/")) return page("Not found", "<p>Not found.</p>", 404);
   if (!who) return jsonRes({ ok: false, error: "unauthorized" }, 401);
@@ -1419,6 +1477,27 @@ export async function handleTravel(request, env, deps = {}) {
   try { body = await request.json(); } catch (e) { return jsonRes({ ok: false, error: "bad JSON" }, 400); }
 
   if (p === "/travel/api/chat") return jsonRes(await chatTurn(env, deps, { text: body.text, open: body.open === true }));
+  if (p === "/travel/api/share") {
+    const key = deps.key !== undefined ? deps.key : await authKey(env, db);
+    return jsonRes({ ok: true, days: SHARE_DAYS, url: u.origin + "/travel/share/" + await makeToken(key, "share", Math.floor(nowMs / 1000) + SHARE_DAYS * 86400) });
+  }
+  if (p === "/travel/api/budget") {
+    const cap = Number(body.cap), cur = String(body.currency || "").toUpperCase();
+    if (!(cap > 0 && cap < 1e7) || !/^[A-Z]{3}$/.test(cur)) return jsonRes({ ok: false, error: "cap must be a positive number and currency a 3-letter code" });
+    await db.prepare("INSERT INTO travel_budget (trip, cap, currency, updated_at) VALUES ('next', ?, ?, ?) ON CONFLICT(trip) DO UPDATE SET cap = excluded.cap, currency = excluded.currency, updated_at = excluded.updated_at").bind(cap, cur, nowIso).run();
+    return jsonRes({ ok: true });
+  }
+  if (p === "/travel/api/spend") {
+    const amt = Number(body.amount), cur = String(body.currency || "").toUpperCase(), label = clean(body.label, 80);
+    const day = isoDay(body.day) ? body.day : localParts(nowMs, c.tz).day;
+    if (!(amt > 0 && amt < 1e7) || !label) return jsonRes({ ok: false, error: "a label and a positive amount are needed" });
+    const b = await db.prepare("SELECT currency FROM travel_budget WHERE trip = 'next'").first();
+    const cc = /^[A-Z]{3}$/.test(cur) ? cur : (b && b.currency) || "EUR";
+    await db.prepare("INSERT INTO travel_spend (id, trip, label, amount, currency, day, created_at) VALUES (?, 'next', ?, ?, ?, ?, ?)").bind("sp:" + nowMs + ":" + Math.floor(Math.random() * 1e6), label, amt, cc, day, nowIso).run();
+    return jsonRes({ ok: true });
+  }
+  if (p === "/travel/api/spend-del") { await db.prepare("DELETE FROM travel_spend WHERE id = ?").bind(String(body.id || "")).run(); return jsonRes({ ok: true }); }
+  if (p === "/travel/api/mail") return jsonRes(await ingestMail(db, nowIso, localParts(nowMs, c.tz).day, String(body.text || "").slice(0, 12000)));
   if (p === "/travel/api/import") return jsonRes(await importText(env, deps, { text: body.text }));
   if (p === "/travel/api/stop") return jsonRes(await saveStop(db, deps, body, nowIso));
   if (p === "/travel/api/permit") return jsonRes(await savePermit(db, body, nowIso));
@@ -1791,7 +1870,9 @@ export async function planState(db, c, nowMs, deps) {
     visa,
     days: dayPlan(stops, today, wx, lodging),
     checkins: await checkinCards(db, c, today),
-    forward_to: c.forward_to || ""
+    forward_to: c.forward_to || "",
+    budget: budgetSummary(await db.prepare("SELECT cap, currency FROM travel_budget WHERE trip = 'next'").first(), await many(db, "SELECT id, label, amount, currency, day FROM travel_spend WHERE trip = 'next' ORDER BY created_at")),
+    deals: await many(db, "SELECT city, price, currency, seen_at FROM travel_watch WHERE seen_at >= ? ORDER BY seen_at DESC LIMIT 10", addDays(today, -30))
   };
 }
 
@@ -1840,6 +1921,8 @@ export async function importText(env, deps, input) {
   const c = await cfg(db);
   const text = String(input && input.text || "").trim().slice(0, 12000);
   if (text.length < 20) return { ok: false, error: "Paste the confirmation text first." };
+  const mailed = await ingestMail(db, nowIso, localParts(nowMs, c.tz).day, text);
+  if (mailed.ok) return mailed;
   if (typeof deps.ai !== "function") return { ok: false, error: "no model caller" };
   const today = localParts(nowMs, c.tz).day;
   const messages = [{ role: "system", content: IMPORT_SYSTEM + "\nToday is " + today + "." }, { role: "user", content: text }];
@@ -2340,6 +2423,144 @@ export async function shiftPlan(db, days, today, nowIso) {
 }
 
 // The compact card the companion's Today screen shows: where the traveller is (or the countdown), tonight's pick, the next move, the next actions.
+// TRAVEL-BUDGET-1: one cap per trip and a ledger of what was spent, so "how are we doing" is one number. Amounts are the
+// owner's own entries (or later, parsed receipts); currencies are never converted, a mixed ledger is summed per currency.
+// TRAVEL-DISRUPT-1: a delay, cancellation or reschedule mail (forwarded, pasted, or posted by the mail worker) moves the plan
+// by the days it names. Keyless and model-free: plain patterns on the mail text. A shift is recorded in travel_notices with
+// its undo, and only stops from the affected day on move. TRAVEL-WATCH-1: price watching without any price API: fare and
+// stay deal alerts the owner already receives (forwarded or posted) are matched to planned places and listed with their price.
+const MON = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12 };
+export function findDates(text, today) {
+  const out = [], y0 = Number(String(today).slice(0, 4));
+  const t = String(text || "");
+  let m;
+  const iso = /\b(20\d\d)-(\d\d)-(\d\d)\b/g;
+  while ((m = iso.exec(t))) out.push({ i: m.index, d: m[0] });
+  const dm = /\b(\d{1,2})(?:st|nd|rd|th)?\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?(?:,?\s+(20\d\d))?\b/gi;
+  while ((m = dm.exec(t))) out.push({ i: m.index, d: dmy(m[3], MON[m[2].toLowerCase()], m[1], y0, today) });
+  const md = /\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+(\d{1,2})(?:st|nd|rd|th)?(?:,?\s+(20\d\d))?\b/gi;
+  while ((m = md.exec(t))) out.push({ i: m.index, d: dmy(m[3], MON[m[1].toLowerCase()], m[2], y0, today) });
+  return out.filter((x) => isoDay(x.d)).sort((a, b) => a.i - b.i).map((x) => x.d);
+}
+function dmy(y, mo, d, y0, today) {
+  const pad = (n) => String(n).padStart(2, "0");
+  let day = (y || y0) + "-" + pad(mo) + "-" + pad(d);
+  if (!y && day < today) day = (y0 + 1) + "-" + pad(mo) + "-" + pad(d);
+  return day;
+}
+export function parseDisruption(text, today) {
+  const t = String(text || "");
+  const cancel = /\b(cancel+ed|cancell?ation|has been cancel)/i.test(t);
+  const delay = /\b(delay(?:ed)?|postponed|re-?scheduled|re-?timed|new departure)\b/i.test(t);
+  if (!cancel && !delay) return null;
+  const hm = /(?:delay(?:ed)?|late)[^.\n]{0,40}?(\d{1,2})\s*(?:hours?|hrs?|h)\b/i.exec(t);
+  const hours = hm ? Number(hm[1]) : 0;
+  const ds = findDates(t, today);
+  let days = 0, from = null;
+  if (ds.length >= 2 && ds[1] > ds[0]) { from = ds[0]; days = daysBetween(ds[0], ds[1]); }
+  else if (delay && hours >= 12) { from = ds[0] || null; days = 1; }
+  if (days < 1 || days > 14) return { kind: cancel ? "cancelled" : "delayed", hours, days: 0, from, shift: false };
+  return { kind: cancel ? "cancelled" : "delayed", hours, days, from, shift: true };
+}
+export async function shiftFrom(db, fromDay, n, nowIso) {
+  const k = Number(n);
+  if (!isoDay(fromDay) || !Number.isInteger(k) || k < 1 || k > 14) return { ok: false, error: "bad shift" };
+  const mod = "+" + k + " days";
+  const a = await db.prepare("UPDATE travel_stops SET start_date = date(start_date, ?), end_date = date(end_date, ?), updated_at = ? WHERE trip = 'next' AND start_date >= ?").bind(mod, mod, nowIso, fromDay).run();
+  const b = await db.prepare("UPDATE travel_stops SET end_date = date(end_date, ?), updated_at = ? WHERE trip = 'next' AND start_date < ? AND end_date >= ?").bind(mod, nowIso, fromDay, fromDay).run();
+  await db.prepare("INSERT OR IGNORE INTO travel_notices (kind, ref, sent_at) VALUES ('disruption-shift', ?, ?)").bind(fromDay + ":+" + k + ":" + nowIso, nowIso).run();
+  return { ok: true, from: fromDay, days: k, stops: ((a.meta && a.meta.changes) || 0) + ((b.meta && b.meta.changes) || 0) };
+}
+const CUR = { "€": "EUR", "$": "USD", "£": "GBP", "₹": "INR" };
+export function parseDeal(text, cities) {
+  const t = String(text || "");
+  const m = /(€|\$|£|₹)\s?(\d{2,5}(?:[.,]\d{1,2})?)|(\d{2,5}(?:[.,]\d{1,2})?)\s?(EUR|USD|GBP|INR)\b/i.exec(t);
+  if (!m || !/\b(deal|fare|from|only|sale|alert|drop|cheap|price)\b/i.test(t)) return null;
+  const hit = (cities || []).find((c) => c && norm(t).includes(norm(c)));
+  if (!hit) return null;
+  const price = Number(String(m[2] || m[3]).replace(",", "."));
+  return { city: hit, price, currency: m[1] ? CUR[m[1]] : m[4].toUpperCase() };
+}
+export async function ingestMail(db, nowIso, today, text) {
+  const out = { ok: true, disruption: null, deal: null };
+  const d = parseDisruption(text, today);
+  if (d) { out.disruption = d; if (d.shift) out.disruption.applied = await shiftFrom(db, d.from, d.days, nowIso); }
+  const rows = await many(db, "SELECT DISTINCT city FROM travel_stops WHERE end_date >= ?", today);
+  const deal = parseDeal(text, rows.map((r) => r.city));
+  if (deal) {
+    const id = (await hex([deal.city, deal.price, deal.currency, today].join("|"))).slice(0, 20);
+    await db.prepare("INSERT OR IGNORE INTO travel_watch (id, city, price, currency, note, seen_at) VALUES (?, ?, ?, ?, ?, ?)").bind(id, deal.city, deal.price, deal.currency, String(text).replace(/\s+/g, " ").slice(0, 140), nowIso).run();
+    out.deal = deal;
+  }
+  if (!out.disruption && !out.deal) out.ok = false;
+  return out;
+}
+export function budgetSummary(budget, spend) {
+  const by = {};
+  for (const r of spend || []) by[r.currency] = (by[r.currency] || 0) + Number(r.amount);
+  const cap = budget ? Number(budget.cap) : null, cur = budget ? budget.currency : null;
+  const spent = cur ? by[cur] || 0 : null;
+  return { cap, currency: cur, spent, left: cap == null ? null : Math.round((cap - spent) * 100) / 100, pct: cap ? Math.round((spent / cap) * 100) : null, other: Object.entries(by).filter(([k]) => k !== cur).map(([k, v]) => ({ currency: k, spent: v })), items: (spend || []).slice(-8).reverse() };
+}
+
+// TRAVEL-OFFLINE-1 / TRAVEL-SHARE-1 (market read Nov 2026: Wanderlog Pro offline, Mindtrip and MonkeyTravel shared trips).
+// Offline: a manifest and a small service worker make the planner installable; the worker keeps the last good copy of the
+// page and of the trip JSON so the plan opens with no signal. It never caches POSTs or sign-in routes.
+// Share: a signed, read-only link (default 30 days) for a travelling companion. It shows places and moves only: no visa
+// limits, no taste data, no mail text, and it changes nothing. No account, no key.
+export const SHARE_DAYS = 30;
+export const MANIFEST = JSON.stringify({ name: "Travel planner", short_name: "Travel", start_url: "/travel", scope: "/travel", display: "standalone", background_color: "#ffffff", theme_color: "#1a73e8", icons: [{ src: "/travel/icon.svg", sizes: "any", type: "image/svg+xml", purpose: "any" }] });
+export const ICON_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#1a73e8"/><path d="M12 36l40-16-14 28-6-12z" fill="#fff"/></svg>';
+export const SW_JS = String.raw`const V = "trv-v1";
+const KEEP = ["/travel", "/travel/api/trip"];
+self.addEventListener("install", (e) => { self.skipWaiting(); });
+self.addEventListener("activate", (e) => { e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => k !== V).map((k) => caches.delete(k)))).then(() => self.clients.claim())); });
+self.addEventListener("fetch", (e) => {
+  const r = e.request, u = new URL(r.url);
+  if (r.method !== "GET" || u.origin !== self.location.origin || !KEEP.includes(u.pathname.replace(/\/$/, ""))) return;
+  e.respondWith(fetch(r).then((res) => { if (res.ok) { const c = res.clone(); caches.open(V).then((k) => k.put(u.pathname, c)); } return res; }).catch(() => caches.match(u.pathname).then((m) => m || new Response("Offline and nothing saved yet.", { status: 503 }))));
+});
+`;
+export function sharePage(plan) {
+  const rows = (plan.places || []).map((p) => "<li><strong>" + esc(p.city) + (p.country_name ? ", " + esc(p.country_name) : "") + "</strong> " + esc(p.start_date) + " to " + esc(p.end_date) + " <em>" + esc(STATE_LABEL[p.state] || "") + "</em></li>").join("");
+  const mv = (plan.moves || []).map((m) => "<li>" + esc(m.day) + ": " + esc(m.from || "?") + " to " + esc(m.to || "?") + (m.booked ? " (booked)" : "") + "</li>").join("");
+  return page("Shared trip", "<h1>Trip plan</h1><p>Read-only view.</p><h2>Stops</h2><ul>" + (rows || "<li>Nothing planned yet.</li>") + "</ul>" + (mv ? "<h2>Moves</h2><ul>" + mv + "</ul>" : ""), 200);
+}
+
+// TRAVEL-ICS-1: the trip plan as an iCalendar file (all-day events, one per stop and per move) so it opens in any calendar
+// app and works offline on the phone. Market read (Nov 2026): Wanderlog, Mindtrip and Google Canvas all export or sync; this
+// is the no-account, no-key version. Read-only: nothing is written back anywhere.
+const icsEsc = (v) => String(v == null ? "" : v).replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\r?\n/g, "\\n");
+const icsDay = (d) => String(d).replace(/-/g, "");
+function icsFold(line) {
+  const out = [];
+  let rest = line;
+  while (rest.length > 74) { out.push(rest.slice(0, 74)); rest = " " + rest.slice(74); }
+  out.push(rest);
+  return out.join("\r\n");
+}
+export function icsFor(plan, nowIso) {
+  const stamp = String(nowIso || new Date().toISOString()).replace(/[-:]/g, "").replace(/\.\d+/, "").slice(0, 15) + "Z";
+  const L = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//q08//travel planner//EN", "CALSCALE:GREGORIAN", "X-WR-CALNAME:Trip plan"];
+  const ev = (uid, from, toExclusive, summary, desc) => {
+    L.push("BEGIN:VEVENT", "UID:" + uid + "@travel.q08.org", "DTSTAMP:" + stamp, "DTSTART;VALUE=DATE:" + icsDay(from), "DTEND;VALUE=DATE:" + icsDay(toExclusive), icsFold("SUMMARY:" + icsEsc(summary)));
+    if (desc) L.push(icsFold("DESCRIPTION:" + icsEsc(desc)));
+    L.push("TRANSP:TRANSPARENT", "END:VEVENT");
+  };
+  for (const s of (plan && plan.places) || []) {
+    if (!s.start_date || !s.end_date) continue;
+    const where = [s.city, s.country_name].filter(Boolean).join(", ");
+    const st = s.state ? STATE_LABEL[s.state] || s.state : "";
+    ev("stop-" + slug(where) + "-" + s.start_date, s.start_date, s.end_date, where, st ? "Lodging: " + st : "");
+  }
+  for (const m of (plan && plan.moves) || []) {
+    if (!m.day) continue;
+    ev("move-" + slug((m.from || "") + "-" + (m.to || "")) + "-" + m.day, m.day, addDays(m.day, 1), (m.from || "?") + " to " + (m.to || "?"), m.booked ? "Booked" : "Not booked yet");
+  }
+  L.push("END:VCALENDAR");
+  return L.join("\r\n") + "\r\n";
+}
+
 export function tripToday(plan) {
   const t = plan.today, places = plan.places || [];
   const cur = places.find((p) => p.start_date <= t && t < p.end_date) || null;

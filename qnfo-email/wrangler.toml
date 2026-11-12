@@ -42,6 +42,13 @@ service = "qnfo-jobsearch"
 environment = "production"
 props = { caller = "qnfo-email" }
 
+# TRAVEL-MAIL-1: gated delay / cancellation / fare-alert mail goes to the travel planner in personal-companion (POST /api/travel/mail checks props.caller).
+[[services]]
+binding = "COMPANION"
+service = "personal-companion"
+environment = "production"
+props = { caller = "qnfo-email" }
+
 [[services]]
 binding = "DASH"
 service = "qnfo-fleet-dashboard"
