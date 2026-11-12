@@ -11,7 +11,7 @@ import {
   parseChat, chatPrompt, chatModels, chatTurn, makeToken, tokenOk, authKey, accessOk, CHAT_SYSTEM,
   visaStatus, weatherRequests, parseWeather, fogSeason, dayPlan, checkinDraft, parseImport, importText, saveStop, savePermit,
   shiftYear, planText, chatContext, placeCards, moveCards,
-  parsePicks, picksPrompt, mapLink, makePicks, picksDue, pickNo
+  parsePicks, picksPrompt, mapLink, makePicks, picksDue, pickNo, icsFor, sharePage, MANIFEST, SW_JS, parseDisruption, parseDeal, findDates, budgetSummary, ingestMail, shiftFrom, planState
 } from "./travel.js";
 
 let pass = 0, fail = 0;
@@ -570,7 +570,7 @@ console.log("\n[repository hygiene]");
   // the chat page's own script calls only this worker's /travel/api routes; the module itself fetches nothing
   const js = /const CHAT_JS = String\.raw`([\s\S]*?)`;/.exec(src);
   // TURNSTILE-EDGE-1: the shared Turnstile block (between its markers) makes the one allowed call, to the Turnstile siteverify endpoint; nothing else may fetch
-  const noTs = src.replace(js ? js[0] : "", "").replace(/\/\/ BEGIN TURNSTILE-EDGE-1[\s\S]*?\/\/ END TURNSTILE-EDGE-1\n/, "");
+  const noTs = src.replace(js ? js[0] : "", "").replace(/\/\/ BEGIN TURNSTILE-EDGE-1[\s\S]*?\/\/ END TURNSTILE-EDGE-1\n/, "").replace(/export const SW_JS = String\.raw`[\s\S]*?`;/, ""); // the browser-side service worker only refetches this site's own pages
   ok("module never calls a booking or payment API", !/fetch\(/.test(noTs));
   ok("the only outbound call is the Turnstile siteverify", /fetch\("https:\/\/challenges\.cloudflare\.com\/turnstile\/v0\/siteverify"/.test(src));
   ok("the page script fetches only its own relative API", !!js && /fetch\(path/.test(js[1]) && !/https?:\/\//.test(js[1].replace(/https?:\/\/[^"'`\s]*\$\{/g, "")) && /"\/travel\/api\//.test(js[1]));
@@ -624,6 +624,65 @@ console.log("\n[ensure batch + cheap request path, TRAVEL-ENSURE-BATCH-1]");
   const spy2 = { prepare(sql) { log2.push(sql); return fresh2.env.PERSONAL.prepare(sql); } };
   await ensureTravelCheap(spy2);
   ok("with no tables ensureTravelCheap falls back to the full ensure", log2.length === 1 + DDL.length + Object.keys(DEFAULTS).length + CALENDAR_SEED.length && Number(fresh2.raw.prepare("SELECT COUNT(*) n FROM sqlite_master WHERE name = 'travel_config'").get().n) === 1, log2.length);
+}
+
+// TRAVEL-ICS-1
+{
+  const plan = { places: [{ city: "Lecce", country_name: "Italy", start_date: "2027-02-01", end_date: "2027-02-03", state: "booked" }, { city: "A,B;C", country_name: "", start_date: "2027-02-03", end_date: "2027-02-05", state: "draft" }], moves: [{ day: "2027-02-03", from: "Lecce", to: "Taranto", booked: false }] };
+  const ics = icsFor(plan, "2026-11-12T20:00:00.000Z");
+  ok("ics is a CRLF VCALENDAR with 3 events", ics.startsWith("BEGIN:VCALENDAR\r\n") && ics.endsWith("END:VCALENDAR\r\n") && (ics.match(/BEGIN:VEVENT/g) || []).length === 3);
+  ok("ics stop is an all-day event with exclusive end", ics.includes("DTSTART;VALUE=DATE:20270201\r\nDTEND;VALUE=DATE:20270203"));
+  ok("ics escapes commas and semicolons", ics.includes("SUMMARY:A\\,B\\;C"));
+  ok("ics move runs one day", ics.includes("DTSTART;VALUE=DATE:20270203\r\nDTEND;VALUE=DATE:20270204") && ics.includes("Lecce to Taranto"));
+  ok("ics of an empty plan is still valid", icsFor({}, "2026-11-12T20:00:00Z").includes("END:VCALENDAR"));
+  ok("ics lines fold at 75", icsFor({ places: [{ city: "x".repeat(200), start_date: "2027-01-01", end_date: "2027-01-02" }] }).split("\r\n").every((l) => l.length <= 75));
+}
+
+// TRAVEL-OFFLINE-1 / TRAVEL-SHARE-1
+{
+  const { env } = freshEnv();
+  const deps = { key: "k".repeat(32), now: Date.parse("2026-11-12T12:00:00Z"), http: async () => ({ ok: false, json: async () => ({}) }) };
+  const u = "https://reading.q08.org";
+  const mf = await handleTravel(new Request(u + "/travel/manifest.webmanifest"), env, deps);
+  ok("manifest is public JSON with start_url", mf.status === 200 && JSON.parse(await mf.text()).start_url === "/travel" && JSON.parse(MANIFEST).scope === "/travel");
+  const sw = await handleTravel(new Request(u + "/travel/sw.js"), env, deps);
+  ok("service worker is JS, scoped to /travel, never caches POST", sw.status === 200 && /javascript/.test(sw.headers.get("Content-Type")) && sw.headers.get("Service-Worker-Allowed") === "/travel" && SW_JS.includes('r.method !== "GET"'));
+  const bad = await handleTravel(new Request(u + "/travel/share/123456789.notavalidsignaturenotavalid"), env, deps);
+  ok("a bad share token is refused", bad.status === 404);
+  const none = await handleTravel(new Request(u + "/travel/api/share", { method: "POST", headers: { "Content-Type": "application/json", Origin: u }, body: "{}" }), env, deps);
+  ok("making a share link needs a signed-in session", none.status === 401);
+  const html = await sharePage({ places: [{ city: "<b>X</b>", country_name: "Italy", start_date: "2027-01-01", end_date: "2027-01-02", state: "booked" }], moves: [] }).text();
+  ok("share page escapes and shows no visa text", html.includes("&lt;b&gt;X") && !/visa/i.test(html));
+  const tok = await makeToken(deps.key, "share", Math.floor(deps.now / 1000) + 3600);
+  const okRes = await handleTravel(new Request(u + "/travel/share/" + tok), env, deps);
+  ok("a valid share token shows the read-only page with a locked-down CSP", okRes.status === 200 && /default-src 'none'/.test(okRes.headers.get("Content-Security-Policy")));
+  const expired = await makeToken(deps.key, "share", Math.floor(deps.now / 1000) - 10);
+  ok("an expired share token is refused", (await handleTravel(new Request(u + "/travel/share/" + expired), env, deps)).status === 404);
+}
+
+// TRAVEL-BUDGET-1 / TRAVEL-DISRUPT-1 / TRAVEL-WATCH-1
+{
+  ok("findDates reads ISO and day-month", JSON.stringify(findDates("was 2026-11-14, now 16 Nov", "2026-11-01")) === JSON.stringify(["2026-11-14", "2026-11-16"]));
+  const d = parseDisruption("Your flight is rescheduled from 14 Nov 2026 to 16 Nov 2026.", "2026-11-01");
+  ok("a reschedule names the days and the day it starts", d && d.shift && d.days === 2 && d.from === "2026-11-14");
+  const d2 = parseDisruption("Flight delayed by 14 hours. New departure Nov 15.", "2026-11-01");
+  ok("a 12h+ delay is one night", d2 && d2.shift && d2.days === 1 && d2.from === "2026-11-15");
+  const d3 = parseDisruption("Your flight is delayed by 2 hours.", "2026-11-01");
+  ok("a short delay moves nothing", d3 && !d3.shift);
+  ok("an unrelated mail is not a disruption", parseDisruption("Your receipt from the cafe", "2026-11-01") === null);
+  ok("deal parse needs a planned city and a price", parseDeal("Fare alert: Lisbon from €89 round trip", ["Lisbon"]).price === 89 && parseDeal("Fare alert: Paris from €89", ["Lisbon"]) === null);
+  const b = budgetSummary({ cap: 1000, currency: "EUR" }, [{ amount: 250, currency: "EUR", label: "a" }, { amount: 10, currency: "USD", label: "b" }]);
+  ok("budget sums per currency and shows what is left", b.spent === 250 && b.left === 750 && b.pct === 25 && b.other.length === 1);
+  const { env } = freshEnv();
+  const db = env.PERSONAL;
+  await ensureTravel(db, "2026-11-12T00:00:00Z");
+  const ins = (id, c, a, z) => db.prepare("INSERT INTO travel_stops (id, trip, city, country, start_date, end_date, updated_at) VALUES (?, 'next', ?, 'PT', ?, ?, 'x')").bind(id, c, a, z).run();
+  await ins("a", "Lisbon", "2026-11-14", "2026-11-17"); await ins("b", "Porto", "2026-11-17", "2026-11-20");
+  const r = await ingestMail(db, "2026-11-12T00:00:00Z", "2026-11-12", "Flight rescheduled from 2026-11-17 to 2026-11-18. Lisbon fare alert from \u20ac59.");
+  const rows = (await db.prepare("SELECT id, start_date, end_date FROM travel_stops ORDER BY id").all()).results;
+  ok("the shift moves later stops and extends the one in progress", r.disruption.applied.ok && rows[0].end_date === "2026-11-18" && rows[1].start_date === "2026-11-18" && rows[1].end_date === "2026-11-21", rows);
+  ok("a deal is stored for a planned city", r.deal && (await db.prepare("SELECT COUNT(*) AS n FROM travel_watch").first()).n === 1);
+  ok("mail with neither is reported as such", (await ingestMail(db, "2026-11-12T00:00:00Z", "2026-11-12", "hello there friend, nothing here")).ok === false);
 }
 
 console.log("\n" + pass + " passed, " + fail + " failed");
