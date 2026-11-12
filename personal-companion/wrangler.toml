@@ -70,6 +70,14 @@ name = "job-application"
 binding = "JOB_FLOW"
 class_name = "JobApplicationFlow"
 
+# PIPELINE-ENGINE-PORT-1 (2026-11-12): one instance per idea qnfo-research-exec claims (PD.researchTick); waits are 6-hour Workflow
+# sleeps that read research_queue. Created once with PUT /accounts/{id}/workflows/research-run {script_name: personal-companion,
+# class_name: ResearchRunFlow}; without it the run continues inline on the hourly tick.
+[[workflows]]
+name = "research-run"
+binding = "RESEARCH_FLOW"
+class_name = "ResearchRunFlow"
+
 [triggers]
 # CRON-SINGLE-TRIGGER-1 (2026-10-02, #1785): ONE hourly trigger; worker.js CRON_TABLE holds the former list
 # (0 * * * *, 0 21 * * *) and runs each entry in the hour it fired.

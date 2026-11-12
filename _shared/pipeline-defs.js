@@ -27,8 +27,11 @@ export function researchPipeline(E) {
     merged: { stage: "idea", state: "superseded" },
     wontfix: { stage: "idea", state: "dropped" }
   };
+  // PIPELINE-ENGINE-PORT-1 (2026-11-12): executed. Every idea from the moment qnfo-research-exec claims it is a run of
+  // researchRunPipeline below (Workflow `research-run`); ideas still waiting in the queue are read from research_queue.status.
   return E.definePipeline({
-    name: "research", label: "Research: idea to publication", plane: "research", version: "1.0.0", mode: "observed",
+    name: "research", label: "Research: idea to publication", plane: "research", version: "1.0.0", mode: "executed", runs: "research-run",
+    executor: "Cloudflare Workflow research-run, one run per claimed idea",
     source: { db: "qnfo-audit", table: "research_queue", status: "status", ts: "created_at" },
     stages: [
       { key: "idea", label: "Idea" }, { key: "research", label: "Research" }, { key: "draft", label: "Draft" },
@@ -137,21 +140,29 @@ export async function jobsTick(E, env, opts = {}) {
   const q = (a) => a.map(() => "?").join(",");
   const rows = (await db.prepare("SELECT m.id FROM jobsearch_matches m WHERE (m.status IN (" + q(JOB_OPEN) + ") OR (m.status IN (" + q(JOB_TERMINAL) + ") AND EXISTS (SELECT 1 FROM jobsearch_events e WHERE e.match_id = m.id AND e.event = 'applied'))) AND NOT EXISTS (SELECT 1 FROM pipeline_runs r WHERE r.pipeline = 'job-application' AND r.subject_ref = m.id) ORDER BY m.id LIMIT ?")
     .bind(...JOB_OPEN, ...JOB_TERMINAL, opts.limit || 25).all()).results || [];
-  for (const r of rows) {
-    const o = await E.openRun(db, def, { match_id: String(r.id) }, { subjectRef: String(r.id), now });
+  return startRuns(E, db, def, env.JOB_FLOW, rows.map((r) => ({ ref: String(r.id), input: { match_id: String(r.id) } })), now, 3 * 864e5, { jobsDb: db, now: opts.now }, res);
+}
+
+// Shared by the executed peers: open a run per subject, start it on its Workflow (inline when the binding is absent or create()
+// throws, with evidence), adopt Workflow runs quiet for longer than staleMs (a poll writes updated_at each period), resume inline
+// runs that are due.
+export async function startRuns(E, db, def, flow, subjects, now, staleMs, ctx, res) {
+  res = res || { opened: 0, workflow: 0, inline: 0, adopted: 0 };
+  for (const sj of subjects) {
+    const o = await E.openRun(db, def, sj.input, { subjectRef: sj.ref, now });
     if (!o.created) continue;
     res.opened++;
     let started = false;
-    if (env.JOB_FLOW && typeof env.JOB_FLOW.create === "function") {
-      try { await env.JOB_FLOW.create({ id: o.id, params: { runId: o.id } }); await E.setMode(db, o.id, "workflow", now); started = true; res.workflow++; }
+    if (flow && typeof flow.create === "function") {
+      try { await flow.create({ id: o.id, params: { runId: o.id } }); await E.setMode(db, o.id, "workflow", now); started = true; res.workflow++; }
       catch (e) { await E.evidence(db, o.id, def.name, "start", false, { workflow_create: String(e && e.message || e).slice(0, 200), fallback: "inline" }, now); }
     }
     if (!started) res.inline++;
   }
-  const stale = new Date(Date.parse(now) - 3 * 864e5).toISOString();
-  const ad = await db.prepare("UPDATE pipeline_runs SET mode = 'inline', next_check_at = ?, updated_at = ? WHERE pipeline = 'job-application' AND mode = 'workflow' AND status IN ('queued','running','waiting') AND updated_at < ?").bind(now, now, stale).run();
+  const stale = new Date(Date.parse(now) - staleMs).toISOString();
+  const ad = await db.prepare("UPDATE pipeline_runs SET mode = 'inline', next_check_at = ?, updated_at = ? WHERE pipeline = ? AND mode = 'workflow' AND status IN ('queued','running','waiting') AND updated_at < ?").bind(now, now, def.name, stale).run();
   res.adopted = ad && ad.meta ? Number(ad.meta.changes) || 0 : 0;
-  res.resume = await E.resumeDue(db, def, { jobsDb: db, now: opts.now }, 20);
+  res.resume = await E.resumeDue(db, def, ctx, 20);
   return res;
 }
 
@@ -159,4 +170,73 @@ export async function jobsTick(E, env, opts = {}) {
 export async function runJobWorkflow(E, env, payload, step) {
   const id = payload && payload.runId;
   return E.runPipeline(env.AUDIT, jobApplicationPipeline(E), id, step, { jobsDb: env.AUDIT });
+}
+
+// ------------------------------------------------------------------ PIPELINE-ENGINE-PORT-1: the executed research pipeline
+// qnfo-research-exec keeps doing the work (grounding, drafting, review, revision, publication) and writes research_queue.status and
+// .stage; a research-run follows one claimed idea through those stages with Workflow sleeps, records evidence for each, and ends on
+// its outcome. It writes only pipeline_runs and pipeline_evidence; research_queue is never written here.
+export const RESEARCH_TERMINAL = ["published", "wontfix", "merged", "deferred", "owner_paused"];
+const RESEARCH_RANK = { ground: 1, ensemble: 1, reconcile: 1, research: 1, draft: 1, review: 2, revise: 3, complete: 4, done: 4 };
+export const RESEARCH_STAGE_DAYS = 7;
+
+async function researchState(ctx, id) {
+  const r = await ctx.auditDb.prepare("SELECT status, stage FROM research_queue WHERE id = ?").bind(id).first();
+  if (!r) return { status: "gone", rank: 9, terminal: true };
+  const status = String(r.status || ""), stage = String(r.stage || "");
+  return { status, stage, rank: status === "published" ? 5 : (RESEARCH_RANK[stage] || 1), terminal: RESEARCH_TERMINAL.includes(status) };
+}
+
+// A stage that passes once the idea is beyond `rank` (or finished), polling every 6 hours for up to a week.
+function progressStage(key, label, rank) {
+  const past = (c) => c.terminal || c.rank > rank;
+  return { key, label,
+    async run(s, ctx) { const c = await researchState(ctx, s.research_id); if (past(c)) return { out: { passed: c.status + "/" + c.stage }, state: { last: c } }; return { wait: true }; },
+    wait: { every: "6 hours", max: RESEARCH_STAGE_DAYS * 4,
+      poll: async (s, ctx) => { const c = await researchState(ctx, s.research_id); return past(c) ? c : null; },
+      resume: async (s, got, ctx, info) => ({ out: { passed: got ? got.status + "/" + got.stage : null, quiet: !!info.timedOut }, state: { last: got || s.last || null } }) } };
+}
+
+export function researchRunPipeline(E) {
+  return E.definePipeline({
+    name: "research-run", label: "Research run: claimed idea to publication", plane: "research", version: "1.0.0",
+    input: { type: "object", required: ["research_id"], props: { research_id: { type: "string" } } },
+    stages: [
+      progressStage("research", "Research and draft", 1),
+      progressStage("review", "Review and correct", 2),
+      progressStage("revise", "Revise", 3),
+      { key: "publication", label: "Publication",
+        async run(s, ctx) { const c = await researchState(ctx, s.research_id); if (c.terminal) return { out: { status: c.status }, state: { last: c } }; return { wait: true }; },
+        wait: { every: "6 hours", max: RESEARCH_STAGE_DAYS * 4,
+          poll: async (s, ctx) => { const c = await researchState(ctx, s.research_id); return c.terminal ? c : null; },
+          resume: async (s, got, ctx, info) => ({ out: { status: got ? got.status : null, quiet: !!info.timedOut }, state: { last: got || s.last || null } }) } },
+      { key: "outcome", label: "Outcome", out: { type: "object", required: ["outcome"] },
+        async run(s) {
+          const st = s.last && s.last.status;
+          const outcome = st === "published" ? "published" : st === "merged" ? "merged" : st === "wontfix" ? "dropped" : (st === "deferred" || st === "owner_paused") ? "parked" : st === "gone" ? "gone" : "quiet";
+          return { out: { outcome }, state: { outcome } };
+        } }
+    ],
+    output: (s) => ({ outcome: s.outcome, research_id: s.research_id })
+  });
+}
+
+// One tick: a run for each idea qnfo-research-exec is working on or claimed or published in the last 3 days.
+export async function researchTick(E, env, opts = {}) {
+  const db = env.AUDIT, def = researchRunPipeline(E), now = (opts.now || (() => new Date().toISOString()))();
+  if (!db) return { skipped: "no AUDIT binding" };
+  await E.ensureEngine(db);
+  const since = new Date(Date.parse(now) - 3 * 864e5).toISOString();
+  const rows = (await db.prepare("SELECT q.id FROM research_queue q WHERE (q.status = 'researching' OR q.claimed_at >= ? OR q.published_at >= ?) AND NOT EXISTS (SELECT 1 FROM pipeline_runs r WHERE r.pipeline = 'research-run' AND r.subject_ref = q.id) ORDER BY q.id LIMIT ?")
+    .bind(since, since, opts.limit || 25).all()).results || [];
+  return startRuns(E, db, def, env.RESEARCH_FLOW, rows.map((r) => ({ ref: String(r.id), input: { research_id: String(r.id) } })), now, 864e5, { auditDb: db, now: opts.now });
+}
+
+export async function runResearchWorkflow(E, env, payload, step) {
+  return E.runPipeline(env.AUDIT, researchRunPipeline(E), payload && payload.runId, step, { auditDb: env.AUDIT });
+}
+
+// The run pipeline behind an executed funnel, by its def.runs name.
+export function runsDef(E, name) {
+  return name === "job-application" ? jobApplicationPipeline(E) : name === "research-run" ? researchRunPipeline(E) : null;
 }
