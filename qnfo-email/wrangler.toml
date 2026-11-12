@@ -35,6 +35,13 @@ props = { caller = "qnfo-email" }
 
 # EMAIL-VOICE-DRAFTER-1 (2.8.0, agent_issues 2373): the voice document lives in the private store bound to the dashboard alone
 # (IDENTITY-STORE-1); this binding reads and proposes it through /api/owner/doc/<key>, authenticated by props.caller.
+# FLOW-DIRECTIVE-1 (2026-11-12): employer replies to rowan.quni@qnfo.org reach the job pipeline (qnfo-jobsearch POST /api/mail-in checks props.caller)
+[[services]]
+binding = "JOBS"
+service = "qnfo-jobsearch"
+environment = "production"
+props = { caller = "qnfo-email" }
+
 [[services]]
 binding = "DASH"
 service = "qnfo-fleet-dashboard"
