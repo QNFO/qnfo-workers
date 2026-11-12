@@ -11,7 +11,7 @@ import {
   parseChat, chatPrompt, chatModels, chatTurn, makeToken, tokenOk, authKey, accessOk, CHAT_SYSTEM,
   visaStatus, weatherRequests, parseWeather, fogSeason, dayPlan, checkinDraft, parseImport, importText, saveStop, savePermit,
   shiftYear, planText, chatContext, placeCards, moveCards,
-  parsePicks, picksPrompt, mapLink, makePicks, picksDue, pickNo, icsFor, sharePage, MANIFEST, SW_JS
+  parsePicks, picksPrompt, mapLink, makePicks, picksDue, pickNo, icsFor, sharePage, MANIFEST, SW_JS, parseDisruption, parseDeal, findDates, budgetSummary, ingestMail, shiftFrom, planState
 } from "./travel.js";
 
 let pass = 0, fail = 0;
@@ -658,6 +658,31 @@ console.log("\n[ensure batch + cheap request path, TRAVEL-ENSURE-BATCH-1]");
   ok("a valid share token shows the read-only page with a locked-down CSP", okRes.status === 200 && /default-src 'none'/.test(okRes.headers.get("Content-Security-Policy")));
   const expired = await makeToken(deps.key, "share", Math.floor(deps.now / 1000) - 10);
   ok("an expired share token is refused", (await handleTravel(new Request(u + "/travel/share/" + expired), env, deps)).status === 404);
+}
+
+// TRAVEL-BUDGET-1 / TRAVEL-DISRUPT-1 / TRAVEL-WATCH-1
+{
+  ok("findDates reads ISO and day-month", JSON.stringify(findDates("was 2026-11-14, now 16 Nov", "2026-11-01")) === JSON.stringify(["2026-11-14", "2026-11-16"]));
+  const d = parseDisruption("Your flight is rescheduled from 14 Nov 2026 to 16 Nov 2026.", "2026-11-01");
+  ok("a reschedule names the days and the day it starts", d && d.shift && d.days === 2 && d.from === "2026-11-14");
+  const d2 = parseDisruption("Flight delayed by 14 hours. New departure Nov 15.", "2026-11-01");
+  ok("a 12h+ delay is one night", d2 && d2.shift && d2.days === 1 && d2.from === "2026-11-15");
+  const d3 = parseDisruption("Your flight is delayed by 2 hours.", "2026-11-01");
+  ok("a short delay moves nothing", d3 && !d3.shift);
+  ok("an unrelated mail is not a disruption", parseDisruption("Your receipt from the cafe", "2026-11-01") === null);
+  ok("deal parse needs a planned city and a price", parseDeal("Fare alert: Lisbon from €89 round trip", ["Lisbon"]).price === 89 && parseDeal("Fare alert: Paris from €89", ["Lisbon"]) === null);
+  const b = budgetSummary({ cap: 1000, currency: "EUR" }, [{ amount: 250, currency: "EUR", label: "a" }, { amount: 10, currency: "USD", label: "b" }]);
+  ok("budget sums per currency and shows what is left", b.spent === 250 && b.left === 750 && b.pct === 25 && b.other.length === 1);
+  const { env } = freshEnv();
+  const db = env.PERSONAL;
+  await ensureTravel(db, "2026-11-12T00:00:00Z");
+  const ins = (id, c, a, z) => db.prepare("INSERT INTO travel_stops (id, trip, city, country, start_date, end_date, updated_at) VALUES (?, 'next', ?, 'PT', ?, ?, 'x')").bind(id, c, a, z).run();
+  await ins("a", "Lisbon", "2026-11-14", "2026-11-17"); await ins("b", "Porto", "2026-11-17", "2026-11-20");
+  const r = await ingestMail(db, "2026-11-12T00:00:00Z", "2026-11-12", "Flight rescheduled from 2026-11-17 to 2026-11-18. Lisbon fare alert from \u20ac59.");
+  const rows = (await db.prepare("SELECT id, start_date, end_date FROM travel_stops ORDER BY id").all()).results;
+  ok("the shift moves later stops and extends the one in progress", r.disruption.applied.ok && rows[0].end_date === "2026-11-18" && rows[1].start_date === "2026-11-18" && rows[1].end_date === "2026-11-21", rows);
+  ok("a deal is stored for a planned city", r.deal && (await db.prepare("SELECT COUNT(*) AS n FROM travel_watch").first()).n === 1);
+  ok("mail with neither is reported as such", (await ingestMail(db, "2026-11-12T00:00:00Z", "2026-11-12", "hello there friend, nothing here")).ok === false);
 }
 
 console.log("\n" + pass + " passed, " + fail + " failed");
