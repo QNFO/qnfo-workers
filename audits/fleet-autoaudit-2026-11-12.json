@@ -1,7 +1,7 @@
 {
-  "audited_at": "2026-11-12 00:44:01",
+  "audited_at": "2026-11-12 13:59:09",
   "d1_write_failures": [],
-  "d1_writes_ok": 5,
+  "d1_writes_ok": 7,
   "guard": {
     "_guard_rc": 0,
     "ahead": [],
@@ -33,6 +33,11 @@
     "unmanaged_truncated": false,
     "unmanaged_workers": [
       {
+        "http": 503,
+        "version": null,
+        "worker": "demo-child-ultrastable"
+      },
+      {
         "http": 404,
         "version": null,
         "worker": "q08-living-paper"
@@ -56,11 +61,24 @@
         "http": 404,
         "version": null,
         "worker": "ultrastable-tick"
+      },
+      {
+        "http": 503,
+        "version": null,
+        "worker": "ultrastable-ultrastable"
       }
     ]
   },
-  "purge_error": "purge skipped: run classified 5 workers, table held 48; a partial report must not shrink the audit surface",
+  "purge_error": "purge skipped: run classified 7 workers, table held 48; a partial report must not shrink the audit surface",
   "rows": {
+    "demo-child-ultrastable": {
+      "before": null,
+      "http": 503,
+      "live": null,
+      "match": 0,
+      "note": "UNMANAGED_ERR",
+      "worker": "demo-child-ultrastable"
+    },
     "q08-living-paper": {
       "before": null,
       "http": 404,
@@ -100,6 +118,14 @@
       "match": 0,
       "note": "UNMANAGED_NO_HEALTH",
       "worker": "ultrastable-tick"
+    },
+    "ultrastable-ultrastable": {
+      "before": null,
+      "http": 503,
+      "live": null,
+      "match": 0,
+      "note": "UNMANAGED_ERR",
+      "worker": "ultrastable-ultrastable"
     }
   },
   "stale_rows_purged": null
