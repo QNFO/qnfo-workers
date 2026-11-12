@@ -741,18 +741,34 @@ function liEq(a, b) { a = String(a || ""); b = String(b || ""); let r = a.length
 const liSalt = (env) => String((env && env.API_KEY) || "") + "|companion-code";
 export function maskedLoginTo() { const p = LOGIN_TO.split("@"); return p[0].slice(0, 2) + "\u2026@" + p[1]; }
 // The live session behind the cookie, or null. Never throws.
+// Every cmp_s token the request carries, in the order sent (at most four).
+export function cookieTokens(request) {
+  const out = [], re = /(?:^|;\s*)cmp_s=([0-9a-f]{64})/g, c = request.headers.get("Cookie") || "";
+  let m; while ((m = re.exec(c)) && out.length < 4) if (out.indexOf(m[1]) < 0) out.push(m[1]);
+  return out;
+}
+// ME-HUB-1 (issue 11287): clearing cookies for both scopes, the q08.org one and the old host-only one, so sign-out leaves nothing behind.
+export function clearSessionCookies(host) {
+  const tail = "HttpOnly; Secure; SameSite=Lax", out = [SESSION_COOKIE + "=; Path=/; Max-Age=0; " + tail];
+  if (cookieDomain(host)) out.unshift(SESSION_COOKIE + "=; Path=/; Max-Age=0; " + cookieDomain(host) + tail);
+  return out;
+}
 export async function sessionFor(request, env, nowMs) {
   try {
-    const m = /(?:^|;\s*)cmp_s=([0-9a-f]{64})/.exec(request.headers.get("Cookie") || "");
-    if (!m || !env || !env.PERSONAL) return null;
+    // ME-HUB-1 (issue 11287): a device signed in before 12 Nov can send two cmp_s cookies (host-only and q08.org); a stale one must not shadow the live one.
+    const toks = cookieTokens(request);
+    if (!toks.length || !env || !env.PERSONAL) return null;
     await ensureSchema(env.PERSONAL);
     const now = nowMs || Date.now();
-    const h = await liHash(m[1]);
-    const row = await env.PERSONAL.prepare("SELECT token_hash, expires_ms, last_seen_ms FROM cmp_sessions WHERE token_hash = ? AND revoked = 0").bind(h).first();
-    if (!row || Number(row.expires_ms) < now) return null;
-    // Sliding: a device in use keeps its session; one unused for SESSION_MS signs in again.
-    if (!row.last_seen_ms || now - Number(row.last_seen_ms) > 36e5) await env.PERSONAL.prepare("UPDATE cmp_sessions SET last_seen_ms = ?, expires_ms = ? WHERE token_hash = ?").bind(now, now + SESSION_MS, h).run();
-    return { hash: h };
+    for (const tok of toks) {
+      const h = await liHash(tok);
+      const row = await env.PERSONAL.prepare("SELECT token_hash, expires_ms, last_seen_ms FROM cmp_sessions WHERE token_hash = ? AND revoked = 0").bind(h).first();
+      if (!row || Number(row.expires_ms) < now) continue;
+      // Sliding: a device in use keeps its session; one unused for SESSION_MS signs in again.
+      if (!row.last_seen_ms || now - Number(row.last_seen_ms) > 36e5) await env.PERSONAL.prepare("UPDATE cmp_sessions SET last_seen_ms = ?, expires_ms = ? WHERE token_hash = ?").bind(now, now + SESSION_MS, h).run();
+      return { hash: h, token: tok };
+    }
+    return null;
   } catch (e) { console.error(JSON.stringify({ evt: "companion:session", error: String(e && e.message || e).slice(0, 200) })); return null; }
 }
 export async function sendLoginCode(env, nowMs) {
@@ -3488,14 +3504,20 @@ export async function handleCompanion(request, env, ctx, deps) {
   // ME-HUB-1: the other q08.org dashboards ask here whether this cookie is a live sign-in. Answers only about the cookie sent.
   if (r === "whoami" && m === "GET") { const ss = await sessionFor(request, env); return J({ ok: true, signed_in: !!ss }, 200); }
   const bearerOk = await deps.auth(request, env);
+  // Sign-out works even when the cookie it carries is already stale (it used to answer 401 and leave the cookie in place): every cmp_s token
+  // sent is revoked and both cookie scopes are cleared. Still needs the page's own header, so a cross-site form cannot sign anyone out.
+  if (r === "logout" && m === "POST") {
+    if (!bearerOk && request.headers.get("X-Companion") !== "1") return J({ ok: false, error: "missing X-Companion header" }, 403);
+    for (const tok of cookieTokens(request)) { try { await env.PERSONAL.prepare("UPDATE cmp_sessions SET revoked = 1 WHERE token_hash = ?").bind(await liHash(tok)).run(); } catch (e) { /* the cookie is cleared anyway */ } }
+    const lh = new Headers({ "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" });
+    for (const c of clearSessionCookies(new URL(request.url).hostname)) lh.append("Set-Cookie", c);
+    return new Response(JSON.stringify({ ok: true }), { headers: lh });
+  }
   const session = bearerOk ? null : await sessionFor(request, env);
   if (!bearerOk && !session) return J({ ok: false, signed_in: false, error: "sign in: ask for a code by e-mail (or send Authorization: Bearer <personal API key>)", login_to: maskedLoginTo() }, 401);
   // The cookie rides on any same-site request, so a cookie-only write must also carry the page's own header (a cross-site form cannot).
   if (!bearerOk && m !== "GET" && request.headers.get("X-Companion") !== "1") return J({ ok: false, error: "missing X-Companion header" }, 403);
-  if (r === "logout" && m === "POST") {
-    if (session) await env.PERSONAL.prepare("UPDATE cmp_sessions SET revoked = 1 WHERE token_hash = ?").bind(session.hash).run();
-    return new Response(JSON.stringify({ ok: true }), { headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", "Set-Cookie": SESSION_COOKIE + "=; Path=/; Max-Age=0; " + cookieDomain(new URL(request.url).hostname) + "HttpOnly; Secure; SameSite=Lax" } });
-  }
+
   await ensureSchema(env.PERSONAL);
   const body = async () => (m === "POST" ? await request.json().catch(() => ({})) : {});
   const stub = () => deps.doStub(env);
@@ -3506,8 +3528,9 @@ export async function handleCompanion(request, env, ctx, deps) {
       const resp = J(await today(env, deps));
       // ME-HUB-1: a device signed in before 12 Nov holds a host-only cookie; once per page load, re-issue it for all of q08.org so the
       // travel and jobs dashboards see the same sign-in. Same token, same lifetime, no new session row.
-      const tk = /(?:^|;\s*)cmp_s=([0-9a-f]{64})/.exec(request.headers.get("Cookie") || "");
-      if (tk) { const h = new Headers(resp.headers); h.append("Set-Cookie", SESSION_COOKIE + "=" + tk[1] + "; Path=/; Max-Age=" + Math.round(SESSION_MS / 1000) + "; " + cookieDomain(new URL(request.url).hostname) + "HttpOnly; Secure; SameSite=Lax"); return new Response(resp.body, { status: resp.status, headers: h }); }
+      // Issue 11287: the live token is re-issued (never a stale one sent first), and on q08.org the old host-only copy is cleared.
+      const tk = session && session.token ? [null, session.token] : null, th = new URL(request.url).hostname;
+      if (tk) { const h = new Headers(resp.headers); h.append("Set-Cookie", SESSION_COOKIE + "=" + tk[1] + "; Path=/; Max-Age=" + Math.round(SESSION_MS / 1000) + "; " + cookieDomain(th) + "HttpOnly; Secure; SameSite=Lax"); if (cookieDomain(th)) h.append("Set-Cookie", clearSessionCookies(th)[1]); return new Response(resp.body, { status: resp.status, headers: h }); }
       return resp;
     }
     if (r === "dashboard" && m === "GET") return J(await dashboard(env));

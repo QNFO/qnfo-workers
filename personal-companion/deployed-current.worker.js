@@ -2950,7 +2950,7 @@ var PR = (() => {
 //
 // Pure ESM, no imports: personal-companion inlines it as namespace PR (scripts/inline-pipeline-modules.mjs); tests load it directly.
 
-const RESEARCH_VERSION = "1.0.0";
+const RESEARCH_VERSION = "1.1.0";
 const DIRECTIVE_ID = "PRODUCT-RESEARCH-1";
 const RUN_EVERY_H = 20;          // one run a day per app, tolerant of the hourly tick drifting
 const STALE_AFTER_H = 26;        // daily cadence plus at most 120 minutes (QUEUE-SLA-1)
@@ -3038,7 +3038,81 @@ const APPS = [
       { name: "Blinkist", kind: "competitor", url: "https://www.blinkist.com/" },
       { name: "Libby", kind: "competitor", url: "https://libbyapp.com/" }
     ],
-    discover: ["reading app", "book recommendations"] }
+    discover: ["reading app", "book recommendations"] },
+  // PRODUCT-RESEARCH-2 (2026-11-12): the travel planner and the job search, each read against its own domain's best practice.
+  { app: "travel", label: "the travel planner", host: "travel.q08.org", code: "personal-companion/travel.js", journeys: [], usage: "travel",
+    features: [
+      { key: "visa", label: "Visa days used against days allowed", marker: "export function visaStatus(" },
+      { key: "weather", label: "Weather for every day of a stop", marker: "async function weatherFor(" },
+      { key: "day-plan", label: "A day-by-day plan", marker: "export function dayPlan(" },
+      { key: "picks", label: "Three places to eat and three things to do per stop", marker: "TRAVEL-PICKS-1" },
+      { key: "taste", label: "One-tap love, skip or hate that tunes the next picks", marker: "TRAVEL-FEEDBACK-1" },
+      { key: "booking", label: "A ready booking link for the next stay", marker: "export function bookingLink(" },
+      { key: "transit", label: "How to get from one stop to the next", marker: "export function transitLink(" },
+      { key: "checks", label: "Trip checks: crowds, closures and book-by dates", marker: "TRAVEL-TRIP-STATE-1" },
+      { key: "ingest", label: "Bookings arrive from confirmation mails on their own", marker: "ITINERARY-INGEST-1" }
+    ],
+    practices: [
+      { key: "itinerary", label: "The whole trip in one place, day by day", terms: ["itinerary", "day by day", "day-by-day", "all your plans", "one place"], weight: 3, covered_by: "day-plan" },
+      { key: "auto-import", label: "Bookings added from confirmation mails without typing", terms: ["forward", "confirmation", "import", "automatically"], weight: 3, covered_by: "ingest" },
+      { key: "entry-rules", label: "Entry rules and visa limits checked before you go", terms: ["visa", "entry requirements", "passport", "schengen"], weight: 3, covered_by: "visa" },
+      { key: "weather", label: "Weather for the days you are there", terms: ["weather", "forecast"], weight: 2, covered_by: "weather" },
+      { key: "local-picks", label: "Things to do and places to eat, tuned by what you liked", terms: ["things to do", "restaurants", "recommendations", "where to eat"], weight: 2, covered_by: "taste" },
+      { key: "getting-there", label: "How to get between stops", terms: ["directions", "train", "transport", "route"], weight: 2, covered_by: "transit" },
+      { key: "packing", label: "A packing checklist from the weather and the trip, ticked off with a tap", terms: ["packing", "pack list", "packing list", "what to pack", "checklist"], weight: 3,
+        backlog: "TRAVEL-PACKING-1", marker: "TRAVEL-PACKING-1" },
+      { key: "offline", label: "The plan opens without a signal", terms: ["offline", "no signal", "without internet", "no wifi"], weight: 3,
+        backlog: "TRAVEL-OFFLINE-1", marker: "TRAVEL-OFFLINE-1" },
+      { key: "calendar", label: "The trip added to the phone calendar with one tap", terms: ["calendar", "sync", "google calendar", "outlook"], weight: 2,
+        backlog: "TRAVEL-CALENDAR-1", marker: "TRAVEL-CALENDAR-1" },
+      { key: "emergency", label: "The local emergency number and nearest embassy for each stop", terms: ["emergency", "embassy", "consulate", "local laws", "safety"], weight: 2,
+        backlog: "TRAVEL-EMERGENCY-1", marker: "TRAVEL-EMERGENCY-1" }
+    ],
+    sources: [
+      { name: "GOV.UK foreign travel advice", kind: "practice", url: "https://www.gov.uk/foreign-travel-advice" },
+      { name: "US traveler's checklist", kind: "practice", url: "https://travel.state.gov/content/travel/en/international-travel/before-you-go/travelers-checklist.html" },
+      { name: "TripIt", kind: "competitor", url: "https://www.tripit.com/web" },
+      { name: "Wanderlog", kind: "competitor", url: "https://wanderlog.com/" },
+      { name: "Polarsteps", kind: "competitor", url: "https://www.polarsteps.com/" },
+      { name: "Rome2Rio", kind: "competitor", url: "https://www.rome2rio.com/" }
+    ],
+    discover: ["travel planner", "trip itinerary"] },
+  { app: "jobs", label: "the job search", host: "jobs.q08.org", code: "qnfo-jobsearch/worker.js", journeys: ["jobs"], usage: null,
+    features: [
+      { key: "content-match", label: "Matches read the posting, not the title", marker: "function semanticLens(" },
+      { key: "tailored", label: "A CV tailored to each posting", marker: "function tailoredResume(" },
+      { key: "answers", label: "Saved answers for the usual application questions", marker: "const ANSWER_BANK" },
+      { key: "prep", label: "An interview brief for each role", marker: "async function prepBrief(" },
+      { key: "practice", label: "Spoken interview practice with a score", marker: "const QUIZ_SYSTEM" },
+      { key: "recall", label: "Yes or no questions that fill in the record", marker: "RECALL_FRAMES" },
+      { key: "track", label: "Applications tracked with follow-ups only when they make sense", marker: "async function followups(" },
+      { key: "add-anywhere", label: "Add a job from anywhere", marker: "Add a job from anywhere" },
+      { key: "one-click", label: "One-click apply", marker: "One-click apply" }
+    ],
+    practices: [
+      { key: "fit", label: "Shows why a job fits, from the posting's own text", terms: ["match", "fit", "skills", "recommended jobs"], weight: 3, covered_by: "content-match" },
+      { key: "tailor", label: "A CV tailored to each job", terms: ["tailor", "resume builder", "keywords", "ats"], weight: 3, covered_by: "tailored" },
+      { key: "tracker", label: "Every application tracked in one place", terms: ["track", "tracker", "applications", "organize", "organise"], weight: 3, covered_by: "track" },
+      { key: "interview", label: "Interview preparation and practice", terms: ["interview", "practice", "prepare"], weight: 2, covered_by: "practice" },
+      { key: "autofill", label: "Applications filled in without retyping", terms: ["autofill", "one click", "one-click", "apply faster"], weight: 3, covered_by: "one-click" },
+      { key: "deadlines", label: "Closing dates shown, nearest first, with a heads-up before one passes", terms: ["deadline", "closing date", "apply by", "expires"], weight: 3,
+        backlog: "JOBS-DEADLINE-1", marker: "JOBS-DEADLINE-1" },
+      { key: "pay", label: "The pay range on each match when the posting gives one", terms: ["salary", "pay range", "compensation", "pay transparency"], weight: 2,
+        backlog: "JOBS-PAY-1", marker: "JOBS-PAY-1" },
+      { key: "company", label: "A short company card before applying: what they do, size, recent news", terms: ["company", "culture", "employer", "about the company", "insights"], weight: 2,
+        backlog: "JOBS-COMPANY-1", marker: "JOBS-COMPANY-1" },
+      { key: "kind-progress", label: "A weekly look at progress with no shame for quiet weeks", terms: ["progress", "goals", "weekly", "motivation", "momentum"], weight: 2,
+        backlog: "JOBS-PROGRESS-1", marker: "JOBS-PROGRESS-1" }
+    ],
+    sources: [
+      { name: "CareerOneStop job search guide", kind: "practice", url: "https://www.careeronestop.org/JobSearch/job-search.aspx" },
+      { name: "EURES", kind: "practice", url: "https://eures.europa.eu/index_en" },
+      { name: "Huntr", kind: "competitor", url: "https://huntr.co/" },
+      { name: "Teal", kind: "competitor", url: "https://www.tealhq.com/" },
+      { name: "Simplify", kind: "competitor", url: "https://simplify.jobs/" },
+      { name: "Careerflow", kind: "competitor", url: "https://www.careerflow.ai/" }
+    ],
+    discover: ["job search", "job tracker"] }
 ];
 
 // ------------------------------------------------------------------ pure helpers (tested offline)
@@ -3202,6 +3276,16 @@ async function companionUsage(db, nowMs) {
   return { window_days: 14, asks, top_cards, activities: Number(act && act.n) || 0, captures: Number(caps && caps.n) || 0 };
 }
 
+// Real use of the travel planner: which kinds of card get which taps (TRAVEL-FEEDBACK-1 ledger), counts only.
+const TRAVEL_CARD = { pick: "place", option: "stay", stop: "stop", pair: "this-or-that" };
+const TRAVEL_SIGNAL = { love: "loved", like: "liked", skip: "skipped", hate: "disliked", instead: "swapped", save: "saved", book: "booked", open: "opened", pass: "passed" };
+async function travelUsage(db, nowMs) {
+  const since = new Date(nowMs - 14 * 86400e3).toISOString();
+  const top_cards = (await all(db, "SELECT target_type, signal, COUNT(*) AS taps FROM travel_feedback WHERE ts >= ? GROUP BY target_type, signal ORDER BY taps DESC LIMIT 8", since))
+    .map((r) => ({ card: (TRAVEL_CARD[r.target_type] || "card") + " " + (TRAVEL_SIGNAL[r.signal] || "tapped"), taps: Number(r.taps) || 0 }));
+  return { window_days: 14, asks: [], top_cards };
+}
+
 const AUDIT_DDL = [
   "CREATE TABLE IF NOT EXISTS product_research_runs (id INTEGER PRIMARY KEY AUTOINCREMENT, app TEXT NOT NULL, run_at TEXT NOT NULL, version TEXT, sources_ok INTEGER NOT NULL DEFAULT 0, sources_failed INTEGER NOT NULL DEFAULT 0, sources_json TEXT, gaps_json TEXT, ideas_json TEXT, players_json TEXT, usage_json TEXT, digest TEXT, filed INTEGER NOT NULL DEFAULT 0, updated INTEGER NOT NULL DEFAULT 0, closed INTEGER NOT NULL DEFAULT 0, error TEXT)",
   "CREATE INDEX IF NOT EXISTS product_research_runs_app ON product_research_runs(app, run_at)",
@@ -3217,7 +3301,7 @@ async function researchApp(env, app, deps) {
   const prev = await one(env.AUDIT, "SELECT players_json FROM product_research_runs WHERE app = ? ORDER BY id DESC LIMIT 1", app.app);
   let prevNames = new Set(); try { prevNames = new Set(JSON.parse((prev && prev.players_json) || "[]").map((p) => String(p.name).toLowerCase())); } catch (e) { prevNames = new Set(); }
   const players = players0.filter((p) => !prevNames.has(p.name.toLowerCase()));
-  const usage = app.usage === "companion" && env.PERSONAL ? await companionUsage(env.PERSONAL, nowMs) : null;
+  const usage = !env.PERSONAL ? null : app.usage === "companion" ? await companionUsage(env.PERSONAL, nowMs) : app.usage === "travel" ? await travelUsage(env.PERSONAL, nowMs) : null;
   const gaps = rankGaps(app, pages, usage);
   const res = { filed: 0, updated: 0, closed: 0 };
   let newLeft = NEW_ISSUES_PER_RUN;
@@ -3320,7 +3404,7 @@ function researchCards(st) {
     + "</section>").join("");
 }
 
-return Object.freeze({ RESEARCH_VERSION, DIRECTIVE_ID, RUN_EVERY_H, STALE_AFTER_H, NEW_ISSUES_PER_RUN, FETCH_TIMEOUT_MS, MAX_TEXT, APPS, appByKey, htmlToText, headings, words, ideasFrom, supportFor, usageGaps, rankGaps, issueTitle, issueBody, digestLines, discoverPlayers, companionUsage, AUDIT_DDL, researchApp, researchTick, researchStatus, researchCards });
+return Object.freeze({ RESEARCH_VERSION, DIRECTIVE_ID, RUN_EVERY_H, STALE_AFTER_H, NEW_ISSUES_PER_RUN, FETCH_TIMEOUT_MS, MAX_TEXT, APPS, appByKey, htmlToText, headings, words, ideasFrom, supportFor, usageGaps, rankGaps, issueTitle, issueBody, digestLines, discoverPlayers, companionUsage, travelUsage, AUDIT_DDL, researchApp, researchTick, researchStatus, researchCards });
 })(); // end inline _shared/product-research.js
 // ---- PIPELINE-ENGINE-INLINE:END ----
 
@@ -5711,7 +5795,7 @@ var __name22 = __name2;
 // line below (VERSION-LINE-NOTES-1, 2026-10-19). Its older trailing notes stay until length-lede.test.mjs stops pinning "LENGTH-LEDE-1" on that line.
 // VERSION-NOTES-MOVED-1: release notes live in the block below
 // W-META-1 (agent_issues 1002316/1002317/1002318): aiRunAttr records in_tok/out_tok/neurons per purpose.
-var VERSION = "1.61.1-codeagent";
+var VERSION = "1.62.0-codeagent";
 // 1.46.0 KERNEL-EVERYWHERE-1 (2026-11-06, owner directive "IMPLEMENT EVERYWHERE ACROSS ALL AI APPS AND SERVICES AND SURFACES", pillar personal): the travel planner CHAT_SYSTEM carries the DOCTRINE-1 kernel 8.2.1 reply recognitions (KERNEL-REPLY-4, scoped to the planner's one designed question): end on the plan or proposal, never a conditional offer or questionnaire; refusals and limits are dispositions with their reason; reversible steps are taken and reported in the same reply. prior 1.45.8-codeagent
 /* 1.44.14 COMPANION-LENGTH-HEADROOM-1 (issue 1000633, pillar personal; patch): repeated length failures alongside exhausted retry budgets expose too little headroom for model output variation. Length-only repairs now target 500 words below the unchanged ceiling while remaining inside each form's normal writer band. */
 /* 1.43.6 BP26-AI-ACT-ART50-1 and BP26-STRUCTURED-DATA-1 (2026-10-26, agent_issues 1000341 and 1000336, pillar core; patch): the visible AI-generated label of every reading.q08.org piece now has its machine-readable half. A piece page carries an Article JSON-LD block (headline, datePublished, url, an Organization as author, never an AI or invented persona, and creditText saying it was written by AI and that no human reviews pieces before they appear) and the index page a Blog block. Measured before: the reading pages carried the visible label and no JSON-LD at all. */

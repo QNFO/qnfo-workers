@@ -3,7 +3,6 @@ ask-qwav
 fleet
 fleet-lee
 ipatent
-jobs
 markets
 papers
 public
