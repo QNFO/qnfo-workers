@@ -3485,7 +3485,7 @@ const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (ch) => ({ "&"
 
 function page(title, inner, status) {
   // TRAVEL-DESIGN-1 (DESIGN-SYSTEM-3, #9929): the sign-in and approval pages use the shared design system; buttons are the ds buttons, one primary per screen.
-  const html = "<!doctype html><html lang=\"en\"><head><meta name=\"robots\" content=\"noindex\">" + trvHead(title, "", "body.ds{max-width:34rem;margin:0 auto;padding:24px 16px}.ds button{font:inherit;min-height:44px;min-width:44px;padding:10px 16px;margin:4px 8px 4px 0;border-radius:var(--ds-r-m);border:1px solid var(--ds-line-strong);background:var(--ds-surface);color:var(--ds-ink);cursor:pointer}.ds button.pick{background:var(--ds-accent);color:var(--ds-on-accent);border-color:var(--ds-accent)}.ds .muted{color:var(--ds-ink-2)}") + "</head><body class=\"ds\">" + inner + "</body></html>";
+  const html = "<!doctype html><html lang=\"en\"><head><meta name=\"robots\" content=\"noindex\"><link rel=\"manifest\" href=\"/travel/manifest.webmanifest\">" + trvHead(title, "", "body.ds{max-width:34rem;margin:0 auto;padding:24px 16px}.ds button{font:inherit;min-height:44px;min-width:44px;padding:10px 16px;margin:4px 8px 4px 0;border-radius:var(--ds-r-m);border:1px solid var(--ds-line-strong);background:var(--ds-surface);color:var(--ds-ink);cursor:pointer}.ds button.pick{background:var(--ds-accent);color:var(--ds-on-accent);border-color:var(--ds-accent)}.ds .muted{color:var(--ds-ink-2)}") + "</head><body class=\"ds\">" + inner + "</body></html>";
   return new Response(html, { status: status || 200, headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store", "X-Robots-Tag": "noindex", "Referrer-Policy": "no-referrer" } });
 }
 
@@ -4130,7 +4130,7 @@ function renderTrip(t) {
     r.appendChild(b); dl.appendChild(r);
   }
 }
-async function loadTrip() { try { const t = await api("/travel/api/trip"); if (t.ok) renderTrip(t); $("#fwd").textContent = t.forward_to ? "Or forward the confirmation email to " + t.forward_to + " and it lands here on its own." : ""; if (!$("#ics")) { const a = document.createElement("a"); a.id = "ics"; a.href = "/travel/trip.ics"; a.textContent = "Add the plan to your calendar (.ics)"; a.style.display = "block"; $("#fwd").after(a); } } catch (e) { $("#days").textContent = "Could not load the trip: " + e.message; } }
+async function loadTrip() { try { const t = await api("/travel/api/trip"); if (t.ok) renderTrip(t); $("#fwd").textContent = t.forward_to ? "Or forward the confirmation email to " + t.forward_to + " and it lands here on its own." : ""; if ("serviceWorker" in navigator) navigator.serviceWorker.register("/travel/sw.js").catch(() => {}); if (!$("#shr")) { const b = document.createElement("a"); b.id = "shr"; b.href = "#"; b.style.display = "block"; b.textContent = "Make a read-only link to share (30 days)"; b.onclick = async (ev) => { ev.preventDefault(); try { const r = await api("/travel/api/share", {}); b.textContent = r.url; b.href = r.url; b.onclick = null; } catch (e) { b.textContent = "Could not make a link: " + e.message; } }; $("#fwd").after(b); } if (!$("#ics")) { const a = document.createElement("a"); a.id = "ics"; a.href = "/travel/trip.ics"; a.textContent = "Add the plan to your calendar (.ics)"; a.style.display = "block"; $("#fwd").after(a); } } catch (e) { $("#days").textContent = "Could not load the trip: " + e.message; } }
 let addOpen = null;
 $("#addstop").onclick = () => { if (addOpen) addOpen.remove(); addOpen = editor(STOP_FIELDS, {}, (x) => api("/travel/api/stop", x)); $("#stops").appendChild(addOpen); };
 $("#addvisa").onclick = () => { if (addOpen) addOpen.remove(); addOpen = editor(VISA_FIELDS, {}, (x) => api("/travel/api/permit", x)); $("#visa").appendChild(addOpen); };
@@ -4318,7 +4318,17 @@ async function handleTravel(request, env, deps = {}) {
         extra["Set-Cookie"] = sessionCookie(await makeToken(key, "sess", Math.floor(nowMs / 1000) + SESSION_DAYS * 86400), SESSION_DAYS * 86400);
       }
     }
-    return htmlRes(chatPage(nonce), 200, { ...extra, "Content-Security-Policy": "default-src 'none'; script-src 'nonce-" + nonce + "'; style-src 'nonce-" + nonce + "'; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'" });
+    return htmlRes(chatPage(nonce), 200, { ...extra, "Content-Security-Policy": "default-src 'none'; script-src 'nonce-" + nonce + "'; style-src 'nonce-" + nonce + "'; connect-src 'self'; worker-src 'self'; manifest-src 'self'; img-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'" });
+  }
+  if (p === "/travel/manifest.webmanifest") return new Response(MANIFEST, { headers: { "Content-Type": "application/manifest+json", "Cache-Control": "public, max-age=3600" } });
+  if (p === "/travel/icon.svg") return new Response(ICON_SVG, { headers: { "Content-Type": "image/svg+xml", "Cache-Control": "public, max-age=86400" } });
+  if (p === "/travel/sw.js") return new Response(SW_JS, { headers: { "Content-Type": "text/javascript; charset=utf-8", "Cache-Control": "no-cache", "Service-Worker-Allowed": "/travel" } });
+  if (p.startsWith("/travel/share/") && request.method === "GET") {
+    const key = deps.key !== undefined ? deps.key : await authKey(env, db);
+    if (!key || !(await tokenOk(key, "share", p.slice("/travel/share/".length), nowMs))) return page("Link expired", "<p>This link is not valid any more.</p>", 404);
+    const sp = sharePage(await planState(db, c, nowMs, deps));
+    sp.headers.set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'");
+    return sp;
   }
   if (p === "/travel/trip.ics" && request.method === "GET") {
     if (!who) return jsonRes({ ok: false, error: "unauthorized" }, 401);
@@ -4339,6 +4349,10 @@ async function handleTravel(request, env, deps = {}) {
   try { body = await request.json(); } catch (e) { return jsonRes({ ok: false, error: "bad JSON" }, 400); }
 
   if (p === "/travel/api/chat") return jsonRes(await chatTurn(env, deps, { text: body.text, open: body.open === true }));
+  if (p === "/travel/api/share") {
+    const key = deps.key !== undefined ? deps.key : await authKey(env, db);
+    return jsonRes({ ok: true, days: SHARE_DAYS, url: u.origin + "/travel/share/" + await makeToken(key, "share", Math.floor(nowMs / 1000) + SHARE_DAYS * 86400) });
+  }
   if (p === "/travel/api/import") return jsonRes(await importText(env, deps, { text: body.text }));
   if (p === "/travel/api/stop") return jsonRes(await saveStop(db, deps, body, nowIso));
   if (p === "/travel/api/permit") return jsonRes(await savePermit(db, body, nowIso));
@@ -5260,6 +5274,30 @@ async function shiftPlan(db, days, today, nowIso) {
 }
 
 // The compact card the companion's Today screen shows: where the traveller is (or the countdown), tonight's pick, the next move, the next actions.
+// TRAVEL-OFFLINE-1 / TRAVEL-SHARE-1 (market read Nov 2026: Wanderlog Pro offline, Mindtrip and MonkeyTravel shared trips).
+// Offline: a manifest and a small service worker make the planner installable; the worker keeps the last good copy of the
+// page and of the trip JSON so the plan opens with no signal. It never caches POSTs or sign-in routes.
+// Share: a signed, read-only link (default 30 days) for a travelling companion. It shows places and moves only: no visa
+// limits, no taste data, no mail text, and it changes nothing. No account, no key.
+const SHARE_DAYS = 30;
+const MANIFEST = JSON.stringify({ name: "Travel planner", short_name: "Travel", start_url: "/travel", scope: "/travel", display: "standalone", background_color: "#ffffff", theme_color: "#1a73e8", icons: [{ src: "/travel/icon.svg", sizes: "any", type: "image/svg+xml", purpose: "any" }] });
+const ICON_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#1a73e8"/><path d="M12 36l40-16-14 28-6-12z" fill="#fff"/></svg>';
+const SW_JS = String.raw`const V = "trv-v1";
+const KEEP = ["/travel", "/travel/api/trip"];
+self.addEventListener("install", (e) => { self.skipWaiting(); });
+self.addEventListener("activate", (e) => { e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => k !== V).map((k) => caches.delete(k)))).then(() => self.clients.claim())); });
+self.addEventListener("fetch", (e) => {
+  const r = e.request, u = new URL(r.url);
+  if (r.method !== "GET" || u.origin !== self.location.origin || !KEEP.includes(u.pathname.replace(/\/$/, ""))) return;
+  e.respondWith(fetch(r).then((res) => { if (res.ok) { const c = res.clone(); caches.open(V).then((k) => k.put(u.pathname, c)); } return res; }).catch(() => caches.match(u.pathname).then((m) => m || new Response("Offline and nothing saved yet.", { status: 503 }))));
+});
+`;
+function sharePage(plan) {
+  const rows = (plan.places || []).map((p) => "<li><strong>" + esc(p.city) + (p.country_name ? ", " + esc(p.country_name) : "") + "</strong> " + esc(p.start_date) + " to " + esc(p.end_date) + " <em>" + esc(STATE_LABEL[p.state] || "") + "</em></li>").join("");
+  const mv = (plan.moves || []).map((m) => "<li>" + esc(m.day) + ": " + esc(m.from || "?") + " to " + esc(m.to || "?") + (m.booked ? " (booked)" : "") + "</li>").join("");
+  return page("Shared trip", "<h1>Trip plan</h1><p>Read-only view.</p><h2>Stops</h2><ul>" + (rows || "<li>Nothing planned yet.</li>") + "</ul>" + (mv ? "<h2>Moves</h2><ul>" + mv + "</ul>" : ""), 200);
+}
+
 // TRAVEL-ICS-1: the trip plan as an iCalendar file (all-day events, one per stop and per move) so it opens in any calendar
 // app and works offline on the phone. Market read (Nov 2026): Wanderlog, Mindtrip and Google Canvas all export or sync; this
 // is the no-account, no-key version. Read-only: nothing is written back anywhere.
@@ -5311,7 +5349,7 @@ function tripToday(plan) {
   };
 }
 
-return Object.freeze({ DDL, CALENDAR_SEED, DEFAULTS, MODELS, PROFILE_CHARS, BASE, PLANNER_URL, ensureTravel, ensureTravelCheap, cfg, addDays, localParts, tripState, bookingLink, transitLink, parseOptions, rankAndMark, promptFor, modelText, sign, verify, signingKey, optionId, mailFor, reconcile, travelTick, applyReaction, SESSION_DAYS, CODE_TRIES, LOGIN_TTL_MIN, LOGIN_MAILS_PER_HOUR, CHAT_MODEL_MENU, authKey, makeToken, tokenOk, accessOk, chatAuthed, firstJson, parseChat, CHAT_SYSTEM, chatContext, historyText, OPEN_TURN, chatPrompt, chatModels, chatTurn, chatState, handleTravel, WX_FORECAST_DAYS, VISA_WARN_DAYS, FOG_BELT, daysBetween, countryName, shiftYear, fogSeason, presence, visaStatus, weatherRequests, parseWeather, dayPlan, checkinDraft, placeCards, moveCards, planState, IMPORT_SYSTEM, parseImport, importText, saveStop, savePermit, planText, PICKS_SYSTEM, picksPrompt, parsePicks, mapLink, picksDue, makePicks, pickNo, SIGNALS, NEGATIVE, SIGNAL_DELTA, TARGET_ADJ, REASONS, REASON_LABELS, TASTE_HALF_LIFE_DAYS, TASTE_CLAMP, TASTE_FORMED_N, EXPLORE_SHARE, VIBE_LEXICON, pickTags, reasonDeltas, decayed, tasteMap, applyTap, addReason, TASTE_PAIRS, applyPair, tagLabel, rankPicks, tasteSummary, tasteHint, stopState, STATE_LABEL, tripBanner, WX_AVOID, WX_CAUTION, weatherVerdict, tripChecks, shiftPlan, icsFor, tripToday });
+return Object.freeze({ DDL, CALENDAR_SEED, DEFAULTS, MODELS, PROFILE_CHARS, BASE, PLANNER_URL, ensureTravel, ensureTravelCheap, cfg, addDays, localParts, tripState, bookingLink, transitLink, parseOptions, rankAndMark, promptFor, modelText, sign, verify, signingKey, optionId, mailFor, reconcile, travelTick, applyReaction, SESSION_DAYS, CODE_TRIES, LOGIN_TTL_MIN, LOGIN_MAILS_PER_HOUR, CHAT_MODEL_MENU, authKey, makeToken, tokenOk, accessOk, chatAuthed, firstJson, parseChat, CHAT_SYSTEM, chatContext, historyText, OPEN_TURN, chatPrompt, chatModels, chatTurn, chatState, handleTravel, WX_FORECAST_DAYS, VISA_WARN_DAYS, FOG_BELT, daysBetween, countryName, shiftYear, fogSeason, presence, visaStatus, weatherRequests, parseWeather, dayPlan, checkinDraft, placeCards, moveCards, planState, IMPORT_SYSTEM, parseImport, importText, saveStop, savePermit, planText, PICKS_SYSTEM, picksPrompt, parsePicks, mapLink, picksDue, makePicks, pickNo, SIGNALS, NEGATIVE, SIGNAL_DELTA, TARGET_ADJ, REASONS, REASON_LABELS, TASTE_HALF_LIFE_DAYS, TASTE_CLAMP, TASTE_FORMED_N, EXPLORE_SHARE, VIBE_LEXICON, pickTags, reasonDeltas, decayed, tasteMap, applyTap, addReason, TASTE_PAIRS, applyPair, tagLabel, rankPicks, tasteSummary, tasteHint, stopState, STATE_LABEL, tripBanner, WX_AVOID, WX_CAUTION, weatherVerdict, tripChecks, shiftPlan, SHARE_DAYS, MANIFEST, ICON_SVG, SW_JS, sharePage, icsFor, tripToday });
 })(); // TRAVEL-INLINE-END
 
 var __defProp2 = Object.defineProperty;
