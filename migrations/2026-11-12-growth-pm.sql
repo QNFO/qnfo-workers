@@ -18,9 +18,12 @@
 -- APPLY-BY: ci
 -- DB: qnfo-audit
 -- BACKUP: bak_20261112_growth_pm_queue_v2
+-- REAPPLY-OK: first apply on 5653a35 failed before any statement ran (backup table created after the first DROP); this repaired file has never applied ok.
 -- Rollback: UPDATE fleet_tasks SET enabled = 0 WHERE id = 'growth-pm'; UPDATE fleet_crons SET enabled = 0 WHERE name = 'growth-pm-hourly'; UPDATE ops_config SET value = '1' WHERE key = 'growth_priority_weight'; UPDATE ops_config SET value = 'off' WHERE key = 'growth_pm'
 
 
+-- Backup first: the view text of v_issue_queue_v2 before this file replaces it (the runner needs the backup ahead of any DROP).
+CREATE TABLE IF NOT EXISTS bak_20261112_growth_pm_queue_v2 AS SELECT name, sql FROM sqlite_master WHERE name = 'v_issue_queue_v2';
 CREATE TABLE IF NOT EXISTS product_growth_metrics (
   product TEXT NOT NULL, metric TEXT NOT NULL, label TEXT NOT NULL, lens TEXT NOT NULL, unit TEXT NOT NULL DEFAULT 'count', direction TEXT NOT NULL DEFAULT 'up',
   target_7d REAL NOT NULL, source TEXT NOT NULL DEFAULT 'sql', owner_loop TEXT NOT NULL DEFAULT 'growth-pm', active INTEGER NOT NULL DEFAULT 1,
@@ -83,7 +86,6 @@ DROP VIEW IF EXISTS v_growth_products_uncovered;
 CREATE VIEW v_growth_products_uncovered AS SELECT r.product FROM product_registry r WHERE r.state = 'active' AND (SELECT COUNT(*) FROM product_growth_metrics m WHERE m.product = r.product AND m.active = 1) < 2 AND NOT EXISTS (SELECT 1 FROM product_growth_parent pp JOIN product_growth_metrics m2 ON m2.product = pp.parent AND m2.active = 1 WHERE pp.product = r.product GROUP BY pp.parent HAVING COUNT(*) >= 2);
 
 
-CREATE TABLE IF NOT EXISTS bak_20261112_growth_pm_queue_v2 AS SELECT name, sql FROM sqlite_master WHERE name = 'v_issue_queue_v2';
 DROP VIEW IF EXISTS v_issue_queue_v2;
 CREATE VIEW v_issue_queue_v2 AS
 SELECT ROW_NUMBER() OVER (ORDER BY (q.prank = 0) DESC, q.aged DESC, q.score DESC, q.id) AS pos, q.*
