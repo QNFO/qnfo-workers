@@ -39,6 +39,14 @@
       "contains": [
         "\"items\""
       ]
+    },
+    {
+      "_note": "VALUE-PIPELINE-1: q08.org's front door is the live pipeline, not the essay list.",
+      "url": "https://q08.org/",
+      "contains": [
+        "Signals in. Forecasts out. Value measured.",
+        "4 · Value captured"
+      ]
     }
   ]
 }

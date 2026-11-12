@@ -3,7 +3,9 @@ import { readFileSync } from "node:fs";
 import { classify, deadlineOf, familyKey, isotonic, termStructure, properEntities, matchEvidence, needsUpdate, buildPrompt, parseShift, combine, valueAdded, plan, renderPage, spinoffStatus, bootstrapCI, lastPerSlug, forecastOne, sha256Hex } from "./forecast-engine.mjs";
 import { block, apply } from "./inline-forecast-engine.mjs";
 import { newsQuery, parseGdelt, parseNewsRss, fetchNews, newsLane, tick, latestRows } from "./forecast-engine.mjs";
+import { simulateBook, parseFredCsv, proxyMove, relatedPieces, storyData, renderStory, renderTrackRecord, flowHtml, proxyLane, usd } from "./forecast-engine.mjs";
 import { DatabaseSync } from "node:sqlite";
+import { ensureSchema as ensureSchemaFor } from "./forecast-engine.mjs";
 let pass = 0, fail = 0;
 const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL", m, x === undefined ? "" : JSON.stringify(x)); } };
 const near = (a, b, e = 1e-3) => Math.abs(a - b) < e;
@@ -165,5 +167,81 @@ const lp = await W.fetch(new Request("https://t.invalid/living-paper"), {});
 ok(lp.status === 301 && lp.headers.get("location") === "/whitepaper", "/living-paper lands on the white paper");
 const hj = await (await W.fetch(new Request("https://t.invalid/health"), {})).json();
 ok(hj.features.includes("forecasts"), "health lists the forecasts feature");
+
+// VALUE-PIPELINE-1: forecasts become simulated positions, marked to the live market, losses included
+{
+  const rows = [
+    { slug: "a", title: "A?", created_at: "2026-11-12T10:00:00Z", prior: 0.40, p: 0.40, outcome: null },
+    { slug: "a", title: "A?", created_at: "2026-11-12T11:00:00Z", prior: 0.40, p: 0.50, outcome: null },
+    { slug: "a", title: "A?", created_at: "2026-11-12T12:00:00Z", prior: 0.45, p: 0.45, outcome: null },
+    { slug: "b", title: "B?", created_at: "2026-11-12T10:00:00Z", prior: 0.80, p: 0.70, outcome: 1 },
+    { slug: "c", title: "C?", created_at: "2026-11-12T10:00:00Z", prior: 0.30, p: 0.30, outcome: null },
+  ];
+  const bk = simulateBook(rows, { a: 0.6 });
+  const a = bk.positions.find((x) => x.slug === "a"), b = bk.positions.find((x) => x.slug === "b");
+  ok(bk.positions.length === 2 && bk.totals.with_crowd === 1, "only forecasts that leave the crowd hold a position", bk.totals);
+  ok(a.side === "YES" && near(a.entry, 0.40) && near(a.value, 150) && near(a.pnl, 50) && a.marked_live, "YES bought at the crowd price on the first disagreement, marked to the live price, no hindsight exit", a);
+  ok(near(a.expected_pnl, 25), "expected P&L at entry is stake x (belief / price - 1)", a);
+  ok(b.side === "NO" && b.settled && near(b.pnl, -100), "a settled losing NO position loses its whole stake and is shown", b);
+  ok(bk.totals.losses === 1 && bk.totals.wins === 0 && near(bk.totals.pnl, -50) && near(bk.totals.realized, -100) && near(bk.totals.unrealized, 50), "totals carry realized losses and unrealized gains", bk.totals);
+  ok(simulateBook([]).totals.positions === 0 && simulateBook([]).totals.return_pct === null, "an empty ledger is an empty book");
+  const csv = "observation_date,DCOILBRENTEU\n2026-11-01,70.5\n2026-11-02,.\n2026-11-03,72.0\n2026-11-04,71.25\n";
+  const pts = parseFredCsv(csv);
+  ok(pts.length === 3 && pts[2].value === 71.25, "FRED CSV parses and skips missing days", pts);
+  const mv = proxyMove(pts, "2026-11-02T09:00:00Z");
+  ok(mv.start === 70.5 && mv.now === 71.25 && near(mv.change, 0.75), "the proxy move runs from the last close on or before the forecast", mv);
+  ok(proxyMove([], "2026-11-01") === null, "no proxy data, no move");
+  const rel = relatedPieces("Jensen Huang announced resignation or removal by December 31?", [{ slug: "x", title: "Nvidia's Jensen Huang and the export rules", published_at: "2026-11-01" }, { slug: "y", title: "Grid batteries", published_at: "2026-11-02" }]);
+  ok(rel.length === 1 && rel[0].url === "https://q08.org/p/x", "a q08 report naming the question's people links to it", rel);
+  ok(usd(-12.5) === "−$12.50" && usd(1000) === "$1,000.00", "money is written as money");
+  // storyData over real tables: the forecast ledger, the market, the q08 signal stream and the paper desk
+  const vq = new DatabaseSync(":memory:"), vs = new DatabaseSync(":memory:");
+  const vdb = d1(vq);
+  await ensureSchemaFor(vdb);
+  vq.exec("CREATE TABLE pt_market (slug TEXT PRIMARY KEY, title TEXT, yes REAL, vol24 REAL, move REAL, closed INTEGER, source TEXT, updated_at TEXT, ends_at TEXT)");
+  vq.exec("CREATE TABLE pt_account (id INTEGER PRIMARY KEY, cash REAL, start_cash REAL)"); vq.exec("INSERT INTO pt_account VALUES (1, 9000, 10000)");
+  vq.exec("CREATE TABLE pt_position (slug TEXT, title TEXT, side TEXT, qty REAL, entry REAL, strategy TEXT, opened_at TEXT, closed_at TEXT, exit REAL, pnl REAL, reason TEXT)");
+  vq.exec("INSERT INTO pt_position VALUES ('m','M?','yes',100,0.5,'s','2026-11-10',NULL,NULL,NULL,NULL), ('k','K?','no',50,0.4,'s','2026-11-09','2026-11-10',0.1,-15,'stop')");
+  vq.exec("CREATE TABLE pt_equity (ts TEXT, equity REAL)"); vq.exec("INSERT INTO pt_equity VALUES ('2026-11-10',10000),('2026-11-11',9100)");
+  vq.exec("CREATE TABLE pt_estimate (slug TEXT, fair REAL, market REAL, outcome INTEGER)"); vq.exec("INSERT INTO pt_estimate VALUES ('k',0.7,0.9,1),('j',0.4,0.1,0)");
+  vq.exec("INSERT INTO pt_market VALUES ('m','M?',0.6,1,0,0,'polymarket','x',NULL), ('jh','Jensen Huang out by December 31?',0.25,1,0,0,'polymarket','x',NULL)");
+  const fut = new Date(Date.now() + 20 * 86400e3).toISOString().slice(0, 10), ca = new Date(Date.now() - 3 * 86400e3).toISOString();
+  vq.prepare("INSERT INTO fe_forecast (created_at, slug, title, deadline, category, moves, prior, p, hash) VALUES (?,?,?,?,?,?,?,?,?)").run(ca, "jh", "Jensen Huang out by December 31?", fut, "leadership", "Nvidia shares.", 0.20, 0.30, "h1");
+  vq.prepare("INSERT INTO fe_proxy (series, date, value) VALUES (?,?,?)").run("NASDAQ100", new Date(Date.now() - 2 * 86400e3).toISOString().slice(0, 10), 20000);
+  vq.prepare("INSERT INTO fe_proxy (series, date, value) VALUES (?,?,?)").run("NASDAQ100", new Date().toISOString().slice(0, 10), 20200);
+  vs.exec("CREATE TABLE signal_log (source TEXT, title TEXT, url TEXT, created_at TEXT)"); vs.exec("INSERT INTO signal_log VALUES ('news','x','u',datetime('now')),('hn','y','v',datetime('now'))");
+  vs.exec("CREATE TABLE published_pieces (slug TEXT, title TEXT, core_concept TEXT, published_at TEXT)"); vs.exec("CREATE TABLE q08_retractions (slug TEXT)");
+  vs.exec("INSERT INTO published_pieces VALUES ('nv','What Jensen Huang leaving would mean','succession','2026-11-11'), ('gone','Huang retracted','x','2026-11-10')"); vs.exec("INSERT INTO q08_retractions VALUES ('gone')");
+  const sd = await storyData({ TRADES_DB: vdb, SIGNAL_DB: d1(vs) });
+  const f0 = sd.forecasts.list[0];
+  ok(sd.signals.last_7d === 2 && sd.forecasts.open === 1 && sd.forecasts.disagree === 1 && sd.forecasts.mean_edge_pts === 10, "story counts signals, forecasts and edge", { s: sd.signals, f: sd.forecasts });
+  ok(f0.position && f0.position.side === "YES" && near(f0.position.pnl, 25), "the live forecast carries its simulated position marked at 25 cents", f0.position);
+  ok(f0.proxy && f0.proxy.id === "NASDAQ100" && f0.proxy.change === 200, "the leadership question carries its equity proxy", f0.proxy);
+  ok(f0.related.length === 1 && f0.related[0].url.endsWith("/p/nv"), "a retracted report is never linked", f0.related);
+  ok(sd.pilot.equity === 9060 && sd.pilot.realized === -15 && sd.pilot.losses === 1, "the paper desk shows its equity and its loss", sd.pilot);
+  ok(sd.estimator.n === 2 && sd.estimator.brier_model > sd.estimator.brier_market, "the estimator's losing record against the market is published", sd.estimator);
+  const stg = Object.fromEntries(sd.stages.map((g) => [g.key, g]));
+  ok(sd.stages.length === 4 && stg.edge.met === true && stg.edge.value === 10 && stg.forecast.met === null && stg.value.met === null, "each stage carries its target and its verdict; no settled data reads as awaiting data", sd.stages);
+  const sp = renderStory(sd, head), tr = renderTrackRecord(sd, head);
+  ok(sp.includes("Target 2 points or more") && tr.includes("The pipeline's targets"), "the targets are on both pages");
+  ok(sp.includes("Signals in. Forecasts out. Value measured.") && sp.includes("Forecasts that move money") && sp.includes("Simulated position:") && sp.includes("https://q08.org/p/nv") && sp.includes("Nasdaq-100"), "the pipeline page links signals, forecasts, positions, reports and the financial proxy");
+  ok(sp.includes('href="https://q08.org/"') && sp.includes('href="https://markets.q08.org/track-record"'), "one navigation spans q08.org and markets.q08.org");
+  ok(tr.includes("+$25.00") && tr.includes("−$15.00") && tr.includes("<svg class=\"vp-spark\""), "the track record shows the gain and the loss and the equity curve");
+  ok(flowHtml(sd).includes("4 · Value captured"), "the four stages render for q08.org's front door");
+  const empty = await storyData({});
+  ok(empty.empty && renderStory(empty, head).includes("No forecasts yet") && renderTrackRecord(empty, head).includes("No position yet"), "both pages render their empty states with no database");
+  const got = [];
+  const lane = await proxyLane(vdb, async (u) => { got.push(u); return { ok: true, status: 200, text: "observation_date,X\n2026-11-03,4.1\n" }; }, Date.now());
+  ok(lane.filter((x) => x.points === 1).length === 5 && got.every((u) => u.startsWith("https://fred.stlouisfed.org/graph/fredgraph.csv?id=")), "the proxy lane fetches each FRED series once", lane);
+  const lane2 = await proxyLane(vdb, async () => { throw new Error("should not fetch"); }, Date.now());
+  ok(lane2.every((x) => x.skipped === "fresh"), "a fresh series is not fetched again within six hours", lane2);
+  const W2 = (await import("./worker.js")).default;
+  for (const path of ["/", "/track-record", "/paper"]) {
+    const html = await (await W2.fetch(new Request("https://t.invalid" + path), {})).text();
+    ok(html.includes('class="vp-nav"') && html.includes("https://q08.org/#reports"), path + " carries the shared q08 navigation");
+  }
+  const sj = await (await W2.fetch(new Request("https://t.invalid/api/story"), {})).json();
+  ok(sj.engine === "VALUE-PIPELINE-1" && typeof sj.flow_html === "string", "/api/story serves the pipeline for q08.org", sj);
+}
 console.log("forecast-engine: " + pass + " passed, " + fail + " failed");
 if (fail) process.exit(1);
