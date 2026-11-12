@@ -90,6 +90,9 @@ const call = async (path, init) => { const r = await w.fetch(new Request("https:
 ok((await call("/api/intake", { method: "POST", body: "{}" }))[0] === 401, "intake needs the owner");
 ok((await call("/api/intake", { method: "POST", headers: { "x-loop-token": "t", "content-type": "application/json" }, body: JSON.stringify({ input: POST, title: "Director of AI Governance", company: "Acme Assurance" }) }))[1].duplicate === true, "intake over the API");
 ok((await call("/api/shortlist"))[1].size === 1, "short list is a public read");
+db.exec("CREATE TABLE IF NOT EXISTS owner_asks (id INTEGER PRIMARY KEY AUTOINCREMENT, plane TEXT, kind TEXT, ref TEXT, question TEXT, cue TEXT, options_json TEXT, priority INTEGER, created_at TEXT, answered_at TEXT, answer TEXT, answer_label TEXT, answered_via TEXT)");
+db.prepare("INSERT INTO owner_asks (plane, kind, ref, question, options_json, answer, answered_at) VALUES ('jobs','resume-claim','claim_x','q','[]','no','2026-11-12')").run();
+ok((await call("/api/resume-claims"))[1].claims[0].answer === "no", "resume claim answers are readable");
 const page = await (await w.fetch(new Request("https://x/"), env, { waitUntil() {} })).text();
 ok(/id="addsave"/.test(page) && />Today</.test(page) && />Answers</.test(page) && /manifest\.webmanifest/.test(page), "home shows Today, Answers and the add box");
 const sh = await w.fetch(new Request("https://x/add?url=https%3A%2F%2Fwww.linkedin.com%2Fjobs%2Fview%2F4012345678&title=Lead"), env, { waitUntil() {} });

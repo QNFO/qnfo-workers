@@ -9,7 +9,7 @@
 // JOBSEARCH-CV-1 (1.5.0): the CV is part of this worker (page /cv): a yes/no interview that builds the claim bank, review of unconfirmed claims, roles, achievements and publications edited in D1, a resume per job (summary, roles, selected work, education, skills) and a cover note, history and backup. The search is tied to that bank (evidence the owner can back up weighs more; what the CV lacks is shown as a gap), decided postings (rejected, applied, approved) never come back under another id, rejections carry a reason the search learns from, and a wider net: stretch matches outside the stated preferences, more boards and aggregators.
 // Routes: GET / (web UI) | GET /api | GET /api/matches | GET /api/matches/:id | GET /api/runs | GET /api/ledger | POST /api/run | POST /api/matches/:id/status | GET /health
 // Port of the jobsearch/ Python modules (tests: jobsearch/test_jobsearch.py, qnfo-jobsearch/worker.test.mjs).
-var VERSION = "1.23.1-codeagent";
+var VERSION = "1.23.2-codeagent";
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -3232,6 +3232,10 @@ const handler = {
       } catch (e) { return J({ error: e.message }, e.status || 422); }
     }
     if (p === "/api/calibration" && m === "GET") { if (!(await ownerSession(request, env))) return J({ error: "sign in first: POST /api/auth/request, then POST /api/auth/verify" }, 401); await ensure(env); return J(await calibration(env)); }
+    if (p === "/api/resume-claims" && m === "GET") {   // RESUME-CLAIMS-1: what the owner tapped about resume claims; rwnq8/resume scripts/claims_check.py fails the build on a claim answered no
+      const r = await env.JOBS_DB.prepare("SELECT ref, answer, answered_at FROM owner_asks WHERE kind='resume-claim'").all().catch((e) => { logErr("resume-claims", e); return { results: [] }; });
+      return J({ claims: r.results.map((x) => ({ ref: x.ref, answer: x.answer || null, answered_at: x.answered_at || null })) });
+    }
     if (p === "/manifest.webmanifest") return new Response(JSON.stringify({ name: "Jobs", short_name: "Jobs", start_url: "/", display: "standalone", share_target: { action: "/add", method: "GET", params: { url: "url", title: "title", text: "text" } } }), { headers: { "content-type": "application/manifest+json" } });
     if (p === "/api/shortlist" && m === "GET") return J(await shortlist(env, Math.min(20, +url.searchParams.get("n") || SHORTLIST_SIZE)));   // JOBS-PIPELINE-1
     if (p === "/api/pipeline" && m === "GET") return J(await pipeline(env));
