@@ -1,4 +1,4 @@
-var VERSION = "0.12.0-engage";
+var VERSION = "0.12.1-codeagent";
 /* 0.4.1: new Shorts descriptions include the QNFO channel context. */ /* #5479, pillar reach: authenticated re-consent and code exchange with the stored OAuth client. */ /* 0.3.0 YT-6 (2026-10-28, pillar reach; minor: a data product; agent_issues 1000597): views and average view duration of each uploaded Short are read hourly from the YouTube Data and Analytics APIs into youtube_videos (views, avg_view_duration_s) and metric youtube_avg_view_duration_s; without the extra owner consent (human_actions yt-analytics-consent) the read is refused, recorded as youtube.retention_scope and nothing is written. */ /* 0.2.1 HEALTH-CONTRACT-1 (2026-10-28, pillar autonomy; patch; agent_issues 2852): /health declares capabilities[] and limitations[], so capability_contract_conformance counts this worker. */ /* 0.2.0 YT-QUALITY-1 (2026-10-28, pillar reach; minor: new capabilities): the Shorts stop looking alike and sounding flat. Voice: Workers AI Deepgram Aura 2 (more natural than melotts, which stays as the per-sentence fallback). Director: four new templates (bignum, flow, compare, list) beside the old ones, rules for speech-written narration (contractions, short sentences, pitch-bearing punctuation, no spoken URL) and for variety (at least four kinds, never one kind three times). Render image: scene fitted to a safe width so nothing leaves the frame, five themes (palette plus animated background) chosen per paper, captions measured in the real font and chunked at phrases in the Shorts safe zone, loudness-normalised audio, an AI-generated mp4 comment tag and provenance.json (BP26-AI-ACT-ART50-1). Closing line no longer speaks a URL. Sources: scripts/youtube_poc (YT-POC-3/4), docs/YOUTUBE-PIPELINE.md. */ /* prior: 0.1.5 */ /* 0.1.5 YT-MANIM-PIN-1 (2026-10-27, pillar reach; patch): the render image pins manim 0.22.0, the version the scene was tested on; 0.18.1 has no Scene.time and the first container render failed with that AttributeError (visible since 0.1.4 returns the Manim stderr). */ /* prior: 0.1.4 */ /* 0.1.4 YT-RENDER-ERR-1 (2026-10-27, pillar reach; patch): the render container returns the Manim stderr tail when Manim fails (the first live render failed with only a traceback of the wrapper). */ /* prior: 0.1.3 */ /* 0.1.3 YT-DIRECTOR-1 (2026-10-27, pillar reach; patch): the director takes the first reply that holds a beats array from qnfo-ai, then Workers AI kimi, then gpt-oss, and a failure note quotes each reply (the first live run failed with "no JSON in model reply" from one model). */ /* prior: 0.1.2 */ /* 0.1.2 YT-EXPORTS-1 (2026-10-27, pillar reach; patch): wrangler.toml declares RenderContainer in `exports` instead of `migrations`, so a deploy after a secrets write through the script API is accepted and re-attaches the container (the pilot incident 1485 class). */ /* prior: 0.1.1 */ /* 0.1.1 YT-RUN-SYNC-1 (2026-10-27, pillar reach; patch): POST /run did its pass inside ctx.waitUntil, which a fetch handler loses 30 s after the response, so a manual run died at the director; it now awaits one bounded pass (budget_s, default 80, under the edge 100 s limit) and returns the row states. */ /* prior: 0.1.0 */ /* 0.1.0 YT-SERVER-1 (2026-10-27, pillar reach; minor: a new worker): the plain-language paper to YouTube Short pipeline runs on Cloudflare only. One hourly tick takes the newest plain_article (living-paper, status ok) with no youtube_videos row (cap 2 videos a week), an LLM director writes the beats, a second model family and a number check drop any beat the article does not support, Workers AI TTS speaks each sentence, a Cloudflare Container renders 1080x1920 with Manim, word-timed captions and the visible AI-narration tag into R2, and videos.insert uploads it (public by default, owner directive 2026-10-27) with containsSyntheticMedia. */
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
@@ -917,26 +917,31 @@ async function status(env) {
 var worker_default = {
   async fetch(request, env, ctx) {
     env = __aiAttrEnv(env, "qnfo-youtube-shorts", "AI", "QNFO_AUDIT");
-    var url = new URL(request.url);
-    if (url.pathname === "/health") return json({ ok: true, worker: WORKER, version: VERSION,
-      capabilities: ["paper-to-short-video", "tts-voice-over", "container-render", "youtube-upload", "retention-read", "status-report", "oauth-reconsent"],
-      limitations: ["POST /run needs the x-run-token header (YT_RUN_TOKEN); /health and /status are open", "rendering runs in a container, one unfinished row is resumed per tick", "uploads at the configured privacy status through the YouTube Data API, so it is bound by that API quota", "a paper whose script has too few supported beats is rejected, and a row failing 4 attempts is terminal", "views and average view duration are read only once the OAuth grant also carries youtube.readonly and yt-analytics.readonly (owner consent); until then they stay NULL"] });
-    if (url.pathname === "/status") return json(await status(env));
-    if (url.pathname === "/oauth/consent" || url.pathname === "/oauth/exchange") return handleOAuth(request, env, url.pathname);
-    if (url.pathname === "/run" && request.method === "POST") {
-      var tok = request.headers.get("x-run-token") || "";
-      if (!env.YT_RUN_TOKEN || !safeEqual(tok, env.YT_RUN_TOKEN)) return json({ ok: false, error: "unauthorized" }, 401);
-      var budget = Math.min(85, Math.max(10, Number(url.searchParams.get("budget_s")) || 80));
-      try {
-        var rr = await runTick(env, { ignoreCap: url.searchParams.get("ignore_cap") === "1", budgetMs: budget * 1000 });
-        await logEvent(env, "youtube.run", JSON.stringify(rr), rr, "ok");
-        return json({ ok: true, result: rr, status: await status(env) });
-      } catch (e) {
-        await logEvent(env, "youtube.run", String(e && e.message || e), null, "error");
-        return json({ ok: false, error: String(e && e.message || e) }, 500);
+    try {
+      var url = new URL(request.url);
+      if (url.pathname === "/health") return json({ ok: true, worker: WORKER, version: VERSION,
+          capabilities: ["paper-to-short-video", "tts-voice-over", "container-render", "youtube-upload", "retention-read", "status-report", "oauth-reconsent"],
+          limitations: ["POST /run needs the x-run-token header (YT_RUN_TOKEN); /health and /status are open", "rendering runs in a container, one unfinished row is resumed per tick", "uploads at the configured privacy status through the YouTube Data API, so it is bound by that API quota", "a paper whose script has too few supported beats is rejected, and a row failing 4 attempts is terminal", "views and average view duration are read only once the OAuth grant also carries youtube.readonly and yt-analytics.readonly (owner consent); until then they stay NULL"] });
+      if (url.pathname === "/status") return json(await status(env));
+      if (url.pathname === "/oauth/consent" || url.pathname === "/oauth/exchange") return handleOAuth(request, env, url.pathname);
+      if (url.pathname === "/run" && request.method === "POST") {
+        var tok = request.headers.get("x-run-token") || "";
+        if (!env.YT_RUN_TOKEN || !safeEqual(tok, env.YT_RUN_TOKEN)) return json({ ok: false, error: "unauthorized" }, 401);
+        var budget = Math.min(85, Math.max(10, Number(url.searchParams.get("budget_s")) || 80));
+        try {
+          var rr = await runTick(env, { ignoreCap: url.searchParams.get("ignore_cap") === "1", budgetMs: budget * 1000 });
+          await logEvent(env, "youtube.run", JSON.stringify(rr), rr, "ok");
+          return json({ ok: true, result: rr, status: await status(env) });
+        } catch (e) {
+          await logEvent(env, "youtube.run", String(e && e.message || e), null, "error");
+          return json({ ok: false, error: String(e && e.message || e) }, 500);
+        }
       }
+      return json({ ok: false, error: "not found" }, 404);
+    } catch (e) {
+      await logEvent(env, "binding_error", e.message, { url: request.url }, "error");
+      return new Response("Internal Server Error", { status: 500 });
     }
-    return json({ ok: false, error: "not found" }, 404);
   },
   async scheduled(event, env, ctx) {
     env = __aiAttrEnv(env, "qnfo-youtube-shorts", "AI", "QNFO_AUDIT");
