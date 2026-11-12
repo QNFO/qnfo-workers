@@ -37,7 +37,7 @@
 // Q08-ASCII-SOURCE-1 (2026-10-01): this file is ASCII-only; every typographic character is a \uXXXX escape. The deploy path
 // double-encoded raw UTF-8, so live pages read "... \u00e2 q08" and posts "\u00e2\u0080\u0094". Keep new literals escaped.
 // VERSION-NOTES-MOVED-1: release notes live in the block below
-var VERSION = "0.53.0";
+var VERSION = "0.54.0";
 /* 0.43.0 Q08-TICK-ALLOWANCE-1 (2026-11-04, pillar cost; minor: the engine now decides on its own whether a tick starts an attempt; BUDGET-SOFT-ROUTE-1, attempts slow down and never stop): ai_call_counters showed 119,552, 129,547 and 110,450 neurons on 2026-11-01..03 against the 50,000 target (ops_config q08_daily_neurons) because q08Budget() only steered the first writer model and nothing bounded the attempts a tick starts (40 a day, the attempt cap, at about 2,760 neurons each). Now the :00 cron and the :30 stall retry go through governedGenerate: tick k of 48 starts an attempt only while the day is under the pace line budget x (k + 1) / 48, an essay after a forecast attempt that spent model calls starts only while the day is still under it, and 150 minutes without an attempt starts one whatever the line says (8 a day at least). No row is written for a tick that waits. The writer gate, reader panels, fact-check, final read and accuracy audit are unchanged, and an attempt already started runs all its rounds. ops_config q08_tick_governor = off restores the old behaviour. tick-allowance.test.mjs replays a UTC day. */
 /* 0.42.0 RM-FORECAST-UPDATE-SCORING-1 (#5578; research): score the last valid update before the horizon with the resolved outcome. */
 /* 0.41.6 FORECAST-CALIBRATION-BUCKET-COVERAGE-1 (#5576, charter pillar research; patch): calibration buckets include probabilities across the full [0,1] range, including the tails, rather than silently omitting forecasts below 5% or above 96%. */
@@ -5455,7 +5455,7 @@ function renderForecasts(rows, stats) {
   var c = stats.calibration;
   var cal = c.n ? ('Scored so far: ' + c.n + ' resolved, mean Brier score ' + c.brier + ' (always saying 50% scores 0.25; lower is better), mean log score ' + c.log_score + ' (always saying 50% scores ' + c.baseline_log_score + '; higher is better; <a href="/forecasts/calibration">calibration by probability bucket</a>)' + (c.reliable ? "" : '. Under 20 resolved forecasts a score is mostly noise') + '. Void: ' + stats.void + (stats.void_share != null ? ' (' + Math.round(stats.void_share * 100) + '% of finished)' : "") + '.') : 'No forecast has been scored yet. Void so far: ' + stats.void + '.';
   if (stats.pm && stats.pm.n > 0) cal += ' Short-term market questions (resolved in days, scored against the market price): ' + stats.pm.n + ' resolved' + (stats.pm.n >= 30 && stats.pm.brier_model != null ? ', model Brier ' + stats.pm.brier_model + ' vs market ' + stats.pm.brier_market : ', too few to score yet') + '.';
-  var body = '<section class="q08-hero"><h1>Forecasts</h1><p class="q-lede">Each forecast takes a mechanism q08 has described and says where it most likely leads: one dated scenario, its probability, the rivals, and a condition anyone can check. When the date passes, two judges from different model families settle it from public evidence and the score is recorded here, misses included. A forecast the evidence cannot settle after four checks is marked void in public.</p><p class="q-meta">' + cal + '</p></section>' +
+  var body = '<section class="q08-hero"><h1>Forecasts</h1><p class="q-lede">Each forecast takes a mechanism q08 has described and says where it most likely leads: one dated scenario, its probability, the rivals, and a condition anyone can check. When the date passes, two judges from different model families settle it from public evidence and the score is recorded here, misses included. A forecast the evidence cannot settle after four checks is marked void in public.</p><p class="q-meta">' + cal + '</p><p class="q-meta">Short-horizon forecasts on live prediction markets, each with its simulated position and P&amp;L: <a href="https://markets.q08.org/">markets.q08.org</a> · <a href="https://markets.q08.org/track-record">track record</a>.</p></section>' +
     '<section class="q08-feed" aria-label="Open forecasts"><h2 class="q-h3">Open</h2>' + (open.length ? '<ul class="q-list">' + open.map(item).join("") + '</ul>' : '<div class="q-note">No open forecasts yet. Researched forecasts can draw on the essay archive.</div>') + '</section>' +
     (fin.length ? '<section class="q08-feed" aria-label="Settled forecasts"><h2 class="q-h3">Settled</h2><ul class="q-list">' + fin.map(item).join("") + '</ul></section>' : "") + q08Sub(true);
   return q08Page({ title: "Forecasts \u00b7 q08", canonical: ORIGIN + "/forecasts", active: "forecasts", ogType: "article", description: "Dated, probability-weighted forecasts built from q08's structural analyses, scored when they resolve.", jsonld: { "@context": "https://schema.org", "@type": "Article", headline: "Forecasts", description: "Dated, probability-weighted forecasts built from q08's structural analyses, scored when they resolve.", url: ORIGIN + "/forecasts", mainEntityOfPage: ORIGIN + "/forecasts", publisher: { "@type": "Organization", name: "q08", url: ORIGIN }, isPartOf: { "@type": "WebSite", name: "q08", url: ORIGIN }, about: { "@type": "Thing", name: "Dated, probability-weighted forecasts and their scoring record" } } }, body);
@@ -5634,7 +5634,7 @@ function q08Attr(s) { return String(s == null ? "" : s).replace(/&/g, "&amp;").r
 function q08Page(o, body) {
   var t = q08Attr(o.title), d = q08Attr(o.description || "Explanatory essays on technology stories: what happened, and the system that made it happen.");
   var canon = o.canonical ? q08Attr(o.canonical) : "";
-  var siteJsonld = { "@context": "https://schema.org", "@type": "WebSite", name: "q08", url: ORIGIN, description: "Systems-level critique: explanatory essays on technology stories, with dated, scored forecasts.", publisher: { "@type": "Organization", name: "q08", url: ORIGIN } };
+  var siteJsonld = { "@context": "https://schema.org", "@type": "WebSite", name: "q08", url: ORIGIN, description: "Signal to value: public signals become forecasts on real prediction markets, with the simulated value of their edge tracked in the open.", publisher: { "@type": "Organization", name: "q08", url: ORIGIN } };
   var ldArr = o.jsonld ? (Array.isArray(o.jsonld) ? o.jsonld : [o.jsonld]) : [];
   ldArr.push(siteJsonld);
   var ld = '<script type="application/ld+json">' + JSON.stringify(ldArr).replace(/</g, "\\u003c") + "<\/script>";
@@ -5647,9 +5647,9 @@ function q08Page(o, body) {
     '<meta property="og:site_name" content="q08"><meta property="og:title" content="' + t + '"><meta property="og:description" content="' + d + '"><meta property="og:type" content="' + (o.ogType || "website") + '">' + (o.ogType === "article" ? pubMeta + modMeta + authMeta : "") + (o.section ? '<meta property="article:section" content="' + q08Attr(o.section) + '">' : "") + '<meta name="twitter:card" content="summary"><meta name="twitter:title" content="' + t + '"><meta name="twitter:description" content="' + d + '">' +
     '<meta name="theme-color" content="#F5F7FB" media="(prefers-color-scheme: light)"><meta name="theme-color" content="#121731" media="(prefers-color-scheme: dark)"><link rel="icon" type="image/svg+xml" href="' + Q08_FAVICON + '"><link rel="alternate" type="application/rss+xml" title="q08" href="/feed.xml">' +
     Q08_FONTS + '<link rel="stylesheet" href="https://qnfo.org/qds.css?v=' + Q08_QDS + '"><script src="https://qnfo.org/qds.js?v=' + Q08_QDS + '" defer><\/script>' + Q08_CSS + ld + MATH_HEAD + "</head><body>" +
-    '<a class="q-skip" href="#main">Skip to main content</a>' + Q08_FAMILY_BAR + '<header class="q-top"><div class="q-wrap"><a class="q08-mark" href="/" aria-label="q08 home"><b>q08</b><small>systems-level critique</small></a>' +
-    '<nav class="q-nav q-nav-wide" aria-label="Main"><a href="/"' + (o.active === "index" ? ' aria-current="page"' : "") + '>Index</a><a href="/forecasts"' + (o.active === "forecasts" ? ' aria-current="page"' : "") + '>Forecasts</a><a href="/subscribe"' + (o.active === "subscribe" ? ' aria-current="page"' : "") + '>Subscribe</a><a href="/feed.xml">RSS</a></nav>' +
-    '<details class="q-menu"><summary aria-label="Menu"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M2 4h12M2 8h12M2 12h12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></summary><nav class="q-nav" aria-label="Main"><a href="/">Index</a><a href="/forecasts">Forecasts</a><a href="/subscribe">Subscribe</a><a href="/feed.xml">RSS</a></nav></details>' +
+    '<a class="q-skip" href="#main">Skip to main content</a>' + Q08_FAMILY_BAR + '<header class="q-top"><div class="q-wrap"><a class="q08-mark" href="/" aria-label="q08 home"><b>q08</b><small>signal to value</small></a>' +
+    '<nav class="q-nav q-nav-wide" aria-label="Main">' + q08NavLinks(o.active) + '</nav>' +
+    '<details class="q-menu"><summary aria-label="Menu"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M2 4h12M2 8h12M2 12h12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></summary><nav class="q-nav" aria-label="Main">' + q08NavLinks(o.active) + '</nav></details>' +
     '<button class="q-theme" type="button" data-q-theme aria-label="Switch between light and dark theme"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.8a6.2 6.2 0 0 1 0 12.4z" fill="currentColor"/></svg></button></div></header>' +
     '<main id="main"><div class="q-wrap">' + body + "</div></main>" + (body.indexOf("cf-turnstile") >= 0 ? TURNSTILE_SCRIPT : "") +
     Q08_EXPLORE + '<footer class="q-foot"><div class="q-wrap"><div class="q-foot-base" style="border-top:0;padding-top:0;margin-top:0"><span>q08: an autonomous signal engine, updated continuously</span><span>The QNFO family: <a href="https://qnfo.org/">QNFO</a> &middot; <a href="https://qwav.org/">QWAV</a> &middot; <a href="https://q08.org/">q08</a></span><span>Pieces are machine-written and gated before publication. <a href="/feed.xml">RSS</a> \u00b7 <a href="/subscribe">Daily digest</a> \u00b7 <a href="/health">Status</a></span></div></div></footer><script src="https://fleet.qnfo.org/ctl.js" defer><\/script></body></html>';
@@ -5667,7 +5667,49 @@ function q08Sub(compact) {
 }
 function q08Short(t, n) { t = String(t || ""); if (t.length <= n) return t; var c = t.slice(0, n), sp = c.lastIndexOf(" "); return (sp > n * 0.5 ? c.slice(0, sp) : c).replace(/[\s,;:.\-]+$/, "") + "\u2026"; }
 function q08Lede(md) { return q08Plain(String(md || "").replace(/^#+\s*.+\n?/m, "").replace(/^[ \t]*(?:#{1,6}|[-*]|>|\d+[.)])[ \t]+/gm, "")); }
-function renderIndex(pieces) {
+// VALUE-PIPELINE-1 (owner 2026-11-12): q08 is a signal-to-value pipeline, signals in, forecasts in the middle, value out, run in the open.
+// The front door shows the live pipeline first (numbers from q08-prediction-markets /api/story through the PM binding); the reports follow as the signals explained.
+var Q08_NAV = [["index", "/", "Pipeline"], ["markets", "https://markets.q08.org/", "Forecasts"], ["track", "https://markets.q08.org/track-record", "Track record"], ["reports", "/#reports", "Signal reports"], ["subscribe", "/subscribe", "Subscribe"]];
+function q08NavLinks(active) {
+  return Q08_NAV.map(function (n) { return '<a href="' + n[1] + '"' + (n[0] === active ? ' aria-current="page"' : "") + ">" + n[2] + "</a>"; }).join("");
+}
+async function pipelineStory(env) {
+  if (!env || !env.PM || typeof env.PM.fetch !== "function") return null;
+  try {
+    var r = await Promise.race([env.PM.fetch("https://pm.internal/api/story"), new Promise(function (_, rej) { setTimeout(function () { rej(new Error("story timeout")); }, 3000); })]);
+    if (!r || !r.ok) return null;
+    return await r.json();
+  } catch (e) { console.warn("pipeline story unavailable", String(e && e.message || e)); return null; }
+}
+function q08Money(x) { if (x == null || !isFinite(+x)) return "–"; var v = Math.abs(+x).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); return (x > 0 ? "+$" : x < 0 ? "−$" : "$") + v; }
+function q08Pct(p) { return p == null ? "–" : Math.round(1000 * p) / 10 + "%"; }
+var Q08_PIPE_CSS = '<style>.q08-pipe{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin:8px 0 20px;max-width:960px}.q08-stage{display:block;border:1px solid var(--q-rule);border-radius:12px;padding:14px 16px;text-decoration:none;color:var(--q-ink)}.q08-stage .k{font:600 var(--q-fs-sm)/1.3 var(--q-sans);color:var(--q-muted)}.q08-stage .v{font:600 1.7rem/1.2 var(--q-sans);font-variant-numeric:tabular-nums;margin:4px 0}.q08-stage p{font-size:var(--q-fs-sm);color:var(--q-muted);margin:0}.q08-stage .t{margin-top:8px;padding-top:8px;border-top:1px solid var(--q-rule)}.q08-live{max-width:760px;margin:0 0 24px}.q08-live .q-item-meta b{color:var(--q-ink)}.q08-cta{display:flex;flex-wrap:wrap;gap:8px 20px;margin:4px 0 32px;font-size:var(--q-fs-sm)}.q08-cta a{display:inline-flex;align-items:center;min-height:44px;color:var(--q-accent)}</style>';
+function renderPipeline(d) {
+  var M = "https://markets.q08.org";
+  var st = {}; ((d && d.stages) || []).forEach(function (g) { st[g.key] = g; });
+  var tgt = function (key, want, fmt) {
+    var g = st[key]; if (!g) return "";
+    var now = g.value == null ? "–" : fmt(g.value);
+    return '<p class="t">Target ' + escHtml(want) + " · now " + escHtml(now) + " · " + (g.met == null ? "awaiting data" : g.met ? "met" : "missed") + "</p>";
+  };
+  var s = (d && d.signals) || {}, f = (d && d.forecasts) || {}, b = (d && d.book && d.book.totals) || {}, pl = d && d.pilot;
+  var stage = function (href, k, v, text, t) { return '<a class="q08-stage" href="' + href + '"><div class="k">' + k + '</div><div class="v">' + escHtml(String(v)) + "</div><p>" + text + "</p>" + (t || "") + "</a>"; };
+  var html = '<div class="q08-pipe">' +
+    stage("#reports", "1 · Signals in", s.last_7d != null ? s.last_7d.toLocaleString("en-US") : "–", "public signals read in 7 days: news, searches, filings, research", tgt("signal", "80% of questions with fresh evidence", function (v) { return Math.round(100 * v) + "%"; })) +
+    stage(M + "/#forecasts", "2 · Forecasts out", f.open != null ? f.open : "–", "live probabilities on real prediction-market questions that move money", tgt("forecast", "beat the crowd's Brier score", String)) +
+    stage(M + "/#forecasts", "3 · Edge vs the market", f.disagree != null ? f.disagree : "–", "forecasts that disagree with the market price" + (f.mean_edge_pts != null ? ", " + escHtml(String(f.mean_edge_pts)) + " points on average" : ""), tgt("edge", "2 points or more", function (v) { return v + " pts"; })) +
+    stage(M + "/track-record", "4 · Value captured", b.positions ? q08Money(b.pnl) : "–", b.positions ? "simulated P&amp;L on " + escHtml(String(b.positions)) + " position" + (b.positions === 1 ? "" : "s") + (pl ? "; paper desk " + escHtml(q08Money(pl.equity - pl.start)) : "") : "no position yet: one opens when a forecast leaves the market price" + (pl ? "; paper desk " + escHtml(q08Money(pl.equity - pl.start)) : ""), tgt("value", "a positive return on settled positions", function (v) { return v + "%"; })) +
+    "</div>";
+  var live = (f.list || []).slice(0, 4).map(function (x) {
+    var pos = x.position ? "Simulated " + escHtml(x.position.side) + " at " + Math.round(100 * x.position.entry) + "¢: <b>" + escHtml(q08Money(x.position.pnl)) + "</b>" : "With the market: no position";
+    var rel = (x.related || []).length ? ' · report: <a href="' + escHtml(x.related[0].url) + '">' + escHtml(q08Short(x.related[0].title, 60)) + "</a>" : "";
+    var px = x.proxy && x.proxy.now != null ? " · " + escHtml(x.proxy.name) + " " + escHtml(String(x.proxy.now)) + (x.proxy.unit === "%" ? "%" : "") : "";
+    return '<li class="q-item"><a class="q-item-title" href="' + M + "/#" + escHtml(x.slug) + '">' + escHtml(x.title) + '</a><div class="q-item-meta"><span class="q-badge">q08 ' + q08Pct(x.forecast) + "</span> market " + q08Pct(x.crowd) + " · " + pos + px + rel + "</div></li>";
+  }).join("");
+  return html + (live ? '<section class="q08-live" aria-label="Live forecasts"><h2 class="q-h3">Live now</h2><ul class="q-list">' + live + "</ul></section>" : "") +
+    '<div class="q08-cta"><a href="' + M + '/">Every forecast and its position</a><a href="' + M + '/track-record">Track record, losses included</a><a href="' + M + '/api/story">The data (JSON)</a></div>';
+}
+function renderIndex(pieces, story) {
   var items = pieces.map(function(p) {
     var date = (p.published_at || "").slice(0, 10);
     var lede = q08Short(q08Lede(p.body_md), 220);
@@ -5675,9 +5717,10 @@ function renderIndex(pieces) {
       '<div class="q-item-meta"><time datetime="' + escHtml(p.published_at || "") + '">' + date + "</time>" + (p.kind === "forecast" ? '<span class="q-badge">Forecast</span>' : (p.core_concept ? '<span class="q-badge">' + escHtml(q08Short(p.core_concept, 44)) + "</span>" : "")) + "</div>" +
       (lede ? '<p class="q-item-text">' + escHtml(lede) + "</p>" : "") + "</li>";
   }).join("");
-  var body = '<section class="q08-hero"><h1>What happened, and the system that made it happen.</h1><p class="q-lede">Each piece reports one story from the technical front page for a reader who missed it, then explains the system that produced it. Every fact is checked against its source.</p></section>' +
-    '<section class="q08-feed" aria-label="Pieces">' + (items ? '<ul class="q-list">' + items + "</ul>" : '<div class="q-note">No pieces published yet. The engine publishes a few times a day; subscribe below to get the next one.</div>') + "</section>" + q08Sub(true);
-  return q08Page({ title: "q08 \u00b7 systems-level critique", canonical: ORIGIN + "/", active: "index", jsonld: { "@context": "https://schema.org", "@type": "Blog", name: "q08", url: ORIGIN + "/", description: "Systems-level critique of technical industry friction." } }, body);
+  var body = Q08_PIPE_CSS + '<section class="q08-hero"><h1>Signals in. Forecasts out. Value measured.</h1><p class="q-lede">Funds and trading desks turn public signals into forecasts and forecasts into positions behind closed doors. q08 runs that pipeline live and in the open: it reads the signals, forecasts real prediction-market questions that move money, prices its edge against the market, and keeps a simulated book of what that edge earns or loses. Every number below is live; nothing is real money.</p></section>' +
+    renderPipeline(story) +
+    '<section class="q08-feed" id="reports" aria-label="Signal reports"><h2 class="q-h3">Signal reports</h2><p class="q-meta">The signals behind the forecasts, explained: what happened and the system that produced it. Every fact is checked against its source. Long-range forecasts from these reports are scored on the <a href="/forecasts">forecast record</a>.</p>' + (items ? '<ul class="q-list">' + items + "</ul>" : '<div class="q-note">No reports published yet. The engine publishes a few times a day; subscribe below to get the next one.</div>') + "</section>" + q08Sub(true);
+  return q08Page({ title: "q08 · signal to value", description: "A live signal-to-value pipeline run in the open: public signals become forecasts on real prediction markets, and every forecast's edge is tracked as a simulated position, losses included.", canonical: ORIGIN + "/", active: "index", jsonld: { "@context": "https://schema.org", "@type": "WebSite", name: "q08", url: ORIGIN + "/", description: "Signal to value: public signals, forecasts on real prediction markets, and the simulated value of their edge, in the open." } }, body);
 }
 // Q08-REACH-1: every piece carries one-tap share links, a ready-to-paste citation and a prompt to answer back, plus Scholar-style
 // citation meta tags and fuller JSON-LD, so a reader can pass it on, cite it and argue with it without leaving the page.
@@ -6504,7 +6547,7 @@ async function q08Fetch(req, env, ctx) {
     }
     // Index
     var pieces = await env.DB.prepare("SELECT slug, title, body_md, core_concept, published_at" + (__forecastSchemaDone ? ", kind" : "") + " FROM published_pieces WHERE slug NOT IN (SELECT slug FROM q08_retractions) ORDER BY published_at DESC LIMIT 20").all().catch(() => ({results:[]}));
-    return html(renderIndex(pieces.results || []));
+    return html(renderIndex(pieces.results || [], await pipelineStory(env)));
 }
 
 function renderAtomFeed(rows) {

@@ -55,6 +55,30 @@
       "contains": [
         "\"engine\":\"FORECAST-ENGINE-1\""
       ]
+    },
+    {
+      "_note": "VALUE-PIPELINE-1: the front page is the signal-to-value pipeline.",
+      "url": "https://markets.q08.org/",
+      "contains": [
+        "Signals in. Forecasts out. Value measured.",
+        "Forecasts that move money"
+      ]
+    },
+    {
+      "_note": "VALUE-PIPELINE-1: the track record recomputes every simulated position.",
+      "url": "https://markets.q08.org/track-record",
+      "contains": [
+        "The pipeline's targets",
+        "Forecast book"
+      ]
+    },
+    {
+      "_note": "VALUE-PIPELINE-1: the story feed q08.org's front door reads.",
+      "url": "https://markets.q08.org/api/story",
+      "contains": [
+        "\"engine\":\"VALUE-PIPELINE-1\"",
+        "\"stages\""
+      ]
     }
   ]
 }

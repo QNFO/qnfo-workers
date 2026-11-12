@@ -397,6 +397,8 @@ const SCHEMA = [
   "CREATE INDEX IF NOT EXISTS fe_signal_created ON fe_signal(created_at)",
   "CREATE TABLE IF NOT EXISTS fe_fetch (family TEXT PRIMARY KEY, query TEXT, fetched_at TEXT NOT NULL, source TEXT, found INTEGER)",
   "CREATE TABLE IF NOT EXISTS fe_tick (id INTEGER PRIMARY KEY AUTOINCREMENT, ran_at TEXT NOT NULL, candidates INTEGER, consequential INTEGER, updated INTEGER, tokens INTEGER, skipped_json TEXT, error TEXT)",
+  // VALUE-PIPELINE-1: daily closes of the financial instruments each question category moves (FRED, no key), so the page can show the market context.
+  "CREATE TABLE IF NOT EXISTS fe_proxy (series TEXT NOT NULL, date TEXT NOT NULL, value REAL NOT NULL, fetched_at TEXT, PRIMARY KEY (series, date))",
 ];
 export async function ensureSchema(db) { for (const s of SCHEMA) await db.prepare(s).run(); }
 
@@ -433,7 +435,7 @@ async function workersAiAsk(env, model, prompt) {
 }
 
 async function defaultFetchText(url) {
-  const r = await fetch(url, { headers: { "user-agent": "q08-forecasts/1 (+https://markets.q08.org/forecasts)", accept: "application/json, application/rss+xml, text/xml" }, signal: AbortSignal.timeout(10000) });
+  const r = await fetch(url, { headers: { "user-agent": "q08-forecasts/1 (+https://markets.q08.org/forecasts)", accept: "application/json, application/rss+xml, text/xml, text/csv;q=0.9, */*;q=0.5" }, signal: AbortSignal.timeout(10000) });
   return { ok: r.ok, status: r.status, text: await r.text() };
 }
 export async function tick(env, nowMs = Date.now()) {
@@ -467,8 +469,14 @@ export async function tick(env, nowMs = Date.now()) {
   if (spin.halted) error = "self-halted: 95% interval of value added is below zero on " + spin.settled + " settled";
   // Resolution: a closed market whose YES price sits at 0 or 1 settles every forecast on it (the pilot's fetch keeps pt_market current).
   await env.TRADES_DB.prepare("UPDATE fe_forecast SET outcome = (SELECT CASE WHEN m.yes >= 0.99 THEN 1 ELSE 0 END FROM pt_market m WHERE m.slug = fe_forecast.slug), resolved_at = ? WHERE outcome IS NULL AND EXISTS (SELECT 1 FROM pt_market m WHERE m.slug = fe_forecast.slug AND m.closed = 1 AND (m.yes >= 0.99 OR m.yes <= 0.01))").bind(new Date(nowMs).toISOString()).run().catch(() => null);
+  // VALUE-PIPELINE-1: score the pipeline's stages on every tick, so each stage's history is in fe_tick beside the run that produced it
+  let stages = null;
+  try { const sd = await storyData(env, nowMs); sd.coverage = pl.coverage; stages = stageScores(sd).map((g) => ({ key: g.key, value: g.value, n: g.n, met: g.met })); } catch (err) { stages = { error: String(err && err.message || err).slice(0, 160) }; }
+  // VALUE-PIPELINE-1: refresh the financial-market proxies (at most every 6 hours per series; a failure never stops the tick).
+  let proxies = null;
+  if (String(env.FE_PROXY || "on") !== "off") { try { proxies = await proxyLane(env.TRADES_DB, env.__fetchText || defaultFetchText, nowMs); } catch (e) { proxies = { error: String(e && e.message || e).slice(0, 160) }; } }
   await env.TRADES_DB.prepare("INSERT INTO fe_tick (ran_at, candidates, consequential, updated, tokens, skipped_json, error) VALUES (?,?,?,?,?,?,?)")
-    .bind(new Date(nowMs).toISOString(), pl.candidates, pl.consequential, updated, tokens, JSON.stringify({ ...pl.skipped, coverage: pl.coverage, news: news.log }), error).run();
+    .bind(new Date(nowMs).toISOString(), pl.candidates, pl.consequential, updated, tokens, JSON.stringify({ ...pl.skipped, coverage: pl.coverage, news: news.log, proxies, stages }), error).run();
   return { candidates: pl.candidates, consequential: pl.consequential, updated, tokens, skipped: pl.skipped, coverage: pl.coverage, news: news.log, error };
 }
 
@@ -491,8 +499,8 @@ export function renderPage(rows, stats, head) {
 <small>${esc(r.tokens)} tokens · ledger hash ${esc(String(r.hash).slice(0, 12))}</small></div></details></article>`;
   }).join("\n");
   const va = stats.value || {};
-  return `<!doctype html><html lang="en"><head>${head("Q08 Forecasts", "Consequential forecasts derived from public signals, scored against the crowd.", FE_CSS)}</head><body class="ds">
-<header class="ds-top"><div class="ds-top-in"><a class="ds-brand" href="/">Q08 Forecasts</a></div></header>
+  return `<!doctype html><html lang="en"><head>${head("Q08 Forecasts", "Consequential forecasts derived from public signals, scored against the crowd.", FE_CSS + VP_CSS)}</head><body class="ds">
+${siteTop("forecasts")}
 <main class="ds-main"><div class="ds-head"><h1>Forecasts that move money</h1><p>Each number starts from the prediction-market crowd and moves only when fresh public signals justify it. Every forecast is scored against the crowd it started from.</p></div>
 <section class="ds-stats"><div class="ds-stat"><div class="k">Open forecasts</div><div class="v">${rows.length}</div></div><div class="ds-stat"><div class="k">Tokens per forecast</div><div class="v">${stats.tokens_per ? esc(stats.tokens_per) : "–"}</div></div><div class="ds-stat"><div class="k">Value added vs crowd</div><div class="v">${va.n ? esc(va.value_added) : "–"}</div></div></section>
 ${va.n ? "" : `<p class="ds-note">No forecast has settled yet. Value added (crowd Brier minus engine Brier) appears here after the first settles.</p>`}
@@ -516,3 +524,236 @@ export async function latestRows(env) {
   return { rows: r.results || [], stats: { value: valueAdded(lastPerSlug(rows)), spinoff: spinoffStatus(rows), tokens_per: tok, total: rows.length, coverage, news_signals: Object.fromEntries((src.results || []).map((x) => [x.source, x.n])) } };
 }
 
+
+// ---------- 9 value: signal -> forecast -> edge -> value, in the open (VALUE-PIPELINE-1) ----------
+// The owner's question (2026-11-12): how does a forecast become money, and where is that shown? The answer is computed here from the ledger,
+// never written by hand: every forecast that disagrees with the crowd opens one simulated position at the crowd's price at that moment
+// (the side the forecast favours, a fixed stake), held to resolution with no hindsight exit and marked to the live market until then.
+// A forecast that agrees with the crowd holds no position: there is no edge to trade. Paper only: no order, wallet or account exists.
+export const STAKE = 100, MIN_EDGE = 0.02;
+const r2 = (x) => Math.round(x * 100) / 100;
+export function simulateBook(rows, yesBySlug = {}, { stake = STAKE, minEdge = MIN_EDGE } = {}) {
+  const first = new Map(), last = new Map();
+  for (const r of rows || []) { last.set(r.slug, r); if (!first.has(r.slug) && Math.abs(r.p - r.prior) >= minEdge) first.set(r.slug, r); }
+  const positions = [];
+  for (const [slug, e] of first) {
+    const l = last.get(slug), side = e.p > e.prior ? "YES" : "NO";
+    const entry = side === "YES" ? e.prior : 1 - e.prior, belief = side === "YES" ? e.p : 1 - e.p;
+    const outcome = l.outcome === 0 || l.outcome === 1 ? Number(l.outcome) : null;
+    const live = Number.isFinite(+yesBySlug[slug]) ? +yesBySlug[slug] : null;
+    const yesNow = outcome != null ? outcome : live != null ? live : e.prior;
+    const mark = side === "YES" ? yesNow : 1 - yesNow, shares = stake / entry, value = shares * mark;
+    positions.push({ slug, title: e.title, category: e.category, side, opened_at: e.created_at, deadline: e.deadline, crowd_at_entry: +e.prior.toFixed(4), forecast_at_entry: +e.p.toFixed(4),
+      forecast_now: +l.p.toFixed(4), entry: +entry.toFixed(4), mark: +mark.toFixed(4), marked_live: outcome == null && live != null, settled: outcome != null, outcome, stake, shares: +shares.toFixed(2),
+      value: r2(value), pnl: r2(value - stake), expected_pnl: r2(stake * (belief / entry - 1)) });
+  }
+  positions.sort((a, b) => Number(a.settled) - Number(b.settled) || Math.abs(b.pnl) - Math.abs(a.pnl));
+  const sum = (f) => r2(positions.reduce((a, x) => a + f(x), 0)), settled = positions.filter((x) => x.settled);
+  const staked = positions.length * stake, pnl = sum((x) => x.pnl);
+  return { stake, min_edge: minEdge, positions, totals: { positions: positions.length, open: positions.length - settled.length, settled: settled.length,
+    wins: settled.filter((x) => x.pnl > 0).length, losses: settled.filter((x) => x.pnl <= 0).length, staked, value: sum((x) => x.value), pnl,
+    realized: r2(settled.reduce((a, x) => a + x.pnl, 0)), unrealized: r2(positions.filter((x) => !x.settled).reduce((a, x) => a + x.pnl, 0)),
+    return_pct: staked ? r2((100 * pnl) / staked) : null, expected_pnl_at_entry: sum((x) => x.expected_pnl),
+    with_crowd: new Set((rows || []).map((r) => r.slug)).size - positions.length } };
+}
+
+// Financial-market transmission: each question category moves an instrument; FRED's public CSV gives its daily close (no key).
+// Shown as context beside the prediction-market position, never as a position of its own.
+export const PROXIES = {
+  monetary: { id: "DGS2", name: "2-year Treasury yield", unit: "%" },
+  macro: { id: "DGS10", name: "10-year Treasury yield", unit: "%" },
+  "energy-geopolitics": { id: "DCOILBRENTEU", name: "Brent crude oil", unit: "$/bbl" },
+  leadership: { id: "NASDAQ100", name: "Nasdaq-100 index", unit: "" },
+  capital: { id: "SP500", name: "S&P 500 index", unit: "" },
+  "officials-rules": { id: "DGS10", name: "10-year Treasury yield", unit: "%" },
+};
+export function parseFredCsv(text) {
+  const out = [];
+  for (const line of String(text || "").split(/\r?\n/).slice(1)) {
+    const [d, v] = line.split(",");
+    if (/^\d{4}-\d{2}-\d{2}$/.test(d || "") && v != null && v.trim() !== "." && Number.isFinite(+v)) out.push({ date: d, value: +v });
+  }
+  return out;
+}
+export async function proxyLane(db, fetchText, nowMs, { maxAgeMin = 360, days = 120 } = {}) {
+  const ids = [...new Set(Object.values(PROXIES).map((p) => p.id))], log = [];
+  const since = new Date(nowMs - days * 86400000).toISOString().slice(0, 10), iso = new Date(nowMs).toISOString();
+  for (const id of ids) {
+    const last = await db.prepare("SELECT max(fetched_at) t FROM fe_proxy WHERE series = ?").bind(id).first().catch(() => null);
+    if (last && last.t && nowMs - Date.parse(last.t) < maxAgeMin * 60000) { log.push({ id, skipped: "fresh" }); continue; }
+    try {
+      const r = await fetchText("https://fred.stlouisfed.org/graph/fredgraph.csv?id=" + id + "&cosd=" + since);
+      const pts = r && r.ok ? parseFredCsv(r.text) : [];
+      for (const pt of pts) await db.prepare("INSERT OR REPLACE INTO fe_proxy (series, date, value, fetched_at) VALUES (?,?,?,?)").bind(id, pt.date, pt.value, iso).run();
+      log.push({ id, status: r && r.status, points: pts.length });
+    } catch (e) { log.push({ id, error: String(e && e.message || e).slice(0, 120) }); }
+  }
+  return log;
+}
+// The instrument's move from the last close on or before the forecast to the latest close.
+export function proxyMove(points, sinceIso) {
+  if (!points || !points.length) return null;
+  const d = String(sinceIso || "").slice(0, 10), sorted = [...points].sort((a, b) => a.date.localeCompare(b.date));
+  const now = sorted[sorted.length - 1], start = [...sorted].reverse().find((x) => x.date <= d) || sorted[0];
+  return { start_date: start.date, start: start.value, now_date: now.date, now: now.value, change: +(now.value - start.value).toFixed(3), change_pct: start.value ? +((100 * (now.value - start.value)) / start.value).toFixed(2) : null };
+}
+// The q08 reports about the same question: pieces whose title or concept names one of its proper entities.
+export function relatedPieces(title, pieces, max = 2) {
+  const proper = properEntities(title).filter((e) => e.length >= 4 || /^[a-z]{3}$/.test(e));
+  if (!proper.length) return [];
+  const has = (t, e) => new RegExp("\\b" + e.replace(/[.$-]/g, "\\$&") + "\\b", "i").test(t);
+  return (pieces || []).map((p) => ({ p, n: proper.filter((e) => has((p.title || "") + " " + (p.core_concept || ""), e)).length })).filter((x) => x.n > 0)
+    .sort((a, b) => b.n - a.n || String(b.p.published_at).localeCompare(String(a.p.published_at))).slice(0, max)
+    .map((x) => ({ title: x.p.title, url: Q08_ORIGIN + "/p/" + x.p.slug, date: String(x.p.published_at || "").slice(0, 10) }));
+}
+export const Q08_ORIGIN = "https://q08.org", MARKETS_ORIGIN = "https://markets.q08.org";
+const safe = async (f, d) => { try { return await f(); } catch (e) { return d; } };
+const all = (db, sql, ...b) => safe(async () => ((await db.prepare(sql).bind(...b).all()).results || []), []);
+// Everything the pipeline pages and q08.org's front door show, read from D1 in one place; every read fails soft so a page always renders.
+export async function storyData(env, nowMs = Date.now()) {
+  const db = env && env.TRADES_DB, sig = env && env.SIGNAL_DB, out = { generated_at: new Date(nowMs).toISOString(), stake: STAKE };
+  if (!db) return { ...out, empty: true };
+  await safe(() => ensureSchema(db));
+  const rows = await all(db, "SELECT id, created_at, slug, title, deadline, category, moves, prior, p, outcome FROM fe_forecast ORDER BY id");
+  const slugs = [...new Set(rows.map((r) => r.slug))];
+  const px = slugs.length ? await all(db, `SELECT slug, yes, closed, updated_at FROM pt_market WHERE slug IN (${slugs.map(() => "?").join(",")})`, ...slugs) : []; // standards-ok: only "?" placeholders are interpolated
+  const book = simulateBook(rows, Object.fromEntries(px.map((m) => [m.slug, m.yes])));
+  const open = lastPerSlug(rows).filter((r) => r.outcome == null && r.deadline >= out.generated_at.slice(0, 10));
+  const edges = open.map((r) => Math.abs(r.p - r.prior));
+  // signals: the q08 stream (news feeds, searches, HN, arXiv, Federal Register) plus the engine's own news lane, last 7 days
+  const s7 = sig ? await all(sig, "SELECT source, count(*) n FROM signal_log WHERE created_at > datetime('now','-7 days') GROUP BY source") : [];
+  const n7 = await all(db, "SELECT source, count(*) n FROM fe_signal WHERE created_at > datetime('now','-7 days') GROUP BY source");
+  const bySource = {}; for (const x of s7.concat(n7)) bySource[x.source] = (bySource[x.source] || 0) + x.n;
+  const pieces = sig ? await all(sig, "SELECT slug, title, core_concept, published_at FROM published_pieces WHERE slug NOT IN (SELECT slug FROM q08_retractions) ORDER BY published_at DESC LIMIT 150") : [];
+  const proxyRows = await all(db, "SELECT series, date, value FROM fe_proxy WHERE date > date('now','-150 days') ORDER BY series, date");
+  const series = {}; for (const x of proxyRows) (series[x.series] = series[x.series] || []).push({ date: x.date, value: x.value });
+  const firstAt = {}; for (const r of rows) if (!firstAt[r.slug]) firstAt[r.slug] = r.created_at;
+  const posBy = Object.fromEntries(book.positions.map((p) => [p.slug, p]));
+  const forecasts = open.sort((a, b) => Math.abs(b.p - b.prior) - Math.abs(a.p - a.prior)).map((r) => {
+    const pr = PROXIES[r.category], mv = pr ? proxyMove(series[pr.id], firstAt[r.slug]) : null;
+    return { slug: r.slug, title: r.title, category: r.category, deadline: r.deadline, crowd: +r.prior.toFixed(4), forecast: +r.p.toFixed(4), edge_pts: Math.round(100 * (r.p - r.prior)), moves: r.moves,
+      market_url: "https://polymarket.com/market/" + r.slug, position: posBy[r.slug] || null, proxy: pr && mv ? { ...pr, ...mv } : pr ? { ...pr } : null, related: relatedPieces(r.title, pieces) };
+  });
+  // the paper-trading pilot (its own estimator, now off) and its scored record, losses included
+  const acct = await safe(() => db.prepare("SELECT cash, start_cash FROM pt_account WHERE id = 1").first(), null);
+  const openPos = await all(db, "SELECT p.qty, p.entry, p.side, m.yes FROM pt_position p LEFT JOIN pt_market m ON m.slug = p.slug WHERE p.closed_at IS NULL");
+  const closed = await all(db, "SELECT slug, title, side, entry, exit, pnl, strategy, opened_at, closed_at, reason FROM pt_position WHERE closed_at IS NOT NULL ORDER BY closed_at DESC LIMIT 50");
+  const curve = (await all(db, "SELECT ts, equity FROM pt_equity ORDER BY ts DESC LIMIT 2016")).reverse();
+  const est = await all(db, "SELECT fair, market, outcome FROM pt_estimate WHERE outcome IN (0,1) AND fair IS NOT NULL AND market IS NOT NULL");
+  let pilot = null;
+  if (acct) {
+    const markOpen = openPos.reduce((a, p) => a + p.qty * (p.yes == null ? p.entry : String(p.side).toLowerCase() === "yes" ? p.yes : 1 - p.yes), 0);
+    const equity = acct.cash + markOpen, realized = closed.reduce((a, x) => a + (x.pnl || 0), 0);
+    pilot = { start: acct.start_cash, equity: r2(equity), return_pct: r2((equity / acct.start_cash - 1) * 100), realized: r2(realized), open: openPos.length, closed: closed.length,
+      wins: closed.filter((x) => x.pnl > 0).length, losses: closed.filter((x) => !(x.pnl > 0)).length, trades: closed, curve: curve.map((c) => ({ ts: c.ts, equity: r2(c.equity) })) };
+  }
+  const estimator = est.length ? { n: est.length, brier_model: +(est.reduce((a, x) => a + brier(x.fair, x.outcome), 0) / est.length).toFixed(4), brier_market: +(est.reduce((a, x) => a + brier(x.market, x.outcome), 0) / est.length).toFixed(4) } : { n: 0 };
+  const lt = await safe(() => db.prepare("SELECT skipped_json FROM fe_tick ORDER BY id DESC LIMIT 1").first(), null);
+  let coverage = null; try { coverage = JSON.parse((lt && lt.skipped_json) || "{}").coverage || null; } catch (err) { coverage = null; }
+  const res = { ...out, coverage, signals: { last_7d: Object.values(bySource).reduce((a, n) => a + n, 0), by_source: bySource, reports: pieces.length, latest_reports: pieces.slice(0, 6).map((p) => ({ title: p.title, url: Q08_ORIGIN + "/p/" + p.slug, date: String(p.published_at || "").slice(0, 10) })) },
+    forecasts: { open: open.length, disagree: open.filter((r) => Math.abs(r.p - r.prior) >= MIN_EDGE).length, mean_edge_pts: edges.length ? r2((100 * edges.reduce((a, x) => a + x, 0)) / edges.length) : null, list: forecasts },
+    value_added: valueAdded(lastPerSlug(rows)), spinoff: spinoffStatus(rows), book, pilot, estimator };
+  res.stages = stageScores(res);
+  return res;
+}
+
+
+// Each stage is an input -> output function with a scored target (owner 2026-11-12: "signal to value with forecasting in the middle").
+// The scores are computed from the same rows as the pages, published in /api/story and recorded on every engine tick (fe_tick.skipped_json.stages).
+export const STAGE_TARGETS = [
+  { key: "signal", name: "Signals in", input: "public news, searches, filings and research", output: "evidence matched to each market question", metric: "coverage", target: 0.8, unit: "share of questions with fresh evidence", loop: "a question without evidence triggers a targeted news fetch (news lane)" },
+  { key: "forecast", name: "Forecasts out", input: "the crowd's price and the matched evidence", output: "one probability per question", metric: "value_added", target: 0, unit: "crowd Brier minus forecast Brier on settled questions", loop: "the engine halts its adjustments when the 95% interval is below zero" },
+  { key: "edge", name: "Edge vs the market", input: "the forecast and the live price", output: "a side and a price gap", metric: "mean_edge_pts", target: 2, unit: "points of disagreement on open forecasts; a gap under the spread cannot be captured", loop: "positions open only at 2 points or more" },
+  { key: "value", name: "Value captured", input: "simulated positions at the market price", output: "profit and loss", metric: "settled_return_pct", target: 0, unit: "return on settled positions, %", loop: "the track record recomputes every position from the ledger" },
+];
+export function stageScores(d) {
+  const cov = d.coverage ? Object.values(d.coverage) : [], legs = cov.reduce((a, c) => a + (c.legs || 0), 0);
+  const t = ((d.book || {}).totals) || {}, va = d.value_added || {};
+  const val = { signal: legs ? +(cov.reduce((a, c) => a + (c.with_evidence || 0), 0) / legs).toFixed(3) : null, forecast: va.n ? va.value_added : null,
+    edge: (d.forecasts || {}).mean_edge_pts ?? null, value: t.settled ? r2((100 * t.realized) / (t.settled * ((d.book || {}).stake || STAKE))) : null };
+  const n = { signal: legs, forecast: va.n || 0, edge: (d.forecasts || {}).open || 0, value: t.settled || 0 };
+  return STAGE_TARGETS.map((g) => ({ ...g, value: val[g.key], n: n[g.key], met: val[g.key] == null ? null : g.key === "forecast" || g.key === "value" ? val[g.key] > g.target : val[g.key] >= g.target }));
+}
+
+// ---------- 10 the pages: one story, one navigation across q08.org and markets.q08.org ----------
+export const NAV = [["pipeline", Q08_ORIGIN + "/", "Pipeline"], ["forecasts", MARKETS_ORIGIN + "/", "Forecasts"], ["track", MARKETS_ORIGIN + "/track-record", "Track record"], ["reports", Q08_ORIGIN + "/#reports", "Signal reports"], ["paper", MARKETS_ORIGIN + "/paper", "Paper desk"]];
+export function siteTop(active) {
+  return `<header class="ds-top"><div class="ds-top-in"><a class="ds-brand" href="${Q08_ORIGIN}/">q08 <span class="ds-muted vp-tag">signal to value</span></a><nav class="vp-nav" aria-label="q08">${NAV.map(([k, h, l]) => `<a href="${h}"${k === active ? ' aria-current="page"' : ""}>${l}</a>`).join("")}</nav></div></header>`;
+}
+export const VP_CSS = ".vp-tag{font-weight:400;font-size:14px}.vp-nav{display:flex;gap:2px 14px;flex-wrap:wrap;justify-content:flex-end}.vp-nav a{display:inline-flex;align-items:center;min-height:44px;font-size:15px;color:var(--ds-ink-2);text-decoration:none}.vp-nav a[aria-current=page]{color:var(--ds-ink);font-weight:650}"
+  + ".vp-flow{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px;margin:0 0 16px;counter-reset:st}.vp-step{background:var(--ds-surface);border:1px solid var(--ds-line);border-radius:var(--ds-r-m);padding:12px 14px;text-decoration:none;color:var(--ds-ink);display:block}.vp-step .k{font-size:14px;color:var(--ds-ink-2);font-weight:600}.vp-step .v{font-size:24px;font-weight:700;font-variant-numeric:tabular-nums;margin:2px 0}.vp-step p{font-size:14px;color:var(--ds-ink-2);margin:0}.vp-step .vp-t{margin-top:8px;padding-top:8px;border-top:1px solid var(--ds-line)}"
+  + ".vp-pos{margin:8px 0 4px;padding:10px 12px;border-radius:var(--ds-r-m);background:var(--ds-surface-2);font-size:15px}.vp-tbl{width:100%;border-collapse:collapse;font-size:15px}.vp-tbl th,.vp-tbl td{text-align:left;padding:8px 6px;border-bottom:1px solid var(--ds-line);vertical-align:top}.vp-tbl td.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}.vp-wrap{overflow-x:auto}.vp-spark{width:100%;height:80px;color:var(--ds-accent)}"
+  + "@media (max-width:640px){.vp-nav{display:none}}";
+const e = (s) => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+export const usd = (x) => (x == null || !Number.isFinite(+x) ? "–" : (x < 0 ? "−$" : "$") + Math.abs(+x).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+const signed = (x) => (x == null ? "–" : (x > 0 ? "+" : "") + usd(x));
+const tone = (x) => (x > 0 ? "ds-good" : x < 0 ? "ds-bad" : "");
+// The four stages with their live numbers; shared by the markets page and, through /api/story, by q08.org's front door.
+const fmtStage = (g) => g.value == null ? "–" : g.key === "signal" ? Math.round(100 * g.value) + "%" : g.key === "value" ? g.value + "%" : String(g.value);
+function targetLine(d, key) {
+  const g = (d.stages || stageScores(d)).find((x) => x.key === key);
+  const want = key === "signal" ? Math.round(100 * g.target) + "% or more" : key === "edge" ? g.target + " points or more" : "above " + g.target;
+  return `<p class="vp-t">Target ${e(want)} · now ${e(fmtStage(g))} · ${g.met == null ? "<span>awaiting data</span>" : g.met ? '<span class="ds-good">met</span>' : '<span class="ds-bad">missed</span>'}</p>`;
+}
+export function flowHtml(d, base = "") {
+  const s = d.signals || {}, f = d.forecasts || {}, b = (d.book || {}).totals || {}, pl = d.pilot;
+  return `<div class="vp-flow">
+<a class="vp-step" href="${Q08_ORIGIN}/#reports"><div class="k">1 · Signals in</div><div class="v">${e(s.last_7d != null ? s.last_7d.toLocaleString("en-US") : "–")}</div><p>public signals read in 7 days from ${e(Object.keys(s.by_source || {}).length)} source types: news, searches, filings, research</p>${targetLine(d, "signal")}</a>
+<a class="vp-step" href="${MARKETS_ORIGIN}/#forecasts"><div class="k">2 · Forecasts out</div><div class="v">${e(f.open != null ? f.open : "–")}</div><p>live probabilities on real Polymarket questions that move money</p>${targetLine(d, "forecast")}</a>
+<a class="vp-step" href="${MARKETS_ORIGIN}/#forecasts"><div class="k">3 · Edge vs the market</div><div class="v">${e(f.disagree != null ? f.disagree : "–")}</div><p>forecasts that disagree with the crowd${f.mean_edge_pts != null ? `, ${e(f.mean_edge_pts)} points on average` : ""}; the rest agree and hold no position</p>${targetLine(d, "edge")}</a>
+<a class="vp-step" href="${MARKETS_ORIGIN}/track-record"><div class="k">4 · Value captured</div><div class="v ${tone(b.pnl)}">${b.positions ? e(signed(b.pnl)) : "–"}</div><p>${b.positions ? `simulated P&amp;L on ${e(b.positions)} position${b.positions === 1 ? "" : "s"} of ${e(usd(d.stake))}` : "no position yet: one opens when a forecast leaves the crowd"}${pl ? `; paper desk ${e(signed(pl.equity - pl.start))}` : ""}</p>${targetLine(d, "value")}</a>
+</div>`;
+}
+function posLine(pos) {
+  if (!pos) return `<div class="vp-pos">No position: the forecast agrees with the market, so there is no edge to trade.</div>`;
+  return `<div class="vp-pos"><b>Simulated position:</b> buy ${e(pos.side)} at ${e(Math.round(pos.entry * 100))}¢ with ${e(usd(pos.stake))} on ${e(String(pos.opened_at).slice(0, 10))}. ${pos.settled ? "Settled" : "Marked to the market now"} at ${e(Math.round(pos.mark * 100))}¢: <b class="${tone(pos.pnl)}">${e(signed(pos.pnl))}</b>. If the forecast is right on average, expected ${e(signed(pos.expected_pnl))}.</div>`;
+}
+function proxyLine(px) {
+  if (!px) return "";
+  if (px.now == null) return `<p class="ds-muted"><b>Financial market:</b> ${e(px.name)} (data loading).</p>`;
+  return `<p class="ds-muted"><b>Financial market:</b> ${e(px.name)} ${e(px.now)}${e(px.unit === "%" ? "%" : px.unit ? " " + px.unit : "")} on ${e(px.now_date)}, ${px.change >= 0 ? "+" : ""}${e(px.change)}${px.unit === "%" ? " points" : ""} since this forecast opened (${e(px.start_date)}). Context for where the same question is priced outside prediction markets, not a position.</p>`;
+}
+export function storyBody(d) {
+  const list = ((d.forecasts || {}).list || []);
+  const cards = list.map((f) => `<article class="ds-card" id="${e(f.slug)}"><div class="fe-top"><h3 class="ds-card-title">${e(f.title)}</h3><div class="fe-p">${e(pct(f.forecast))}</div></div>
+<div class="ds-meta">${f.edge_pts ? `<span class="ds-badge ds-badge-accent">${f.edge_pts > 0 ? "+" : ""}${e(f.edge_pts)} pts vs crowd</span>` : `<span class="ds-badge">With the crowd</span>`} Crowd ${e(pct(f.crowd))} · settles ${e(f.deadline)} · <a href="${e(f.market_url)}" rel="nofollow noopener">market</a></div>
+${posLine(f.position)}
+<p class="ds-muted"><b>What it moves:</b> ${e(f.moves)}</p>${proxyLine(f.proxy)}
+${f.related && f.related.length ? `<p class="ds-muted"><b>Signal reports on q08.org:</b> ${f.related.map((r) => `<a href="${e(r.url)}">${e(r.title)}</a>`).join(" · ")}</p>` : ""}</article>`).join("\n");
+  return cards || `<div class="ds-empty"><b>No forecasts yet</b>The engine runs hourly and writes one when a consequential market question has fresh signals.</div>`;
+}
+export function renderStory(d, head) {
+  const b = (d.book || {}).totals || {};
+  return `<!doctype html><html lang="en"><head>${head("q08: signal to value", "Public signals become forecasts on real prediction markets; every forecast's edge is priced and tracked as a simulated position, losses included.", FE_CSS + VP_CSS)}</head><body class="ds">
+${siteTop("forecasts")}
+<main class="ds-main"><div class="ds-head"><h1>Signals in. Forecasts out. Value measured.</h1><p>Funds and trading desks turn signals into forecasts and forecasts into positions behind closed doors. q08 runs that loop live and in the open: every signal, every forecast, every simulated position and every loss is on this page and in the <a href="/api/story">data</a>.</p></div>
+${flowHtml(d)}
+<p class="ds-note">How the value is captured: when a forecast leaves the market price, the side it favours is bought at that price. If the forecast is better calibrated than the crowd, those positions earn money on average; if not, they lose it, and the <a href="/track-record">track record</a> shows which. ${b.positions ? "" : "No forecast has left the crowd yet, so the book is empty."}</p>
+<h2 id="forecasts">Forecasts that move money</h2>
+${storyBody(d)}
+<footer class="fe-foot"><a href="/track-record">Track record</a><a href="${Q08_ORIGIN}/#reports">Signal reports</a><a href="/paper">Paper desk</a><a href="/whitepaper">White paper</a><a href="/api/story">Data (JSON)</a><span>Simulated positions only. Not investment advice.</span></footer>
+</main></body></html>`;
+}
+function spark(curve) {
+  if (!curve || curve.length < 2) return "";
+  const v = curve.map((c) => c.equity), lo = Math.min(...v), hi = Math.max(...v), w = 600, h = 80, k = (hi - lo) || 1;
+  const pts = v.map((y, i) => `${((i / (v.length - 1)) * w).toFixed(1)},${(h - 4 - ((y - lo) / k) * (h - 8)).toFixed(1)}`).join(" ");
+  return `<svg class="vp-spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" role="img" aria-label="Paper desk equity from ${e(usd(v[0]))} to ${e(usd(v[v.length - 1]))}"><polyline fill="none" stroke="currentColor" stroke-width="2" vector-effect="non-scaling-stroke" points="${pts}"/></svg>`;
+}
+export function renderTrackRecord(d, head) {
+  const bk = d.book || { positions: [], totals: {} }, t = bk.totals || {}, pl = d.pilot, es = d.estimator || {}, va = d.value_added || {};
+  const prow = (p) => `<tr><td><a href="/#${e(p.slug)}">${e(p.title)}</a><br><small>${e(String(p.opened_at).slice(0, 10))} · forecast ${e(pct(p.forecast_at_entry))} vs crowd ${e(pct(p.crowd_at_entry))}</small></td><td>${e(p.side)} @ ${e(Math.round(p.entry * 100))}¢</td><td class="n">${e(Math.round(p.mark * 100))}¢${p.settled ? " settled" : ""}</td><td class="n ${tone(p.pnl)}">${e(signed(p.pnl))}</td></tr>`;
+  const trow = (x) => `<tr><td>${e(x.title || x.slug)}<br><small>${e(String(x.opened_at || "").slice(0, 10))} to ${e(String(x.closed_at || "").slice(0, 10))} · ${e(x.reason || x.strategy || "")}</small></td><td>${e(String(x.side || "").toUpperCase())} @ ${e(Math.round((x.entry || 0) * 100))}¢</td><td class="n">${x.exit == null ? "–" : e(Math.round(x.exit * 100)) + "¢"}</td><td class="n ${tone(x.pnl)}">${e(signed(x.pnl))}</td></tr>`;
+  const table = (rows, f) => `<div class="vp-wrap"><table class="vp-tbl"><thead><tr><th>Question</th><th>Bought</th><th>Now</th><th>P&amp;L</th></tr></thead><tbody>${rows.map(f).join("")}</tbody></table></div>`;
+  return `<!doctype html><html lang="en"><head>${head("q08 track record", "Every simulated position the q08 forecasts took against real prediction markets, marked live, losses included.", FE_CSS + VP_CSS)}</head><body class="ds">
+${siteTop("track")}
+<main class="ds-main"><div class="ds-head"><h1>Track record</h1><p>What the forecasts would have made or lost, recomputed from the hash-chained ledger on every visit. Wins and losses both stay on this page.</p></div>
+<section class="ds-stats"><div class="ds-stat"><div class="k">Forecast book P&amp;L</div><div class="v ${tone(t.pnl)}">${t.positions ? e(signed(t.pnl)) : "–"}</div></div><div class="ds-stat"><div class="k">Positions (open / settled)</div><div class="v">${e(t.open || 0)} / ${e(t.settled || 0)}</div></div><div class="ds-stat"><div class="k">Settled wins / losses</div><div class="v">${e(t.wins || 0)} / ${e(t.losses || 0)}</div></div><div class="ds-stat"><div class="k">Value added vs crowd</div><div class="v">${va.n ? e(va.value_added) : "–"}</div></div></section>
+<h2>The pipeline's targets</h2><div class="vp-wrap"><table class="vp-tbl"><thead><tr><th>Stage</th><th>Input → output</th><th>Target</th><th>Now</th></tr></thead><tbody>${(d.stages || []).map((g) => `<tr><td>${e(g.name)}</td><td>${e(g.input)} → ${e(g.output)}<br><small>${e(g.unit)}. Loop: ${e(g.loop)}.</small></td><td class="n">${e(g.key === "signal" ? Math.round(100 * g.target) + "%" : g.target)}</td><td class="n ${g.met == null ? "" : g.met ? "ds-good" : "ds-bad"}">${e(fmtStage(g))}${g.met == null ? " (no data yet)" : ""}</td></tr>`).join("")}</tbody></table></div>
+<h2>Forecast book</h2><p class="ds-muted">One ${e(usd(bk.stake || STAKE))} position per forecast that moved at least ${e(Math.round(100 * (bk.min_edge || MIN_EDGE)))} points from the market, bought at the market price at that moment, held to resolution. ${e(t.with_crowd || 0)} forecast${t.with_crowd === 1 ? "" : "s"} agree with the crowd and hold nothing. Expected P&amp;L at entry, if the forecasts are right: ${e(signed(t.expected_pnl_at_entry))}.</p>
+${bk.positions && bk.positions.length ? table(bk.positions, prow) : `<div class="ds-empty"><b>No position yet</b>The first one opens the hour a forecast moves away from the market price.</div>`}
+<h2>Paper desk</h2>${pl ? `<p class="ds-muted">The earlier pilot: ${e(usd(pl.start))} of simulated money traded by a price-blind estimator. Equity now ${e(usd(pl.equity))} (${e(pl.return_pct)}%), realized ${e(signed(pl.realized))} on ${e(pl.closed)} closed trades (${e(pl.wins)} won, ${e(pl.losses)} lost), ${e(pl.open)} open.</p>${spark(pl.curve)}${pl.trades.length ? table(pl.trades.slice(0, 20), trow) : ""}` : `<div class="ds-empty"><b>No paper desk data</b>The pilot's account appears after its first tick.</div>`}
+<h2>Accuracy against the crowd</h2><p class="ds-muted">${es.n ? `The pilot's estimator, scored on ${e(es.n)} resolved questions: Brier ${e(es.brier_model)} against ${e(es.brier_market)} for the market price (lower is better). ${es.brier_model > es.brier_market ? "The market was more accurate, so the estimator was switched off and the current engine starts from the market price and moves only on cited signals." : "The estimator beat the market price."}` : "No resolved estimates yet."} ${va.n ? `Current engine on ${e(va.n)} settled: Brier ${e(va.brier_engine)} vs crowd ${e(va.brier_prior)}.` : "The current engine has no settled forecast yet; its score appears here when the first market resolves."}</p>
+<footer class="fe-foot"><a href="/">Forecasts</a><a href="/api/track-record">Hash-chained ledger (JSON)</a><a href="/api/story">Data (JSON)</a><span>Simulated positions only. Not investment advice.</span></footer>
+</main></body></html>`;
+}
