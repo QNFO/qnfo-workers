@@ -245,6 +245,7 @@ and [the machine-readable catalog](agent-catalog.json).
 - [Handoff: METRIC-TRIGGER-9901-ISSUES-OVER-24H-NO-DOER: Open issues older than 24 h with no doer](handoff/issue-3228.md) - `docs/handoff/issue-3228.md`
 - [Handoff: TP-1.17-STAGED-ROLLOUT-AI-GATEWAY-1: Staged rollout for qnfo-ai and qnfo-gateway, then both leave the never-auto-merge lists together](handoff/issue-3273.md) - `docs/handoff/issue-3273.md`
 - [Handoff: TP-2.3-ONE-PROBE-PASS-1: One probe pass: fleet-control's */20 tick probes every live worker once into worker_live_audit; the dashboard, lifecycle and deploy-guard read that table](handoff/issue-3365.md) - `docs/handoff/issue-3365.md`
+- [Handoff: METRIC-TRIGGER-6116-PAPERS-QUEUED-OVER-120M: Dissemination SLA: a published paper waited more than 120 minutes](handoff/issue-3379.md) - `docs/handoff/issue-3379.md`
 - [Handoff: OWNER-TASK-op-mvh2iuolcaa1: Audit fleet cost attribution: identify the untagged owner-local desktop clients generating ~$167 list cost over the last 30 days, tag them into unified](handoff/issue-3397.md) - `docs/handoff/issue-3397.md`
 - [Handoff: METRIC-TRIGGER-9510-CLOSURE-BRANCHING-RATIO-24H: Closure branching: more than one reopen for every two closures in 24 h](handoff/issue-3432.md) - `docs/handoff/issue-3432.md`
 - [Handoff: COST-SUSTAIN-1: research pipeline spend to <=$300/mo all-in without quality loss](handoff/issue-3433.md) - `docs/handoff/issue-3433.md`
@@ -272,6 +273,50 @@ and [the machine-readable catalog](agent-catalog.json).
 - [Handoff: BP26-SLO-ERROR-BUDGETS-1: SLOs and error budgets per user-facing surface with automatic blameless postmortems](handoff/issue-4453.md) - `docs/handoff/issue-4453.md`
 - [Handoff: \[#1001986\] WORK-CLAIM-MERGED-RELEASE-1: a claim whose pull request merged is released at the merge, not at its TTL](handoff/issue-8023.md) - `docs/handoff/issue-8023.md`
 - [Handoff: \[#1001990\] ROADMAP-1: QNFO.INFRA FLEET-BUDGET-W3W4-1: drop the two stale Vectorize indexes (qnfo-tasks, qnfo-notes) and fold or document qnfo-pdf and qnfo-containers-pilot (vectorize_indexes 10 -> 8)](handoff/issue-8024.md) - `docs/handoff/issue-8024.md`
+- [Handoff: \[#1002030\] security issue (details kept in qnfo-audit)](handoff/issue-8048.md) - `docs/handoff/issue-8048.md`
+- [Handoff: \[#1002037\] security issue (details kept in qnfo-audit)](handoff/issue-8056.md) - `docs/handoff/issue-8056.md`
+- [Handoff: \[#1002038\] UX-SCREENS-1: fleet-lee (local)](handoff/issue-8057.md) - `docs/handoff/issue-8057.md`
+- [Handoff: \[#1002048\] ROADMAP-1: QNFO.OPS W2-J-HYPER-2: evolve runner applies a manager_evolve_proposals row through a migration PR and keeps or reverts it against the sealed holdout](handoff/issue-8064.md) - `docs/handoff/issue-8064.md`
+- [Handoff: \[#1002049\] ROADMAP-1: QNFO.RSCH REGISTER-2: the defensive-publication register verifies its publisher only by the private link and mints no DOI](handoff/issue-8066.md) - `docs/handoff/issue-8066.md`
+- [Handoff: \[#1002058\] BP26-KILLSWITCH-READERS-2: qnfo-cloud-ops reads fleet_kill_switch once per scheduled run and stops new side effects while it is on](handoff/issue-8074.md) - `docs/handoff/issue-8074.md`
+- [Handoff: \[#1002059\] ADR-TEXT-PROBE-1: owner-steps-watch resolves the ADR text card when both R2 objects hold a real document](handoff/issue-8075.md) - `docs/handoff/issue-8075.md`
+- [Handoff: \[#1002061\] ADR014-ENFORCE-PROMOTE-1: promote the ADR-014 publish check from observe to enforce when seven days are clean](handoff/issue-8077.md) - `docs/handoff/issue-8077.md`
+- [Handoff: \[#1002062\] ADR014-LEGACY-BYLINE-1: a legacy organisation-byline paper takes the owner byline when it is next revised](handoff/issue-8078.md) - `docs/handoff/issue-8078.md`
+- [Handoff: \[#1002077\] ROADMAP-1: QNFO.INFRA ARCHIVE-MARKER-READ-3: scripts/cf_ops_actions.py reads the RETIRED and FOLDED marker under archive/<name>/ as well (delete-worker, delete-vectorize-index, unbind-service)](handoff/issue-8086.md) - `docs/handoff/issue-8086.md`
+- [Handoff: \[#1002080\] ROADMAP-1: QNFO.INFRA UNBIND-VERIFY-RETRY-1: cf-ops-actions unbind-service and unbind-d1 verify the result with one read that lags the write](handoff/issue-8088.md) - `docs/handoff/issue-8088.md`
+- [Handoff: \[#1002082\] ROADMAP-1: QNFO.INFRA WORKER-COUNT-1.9: fold qnfo-github-steward into qnfo-fleet-control with scripts/fold_worker.py (dry run clean)](handoff/issue-8090.md) - `docs/handoff/issue-8090.md`
+- [Handoff: \[#1002173\] ROADMAP-1: QNFO.REACH #2737: Leading indicators that say where to look, not just what to watch](handoff/issue-8158.md) - `docs/handoff/issue-8158.md`
+- [Handoff: \[#1002174\] ROADMAP-1: QNFO.RSCH #2738: Empty /v1/search replies name the index that answered and the next step](handoff/issue-8159.md) - `docs/handoff/issue-8159.md`
+- [Handoff: \[#1002203\] OWNER-VOICE-GUARD-1: owner-voice gate violation (bluesky)](handoff/issue-8181.md) - `docs/handoff/issue-8181.md`
+- [Handoff: \[#1002178\] CF-CAPABILITY-DECIDE-1: account-notifications](handoff/issue-8186.md) - `docs/handoff/issue-8186.md`
+- [Handoff: \[#1002210\] CRON-FAULT-1: worker-silent:qnfo-infra](handoff/issue-8192.md) - `docs/handoff/issue-8192.md`
+- [Handoff: JOBSEARCH-FOLLOWUP-2: phone UI, judge-driven ranking, referral step, companion link (after PR 8198)](handoff/issue-8199.md) - `docs/handoff/issue-8199.md`
+- [Handoff: \[#1001677\] DATA-LAKE-1: move append-only history (verifications, probe log, events) to R2 with a query layer](handoff/issue-8212.md) - `docs/handoff/issue-8212.md`
+- [Handoff: \[#1001805\] PORTFOLIO-WRITE-FAILED-1: QNFO/.github/PORTFOLIO.md](handoff/issue-8214.md) - `docs/handoff/issue-8214.md`
+- [Handoff: \[#1001806\] PORTFOLIO-WRITE-FAILED-1: QNFO/.github/profile/README.md](handoff/issue-8215.md) - `docs/handoff/issue-8215.md`
+- [Handoff: \[#1001825\] UX-SCREENS-1: papers (live)](handoff/issue-8216.md) - `docs/handoff/issue-8216.md`
+- [Handoff: \[#1001862\] ROADMAP-1: QNFO.RSCH #rag-rerank-parity: keep the cheaper rerank arm when quality holds, decided from 3 recorded pairs](handoff/issue-8217.md) - `docs/handoff/issue-8217.md`
+- [Handoff: \[#1002190\] METRIC-TRIGGER-21684-SPEND-LEDGER-FALLBACK-PRICED-ROWS: Cost gap: the AI spend ledger priced calls from a catch-all rate (an unknown mod](handoff/issue-8219.md) - `docs/handoff/issue-8219.md`
+- [Handoff: \[#1002192\] ROADMAP-1: QNFO.PERSONAL #2902: Give the weekly companion summary a one-line 1-5 quality probe](handoff/issue-8221.md) - `docs/handoff/issue-8221.md`
+- [Handoff: \[#1002193\] ROADMAP-1: QNFO.PERSONAL #2903: Worth a look: say how many items your votes hid (reversible)](handoff/issue-8222.md) - `docs/handoff/issue-8222.md`
+- [Handoff: \[#1002207\] VERIFICATION-DEFERRED-7D-1: issue-100384-BACKFILL-1](handoff/issue-8226.md) - `docs/handoff/issue-8226.md`
+- [Handoff: \[#1002208\] personal issue (details kept in qnfo-audit)](handoff/issue-8227.md) - `docs/handoff/issue-8227.md`
+- [Handoff: \[#1002209\] BLINDSPOT-1: belief fleet-closure-subcritical is contradicted by its live probe](handoff/issue-8228.md) - `docs/handoff/issue-8228.md`
+- [Handoff: \[#1002211\] METRIC-TRIGGER-5996-OUTREACH-EMAILS-SENT-7D: Email outreach: fewer than 10 mails sent in 7 days](handoff/issue-8229.md) - `docs/handoff/issue-8229.md`
+- [Handoff: \[RM-3670\] DOC-GOV-1: DOC-GOV-1: Executable governance: turn qnfo/governance (UNIFIED-DATA-GOVERNANCE-P](handoff/issue-8233.md) - `docs/handoff/issue-8233.md`
+- [Handoff: \[RM-3671\] DOC-BACKLOG-1: DOC-BACKLOG-1: Ingest master-build-out-backlog (v1, ADDENDUM, SWEEP2, v3) and bloat-a](handoff/issue-8234.md) - `docs/handoff/issue-8234.md`
+- [Handoff: \[RM-3672\] DOC-AUDIT-1: DOC-AUDIT-1: Convert red-team and systemwide audits (RED-TEAM-INFRA-AUDIT, PHASE3,](handoff/issue-8235.md) - `docs/handoff/issue-8235.md`
+- [Handoff: \[RM-3673\] DOC-HANDOFF-1: DOC-HANDOFF-1: Triage ~95 handoff, closeout, fleet-consolidation and audit/conversati](handoff/issue-8236.md) - `docs/handoff/issue-8236.md`
+- [Handoff: \[RM-3674\] DOC-RESEARCH-1: DOC-RESEARCH-1: Research docs with no implementation: CFPE phase-4 proposals (sqrtSWAP](handoff/issue-8237.md) - `docs/handoff/issue-8237.md`
+- [Handoff: \[#1002217\] CF-AGENT-SETUP-1: load Cloudflare Skills and the Cloudflare API MCP (Code Mode) into the fleet command-line agent](handoff/issue-8240.md) - `docs/handoff/issue-8240.md`
+- [Handoff: \[#1002220\] CODE-AGENT-UX-1.3: GitHub App registration and GITHUB_WEBHOOK_SECRET for /github/webhook](handoff/issue-8242.md) - `docs/handoff/issue-8242.md`
+- [Handoff: \[#1002221\] CODE-AGENT-UX-1.4: verify before the PR (suites plus module compile in Sandbox)](handoff/issue-8243.md) - `docs/handoff/issue-8243.md`
+- [Handoff: \[#1002222\] CODE-AGENT-UX-1.5: /cmd UI: timeline, diff cards, PR card with checks, task list, undo](handoff/issue-8244.md) - `docs/handoff/issue-8244.md`
+- [Handoff: \[#1002227\] Capture: photo of a text page becomes calendar events, with a visible log of where each capture went](handoff/issue-8247.md) - `docs/handoff/issue-8247.md`
+- [Handoff: \[#1002228\] Today: proactive home (now/next, where, weather, briefing, ask-me suggestions, one next step)](handoff/issue-8248.md) - `docs/handoff/issue-8248.md`
+- [Handoff: \[#1002229\] Ask: ChatGPT-style command line with full tool power (calendar read/write, live web search, Amsterdam listings, email, notes, memory, tasks)](handoff/issue-8249.md) - `docs/handoff/issue-8249.md`
+- [Handoff: \[#1002234\] CMDLINE-SANDBOX-1: run the CodeSession edit and test loop inside a Sandbox container](handoff/issue-8254.md) - `docs/handoff/issue-8254.md`
+- [Handoff: \[#1002237\] DASH-FOLD-3-1: fold the fleet dashboard into three screens (Now, Work, Portfolio) driven by the command line](handoff/issue-8257.md) - `docs/handoff/issue-8257.md`
 - [COST-DECISION-OWNER-LOCAL-TEXT-1: owner-local sentence contradicts the $0 spend and the credit runway divides by unbilled third-party list cost](handoff/issues/COST-DECISION-OWNER-LOCAL-TEXT-1.md) - `docs/handoff/issues/COST-DECISION-OWNER-LOCAL-TEXT-1.md`
 - [COST-FEED-7D-WINDOW-1: /api/cost by_model_7d and by_worker_7d sum 8 UTC day buckets (today partial) under a 7d label, with est_usd unlabelled as list price](handoff/issues/by-window-8-buckets.md) - `docs/handoff/issues/by-window-8-buckets.md`
 - [RUM-ZERO-DAY-1: a stored false zero for 2026-10-13 understates the 7- and 28-day pageviews, and the dashboard top pages read the unfiltered source](handoff/issues/rum-zero-13.md) - `docs/handoff/issues/rum-zero-13.md`
