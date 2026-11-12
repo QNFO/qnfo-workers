@@ -433,7 +433,7 @@ export function statusPage(st, head) {
     return '<section class="ds-card"><h2>' + esc(p.label) + '</h2><p class="pp-mute">' + how + "</p>"
       + '<ol class="pp-stages">' + stages + "</ol><p class=\"pp-mute\">" + p.total + " in total: " + states + "</p>" + extra + "</section>";
   };
-  const css = ".pp-clock{align-items:center;gap:var(--ds-s2,8px)}" + ".pp-stages{list-style:none;padding:0;margin:var(--ds-s2,8px) 0;display:grid;gap:4px}.pp-stages li{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--ds-line,#ddd)}.pp-mute{color:var(--ds-mute,#666);font-size:14px}.pp-bad{color:var(--ds-bad,#b00020)}";
+  const css = ".pp-clock{align-items:center;gap:var(--ds-s2,8px)}.pp-flow summary{display:flex;justify-content:space-between;align-items:center;gap:var(--ds-s2,8px);min-height:44px;cursor:pointer}" + ".pp-stages{list-style:none;padding:0;margin:var(--ds-s2,8px) 0;display:grid;gap:4px}.pp-stages li{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--ds-line,#ddd)}.pp-mute{color:var(--ds-mute,#666);font-size:14px}.pp-bad{color:var(--ds-bad,#b00020)}";
   const ck = st.clock || { loops: [] }, bad = ck.not_ok || 0;
   const status = st.healthy ? "Every clock is ticking on time with correct output, and the personal pipeline has no failed or stuck run."
     : bad ? bad + (bad === 1 ? " clock has" : " clocks have") + " stopped or gave wrong output; the watchdog is repairing " + (bad === 1 ? "it" : "them") + " and files a fleet issue if a repair does not hold."
@@ -447,6 +447,6 @@ export function statusPage(st, head) {
       + ". Longest delay: " + ck.loops.reduce((m, r) => Math.max(m, Number(r.latency_min) || 0), 0) + " min. Correct output: " + (acc.length ? Math.round(100 * acc.reduce((n, r) => n + Number(r.accuracy), 0) / acc.length) + "%" : "not counted yet")
       + ". Checked " + (ck.watchdog_age_min === null ? "never" : ck.watchdog_age_min + " min ago") + ".</p>") + "</section>";
   return "<!doctype html><html lang=\"en\"><head>" + (head ? head("Pipelines", css) : "<meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>Pipelines</title><style>body{font:16px/1.5 system-ui;max-width:640px;margin:auto;padding:16px}" + css + "</style>")
-    + '</head><body class="ds"><main class="ds-main"><h1>Pipelines</h1><p>' + esc(status) + "</p>" + clockCard + st.pipelines.map(card).join("")
+    + '</head><body class="ds"><main class="ds-main"><h1>Pipelines</h1><p>' + esc(status) + "</p>" + clockCard + (st.flowCard || "") + st.pipelines.map(card).join("")
     + '<p class="pp-mute">Counts only. Personal events stay in the private personal store. ' + esc(st.engine) + ".</p></main></body></html>";
 }

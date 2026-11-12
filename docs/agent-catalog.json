@@ -1383,6 +1383,16 @@
       "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-4453.md"
     },
     {
+      "path": "docs/handoff/issue-4907.md",
+      "title": "Handoff: TP-2.5-FLEET-EXEC-SINGLE-DISPATCHER-1: fleet-exec */10 becomes the single dispatcher for every schedule finer than hourly; workers keep at most one platform cron each",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-4907.md"
+    },
+    {
+      "path": "docs/handoff/issue-7922.md",
+      "title": "Handoff: BLINDSPOT-1: belief evolve-wip-planner-alignment is contradicted by its live probe",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-7922.md"
+    },
+    {
       "path": "docs/handoff/issue-8023.md",
       "title": "Handoff: [#1001986] WORK-CLAIM-MERGED-RELEASE-1: a claim whose pull request merged is released at the merge, not at its TTL",
       "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-8023.md"
@@ -1613,9 +1623,24 @@
       "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-8257.md"
     },
     {
+      "path": "docs/handoff/issue-8261.md",
+      "title": "Handoff: COMPANION-DOCTOR-PREP-1: Companion: appointment-aware doctor summary (calendar detects a GP or therapist visit, prepares the summary the day before)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-8261.md"
+    },
+    {
+      "path": "docs/handoff/issue-8262.md",
+      "title": "Handoff: COMPANION-HEALTH-IMPORT-1: Companion: import daily health summaries (sleep regularity, steps, resting heart rate, HRV, daylight, audio exposure, mindful minutes) and pair them with check-ins",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-8262.md"
+    },
+    {
       "path": "docs/handoff/issue-8266.md",
       "title": "Handoff: COMPANION-TRAVEL-OFFLINE-1: Companion: travel and patchy-signal use (place names filled in after reconnect, travel time zone for moments, local emergency numbers in the care panel)",
       "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-8266.md"
+    },
+    {
+      "path": "docs/handoff/issue-8267.md",
+      "title": "Handoff: COMPANION-DWELL-1: Companion: prompt a check-in after dwelling at a place (needs background location; design and blocker)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-8267.md"
     },
     {
       "path": "docs/handoff/issue-8268.md",
@@ -1641,6 +1666,31 @@
       "path": "docs/handoff/issue-8275.md",
       "title": "Handoff: AI-CALL-YIELD-1: measure output per AI call, cut research-exec waste, meter unmetered purposes",
       "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-8275.md"
+    },
+    {
+      "path": "docs/handoff/issue-8278.md",
+      "title": "Handoff: YT-D1-OVERLOAD-1: qnfo-youtube-shorts hourly ticks at 11:00Z and 12:00Z on 2026-11-06 failed with D1_ERROR \"D1 DB is overloaded\"; qnfo-audit is 995 MB",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-8278.md"
+    },
+    {
+      "path": "docs/handoff/issue-8282.md",
+      "title": "Handoff: COMPANION-FORYOU-2: For you: away-aware and city-aware ranking (hide Amsterdam cards when away; read venues of the city you are in)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-8282.md"
+    },
+    {
+      "path": "docs/handoff/issue-8283.md",
+      "title": "Handoff: COMPANION-FORYOU-3: For you: bring captured items into the feed (a photographed poster or a jotted event becomes a card with its capture date as the reason) and add the moment-of-impact action (buy ticket date, decide-by)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-8283.md"
+    },
+    {
+      "path": "docs/handoff/issue-8288.md",
+      "title": "Handoff: CMDLINE-EXPAND-1: command line transcript rows cannot be opened to read the full prompt and answer",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-8288.md"
+    },
+    {
+      "path": "docs/handoff/issue-8289.md",
+      "title": "Handoff: COMPANION-OPS-2: Ask ops follow-ups (remove and edit sources by voice, change settings, show fleet queue, redeploy status)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-8289.md"
     },
     {
       "path": "docs/handoff/issues/COST-DECISION-OWNER-LOCAL-TEXT-1.md",

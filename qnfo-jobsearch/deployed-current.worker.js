@@ -9,7 +9,7 @@
 // JOBSEARCH-CV-1 (1.5.0): the CV is part of this worker (page /cv): a yes/no interview that builds the claim bank, review of unconfirmed claims, roles, achievements and publications edited in D1, a resume per job (summary, roles, selected work, education, skills) and a cover note, history and backup. The search is tied to that bank (evidence the owner can back up weighs more; what the CV lacks is shown as a gap), decided postings (rejected, applied, approved) never come back under another id, rejections carry a reason the search learns from, and a wider net: stretch matches outside the stated preferences, more boards and aggregators.
 // Routes: GET / (web UI) | GET /api | GET /api/matches | GET /api/matches/:id | GET /api/runs | GET /api/ledger | POST /api/run | POST /api/matches/:id/status | GET /health
 // Port of the jobsearch/ Python modules (tests: jobsearch/test_jobsearch.py, qnfo-jobsearch/worker.test.mjs).
-var VERSION = "1.25.1-codeagent";
+var VERSION = "1.26.0-codeagent";
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -1703,7 +1703,9 @@ async function loadCtx(env) {
     const snapshot = parseApplicationSnapshot(application.note);
     return snapshot ? [{ features: snapshot.features, applied_ms: Date.parse(application.applied_at), replied: !!application.replied }] : [];
   });
-  return makeCtx(answers, fb, outcomeScoreWeights(outcomeRows), OWNED);
+  // FLOW-DIRECTIVE-1: the outcome weights are an adaptation with a prediction; a missed prediction writes flow_knob:jobs.outcome_weights = off
+  const knob = await env.JOBS_DB.prepare("SELECT value FROM ops_config WHERE key = 'flow_knob:jobs.outcome_weights'").first().catch(() => null);
+  return makeCtx(answers, fb, knob && knob.value === "off" ? {} : outcomeScoreWeights(outcomeRows), OWNED);
 }
 async function getMeta(env, k) { const r = await env.JOBS_DB.prepare("SELECT v FROM jobsearch_meta WHERE k=?").bind(k).first(); return r ? r.v : null; }
 const REASONS = ["field", "coding", "level", "location", "company", "applied", "other"];   // JOBSEARCH-FIT-1: "coding" = too much hands-on code
@@ -2233,8 +2235,10 @@ async function run(env) {
     await ensureUltrastableSkills(env).catch((e) => logErr("ultrastable-skills", e));   // JOBSEARCH-SKILLS-1
     await ensureCredentialEvidence(env).catch((e) => logErr("credential-evidence", e));   // CREDENTIAL-EVIDENCE-1
     await syncSkillAsks(env).catch((e) => logErr("skill-asks", e));   // JOBSEARCH-SKILLS-1: taps on fleet.qnfo.org/focus reach the CV bank
+    await syncOutcomeAsks(env).catch((e) => logErr("outcome-asks", e));   // FLOW-DIRECTIVE-1: what came back from each application, by tap
     await ensureResearchPubs(env).catch((e) => logErr("research-pubs", e));   // before loadCtx so the context sees the merged bank
     const ctx = await loadCtx(env);
+    await recordWeightsAdaptation(env, ctx).catch((e) => logErr("weights-adaptation", e));   // FLOW-DIRECTIVE-1
     const prefsHash = await sha256hex(JSON.stringify([RANK_RULES, ctx.a, [...ctx.learned.boost].sort(), [...ctx.learned.block].sort(), [...OWNED].sort(), [...ctx.learned.coPen].sort(), [...ctx.learned.coDrop].sort()]));
     const prefsChanged = (await getMeta(env, "prefs_hash")) !== prefsHash;
     let mission = null; try { mission = await missionSources(env); } catch (e) { logErr("mission-sources", e); }
@@ -3179,6 +3183,51 @@ function parseJobMail(from, subject, body) {
   const dom = (/@([\w-]+)\./.exec(from) || [])[1] || "";
   return { event, company: co.trim() || (dom && !/^(greenhouse|ashbyhq|lever|workable|linkedin|mail|notifications?|noreply|no-reply)$/.test(dom) ? dom : ""), subject };
 }
+// ------------------------------------------------------------------ FLOW-DIRECTIVE-1 (1.26.0, Rowan 2026-11-12): outcomes come back as signals
+// Measured 2026-11-12: 9 applications and 0 outcomes ever recorded. Employer mail to the application address (rowan.quni@qnfo.org) is routed to
+// qnfo-email, which never handed it here, and nothing asked Rowan what came back. Two inflows now carry job.outcome into jobsearch_events,
+// where outcomeScoreWeights reads it: qnfo-email forwards inbound mail through its JOBS service binding (POST /api/mail-in, accepted only
+// from that binding), and an application 14, 28 and 42 days old gets a tap question on fleet.qnfo.org/focus (owner_asks kind job-outcome).
+// "Nothing yet" changes nothing: no reply is not a rejection (FOLLOWUP-ONLY-INTERVIEW-1).
+const OUTCOME_ASK_DAYS = [14, 28, 42];
+const OUTCOME_ASK_OPTIONS = [{ key: "replied", label: "They replied" }, { key: "interview", label: "Interview invite" }, { key: "rejected", label: "They said no" }, { key: "none", label: "Nothing yet" }];
+async function syncOutcomeAsks(env, nowMs = Date.now()) {
+  const out = { asked: 0, applied: 0 };
+  const rows = (await env.JOBS_DB.prepare("SELECT m.id, m.company, m.title, m.status, MIN(e.ts) AS applied_at FROM jobsearch_matches m JOIN jobsearch_events e ON e.match_id = m.id AND e.event = 'applied' GROUP BY m.id").all()).results || [];
+  for (const r of rows) {
+    if (r.status !== "applied") continue;
+    const days = Math.floor((nowMs - Date.parse(r.applied_at)) / 86400000);
+    const round = OUTCOME_ASK_DAYS.filter((d) => days >= d).length;
+    if (!round) continue;
+    const co = String(r.company || "the employer").trim(), ti = String(r.title || "the role").trim();
+    const res = await env.JOBS_DB.prepare("INSERT OR IGNORE INTO owner_asks (plane, kind, ref, question, cue, options_json, priority) VALUES ('jobs','job-outcome',?1,?2,?3,?4,2)")
+      .bind(r.id + "@" + round, "Has " + co + " answered your application for " + ti + "?", "Applied " + String(r.applied_at).slice(0, 10) + ", " + days + " days ago. \u201cNothing yet\u201d keeps the application open.", JSON.stringify(OUTCOME_ASK_OPTIONS)).run();
+    out.asked += (res.meta && res.meta.changes) || 0;
+  }
+  const taps = (await env.JOBS_DB.prepare("SELECT ref, answer, answered_at FROM owner_asks WHERE kind = 'job-outcome' AND answer IN ('replied','interview','rejected')").all()).results || [];
+  for (const t of taps) {
+    const id = String(t.ref).replace(/@\d+$/, "");
+    const cur = await env.JOBS_DB.prepare("SELECT status FROM jobsearch_matches WHERE id = ?1").bind(id).first();
+    if (!cur || cur.status !== "applied") continue;   // already moved (by mail or an earlier tap)
+    await setPipeStatus(env, id, t.answer, "from a tap on fleet.qnfo.org/focus (job-outcome)", t.answered_at);
+    out.applied++;
+  }
+  return out;
+}
+// Each change of the outcome weights is recorded as an adaptation that predicts the reply rate will not fall; personal-companion settles it
+// after 30 days (_shared/flow-registry.js settleAdaptations) and a miss turns the weights off through ops_config flow_knob:jobs.outcome_weights.
+async function recordWeightsAdaptation(env, ctx) {
+  const w = (ctx && ctx.outcomeWeights) || {};
+  if (!Object.keys(w).length) return { recorded: false, reason: "no outcome weights yet" };
+  const json = JSON.stringify(Object.keys(w).sort().reduce((o, k) => (o[k] = w[k], o), {}));
+  const hash = (await sha256hex(json)).slice(0, 16);
+  const base = await env.JOBS_DB.prepare("SELECT last_value FROM metric_registry WHERE metric = 'jobsearch_reply_rate_90d'").first().catch(() => null);
+  const now = new Date().toISOString(), due = new Date(Date.now() + 30 * 86400000).toISOString();
+  await env.JOBS_DB.prepare("CREATE TABLE IF NOT EXISTS flow_adaptations (id INTEGER PRIMARY KEY AUTOINCREMENT, flow TEXT NOT NULL, knob TEXT NOT NULL, new_hash TEXT NOT NULL, new_json TEXT, metric TEXT NOT NULL, op TEXT NOT NULL, baseline REAL, rollback_value TEXT NOT NULL DEFAULT 'off', created_at TEXT NOT NULL, due_at TEXT NOT NULL, settled_at TEXT, observed REAL, verdict TEXT, UNIQUE(knob, new_hash))").run();
+  const r = await env.JOBS_DB.prepare("INSERT OR IGNORE INTO flow_adaptations (flow, knob, new_hash, new_json, metric, op, baseline, rollback_value, created_at, due_at) VALUES ('jobs-outcome-learner','jobs.outcome_weights',?1,?2,'jobsearch_reply_rate_90d','>=',?3,'off',?4,?5)")
+    .bind(hash, json, base && base.last_value !== null && base.last_value !== "" ? Number(base.last_value) : null, now, due).run();
+  return { recorded: !!(r.meta && r.meta.changes), hash };
+}
 async function applyJobMail(env, m) {
   const p = parseJobMail(m.from || "", m.subject || "", m.body || "");
   if (!p.event) return { matched: false, reason: "not a job status mail" };
@@ -3647,6 +3696,13 @@ const handler = {
     if (p === "/api/ledger" && m === "GET") { await loadBank(env); return J({ person: { ...LEDGER.person, sign_in_email: undefined }, owner_stated: LEDGER.owner_stated, unverified_needs_owner: LEDGER.unverified_needs_owner, facts: LEDGER.facts.filter((f) => ((BANK.facts.find((x) => x.id === f.id) || {}).source === "verified_cv")).map((f) => ({ id: f.id, text: f.text, employer: f.employer, period: f.period })), headlines: LEDGER.headlines }); }   // public: only the verified CV record; what the owner adds in the interview stays private
     if (p === "/api/ops" && m === "GET") { const rep = await opsReportCached(env, url.searchParams.get("fresh") === "1"); return J(rep, rep.status === "ok" ? 200 : 503); }
     if ((p === "/api/outcomes" || p === "/api/funnel") && m === "GET") return J(await outcomes(env));
+    // FLOW-DIRECTIVE-1: employer mail arrives at qnfo-email (Email Routing for rowan.quni@qnfo.org) and is handed here through its JOBS service
+    // binding; ctx.props.caller is set by that binding, so a public request cannot write an outcome.
+    if (p === "/api/mail-in" && m === "POST") {
+      if (!(ctx && ctx.props && ctx.props.caller === "qnfo-email")) return J({ error: "accepted only from the qnfo-email service binding" }, 403);
+      try { const b = await request.json(); const r = await applyJobMail(env, { from: String(b.from || ""), subject: String(b.subject || ""), body: String(b.body || "").slice(0, 20000), date: b.date }); console.log(JSON.stringify({ worker: WORKER, event: "mail-in", ...r })); return J(r); }
+      catch (e) { logErr("mail-in", e); return J({ error: e.message }, e.status || 500); }
+    }
     if (p === "/api/followups" && m === "GET") return J(await followups(env));
     // JOBSEARCH-AUTOPILOT-1: status is open; the queue, the answers and the results need the runner's GitHub OIDC token, the loop token or an owner session
     if (p === "/api/autopilot" && m === "GET") return J(await autopilotStatus(env));
