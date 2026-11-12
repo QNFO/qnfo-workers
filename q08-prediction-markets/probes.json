@@ -58,14 +58,9 @@
       "url": "https://markets.q08.org/api/pm",
       "contains": [
         "\"growth\"",
-        "Q08-PM-RESOLVE-1"
-      ]
-    },
-    {
-      "url": "https://q08-prediction-markets.q08.workers.dev/api/pm",
-      "contains": [
+        "Q08-PM-RESOLVE-1",
         "\"research\":",
-        "\"sources\":"
+        "\"competitors\":"
       ]
     }
   ]
