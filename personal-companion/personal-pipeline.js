@@ -390,11 +390,18 @@ export async function statusAll(env, nowMs = Date.now()) {
       if (!env.AUDIT) throw new Error("no AUDIT binding");
       const s = def.source;
       const rows = (await env.AUDIT.prepare("SELECT " + s.status + " AS status, COUNT(*) AS n, MIN(" + s.ts + ") AS oldest FROM " + s.table + " GROUP BY " + s.status).all()).results || [];
-      out.pipelines.push(PE.projectStatus(def, rows, nowMs));
+      const view = PE.projectStatus(def, rows, nowMs);
+      // PIPELINE-ENGINE-PORT-1: an executed funnel carries its runs (counts only), read without DDL from the plane that owns them
+      if (def.runs === "job-application") {
+        try { const r = await PE.statusOf(env.AUDIT, PD.jobApplicationPipeline(PE), nowMs, { ensure: false }); view.runs = { pipeline: r.pipeline, total: r.total, by_state: r.by_state, stages: r.stages, done_24h: r.done_24h, failed_24h: r.failed_24h, stuck: r.stuck }; }
+        catch (e) { view.runs = { pipeline: "job-application", total: 0, by_state: {}, note: "no runs yet" }; }
+      }
+      out.pipelines.push(view);
     } catch (e) { out.pipelines.push({ pipeline: def.name, error: String(e && e.message || e).slice(0, 200) }); }
   }
   const p = out.pipelines[0] || {};
-  out.healthy = !p.error && (p.failed_24h || 0) === 0 && (p.stuck || 0) === 0;
+  const jr = (out.pipelines.find((x) => x.runs) || {}).runs || {};
+  out.healthy = !p.error && (p.failed_24h || 0) === 0 && (p.stuck || 0) === 0 && (jr.failed_24h || 0) === 0 && (jr.stuck || 0) === 0;
   return out;
 }
 
@@ -404,12 +411,20 @@ export function statusPage(st, head) {
     if (p.error) return '<section class="ds-card"><h2>' + esc(p.pipeline) + '</h2><p class="pp-bad">Could not read this pipeline: ' + esc(p.error) + "</p></section>";
     const stages = p.stages.map((s) => '<li><span>' + esc(s.label) + '</span><b>' + s.active + "</b></li>").join("");
     const states = Object.keys(p.by_state).sort().map((k) => esc(k) + " " + p.by_state[k]).join(" · ");
-    const extra = p.plane === "personal" ? '<p class="pp-mute">Last 24 hours: ' + (p.done_24h || 0) + " finished, " + (p.failed_24h || 0) + " failed, " + (p.stuck || 0) + " stuck.</p>" : "";
-    return '<section class="ds-card"><h2>' + esc(p.label) + '</h2><p class="pp-mute">' + (p.mode === "observed" ? "Runs in its own worker; stages read from its status." : "Runs on Cloudflare Workflows, inline when needed.") + "</p>"
+    let extra = p.plane === "personal" ? '<p class="pp-mute">Last 24 hours: ' + (p.done_24h || 0) + " finished, " + (p.failed_24h || 0) + " failed, " + (p.stuck || 0) + " stuck.</p>" : "";
+    if (p.runs) {
+      const rs = (p.runs.stages || []).filter((s) => s.active).map((s) => esc(s.label) + " " + s.active).join(" · ");
+      const done = (p.runs.by_state && p.runs.by_state.done) || 0;
+      extra += '<p class="pp-mute">Application runs: ' + (p.runs.total || 0) + " in total, " + done + " finished" + (rs ? ", now " + rs : "") + ". "
+        + (p.runs.failed_24h || 0) + " failed and " + (p.runs.stuck || 0) + " stuck in 24 hours.</p>";
+    }
+    const how = p.mode === "observed" ? "Runs in its own worker; stages read from its status."
+      : p.runs ? "Each application runs on Cloudflare Workflows; earlier stages read from its status." : "Runs on Cloudflare Workflows, inline when needed.";
+    return '<section class="ds-card"><h2>' + esc(p.label) + '</h2><p class="pp-mute">' + how + "</p>"
       + '<ol class="pp-stages">' + stages + "</ol><p class=\"pp-mute\">" + p.total + " in total: " + states + "</p>" + extra + "</section>";
   };
   const css = ".pp-stages{list-style:none;padding:0;margin:var(--ds-s2,8px) 0;display:grid;gap:4px}.pp-stages li{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--ds-line,#ddd)}.pp-mute{color:var(--ds-mute,#666);font-size:14px}.pp-bad{color:var(--ds-bad,#b00020)}";
-  const status = st.healthy ? "Every pipeline is reading, and the personal one has no failed or stuck run." : "The personal pipeline has a failed or stuck run, or a pipeline could not be read.";
+  const status = st.healthy ? "Every pipeline is reading, with no failed or stuck run." : "A pipeline has a failed or stuck run, or could not be read.";
   return "<!doctype html><html lang=\"en\"><head>" + (head ? head("Pipelines", css) : "<meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>Pipelines</title><style>body{font:16px/1.5 system-ui;max-width:640px;margin:auto;padding:16px}" + css + "</style>")
     + '</head><body class="ds"><main class="ds-main"><h1>Pipelines</h1><p>' + esc(status) + "</p>" + st.pipelines.map(card).join("")
     + '<p class="pp-mute">Counts only. Personal events stay in the private personal store. ' + esc(st.engine) + ".</p></main></body></html>";
