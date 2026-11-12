@@ -43,9 +43,17 @@ def main():
     pointed = [f for f in carrying if "AGENT-BOOTSTRAP-1" in Path(f).read_text(encoding="utf-8", errors="replace")]
     if carrying and not pointed:
         fail.append("no instruction file carries the AGENT-BOOTSTRAP-1 pointer (python3 sync_agent_bootstrap.py <file>)")
-    base = sys.argv[sys.argv.index("--base") + 1] if "--base" in sys.argv else "origin/main"
-    if sh("git", "rev-parse", "--verify", base).returncode != 0:
-        print(f"self_closed_lint: base {base} not found; added-line scan skipped (logged, not silent)")
+    argv = sys.argv
+    base = "origin/main"
+    if "--base" in argv:
+        i = argv.index("--base")
+        if i + 1 >= len(argv):
+            print("FAIL --base needs a ref"); sys.exit(1)
+        base = argv[i + 1]
+    if "--no-diff" in argv:
+        print("self_closed_lint: --no-diff given; added-line scan not run (instruction-file check only)")
+    elif sh("git", "rev-parse", "--verify", base).returncode != 0:
+        fail.append(f"base {base} not found, so the added-line scan cannot run (fetch it, or pass --no-diff to check instruction files only)")
     else:
         d = sh("git", "diff", "-U0", f"{base}...HEAD").stdout.splitlines()
         cur = None
@@ -53,7 +61,7 @@ def main():
             if l.startswith("+++ b/"):
                 cur = l[6:]
             elif l.startswith("+") and not l.startswith("+++") and cur and cur.endswith(EXT):
-                if Path(cur).name in {Path(i).name for i in INSTRUCTION} or "self_closed_lint" in cur:
+                if cur in INSTRUCTION or "self_closed_lint" in cur:
                     continue
                 if hits([l[1:]]):
                     fail.append(f"{cur}: waits on a person: {l[1:].strip()[:100]}")
