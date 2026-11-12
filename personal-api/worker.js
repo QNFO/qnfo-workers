@@ -296,7 +296,7 @@ function clampMaxTokens(requested, isReason) {
 __name(clampMaxTokens, "clampMaxTokens");
 __name2(clampMaxTokens, "clampMaxTokens");
 __name22(clampMaxTokens, "clampMaxTokens");
-var VERSION = "4.45.2";
+var VERSION = "4.45.3";
 // 4.37.2 KERNEL-PERSONAL-PRIVACY-1: preserve all ten registered reply categories across the content-free telemetry boundary.
 // 4.37.1 KERNEL-PERSONAL-PRIVACY-1: classify twin replies inside the personal plane; AUDIT receives only fixed categories and random event ids, never reply text or excerpts.
 // 4.37.0 KERNEL-EVERYWHERE-1 (2026-11-06, owner directive "IMPLEMENT EVERYWHERE ACROSS ALL AI APPS AND SERVICES AND SURFACES", pillar personal): the twin SYSTEM_PROMPT carries the DOCTRINE-1 kernel 8.2.1 reply recognitions (KERNEL-REPLY-4): end every reply on the answer or result, never on a question, conditional offer or menu; ambiguity gets a stated assumption; a refusal or limit with its reason is a disposition stated declaratively; reversible tool actions are taken and reported in the same reply, and a requested change is made with the tool, not described. Each twin reply is also mirrored to qnfo-audit.personal_replies so the kernel false-stop scan covers this surface. prior 4.36.2
@@ -6339,6 +6339,35 @@ function focusClock(){var c=$('focus-clock');if(!c)return;if(FOCUS.endAt)FOCUS.l
 function focusStart(){if(!FOCUS.choice)return;rememberFocusPrefs();focusClearTimer();FOCUS.left=FOCUS.choice.minutes*60;FOCUS.endAt=Date.now()+FOCUS.left*1000;FOCUS.checks=[false,false,false];FOCUS.timer=setInterval(focusClock,1000);drawFocus();focusClock()}
 function focusPause(){if(!FOCUS.endAt)return;focusClock();if(!FOCUS.endAt)return;FOCUS.left=Math.max(0,Math.ceil((FOCUS.endAt-Date.now())/1000));clearInterval(FOCUS.timer);FOCUS.timer=null;FOCUS.endAt=0;FOCUS.paused=FOCUS.left>0;drawFocus();focusClock()}
 function focusResume(){if(!FOCUS.choice||!FOCUS.left)return;FOCUS.endAt=Date.now()+FOCUS.left*1000;FOCUS.paused=false;FOCUS.timer=setInterval(focusClock,1000);drawFocus();focusClock()}
+
+// COMPANION-HEALTH-IMPORT-1: handle health import file upload
+function healthImport(file){
+  if(!file)return Promise.resolve({error:'no file'});
+  var f=new FormData(); f.append('file',file);
+  return api('/companion/api/health/import',{method:'POST',body:f});
+}
+
+// COMPANION-LOVED-PLACES-1: render loved places suggestions
+function renderLovedPlaces(v){
+  api('/companion/api/loved-places').then(function(r){
+    var c=el('div',{cls:'card'},[el('h2',{text:'Loved places'})]);
+    (r.items||[]).forEach(function(p){
+      c.appendChild(el('div',{cls:'mute',text:p.name}));
+    });
+    v.appendChild(c);
+  }).catch(warn);
+}
+
+// COMPANION-FORYOU-2: apply away and city filters to feed
+function applyAwayCityFilters(t){
+  // placeholder implementation
+  if(t.away){
+    // could hide certain cards
+  }
+  if(t.city && t.city!==t.current_city){
+    // could load city venues
+  }
+}
 function focusReset(){focusClearTimer();drawFocus()}
 function focusHandoff(button){var out=$('focus-handoff-out');button.disabled=true;return api('/companion/api/actions').then(function(r){var active=FOCUS.choice,next=CMP.focusOptions(r.actions||[],[],FOCUS.minutes,FOCUS.energy).find(function(x){return x.kind==='action'&&(!active||active.kind!=='action'||String(x.id)!==String(active.id))});var goal=active&&active.title||FOCUS.lastGoal||'Not selected';var done=FOCUS.completed.length?FOCUS.completed.map(function(x){return'- '+x}).join('\\n'):'None yet';var step=next?next.title+' ('+next.minutes+' min)':'No next action fits this time and energy selection';var checks=FOCUS_STEPS.map(function(x,i){return(FOCUS.checks[i]?'[x] ':'[ ] ')+x}).join('\\n');var text=['Focus session handoff','Current goal: '+goal,'Completed items:\\n'+done,'Next action: '+step,'Constraints: '+FOCUS.minutes+' minutes; '+FOCUS.energy+' energy','Checklist:\\n'+checks].join('\\n');out.innerHTML='';if(typeof navigator!=='undefined'&&navigator.clipboard&&navigator.clipboard.writeText)return navigator.clipboard.writeText(text).then(function(){say(out,'Copied to your clipboard only; nothing was sent.')},function(){out.style.whiteSpace='pre-wrap';say(out,'Clipboard unavailable. Select and copy this handoff:\\n'+text,true)});out.style.whiteSpace='pre-wrap';say(out,'Clipboard unavailable. Select and copy this handoff:\\n'+text,true)}).catch(function(e){out.innerHTML='';say(out,'Could not prepare the handoff. '+e.message,true)}).then(function(){button.disabled=false})}
 function focusDone(){var c=FOCUS.choice;if(!c||FOCUS.saving)return;FOCUS.saving=true;var b=$('focus-out');b.innerHTML='';say(b,'Saving…');var ref=c.kind==='action'?{action_id:c.id}:{activity_id:c.id,title:c.title,category:c.category};var done=c.kind==='action'?api('/companion/api/actions/done',{json:{id:c.id}}):Promise.resolve({ok:true});return done.then(function(r){if(!r.ok)throw new Error(r.error||'could not finish');return api('/companion/api/activity',{json:ref})}).then(function(r){if(!r.ok)throw new Error(r.error||'could not save');FOCUS.lastGoal=c.title;FOCUS.completed.push(c.title);focusClearTimer();FOCUS.offset++;FOCUS.choice=null;FOCUS.options=[];FOCUS.saving=false;$('focus').innerHTML='';var handoff=el('div',{id:'focus-handoff-out',role:'status','aria-live':'polite'}),copy=el('button',{text:'Copy session handoff'});copy.onclick=function(){return focusHandoff(copy)};var out=el('div',{cls:'card'},[el('h2',{text:'Done. That counts.'}),el('div',{text:r.reply||'Noted. Doing it counts.'}),el('div',{cls:'row',style:'margin-top:10px'},[el('button',{cls:'p',text:'One more',onclick:loadFocus}),copy,el('button',{text:'Today',onclick:function(){go('today')}})]),handoff]);$('focus').appendChild(out)}).catch(function(e){FOCUS.saving=false;b.innerHTML='';say(b,e.message,true)})}
