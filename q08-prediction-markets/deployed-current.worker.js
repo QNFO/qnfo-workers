@@ -734,7 +734,7 @@ export async function tick(env, feed, deps = {}) {
   const coolNow = new Set((await db.prepare("SELECT DISTINCT slug FROM pt_position WHERE closed_at IS NOT NULL AND closed_at > ?").bind(new Date(nowMs - 6 * 3600 * 1000).toISOString()).all()).results.map((r) => r.slug));
   let est = { rows: [], status: "off" };
   // CONSOLIDATE-1: the price-hidden estimator lost to the crowd on 30 resolved questions (Brier 0.218 vs 0.039) and is the pilot's only model spend; wrangler sets PM_ESTIMATE = "off". Settlement, the market feed and the frozen record keep running.
-  if (source === "polymarket" && String(env.PM_ESTIMATE || "on") !== "off") est = await estimate(env, db, candidates(markets, heldNow, coolNow, CFG, nowMs, offDomains(ctl0, nowMs)), nowMs, deps);
+  if (source === "polymarket" && String(env.PM_ESTIMATE || "on").trim().toLowerCase() !== "off") est = await estimate(env, db, candidates(markets, heldNow, coolNow, CFG, nowMs, offDomains(ctl0, nowMs)), nowMs, deps);
   if (!(await lock(db))) return { busy: true };
   let result;
   try {

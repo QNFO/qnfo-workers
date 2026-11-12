@@ -12,6 +12,7 @@ export function block() {
 }
 export function apply(text) {
   const a = text.indexOf(BEGIN), b = text.indexOf(END);
+  if ((a < 0) !== (b < 0) || (a >= 0 && b < a)) throw new Error("FORECAST-ENGINE-1 markers are broken (one missing or out of order)");
   if (a >= 0 && b > a) return text.slice(0, a) + block() + text.slice(b + END.length).replace(/^\n/, "");
   const at = text.indexOf("\nexport default {");
   if (at < 0) throw new Error("no export default in worker.js");

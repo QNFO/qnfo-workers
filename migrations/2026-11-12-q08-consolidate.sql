@@ -4,7 +4,7 @@
 -- forecast-record metrics, pm_chain_ok (the frozen forecast log still has to verify).
 -- APPLY-BY: ci
 -- DB: qnfo-audit
--- Rollback: UPDATE analytics_metric_triggers SET enabled = 1 WHERE notes LIKE '%CONSOLIDATE-1%';
+-- Rollback: UPDATE analytics_metric_triggers SET enabled = 1 WHERE metric_key IN ('q08_gate_pass_rate_7d', 'q08_neurons_per_published_piece_7d', 'q08_verified_votes_7d', 'q08_panel_effective_votes_30d', 'q08_panel_unavailable_share_7d', 'pm_breaker_active', 'pm_brier_gain', 'pm_shadow_roi', 'pm_graduation_ready', 'pm_inconsistent_share', 'pm_lookahead_share');
 UPDATE analytics_metric_triggers
 SET enabled = 0, notes = trim(coalesce(notes, '') || ' CONSOLIDATE-1 2026-11-12: disabled; the essay engine runs signals-only (ops_config q08_mode = full restores it, then re-enable).')
 WHERE metric_key IN ('q08_gate_pass_rate_7d', 'q08_neurons_per_published_piece_7d', 'q08_verified_votes_7d', 'q08_panel_effective_votes_30d', 'q08_panel_unavailable_share_7d')
