@@ -139,3 +139,7 @@ activation with ratings, WHO-5, safety plan, pause, honest-AI persona, discreet 
 - [x] **Silence unless actionable** (`COMPANION-SILENCE-1`): Today shows only items with an action; no pinned wellbeing clutter, no repeated asks (the daily mood check-in is kept). (shipped 4.43.0: button-less check-ins hidden once mood is in, zero counts and footer removed)
 - [x] **Plain language only** (`COMPANION-PLAIN-1`): no ids, raw logs or machine output on Today; a test scans rendered Today text for them. (shipped 4.43.0: `PLAIN_BAD`, phone journey `today-plain-language`, self-check `today-plain`)
 - [x] **Self-owned defects** (`COMPANION-SELFFIX-1`): extend SELF_CHECKS so a defect is filed, fixed and closed with only "done" reported. (shipped 4.43.0: `selfHeal` repairs stale asks hourly; only unrepairable defects file an issue)
+
+## MIND-IN-COMPANION-1 (2026-11-12)
+Mind is part of Today (personal-api 4.45.0). Static cards in `personal-api/companion.js` (`MIND_CARDS`), one linted fleet-written card a day in D1 `cmp_mind_cards` (`mindGrow`, status `rejected` rows count refusals), votes in `cmp_mind_votes`. mind.q08.org (q08-mind 2.4.0) redirects to me.q08.org/companion#mind; feeds and `/health` stay.
+Next, in code: `code-task: repo=qnfo-workers path=personal-api/companion.js` add a metric `mind_cards_rejected_7d` and a metric for helps/not-for-me votes per card; retire cards voted down twice.

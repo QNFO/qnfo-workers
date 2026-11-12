@@ -48,7 +48,7 @@ try {
   const get = async (path, at) => {
     if (at !== undefined) Date.now = () => at;
     try {
-      const r = await worker.fetch(new Request("https://mind.q08.org" + path), {}, { waitUntil() {} });
+      const r = await worker.fetch(new Request("https://mind.test" + path), {}, { waitUntil() {} });
       return { status: r.status, body: await r.text(), cache: r.headers.get("cache-control") };
     } finally { Date.now = realNow; }
   };

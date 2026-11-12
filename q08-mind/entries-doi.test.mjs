@@ -84,7 +84,7 @@ try {
   writeFileSync(file, inlined);
   const worker = (await import(pathToFileURL(file).href)).default;
   const get = async (path) => {
-    const r = await worker.fetch(new Request("https://mind.q08.org" + path), {}, { waitUntil() {} });
+    const r = await worker.fetch(new Request("https://mind.test" + path), {}, { waitUntil() {} });
     return { status: r.status, body: await r.text() };
   };
   const api = await get("/api/entries.json");
