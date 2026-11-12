@@ -1,0 +1,11 @@
+# PRODUCT-RESEARCH-1: apps with a phone-journey file that are not yet in APPS of _shared/product-research.js. Shrink-only: delete a line in the PR that registers the app.
+ask-qwav
+fleet
+fleet-lee
+ipatent
+jobs
+markets
+papers
+public
+reading
+signal

@@ -12,7 +12,7 @@ export const END = "// ---- PIPELINE-ENGINE-INLINE:END ----";
 
 function ns(name, text, file) {
   const names = [];
-  let t = text.replace(/^import \* as (PE|PD|FR) from "[^"]+";\s*$/gm, "");
+  let t = text.replace(/^import \* as (PE|PD|FR|PR) from "[^"]+";\s*$/gm, "");
   t = t.replace(/^export (async function|function|const|let|var|class) ([A-Za-z_$][\w$]*)/gm, (m, kw, id) => { names.push(id); return kw + " " + id; });
   if (/^\s*(import|export)\b/m.test(t)) throw new Error("unhandled import/export in " + file);
   return "var " + name + " = (() => {\n" + t + "\nreturn Object.freeze({ " + names.join(", ") + " });\n})(); // end inline " + file + "\n";
@@ -23,7 +23,9 @@ export function buildBlock(rootUrl) {
   const rd = (p) => fs.readFileSync(root + p, "utf8");
   return BEGIN + "\n" + ns("PE", rd("_shared/pipeline-engine.js"), "_shared/pipeline-engine.js") + ns("PD", rd("_shared/pipeline-defs.js"), "_shared/pipeline-defs.js")
     + ns("PP", rd("personal-companion/personal-pipeline.js"), "personal-companion/personal-pipeline.js")
-    + ns("FR", rd("_shared/flow-registry.js"), "_shared/flow-registry.js") + END;   // FLOW-DIRECTIVE-1
+    + ns("FR", rd("_shared/flow-registry.js"), "_shared/flow-registry.js")
+    + ns("PR", rd("_shared/product-research.js"), "_shared/product-research.js") + END;   // PRODUCT-RESEARCH-1
+   //   // FLOW-DIRECTIVE-1
 }
 
 if (import.meta.url === "file://" + process.argv[1]) {
