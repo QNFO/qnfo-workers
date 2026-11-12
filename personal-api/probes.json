@@ -34,6 +34,14 @@
         "Quick question",
         "/companion/api/recall/answer"
       ]
+    },
+    {
+      "url": "https://me.q08.org/companion",
+      "status": 200,
+      "contains": [
+        "function mindCard",
+        "Go deeper"
+      ]
     }
   ]
 }

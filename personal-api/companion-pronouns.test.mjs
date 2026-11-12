@@ -10,7 +10,10 @@ const ok = (name, cond, extra) => {
 };
 const src = fs.readFileSync(new URL("./companion.js", import.meta.url), "utf8");
 const code = src.split("\n").filter((l) => !/^\s*\/\//.test(l)).join("\n");
-const lits = code.match(/"(?:[^"\\\n]|\\.)*"/g) || [];
+// MIND-IN-COMPANION-1: the book summaries describe their authors and subjects, not Rowan; that one data line is exempt.
+const lits0 = code.split("\n").filter((l) => !/^export const MIND_BOOKS = /.test(l)).join("\n");
+void lits0;
+const lits = lits0.match(/"(?:[^"\\\n]|\\.)*"/g) || [];
 const gendered = lits.filter((l) => !/never he or she/.test(l) && /\b(he|his|him|himself|she|her|hers|herself)\b/i.test(l));
 ok("no gendered pronoun in a string literal", gendered.length === 0, gendered.slice(0, 5));
 ok("COMPANION MODE asks for the name or you", /never he or she/.test(src));

@@ -21,6 +21,13 @@ export const journeys = [
       await u.tap("Skip", { within: "#calm" }); await u.see("How is it now?");
       await u.tap("Better", { within: "#calm" }); await u.see("Rest for a bit");
     } },
+  { id: "mind-card", title: "Mind is on Today: read a one-minute card, tap This helps, get another, open Go deeper",
+    async run(u) {
+      await u.open("/__harness/session"); await u.open("/companion"); await u.see("Right now", { wait: 5000 }); await u.see("What can help"); await u.screen("mind-card");
+      await u.tap("This helps"); await u.see("Helps (saved)");
+      await u.tap("Another one"); await u.see("What can help");
+      await u.tap("Go deeper: books, one tap each"); await u.see("Go deeper"); await u.see("How my mind works", { wait: 5000 });
+    } },
   { id: "evening-recap", title: "Evening: see what the day held and let the rest go",
     async run(u, env) {
       await fetch(env.base + "/__harness/clock?local=20"); await fetch(env.base + "/__harness/done-one?title=Call%20the%20dentist");
@@ -80,11 +87,11 @@ export const journeys = [
       await u.expect(async () => (await u.page.locator("#mood-card button").filter({ visible: true }).count()) > 0, "the check-in notification opens Today with no mood buttons to tap (no #mood-card)");
       await u.tap(u.page.locator("#mood-card button").filter({ visible: true }).nth(2)); await u.screen("mood");
     } },
-  { id: "reading-pick", title: "Find something to read",
+  { id: "reading-pick", title: "Find something to read: the books sit under Go deeper on Today, no other address",
     async run(u) {
-      await signedIn(u);
-      await u.see("Something to read");
-      await u.expect(async () => /^https:\/\/mind\.q08\.org\//.test(await u.page.getByRole("link", { name: "Open today’s pick" }).getAttribute("href") || ""), "the reading pick does not link to mind.q08.org");
+      await u.open("/__harness/session"); await u.open("/companion"); await u.see("Right now", { wait: 5000 });
+      await u.tap("Go deeper: books, one tap each"); await u.see("Seven and a Half Lessons About the Brain", { wait: 5000 });
+      await u.tap("Seven and a Half Lessons About the Brain"); await u.see("Short essays on what a brain is actually for");
     } },
   { id: "today-default", title: "Open the companion and see Today with Ask and Capture",
     async run(u) { await u.open("/__harness/session"); await u.open("/"); await u.see("Ask me"); await u.see("Capture", { within: "nav" }); await u.screen("today-default"); } },
