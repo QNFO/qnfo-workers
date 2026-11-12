@@ -1,6 +1,10 @@
 {
  "_doc": "UX-JOURNEYS-1: the most taps and typed fields each journey may take. Lower a number when a change makes a journey easier; raising one needs a reason in the PR. typing is 0 for every owner journey except the six-digit sign-in code.",
  "companion": {
+  "calm-down": {
+   "taps": 5,
+   "typing": 0
+  },
   "sign-in": {
    "taps": 2,
    "typing": 1
