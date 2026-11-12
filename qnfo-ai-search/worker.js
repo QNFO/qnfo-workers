@@ -36,7 +36,7 @@
 //   LIMITS    public AI use is capped per visitor (hashed IP, hourly) and globally (daily); over a cap, or with the
 //             fleet's 30-day AI spend at SPEND_CAP_TOTAL_USD, the answer is sources-only (no model call).
 
-var VERSION = "2.20.3-codeagent";
+var VERSION = "2.20.4-codeagent";
 // 2.19.0 KERNEL-EVERYWHERE-1 (2026-11-06, owner directive "IMPLEMENT EVERYWHERE ACROSS ALL AI APPS AND SERVICES AND SURFACES", pillar reach): the Ask writer SYSTEM prompt carries the DOCTRINE-1 kernel 8.2.1 reply recognitions (KERNEL-REPLY-4): the answer body ends on the result; the designed FOLLOWUPS block remains the only question shape; no conditional offers or menus; ambiguity gets a stated assumption; limits are dispositions with their reason. prior 2.18.2-codeagent
 // 2.13.0 CROSS-LINK-1 (2026-11-04, pillar reach; minor: the Ask page links QWAV and q08 in its nav and footer and carries a Keep exploring strip to the paper library, QWAV, q08 and the idea threads). Prediction: ask.qwav.org visitors click through to another surface; revert: restore 2.12.17. // 2.12.17 earlier history follows: 
 
@@ -4522,6 +4522,10 @@ function wmAttach(target, workerName) {
 // ---- WEBMCP-FLEET-1:ATTACH qnfo-ai-search ----
 wmAttach(worker_default, "qnfo-ai-search");
 
+
+
+
+
 // ---- VOICE-INPUT-1:BEGIN (sourced from _shared/voice.js; applied by scripts/voice-apply.mjs; do not edit inside a worker) ----
 // VOICE-INPUT-1 (2026-11-09, pillar reach; owner directive: "everywhere there's a text box or a prompt I want the microphone to work,
 // like a Google search bar, on Android, desktop, whatever"). One block, inlined into every worker that serves HTML, that
@@ -4531,7 +4535,7 @@ wmAttach(worker_default, "qnfo-ai-search");
 //   3. injects the script tag into each 200 HTML page and sets Permissions-Policy microphone=(self) when the origin sent none or sent a
 //      policy that blocks the microphone (the *.qnfo.org zone rule had forced microphone=() until MIC-ZONE-1 changed it to (self)).
 // Opt a field out with data-novoice. Honeypots, passwords, numbers, e-mails and codes are skipped by the script itself.
-var VX_VERSION = "1.0.0";
+var VX_VERSION = "1.0.1";
 var VX_RATE = {};
 var VX_STT_URL = "https://fleet.qnfo.org/__voice/stt";
 function vxNop(e) { return e; }
@@ -4560,7 +4564,8 @@ var VX_CLIENT = "(function(){if(window.__vx)return;window.__vx=1;" +
 "function startMR(el,btn){navigator.mediaDevices.getUserMedia({audio:true}).then(function(s){var a={btn:btn,stream:s};active=a;var ch=[],mr=new MediaRecorder(s);a.mr=mr;btn.classList.add('rec');btn.setAttribute('aria-label','Stop and transcribe');mr.ondataavailable=function(e){if(e.data&&e.data.size)ch.push(e.data)};mr.onstop=function(){s.getTracks().forEach(function(t){t.stop()});var blob=new Blob(ch,{type:mr.mimeType||'audio/webm'});btn.classList.remove('rec');if(!blob.size)return;btn.disabled=true;toast('Transcribing...');fetch('/__voice/transcribe',{method:'POST',headers:{'x-voice':'1','Content-Type':blob.type},body:blob,credentials:'same-origin'}).then(function(r){return r.json()}).then(function(j){btn.disabled=false;if(j&&j.ok&&j.text){var v=el.value;setVal(el,v+sep(v)+j.text);el.focus();toastEl&&(toastEl.style.display='none')}else fail(btn,(j&&j.error)||'Could not transcribe that.')}).catch(function(){btn.disabled=false;fail(btn,'Could not reach the speech service.')})};mr.start()}).catch(function(e){fail(btn,e&&e.name==='NotAllowedError'?errMsg('not-allowed'):errMsg('audio-capture'))})}" +
 "function toggle(el,btn){if(active){var same=active.btn===btn;stop();if(same)return}try{el.focus()}catch(e){nop(e)}if(SR)startSR(el,btn);else startMR(el,btn)}" +
 "function attach(el){if(map.has(el)||!eligible(el)||hasOwnMic(el))return;var b=document.createElement('button');b.type='button';b.className='vx-b';b.innerHTML=ICON;b.setAttribute('aria-label','Speak into this box');b.title='Speak instead of typing';b.addEventListener('mousedown',function(e){e.preventDefault()});b.addEventListener('click',function(e){e.preventDefault();e.stopPropagation();toggle(el,b)});document.body.appendChild(b);map.set(el,b);place()}" +
-"function place(){if(raf)return;raf=requestAnimationFrame(function(){raf=0;var vw=innerWidth,vh=innerHeight;map.forEach(function(b,el){if(!el.isConnected){b.remove();map.delete(el);return}var r=el.getBoundingClientRect(),cs=getComputedStyle(el),ok=r.width>=80&&r.height>=20&&cs.visibility!=='hidden'&&cs.display!=='none'&&r.bottom>0&&r.top<vh&&r.right>0&&r.left<vw;if(!ok){b.classList.remove('on');return}var sz=r.height<44?28:36;b.style.width=b.style.height=sz+'px';var top=r.height<60?r.top+(r.height-sz)/2:r.bottom-sz-6,left=Math.min(r.right-sz-6,vw-sz-4);b.style.top=Math.max(2,top)+'px';b.style.left=Math.max(2,left)+'px';b.classList.add('on')})})}" +
+"function vis(el,r,vw,vh){try{if(el.checkVisibility&&!el.checkVisibility({visibilityProperty:true,contentVisibilityAuto:true}))return false;if(el.closest('details:not([open])'))return false;if(el.closest('[hidden],[inert],[aria-hidden=true]'))return false;var x=Math.min(Math.max(r.left+r.width/2,0),vw-1),y=Math.min(Math.max(r.top+Math.min(r.height/2,20),0),vh-1),t=document.elementFromPoint(x,y);return !!t&&(t===el||el.contains(t))}catch(e){nop(e);return false}}" +
+"function place(){if(raf)return;raf=requestAnimationFrame(function(){raf=0;var vw=innerWidth,vh=innerHeight;map.forEach(function(b,el){if(!el.isConnected){b.remove();map.delete(el);return}var r=el.getBoundingClientRect(),cs=getComputedStyle(el),ok=r.width>=80&&r.height>=20&&cs.visibility!=='hidden'&&cs.display!=='none'&&r.bottom>0&&r.top<vh&&r.right>0&&r.left<vw&&vis(el,r,vw,vh);if(!ok){b.classList.remove('on');return}var sz=r.height<44?28:36;b.style.width=b.style.height=sz+'px';var top=r.height<60?r.top+(r.height-sz)/2:r.bottom-sz-6,left=Math.min(r.right-sz-6,vw-sz-4);b.style.top=Math.max(2,top)+'px';b.style.left=Math.max(2,left)+'px';b.classList.add('on')})})}" +
 "function scan(root){var q=(root&&root.querySelectorAll?root:document).querySelectorAll('textarea,input');for(var i=0;i<q.length;i++)attach(q[i]);if(root&&root.tagName&&(root.tagName==='TEXTAREA'||root.tagName==='INPUT'))attach(root)}" +
 "scan(document);new MutationObserver(function(ms){var any=false;ms.forEach(function(m){m.addedNodes.forEach(function(n){if(n.nodeType===1){scan(n);any=true}})});place()}).observe(document.documentElement,{childList:true,subtree:true});" +
 "['scroll','resize','input','focusin','transitionend','animationend'].forEach(function(ev){addEventListener(ev,place,true)});setInterval(place,1500);" +

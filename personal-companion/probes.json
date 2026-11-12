@@ -67,6 +67,17 @@
         "withdrawn_no_source_record",
         "retracted_after_audit"
       ]
+    },
+    {
+      "_note": "PERSONAL-PIPELINE-1: one status view for the research, jobs and personal pipelines on the shared engine; counts only.",
+      "url": "https://personal-companion.q08.workers.dev/api/pipelines",
+      "status": 200,
+      "contains": [
+        "\"engine\":\"pipeline-engine",
+        "\"pipeline\":\"personal\"",
+        "\"pipeline\":\"research\"",
+        "\"pipeline\":\"jobs\""
+      ]
     }
   ]
 }

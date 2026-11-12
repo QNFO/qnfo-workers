@@ -552,7 +552,7 @@ __name222(gateAudit1CfWorkerDeploy, "gateAudit1CfWorkerDeploy");
 __name2222(gateAudit1CfWorkerDeploy, "gateAudit1CfWorkerDeploy");
 __name22222(gateAudit1CfWorkerDeploy, "gateAudit1CfWorkerDeploy");
 __name222222(gateAudit1CfWorkerDeploy, "gateAudit1CfWorkerDeploy");
-var VERSION = "2.71.3-codeagent";
+var VERSION = "2.71.4-codeagent";
 /* 2.62.20 OPS-ARG-ALIAS-1 (issues 5775, 5780, 6173, 6193, 6671, 6792, 6767, 6826, 6015, 6860, pillar autonomy; patch). Caller-input mistakes are no longer fleet failures: workspace_grep accepts query/regex/search for pattern, cf_worker_read/deploy/bindings accept name/script for worker, fleet_graph infers a missing op from its other arguments and accepts filter/q/name for query; a still-missing argument answers arg_error with a hint, and an arg_error or an exception thrown by the caller own run_code or run_code_net JavaScript (user_code_error) is logged as status rejected, so it files no TOOL-FAILURE or LOOP-BREAKER issue. errorDetailCapture writes worker_logs in batches of 25 and records a D1 overload as a deferral, not an error. qnfo-ops/tool-arg-alias.test.mjs. */
 /* 2.62.11 WORKER-LOAD-GATE-1 (issue #6518, pillar autonomy; patch): inline the OAuth broker in the deployable single-module worker. */
 /* 2.62.1 CONTAINER-WORKSPACE-TIMEOUT-1 (#3922, issue 1000117, pillar autonomy; patch): container_workspace_exec allows 120 seconds for cold-start initialization while preserving its 300-second ceiling. */
@@ -9038,7 +9038,35 @@ async function handleChatCore(env, body, ua, ctx, pub) {
                     await _rqDb.prepare("UPDATE intents SET triaged_at = ?, triage_decision = 'promote', triage_score = COALESCE(triage_score, 0) WHERE id = ? AND triaged_at IS NULL").bind(_now, _iid).run();
                   } catch (e3) {
                   }
-                  // RESEARCH-QUEUE-BACKFILL-1 (issue 1002487): the 6 leaked intents created 2026-10-18..2026-11-08
+                          // RESEARCH-QUEUE-BACKFILL-1 (issue 1002487): backfill leaked intents that were closed 'done' without triage
+        try {
+          const _bDb = env.DB || env.QNFO_DB;
+          if (_bDb) {
+            // Find all untriaged done intents from the ops research feed (created after 2026-10-18)
+            const _leaked = await _bDb.prepare(
+              `SELECT id FROM intents WHERE source = 'qnfo-ops-research-feed' AND type = 'note' AND status = 'done' AND triaged_at IS NULL AND created_at >= ?`
+            ).bind('2026-10-18T00:00:00Z').all();
+            if (_leaked && _leaked.results) {
+              for (const row of _leaked.results) {
+                const _iid = row.id;
+                // Ensure we haven't already queued this intent
+                const _exists = await _bDb.prepare(`SELECT 1 FROM research_queue WHERE source_id = ?`).bind(_iid).first();
+                if (_exists) continue;
+                const _now = iso();
+                // Insert into research_queue
+                await _bDb.prepare(
+                  `INSERT OR IGNORE INTO research_queue (id, source, source_id, decision, status, created_at) VALUES (?, 'chat', ?, 'ACCEPT', 'queued', ?)`
+                ).bind(crypto.randomUUID(), _iid, _now).run();
+                // Mark intent as triaged to stop it counting as a leak
+                await _bDb.prepare(
+                  `UPDATE intents SET triaged_at = ?, triage_decision = 'promote', triage_score = COALESCE(triage_score, 0) WHERE id = ? AND triaged_at IS NULL`
+                ).bind(_now, _iid).run();
+              }
+            }
+          }
+        } catch (eBackfill) {
+          // Swallow any errors – backfill is best‑effort and should not affect the primary response
+        }
                   // (NCM 2610.14162, PCB signal-propagation falsification audit, consilience synthesis, 3 others) sit
                   // as status='done' AND triaged_at IS NULL with no research_queue row. Backfill every such leaked
                   // research-feed intent here (idempotent via the source_id existence check) and close its triage.
