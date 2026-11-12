@@ -143,3 +143,15 @@ activation with ratings, WHO-5, safety plan, pause, honest-AI persona, discreet 
 ## MIND-IN-COMPANION-1 (2026-11-12)
 Mind is part of Today (personal-api 4.45.0). Static cards in `personal-api/companion.js` (`MIND_CARDS`), one linted fleet-written card a day in D1 `cmp_mind_cards` (`mindGrow`, status `rejected` rows count refusals), votes in `cmp_mind_votes`. mind.q08.org (q08-mind 2.4.0) redirects to me.q08.org/companion#mind; feeds and `/health` stay.
 Next, in code: `code-task: repo=qnfo-workers path=personal-api/companion.js` add a metric `mind_cards_rejected_7d` and a metric for helps/not-for-me votes per card; retire cards voted down twice.
+## Product research backlog (PRODUCT-RESEARCH-1, daily, owner 2026-11-12)
+
+The fleet's product-manager loop (`_shared/product-research.js`, run by personal-companion's hourly tick, once a day per app) files one issue per
+gap below that is not yet in the code, in weight order, three new a day, and the code loop builds it. Each id is the text the code carries when
+it ships (the issue's closing probe). Practices already covered are in `APPS` in that file. Read the latest run: `SELECT digest FROM
+product_research_runs ORDER BY id DESC`.
+
+- [ ] **Visual routines** (`COMPANION-ROUTINES-1`): the same few steps in the same order each morning and evening, one tap per step.
+- [ ] **Break a task into steps** (`COMPANION-BREAKDOWN-1`): one tap splits a big action into three small ones from a fixed template, no model.
+- [ ] **Kind progress** (`COMPANION-KIND-PROGRESS-1`): a weekly look at what got done, no streaks and no shame for missed days.
+- [ ] **Body doubling** (`COMPANION-BODY-DOUBLE-1`): a "work alongside me" timer that says what it is doing, no model.
+- [ ] **Audio for each book** (`MIND-AUDIO-1`), **free library link** (`MIND-LIBRARY-1`), **content notes** (`MIND-CONTENT-NOTES-1`), **read it or not for me** (`MIND-PROGRESS-1`) in `q08-mind/data/books.json` and its page.
