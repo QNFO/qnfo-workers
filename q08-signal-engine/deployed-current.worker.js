@@ -37,7 +37,7 @@
 // Q08-ASCII-SOURCE-1 (2026-10-01): this file is ASCII-only; every typographic character is a \uXXXX escape. The deploy path
 // double-encoded raw UTF-8, so live pages read "... \u00e2 q08" and posts "\u00e2\u0080\u0094". Keep new literals escaped.
 // VERSION-NOTES-MOVED-1: release notes live in the block below
-var VERSION = "0.50.2";
+var VERSION = "0.50.3-codeagent";
 /* 0.43.0 Q08-TICK-ALLOWANCE-1 (2026-11-04, pillar cost; minor: the engine now decides on its own whether a tick starts an attempt; BUDGET-SOFT-ROUTE-1, attempts slow down and never stop): ai_call_counters showed 119,552, 129,547 and 110,450 neurons on 2026-11-01..03 against the 50,000 target (ops_config q08_daily_neurons) because q08Budget() only steered the first writer model and nothing bounded the attempts a tick starts (40 a day, the attempt cap, at about 2,760 neurons each). Now the :00 cron and the :30 stall retry go through governedGenerate: tick k of 48 starts an attempt only while the day is under the pace line budget x (k + 1) / 48, an essay after a forecast attempt that spent model calls starts only while the day is still under it, and 150 minutes without an attempt starts one whatever the line says (8 a day at least). No row is written for a tick that waits. The writer gate, reader panels, fact-check, final read and accuracy audit are unchanged, and an attempt already started runs all its rounds. ops_config q08_tick_governor = off restores the old behaviour. tick-allowance.test.mjs replays a UTC day. */
 /* 0.42.0 RM-FORECAST-UPDATE-SCORING-1 (#5578; research): score the last valid update before the horizon with the resolved outcome. */
 /* 0.41.6 FORECAST-CALIBRATION-BUCKET-COVERAGE-1 (#5576, charter pillar research; patch): calibration buckets include probabilities across the full [0,1] range, including the tails, rather than silently omitting forecasts below 5% or above 96%. */
@@ -2833,7 +2833,9 @@ async function generate(env) {
     const RETRY_MODEL_CAP = 2;
     if (retryModels.length > RETRY_MODEL_CAP) retryModels = retryModels.slice(0, RETRY_MODEL_CAP);
     if (retryModels.length) {
-      try { retryPiece = await compose(env, retryPrompt, banned, retryModels, undefined, TITLE_REPAIR_ON); } catch (e) { retryPiece = null; }
+        if (!retryPiece) {
+        try { retryPiece = await compose(env, retryPrompt, banned, retryModels, undefined, TITLE_REPAIR_ON); } catch (e) { retryPiece = null; }
+      }
     }
     if (retryPiece && retryPiece.text) {
       var retryGate = gateW(retryPiece.text);
@@ -2928,6 +2930,7 @@ var FORECAST_CAP_KEY = "q08_forecast_max_per_day", FORECAST_CAP_DEFAULT = 3, FOR
 var FORECAST_EVERY = 3;            // a forecast is due after this many consecutive non-forecast pieces
 var FORECAST_MIN_DAYS = 14, FORECAST_MAX_DAYS = 730;
 var FORECAST_RECHECK_DAYS = 7, FORECAST_MAX_CHECKS = 4;
+var VERSION = "0.43.1";
 var __forecastSchemaDone = false, __forecastSchemaTried = 0;
 // BP26-FORECAST-HYGIENE-1 (Metaculus-style resolution criteria): a resolution names the source that settles it, the date, and what happens in the edge case.
 // Text patterns, the same three scripts/bp26_forecast.py measures as forecast_resolution_criteria_complete: they check the words are present, not that the criteria are good.
