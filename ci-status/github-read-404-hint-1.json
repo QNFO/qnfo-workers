@@ -1,0 +1,11 @@
+{
+  "applier": "GITHUB-READ-404-HINT-1",
+  "issue": 1391,
+  "head": "0c1ba8ff9b4c6921a7fc61672cbf7a7252181874",
+  "apply_rc": "0",
+  "committed": "no-change",
+  "deploy_rc": "0",
+  "pre_version": "2.38.1-toolbudget-relock",
+  "post_version": "2.38.1-toolbudget-relock",
+  "ts": "2026-09-30T13:54:57Z"
+}

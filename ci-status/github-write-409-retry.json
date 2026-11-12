@@ -1,0 +1,8 @@
+{
+  "workflow": "apply-github-write-409-retry",
+  "issue": "1372 / GITHUB-FILE-WRITE-409-NO-RETRY-1",
+  "guard_exit": "success",
+  "job_status": "failure",
+  "head": "064e5cf790cc1d1c78120bab5b8faa02bad55644",
+  "ts": "2026-09-29T16:06:43.057Z"
+}

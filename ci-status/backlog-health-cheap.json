@@ -1,0 +1,8 @@
+{
+  "workflow": "apply-backlog-health-cheap",
+  "issue": "1368 / HEALTH-PROBE-BUDGET-1",
+  "guard_exit": "success",
+  "job_status": "failure",
+  "head": "fd4c12377d99f610b932b773c5ed56966dfbbfa0",
+  "ts": "2026-09-29T15:45:02.235Z"
+}

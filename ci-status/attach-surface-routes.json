@@ -1,0 +1,219 @@
+{
+  "marker": "SURFACE-ROUTES-1",
+  "service": "qnfo-gateway",
+  "token_present": true,
+  "stage": "partial",
+  "status": "failed",
+  "error": "qwav.tech: created unverified; ipatent.me: present unverified; www.ipatent.me: present unverified; qwav.net: present unverified; www.qwav.net: present unverified; qwav.uk: present unverified; www.qwav.uk: present unverified; qwave.tech: present unverified; www.qwave.tech: present unverified; q-wave.tech: present unverified; www.q-wave.tech: present unverified; empoweringchange.today: created unverified; www.empoweringchange.today: present unverified; qwav.org: created unverified; www.qwav.org: created unverified",
+  "gateway_version": "3.48.2-codeagent",
+  "hosts": {
+    "archive.qnfo.org": {
+      "zone": "qnfo.org",
+      "route_id": "5d88da51eb374f7cba7b26ee4ade6b0b",
+      "status": "present",
+      "detail": null,
+      "verified": true
+    },
+    "qwav.tech": {
+      "zone": "qwav.tech",
+      "route_id": "98f3c7c09f3b4112989e3a16b8fe07fc",
+      "status": "created",
+      "detail": null,
+      "verified": false,
+      "rolled_back": true
+    },
+    "agent-orchestrator.qnfo.org": {
+      "zone": "qnfo.org",
+      "route_id": "defc645024594631a0bbf560a59a5f6e",
+      "status": "present",
+      "detail": null,
+      "verified": true
+    },
+    "fleet-executor.qnfo.org": {
+      "zone": "qnfo.org",
+      "route_id": "cdf069e60faa480898c8115552beda05",
+      "status": "present",
+      "detail": null,
+      "verified": true
+    },
+    "fleet-scheduler.qnfo.org": {
+      "zone": "qnfo.org",
+      "route_id": "f9dd8ba8e12d4598a96df231ae34fec1",
+      "status": "present",
+      "detail": null,
+      "verified": true
+    },
+    "qnfo-arxiv-radar.qnfo.org": {
+      "zone": "qnfo.org",
+      "route_id": "86b6969f646447eb8169b097b0c0a291",
+      "status": "present",
+      "detail": null,
+      "verified": true
+    },
+    "qnfo-calibration-audit.qnfo.org": {
+      "zone": "qnfo.org",
+      "route_id": "c830202cbba04cb0867734163a5470b8",
+      "status": "present",
+      "detail": null,
+      "verified": true
+    },
+    "qnfo-citation-watch.qnfo.org": {
+      "zone": "qnfo.org",
+      "route_id": "1e12e7c037bc438dacda4e9894b23ea6",
+      "status": "present",
+      "detail": null,
+      "verified": true
+    },
+    "qnfo-paper-reviser.qnfo.org": {
+      "zone": "qnfo.org",
+      "route_id": "b3109629cd9548a58c077c058301c758",
+      "status": "present",
+      "detail": null,
+      "verified": true
+    },
+    "qnfo-research-radar.qnfo.org": {
+      "zone": "qnfo.org",
+      "route_id": "36d201abc84b4e2884a277ef309c2fa2",
+      "status": "present",
+      "detail": null,
+      "verified": true
+    },
+    "qnfo-secrets-audit.qnfo.org": {
+      "zone": "qnfo.org",
+      "route_id": "eb7f8da86d9c46c5ae5ca27f8c487493",
+      "status": "present",
+      "detail": null,
+      "verified": true
+    },
+    "qnfo-system-health.qnfo.org": {
+      "zone": "qnfo.org",
+      "route_id": "d9a04302c5b245329a14736f3a35251e",
+      "status": "present",
+      "detail": null,
+      "verified": true
+    },
+    "scorecard.qnfo.org": {
+      "zone": "qnfo.org",
+      "route_id": "8a052ea00f30409b8f8d2af38236f0a2",
+      "status": "present",
+      "detail": null,
+      "verified": true
+    },
+    "analytics.qnfo.org": {
+      "zone": "qnfo.org",
+      "route_id": "327ec2a262274cf595b7dc68f60f89c3",
+      "status": "present",
+      "detail": null,
+      "verified": true
+    },
+    "ipatent.me": {
+      "zone": "ipatent.me",
+      "route_id": "8b7578ad0f7e4a66b583d9b072dd4a65",
+      "status": "present",
+      "detail": null,
+      "verified": false
+    },
+    "www.ipatent.me": {
+      "zone": "ipatent.me",
+      "route_id": "659425eaf74e4c25ba4c0dcc24a1a1e5",
+      "status": "present",
+      "detail": null,
+      "verified": false
+    },
+    "qwav.net": {
+      "zone": "qwav.net",
+      "route_id": "8eab103f9f224d94be50de3136d2a6c7",
+      "status": "present",
+      "detail": null,
+      "verified": false
+    },
+    "www.qwav.net": {
+      "zone": "qwav.net",
+      "route_id": "da08c2a4e11d4a228c1f5cba1308bbd5",
+      "status": "present",
+      "detail": null,
+      "verified": false
+    },
+    "qwav.uk": {
+      "zone": "qwav.uk",
+      "route_id": "da26d4194f484676a2d51d170b4e6499",
+      "status": "present",
+      "detail": null,
+      "verified": false
+    },
+    "www.qwav.uk": {
+      "zone": "qwav.uk",
+      "route_id": "c0d5644ffb674e43ab671e4393cc1809",
+      "status": "present",
+      "detail": null,
+      "verified": false
+    },
+    "qwave.tech": {
+      "zone": "qwave.tech",
+      "route_id": "099bcad6230641d58d834363fa6127fc",
+      "status": "present",
+      "detail": null,
+      "verified": false
+    },
+    "www.qwave.tech": {
+      "zone": "qwave.tech",
+      "route_id": "6c0ccea65ce947c7be86ac21f8d68dac",
+      "status": "present",
+      "detail": null,
+      "verified": false
+    },
+    "q-wave.tech": {
+      "zone": "q-wave.tech",
+      "route_id": "96a4d00b9e6d41d9b46885d23f0a6092",
+      "status": "present",
+      "detail": null,
+      "verified": false
+    },
+    "www.q-wave.tech": {
+      "zone": "q-wave.tech",
+      "route_id": "50d6985908954440b31cdbc3c20d7055",
+      "status": "present",
+      "detail": null,
+      "verified": false
+    },
+    "empoweringchange.today": {
+      "zone": "empoweringchange.today",
+      "route_id": "a42a86b26b394a51b95aea39a07a9fe7",
+      "status": "created",
+      "detail": null,
+      "verified": false,
+      "rolled_back": true
+    },
+    "www.empoweringchange.today": {
+      "zone": "empoweringchange.today",
+      "route_id": "8cbae80673ed493aae69c15172c4a456",
+      "status": "present",
+      "detail": null,
+      "verified": false
+    },
+    "qwav.org": {
+      "zone": "qwav.org",
+      "route_id": "7890a190910b4995a9c72b52a6ae1591",
+      "status": "created",
+      "detail": null,
+      "pages_detach_http": 200,
+      "pages_detached": "qwav",
+      "verified": false,
+      "pages_reattached": true,
+      "rolled_back": true
+    },
+    "www.qwav.org": {
+      "zone": "qwav.org",
+      "route_id": "e91912f8f5494ba69e5984b6fd070f86",
+      "status": "created",
+      "detail": null,
+      "pages_detach_http": 200,
+      "pages_detached": "qwav",
+      "verified": false,
+      "pages_reattached": true,
+      "rolled_back": true
+    }
+  },
+  "ts": "2026-11-01T17:49:45Z",
+  "lifecycle_version": "1.17.0-paper-learn-probation"
+}

@@ -1,0 +1,14 @@
+{
+  "marker": "COMPANION-DOMAIN-1",
+  "host": "me.q08.org",
+  "service": "personal-api",
+  "token_present": true,
+  "stage": "verify",
+  "status": "ok",
+  "error": null,
+  "worker_version": "4.30.0",
+  "route_id": "859a9e33ac72465080138ec966c41b90",
+  "dns_created": null,
+  "verified": true,
+  "ts": "2026-11-01T17:19:32Z"
+}

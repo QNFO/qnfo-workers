@@ -1,0 +1,8 @@
+{
+  "workflow": "apply-version-precedence-1",
+  "defects": ["VERSION-PRECEDENCE-1", "NOTE-APPEND-IDEMPOTENT-1"],
+  "patch_step": "success",
+  "job_status": "success",
+  "head": "0912187e37aadf68482b3424c0396c13490b0014",
+  "ts": "2026-09-29T16:02:27.569Z"
+}

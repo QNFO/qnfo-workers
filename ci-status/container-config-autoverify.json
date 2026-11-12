@@ -1,0 +1,34 @@
+{
+  "workflow": "container-config-autoverify",
+  "marker": "CONTAINER-CONFIG-AUTOVERIFY-1",
+  "issue": 1485,
+  "worker": "qnfo-containers-pilot",
+  "pre_containers": null,
+  "pre_error": null,
+  "restore": {
+    "attempted": false,
+    "rc": null,
+    "tail": "",
+    "gate": {
+      "need_restore": false,
+      "reason": "newest container event is container.exec at 2026-11-04T08:41:09.472Z: container healthy, nothing to restore",
+      "evidence": {
+        "health_http": 200,
+        "newest_container_event": [
+          "container.exec",
+          "2026-11-04T08:41:09.472Z",
+          0.5428202748298645
+        ]
+      }
+    }
+  },
+  "post_containers": null,
+  "post_bindings": [
+    "AUDIT",
+    "PILOT_TOKEN",
+    "SHELL_CONTAINER"
+  ],
+  "closed": false,
+  "head": "ec295237306018d7f07d1a33a36c3be6faed459a",
+  "ts": "2026-11-04T09:13:44Z"
+}

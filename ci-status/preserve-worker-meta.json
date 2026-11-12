@@ -1,0 +1,10 @@
+{
+  "workflow": "apply-preserve-worker-meta-fix",
+  "issue": 1487,
+  "marker": "PRESERVE-WORKER-METADATA-1",
+  "gate_style": "property-based",
+  "pre_version": "2.37.31-continuation-inherit",
+  "applied": "",
+  "applied_sha": "",
+  "ts": "2026-09-29T19:53:16Z"
+}
