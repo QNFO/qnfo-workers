@@ -1,4 +1,4 @@
-var VERSION = "1.1.6-codeagent";
+var VERSION = "1.1.7-codeagent";
 // WORKER-SOURCE-IN-REPO-1 (issue 9663): tracked copy of the deployed script, plus /health.
 const URLS=["https://me.q08.org/"];
 const ACCOUNT="edb167b78c9fb901ea5bca3ce58ccc4b", SERVED_BY="personal-api";
@@ -86,6 +86,7 @@ async function probe(env){
   return res;
 }
 async function scheduled(ev,env,ctx){ ctx.waitUntil(probe(env)); }
+export { scheduled };
 
 async function fetch(req,env){
   const u=new URL(req.url);
