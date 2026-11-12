@@ -52,6 +52,12 @@ export const journeys = [
       await u.type("#li-code", code); // the one field the owner must fill: six digits from their inbox
       await u.tap("Open"); await u.see("What can I do right now?"); await u.screen("today");
     } },
+  { id: "sign-out", title: "Sign out on this phone and stay signed out after a reload",   // issue 11287: no sign-in cookie survives sign-out
+    async run(u) {
+      await signedIn(u);
+      await u.tap("More", { within: "nav" }); await u.tap("Data", { within: "nav" }); await u.tap("Sign out on this device"); await u.see("E-mail me a code");
+      await u.open(CLASSIC); await u.see("E-mail me a code"); await u.screen("signed-out");
+    } },
   { id: "one-thing-now", title: "Bored or stuck: get one thing to do and start it",
     async run(u) {
       await signedIn(u);

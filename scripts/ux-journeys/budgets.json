@@ -56,6 +56,14 @@
   "today-plain-language": {
    "taps": 0,
    "typing": 0
+  },
+  "sign-out": {
+   "taps": 3,
+   "typing": 0
+  },
+  "hub-places": {
+   "taps": 0,
+   "typing": 0
   }
  },
  "public": {
