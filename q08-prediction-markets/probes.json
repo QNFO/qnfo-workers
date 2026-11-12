@@ -58,6 +58,30 @@
         "The pipeline's targets",
         "Forecast book"
       ]
+    },
+    {
+      "_note": "Q08-GROWTH-1: the pre-registration ledger with its public hash check.",
+      "url": "https://markets.q08.org/ledger",
+      "contains": [
+        "The ledger",
+        "Check it yourself"
+      ]
+    },
+    {
+      "_note": "Q08-CLOCK-1: every pipeline stage reports its own freshness.",
+      "url": "https://markets.q08.org/api/clock",
+      "contains": [
+        "\"forecasts_on_time\"",
+        "\"settlement_on_time\""
+      ]
+    },
+    {
+      "_note": "Q08-GROWTH-1: the product manager's growth targets and runs.",
+      "url": "https://markets.q08.org/api/pm",
+      "contains": [
+        "\"growth\"",
+        "Q08-PM-RESOLVE-1"
+      ]
     }
   ]
 }

@@ -75,7 +75,7 @@ ok(/min-height:44px/.test(ER_CSS) && /focus-visible/.test(ER_CSS) && /prefers-re
 const html = (b, init) => new Response(b, { status: 200, headers: { "Content-Type": "text/html; charset=utf-8" }, ...init });
 const req = (u, o) => new Request(u, o);
 const r1 = await erWithRail(html(page), req("https://qnfo.org/x"));
-ok(r1.headers.get("X-Explore-Rail") === "1.1.0" && /data-explore-rail/.test(await r1.text()), "wrapper decorates a document");
+ok(r1.headers.get("X-Explore-Rail") === "1.2.0" && /data-explore-rail/.test(await r1.text()), "wrapper decorates a document");
 ok(!/data-explore-rail/.test(await (await erWithRail(html(page), req("https://qnfo.org/x", { method: "POST" }))).text()), "POST untouched");
 ok(!/data-explore-rail/.test(await (await erWithRail(html(page, { status: 404 }), req("https://qnfo.org/x"))).text()), "404 untouched");
 ok(!/data-explore-rail/.test(await (await erWithRail(new Response(page, { headers: { "Content-Type": "application/json" } }), req("https://qnfo.org/x"))).text()), "non-HTML untouched");

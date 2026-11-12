@@ -36,7 +36,7 @@
 //   LIMITS    public AI use is capped per visitor (hashed IP, hourly) and globally (daily); over a cap, or with the
 //             fleet's 30-day AI spend at SPEND_CAP_TOTAL_USD, the answer is sources-only (no model call).
 
-var VERSION = "2.20.2-codeagent";
+var VERSION = "2.20.3-codeagent";
 // 2.19.0 KERNEL-EVERYWHERE-1 (2026-11-06, owner directive "IMPLEMENT EVERYWHERE ACROSS ALL AI APPS AND SERVICES AND SURFACES", pillar reach): the Ask writer SYSTEM prompt carries the DOCTRINE-1 kernel 8.2.1 reply recognitions (KERNEL-REPLY-4): the answer body ends on the result; the designed FOLLOWUPS block remains the only question shape; no conditional offers or menus; ambiguity gets a stated assumption; limits are dispositions with their reason. prior 2.18.2-codeagent
 // 2.13.0 CROSS-LINK-1 (2026-11-04, pillar reach; minor: the Ask page links QWAV and q08 in its nav and footer and carries a Keep exploring strip to the paper library, QWAV, q08 and the idea threads). Prediction: ask.qwav.org visitors click through to another surface; revert: restore 2.12.17. // 2.12.17 earlier history follows: 
 
@@ -4657,7 +4657,7 @@ vxAttach(worker_default, "qnfo-ai-search");
 // public page is never pointed at the owner's private surfaces and a private page is never decorated (personal/research separation, DOMAIN-PLANE-1). Only
 // 200 text/html GET answers are changed; JSON, feeds, PDFs, previews inside frames, API paths, unsubscribe and confirm pages pass through. Every link is tagged
 // utm_medium=explore-rail so utm_clicks measures which doors people take (clicks are not readers: READER-YIELD-1).
-var ER_VERSION = "1.1.0";
+var ER_VERSION = "1.2.0";
 // ULTRASTABLE-FOOTER-1 (2026-11-10, owner directive: the whole autonomous system runs on Ultrastable, so say so in the footer of every page, with more cross-product links).
 // One strip at the foot of every rail (full and compact): the platform line plus the doors that prove and show it. Public links only.
 var ER_PLATFORM = [
@@ -4679,8 +4679,8 @@ var ER_PROPS = [
   { k: "qwav", hosts: ["qwav.org", "www.qwav.org", "qwav.tech", "www.qwav.tech"], url: "https://qwav.org/", t: "QWAV", d: "Quantum computing measured in joules per correct answer: the JPCUB benchmark and the p-adic architecture.", cta: "Explore quantum", next: ["papers", "ask", "ideas", "archive", "qnfo"] },
   { k: "archive", hosts: ["archive.qnfo.org"], url: "https://archive.qnfo.org/", t: "Archive", d: "The permanent record: every version of every paper, with what changed and when.", cta: "Open the archive", next: ["papers", "ask", "qwav", "ideas", "fleet"] },
   { k: "ipatent", hosts: ["ipatent.qnfo.org"], url: "https://ipatent.qnfo.org/", t: "iPatent", d: "Free provisional patent drafting with a claim-support check, built on the same research.", cta: "Draft a patent", next: ["papers", "ask", "qnfo", "ideas", "qwav"] },
-  { k: "markets", hosts: ["markets.q08.org"], url: "https://markets.q08.org/", t: "Paper-trading markets", d: "Practise with prediction markets using play money and see how your calls score.", cta: "Try the markets", next: ["q08", "qnfo", "ideas", "fleet", "papers"] },
-  { k: "q08", hosts: ["q08.org", "www.q08.org"], url: "https://q08.org/", t: "q08 essays", d: "Essays on technology stories: what happened, and the system that made it happen.", cta: "Read the essays", next: ["markets", "qnfo", "papers", "ideas", "fleet"] },
+  { k: "markets", hosts: ["markets.q08.org"], url: "https://markets.q08.org/", t: "q08 forecasts", d: "Pre-registered forecasts on the events that move markets, hash-chained before the event and scored when it settles, misses included.", cta: "See the live calls", next: ["q08", "qnfo", "fleet", "papers", "ideas"] },
+  { k: "q08", hosts: ["q08.org", "www.q08.org"], url: "https://q08.org/", t: "q08 signal to value", d: "Public signals become forecasts on real prediction markets, priced as simulated positions, every result in the open.", cta: "Follow the pipeline", next: ["markets", "qnfo", "fleet", "papers", "ideas"] },
   { k: "fleet", hosts: ["fleet.qnfo.org"], url: "https://fleet.qnfo.org/", t: "Live fleet", d: "Watch the autonomous system run: what it is working on, shipping and measuring right now.", cta: "Watch it run", next: ["papers", "ideas", "qnfo", "archive", "ask"] }
 ];
 // Paths that are never decorated: machine routes, one-time-link pages, and the rail's own host-independent exclusions.
