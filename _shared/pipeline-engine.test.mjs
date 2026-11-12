@@ -93,5 +93,25 @@ ok("research projects onto idea -> publication", rs.stages.find((s) => s.key ===
 const js = E.projectStatus(jobsPipeline(E), [{ status: "applied", n: 9 }, { status: "expired", n: 453 }]);
 ok("jobs projects applied as active, expired as dropped", js.stages.find((s) => s.key === "applied").active === 9 && js.by_state.dropped === 453, js);
 
+console.log("[WORKFLOW-FIRST-READ-RETRY-1: no D1 call outside a retried step]");
+{
+  const raw = new DatabaseSync(":memory:");
+  const inner = { prepare(sql) { let a = []; const api = { bind(...x) { a = x; return api; },
+    async run() { const r = raw.prepare(sql).run(...a); return { success: true, meta: { changes: r.changes } }; },
+    async all() { return { results: raw.prepare(sql).all(...a) }; }, async first() { return raw.prepare(sql).get(...a) ?? null; } }; return api; },
+    async exec(q) { raw.exec(q); }, async batch(xs) { return Promise.all(xs.map((x) => x.run())); } };
+  const tiny = E.definePipeline({ name: "tiny", label: "Tiny", plane: "personal", version: "1.0.0", input: { type: "object", props: {} },
+    stages: [{ key: "one", label: "One", async run() { return { out: { ok: 1 } }; } }], output: () => ({ ok: 1 }) });
+  const o = await E.openRun(inner, tiny, {}, { subjectRef: "t1", now: "2026-11-12T17:00:00Z" });
+  let inStep = false, outside = 0, failOnce = true;
+  const guarded = { prepare(sql) { if (!inStep) outside++; if (failOnce && inStep) { failOnce = false; throw new Error("D1_ERROR: D1 DB is overloaded."); } return inner.prepare(sql); },
+    exec: inner.exec, batch: inner.batch };
+  const step = { async do(name, a, b) { const fn = typeof a === "function" ? a : b; for (let t = 0; ; t++) { inStep = true; try { return await fn(); } catch (e) { if (t >= 2) throw e; } finally { inStep = false; } } },
+    async sleep() {} };
+  const res = await E.runPipeline(guarded, tiny, o.id, step, {});
+  ok("an overload on the first read is retried by the step and the run finishes", res && res.status === "done", res);
+  ok("no D1 call happens outside a step", outside === 0, outside);
+}
+
 console.log("\n" + pass + " passed, " + fail + " failed");
 if (fail) process.exit(1);
