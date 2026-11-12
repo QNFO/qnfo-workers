@@ -3097,7 +3097,7 @@ function supportFor(practice, pages) {
 function usageGaps(usage) {
   const out = [];
   for (const a of (usage && usage.asks) || []) {
-    if (a.sent >= 4 && a.answered / a.sent < 0.1) out.push({ key: "ignored-ask-" + String(a.kind).toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 40), kind: a.kind, sent: a.sent, answered: a.answered });
+    if (a.sent >= 4 && (a.answered || 0) / a.sent < 0.1) out.push({ key: "ignored-ask-" + String(a.kind).toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 40), kind: a.kind, sent: a.sent, answered: a.answered });
   }
   return out;
 }
@@ -3193,13 +3193,15 @@ async function all(db, sql, ...args) { try { const r = await db.prepare(sql).bin
 // Real use of the companion: counts only, never what was said.
 async function companionUsage(db, nowMs) {
   const since = new Date(nowMs - 14 * 86400e3).toISOString(), day = since.slice(0, 10);
+  const probe = await one(db, "SELECT COUNT(*) AS n FROM companion_nudges");
+  if (!probe) return null;
   const asks = (await all(db, "SELECT kind, COUNT(*) AS sent, SUM(CASE WHEN state = 'done' OR (response IS NOT NULL AND trim(response) <> '') THEN 1 ELSE 0 END) AS answered FROM companion_nudges WHERE sent_at >= ? GROUP BY kind ORDER BY sent DESC LIMIT 20", since))
     .map((r) => ({ kind: String(r.kind), sent: Number(r.sent) || 0, answered: Number(r.answered) || 0 }));
   const top_cards = (await all(db, "SELECT card, SUM(n) AS taps FROM cmp_card_taps WHERE day >= ? GROUP BY card ORDER BY taps DESC LIMIT 8", day))
     .map((r) => ({ card: String(r.card), taps: Number(r.taps) || 0 }));
   const act = await one(db, "SELECT COUNT(*) AS n FROM cmp_activity_log WHERE ts >= ?", since);
   const caps = await one(db, "SELECT COUNT(*) AS n FROM cmp_inbox WHERE ts >= ?", since);
-  return { window_days: 14, asks, top_cards, activities: Number(act && act.n) || 0, captures: Number(caps && caps.n) || 0 };
+  return { measured: true, window_days: 14, asks, top_cards, activities: Number(act && act.n) || 0, captures: Number(caps && caps.n) || 0 };
 }
 
 const AUDIT_DDL = [
@@ -3248,7 +3250,8 @@ async function researchApp(env, app, deps) {
     } catch (e) { g.state = "queued"; console.error(JSON.stringify({ evt: "product-research:file", app: app.app, key: g.key, error: String(e && e.message || e).slice(0, 200) })); }
   }
   // Usage gaps close on their own when the ask is answered again or no longer sent.
-  const openUsage = await all(env.AUDIT, "SELECT id, title FROM agent_issues WHERE title LIKE ? AND status <> 'closed'", issueTitle(app.app, "ignored-ask-") + "%");
+  // Only close on a real measurement: with no usage read (no PERSONAL binding, failed query) nothing was measured, so nothing is closed.
+  const openUsage = !usage || !usage.measured ? [] : await all(env.AUDIT, "SELECT id, title FROM agent_issues WHERE title LIKE ? AND status <> 'closed'", issueTitle(app.app, "ignored-ask-") + "%");
   for (const row of openUsage) {
     if (gaps.some((g) => issueTitle(app.app, g.key) === row.title)) continue;
     try {
