@@ -4,12 +4,6 @@
   "health": "https://qnfo-jobsearch.q08.workers.dev/health",
   "http": [
     {
-      "url": "https://qnfo-jobsearch.q08.workers.dev/health",
-      "contains": [
-        "\"worker\":\"qnfo-jobsearch\""
-      ]
-    },
-    {
       "url": "https://qnfo-jobsearch.q08.workers.dev/api/ops",
       "contains": [
         "\"rerank\":{\"status\"",
@@ -40,12 +34,6 @@
       ]
     },
     {
-      "url": "https://qnfo-jobsearch.q08.workers.dev/api/referrals",
-      "contains": [
-        "\"items\""
-      ]
-    },
-    {
       "url": "https://qnfo-jobsearch.q08.workers.dev/api/ledger",
       "contains": [
         "Autonomous AI systems researcher"
@@ -56,6 +44,18 @@
       "status": 401,
       "contains": [
         "sign in first"
+      ]
+    },
+    {
+      "url": "https://qnfo-jobsearch.q08.workers.dev/api/shortlist",
+      "contains": [
+        "\"bar\":\"score 55"
+      ]
+    },
+    {
+      "url": "https://qnfo-jobsearch.q08.workers.dev/api/pipeline",
+      "contains": [
+        "\"counts\""
       ]
     }
   ]

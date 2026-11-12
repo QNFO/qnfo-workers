@@ -34,6 +34,18 @@
       "contains": [
         "how_to_verify"
       ]
+    },
+    {
+      "url": "https://q08-prediction-markets.q08.workers.dev/api/forecasts",
+      "contains": [
+        "\"engine\":\"FORECAST-ENGINE-1\""
+      ]
+    },
+    {
+      "url": "https://q08-prediction-markets.q08.workers.dev/forecasts",
+      "contains": [
+        "Forecasts that move money"
+      ]
     }
   ]
 }

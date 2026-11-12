@@ -14,8 +14,8 @@ const line = (n) => { const m = new RegExp("\\nvar " + n + " = [^\\n]*").exec(sr
 const oneLine = (h) => { const a = src.indexOf("\n" + h); if (a < 0) throw new Error("missing " + h); const b = src.indexOf("\n", a + 1); return src.slice(a, b < 0 ? src.length : b); };
 const fn = (h) => { const a = src.indexOf("\n" + h); if (a < 0) throw new Error("missing " + h); return src.slice(a, src.indexOf("\n}\n", a) + 2); };
 const consts = ["Q08_DAILY_NEURONS_DEFAULT", "Q08_BUDGET_BURST", "Q08_TICK_MS", "Q08_TICKS_PER_DAY", "Q08_FLOOR_EVERY_TICKS"].map(line).join("");
-const govSrc = [fn("async function q08Budget("), fn("async function q08TickConfig("), fn("async function q08LastAttemptMs("), fn("function q08PaceLine("), fn("function q08TickAllowance("), oneLine("function q08Paced("), fn("async function governedGenerate("), fn("async function q08TickMore(")];
-const build = (DateImpl, generate) => new Function("Date", "generate", consts + govSrc.join("") + "\nreturn { q08Budget, q08TickConfig, q08LastAttemptMs, q08PaceLine, q08TickAllowance, q08Paced, governedGenerate, q08TickMore };")(DateImpl, generate);
+const govSrc = [fn("async function q08Budget("), fn("async function q08TickConfig("), fn("async function q08LastAttemptMs("), fn("function q08PaceLine("), fn("function q08TickAllowance("), oneLine("function q08Paced("), fn("async function q08Mode("), fn("async function governedGenerate("), fn("async function q08TickMore(")];
+const build = (DateImpl, generate) => new Function("Date", "generate", consts + "async function signalsOnly() { throw new Error(\"signals mode is covered by signals-only.test.mjs\"); }\n" + govSrc.join("") + "\nreturn { q08Budget, q08TickConfig, q08LastAttemptMs, q08PaceLine, q08TickAllowance, q08Paced, governedGenerate, q08TickMore, q08Mode };")(DateImpl, generate);
 let events = [];
 const realErr = console.error;
 console.error = (...a) => { events.push(a.map(String).join(" ")); };
@@ -65,7 +65,7 @@ const mkDb = (cfg) => {
   return db;
 };
 const shim = (db) => ({ prepare(sql) { let args = []; const st = { bind(...x) { args = x; return st; }, async first() { return db.prepare(sql).get(...args) || null; }, async all() { return { results: db.prepare(sql).all(...args) }; }, async run() { db.prepare(sql).run(...args); return { meta: {} }; } }; return st; } });
-const envOf = (db) => ({ AUDIT: shim(db), DB: shim(db) });
+const envOf = (db) => ({ AUDIT: shim(db), DB: shim(db), Q08_MODE: "full" });
 ok(!(await lib0.q08TickConfig(envOf(mkDb({})))).off, "governor defaults on");
 ok((await lib0.q08TickConfig(envOf(mkDb({ q08_tick_governor: " OFF " })))).off, "ops_config q08_tick_governor = off (any case) turns it off");
 ok(!(await lib0.q08TickConfig(envOf(mkDb({ q08_tick_governor: "on" })))).off && !(await lib0.q08TickConfig({})).off, "on and no AUDIT binding keep it on");
@@ -208,7 +208,7 @@ for (const line_ of summary) realErr(line_);
   const out3 = await lib.governedGenerate(env);
   ok(out3.ok === true && called === 2 && seenGov === undefined, "q08_tick_governor = off: generate() runs as before, with no decision on its env", [out3, called]);
   const broken = build(FD, async () => ({ ok: true }));
-  const out4 = await broken.governedGenerate({ AUDIT: { prepare() { throw new Error("d1 down"); } }, DB: { prepare() { throw new Error("d1 down"); } } });
+  const out4 = await broken.governedGenerate({ Q08_MODE: "full", AUDIT: { prepare() { throw new Error("d1 down"); } }, DB: { prepare() { throw new Error("d1 down"); } } });
   ok(out4.ok === true, "a D1 fault never throttles: the attempt runs");
 }
 
