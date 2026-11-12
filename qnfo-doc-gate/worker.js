@@ -1,5 +1,5 @@
 // WORKER-SOURCE-IN-REPO-1 (issue 9713): tracked copy of the deployed script (fetched through the Cloudflare API on 2026-11-09), plus /health.
-var VERSION = "1.0.5-codeagent";
+var VERSION = "1.0.6-codeagent";
 const SCOPES=[["AUDIT","handoffs/"],["AUDIT","audits/"],["AUDIT","closeouts/"],["AUDIT","fleet-consolidation/"],["AUDIT","audit/"],["AUDIT","install-dir-cleanup/"],["PALIMPSEST","docs/"],["QNFO","governance/"]];
 const CUTOFF="2026-11-06T18:00:00.000Z";
 const MAX_LISTED=50;
@@ -74,92 +74,114 @@ async function runChecks(env){
 }
 async function run(env){
   await init(env);
-  const now=new Date().toISOString();
-  const known={};
-  (await q(env,"SELECT bucket||'/'||key AS k FROM doc_audit")).forEach(function(r){known[r.k]=1;});
-  const docs=[];
-  for(const s of SCOPES){
-    const b=s[0], p=s[1]; let cursor;
-    do{
-      const l=await env[b].list({prefix:p,cursor:cursor,limit:1000});
-      for(const o of l.objects){ if(/\.(md|docx|pdf)$/i.test(o.key)) docs.push({b:b,key:o.key,size:o.size,up:o.uploaded.toISOString()}); }
-      cursor=l.truncated?l.cursor:undefined;
-    }while(cursor);
-  }
-  let newDocs=0;
-  for(const d of docs){
-    const k=d.b+"/"+d.key;
-    if(known[k]){ await q(env,"UPDATE doc_audit SET last_seen=?1,size=?2 WHERE bucket=?3 AND key=?4",[now,d.size,d.b,d.key]); continue; }
-    newDocs++;
-    const name=d.key.split("/").pop().replace(/\.(md|docx|pdf)$/i,"").slice(0,40);
-    const like="%"+name+"%";
-    const a=await q(env,"SELECT COUNT(*) n FROM agent_issues WHERE title LIKE ?1 OR description LIKE ?1",[like]);
-    const r=await q(env,"SELECT COUNT(*) n FROM roadmap_implementation WHERE item LIKE ?1 OR source LIKE ?1 OR title LIKE ?1 OR IFNULL(evidence,'') LIKE ?1 OR IFNULL(artifact_ref,'') LIKE ?1",[like]);
-    const traced=(a[0].n>0||r[0].n>0)?1:0;
-    const disp=(!traced&&d.up<CUTOFF)?("cluster:"+cluster(d.b,d.key)):null;
-    await q(env,"INSERT OR IGNORE INTO doc_audit (bucket,key,size,uploaded,first_seen,last_seen,traced,disposition) VALUES (?1,?2,?3,?4,?5,?5,?6,?7)",[d.b,d.key,d.size,d.up,now,traced,disp]);
-    // Ingest specific backlog audit documents into roadmap_implementation if not already present
-    const backlogKeys = [
-      "audits/2026-09-30-master-build-out-backlog/v1",
-      "audits/2026-09-30-master-build-out-backlog/ADDENDUM",
-      "audits/2026-09-30-master-build-out-backlog/SWEEP2",
-      "audits/2026-09-30-master-build-out-backlog/v3",
-      "audits/2026-09-18-bloat-audit"
-    ];
-    for (const bk of backlogKeys) {
-      // Ensure the document exists in doc_audit (bucket "AUDIT")
-      const docExists = await q(env, "SELECT 1 FROM doc_audit WHERE bucket=?1 AND key=?2 LIMIT 1", ["AUDIT", bk]);
-      if (!docExists.length) continue;
-      const pid = "DOC-BACKLOG-1-" + bk.replace(/[^A-Za-z0-9]/g, "");
-      const implExists = await q(env, "SELECT id FROM roadmap_implementation WHERE item=?1 LIMIT 1", [pid]);
-      if (!implExists.length) {
-        await q(env,
-          "INSERT INTO roadmap_implementation (item,source,title,artifact_type,status,evidence) VALUES (?1,'doc-gate',?2,'core','open','ingested by qnfo-doc-gate')",
-          [pid, pid + ": ingest " + bk]
-        );
+  const now = new Date().toISOString();
+  let errorMsg = null;
+  let newDocs = 0;
+  let lint = 0;
+
+  try {
+    const known = {};
+    (await q(env, "SELECT bucket||'/'||key AS k FROM doc_audit")).forEach(r => { known[r.k] = 1; });
+
+    const docs = [];
+    for (const s of SCOPES) {
+      const b = s[0], p = s[1];
+      let cursor;
+      do {
+        const l = await env[b].list({ prefix: p, cursor: cursor, limit: 1000 });
+        for (const o of l.objects) {
+          if (/\.(md|docx|pdf)$/i.test(o.key)) docs.push({ b: b, key: o.key, size: o.size, up: o.uploaded.toISOString() });
+        }
+        cursor = l.truncated ? l.cursor : undefined;
+      } while (cursor);
+    }
+
+    for (const d of docs) {
+      const k = d.b + "/" + d.key;
+      if (known[k]) {
+        await q(env, "UPDATE doc_audit SET last_seen=?1,size=?2 WHERE bucket=?3 AND key=?4", [now, d.size, d.b, d.key]);
+        continue;
+      }
+      newDocs++;
+      const name = d.key.split("/").pop().replace(/\.(md|docx|pdf)$/i, "").slice(0, 40);
+      const like = "%" + name + "%";
+      const a = await q(env, "SELECT COUNT(*) n FROM agent_issues WHERE title LIKE ?1 OR description LIKE ?1", [like]);
+      const r = await q(env, "SELECT COUNT(*) n FROM roadmap_implementation WHERE item LIKE ?1 OR source LIKE ?1 OR title LIKE ?1 OR IFNULL(evidence,'') LIKE ?1 OR IFNULL(artifact_ref,'') LIKE ?1", [like]);
+      const traced = (a[0].n > 0 || r[0].n > 0) ? 1 : 0;
+      const disp = (!traced && d.up < CUTOFF) ? ("cluster:" + cluster(d.b, d.key)) : null;
+      await q(env, "INSERT OR IGNORE INTO doc_audit (bucket,key,size,uploaded,first_seen,last_seen,traced,disposition) VALUES (?1,?2,?3,?4,?5,?5,?6,?7)", [d.b, d.key, d.size, d.up, now, traced, disp]);
+
+      // Ingest specific backlog audit documents into roadmap_implementation if not already present
+      const backlogKeys = [
+        "audits/2026-09-30-master-build-out-backlog/v1",
+        "audits/2026-09-30-master-build-out-backlog/ADDENDUM",
+        "audits/2026-09-30-master-build-out-backlog/SWEEP2",
+        "audits/2026-09-30-master-build-out-backlog/v3",
+        "audits/2026-09-18-bloat-audit"
+      ];
+      for (const bk of backlogKeys) {
+        const docExists = await q(env, "SELECT 1 FROM doc_audit WHERE bucket=?1 AND key=?2 LIMIT 1", ["AUDIT", bk]);
+        if (!docExists.length) continue;
+        const pid = "DOC-BACKLOG-1-" + bk.replace(/[^A-Za-z0-9]/g, "");
+        const implExists = await q(env, "SELECT id FROM roadmap_implementation WHERE item=?1 LIMIT 1", [pid]);
+        if (!implExists.length) {
+          await q(env,
+            "INSERT INTO roadmap_implementation (item,source,title,artifact_type,status,evidence) VALUES (?1,'doc-gate',?2,'core','open','ingested by qnfo-doc-gate')",
+            [pid, pid + ": ingest " + bk]
+          );
+        }
       }
     }
-  }
-  await q(env,"UPDATE doc_audit SET disposition=NULL WHERE traced=0 AND disposition LIKE 'cluster:%' AND substr(disposition,9) IN (SELECT predicate_id FROM agent_issues WHERE status IN ('closed','resolved','wontfix') AND predicate_id IS NOT NULL) AND substr(disposition,9) NOT IN (SELECT predicate_id FROM agent_issues WHERE status='open' AND predicate_id IS NOT NULL)");
-  const unc=await q(env,"SELECT bucket,key FROM doc_audit WHERE traced=0 AND disposition IS NULL ORDER BY first_seen LIMIT "+MAX_LISTED);
-  if(unc.length){
-    const pid="DOC-ORPHAN-"+now.slice(0,13).replace(/[-T]/g,"");
-    const desc="DOC-GATE-1 (qnfo-doc-gate): "+unc.length+" document(s) on R2 have no issue or roadmap trace. Implement each as code (worker, PR, probe) or retire with a recorded reason. Documents:\n"+unc.map(function(u){return u.bucket+":"+u.key;}).join("\n");
-    const ex=await q(env,"SELECT id FROM agent_issues WHERE predicate_id=?1 LIMIT 1",[pid]);
-    let id;
-    if(ex.length) id=ex[0].id; else {
-      const ins=await q(env,"INSERT INTO agent_issues (title,description,source,category,priority,status,created_at,updated_at,predicate_id) VALUES (?1,?2,'doc-gate','code-change','medium','open',?3,?3,?4) RETURNING id",[pid+": "+unc.length+" untraced R2 documents",desc,Date.now(),pid]);
-      id=ins[0].id;
-      await q(env,"INSERT INTO roadmap_implementation (item,source,title,artifact_type,status,evidence) VALUES (?1,'doc-gate',?2,'core','open',?3)",[pid,pid+": implement or retire "+unc.length+" untraced docs","issue "+id+"\n"+desc]);
+
+    await q(env, "UPDATE doc_audit SET disposition=NULL WHERE traced=0 AND disposition LIKE 'cluster:%' AND substr(disposition,9) IN (SELECT predicate_id FROM agent_issues WHERE status IN ('closed','resolved','wontfix') AND predicate_id IS NOT NULL) AND substr(disposition,9) NOT IN (SELECT predicate_id FROM agent_issues WHERE status='open' AND predicate_id IS NOT NULL)");
+
+    const unc = await q(env, "SELECT bucket,key FROM doc_audit WHERE traced=0 AND disposition IS NULL ORDER BY first_seen LIMIT " + MAX_LISTED);
+    if (unc.length) {
+      const pid = "DOC-ORPHAN-" + now.slice(0, 13).replace(/[-T]/g, "");
+      const desc = "DOC-GATE-1 (qnfo-doc-gate): " + unc.length + " document(s) on R2 have no issue or roadmap trace. Implement each as code (worker, PR, probe) or retire with a recorded reason. Documents:\n" + unc.map(u => u.bucket + ":" + u.key).join("\n");
+      const ex = await q(env, "SELECT id FROM agent_issues WHERE predicate_id=?1 LIMIT 1", [pid]);
+      let id;
+      if (ex.length) id = ex[0].id;
+      else {
+        const ins = await q(env, "INSERT INTO agent_issues (title,description,source,category,priority,status,created_at,updated_at,predicate_id) VALUES (?1,?2,'doc-gate','code-change','medium','open',?3,?3,?4) RETURNING id", [pid + ": " + unc.length + " untraced R2 documents", desc, Date.now(), pid]);
+        id = ins[0].id;
+        await q(env, "INSERT INTO roadmap_implementation (item,source,title,artifact_type,status,evidence) VALUES (?1,'doc-gate',?2,'core','open',?3)", [pid, pid + ": implement or retire " + unc.length + " untraced docs", "issue " + id + "\n" + desc]);
+      }
+      for (const u of unc) await q(env, "UPDATE doc_audit SET disposition=?1 WHERE bucket=?2 AND key=?3", ["issue:" + id, u.bucket, u.key]);
     }
-    for(const u of unc) await q(env,"UPDATE doc_audit SET disposition=?1 WHERE bucket=?2 AND key=?3",["issue:"+id,u.bucket,u.key]);
+
+    await q(env, "CREATE TABLE IF NOT EXISTS doc_gate_state (k TEXT PRIMARY KEY, v TEXT)");
+    const hwr = await q(env, "SELECT v FROM doc_gate_state WHERE k='reply_hw'");
+    const since = hwr.length ? hwr[0].v : new Date(Date.now() - 3 * 86400000).toISOString().slice(0, 19).replace('T', ' ');
+    const nextHw = new Date(Date.now() - 300000).toISOString().slice(0, 19).replace('T', ' ');
+    const phr = await q(env, "SELECT phrase,pattern_key FROM false_stop_phrases WHERE pattern_key IN ('sole-safeguard','text-as-output') AND scope='reply'");
+    for (const p of phr) {
+      const rows = await q(env, "SELECT source,reply_id,reply_ts,substr(body,1,200) AS ex FROM v_agent_replies WHERE reply_ts > ?2 AND lower(body) LIKE ?1 LIMIT 100", ["%" + p.phrase + "%", since]);
+      for (const x of rows) await q(env, "INSERT OR IGNORE INTO false_stop_hits (source,reply_id,reply_ts,pattern_key,phrase,excerpt) VALUES (?1,?2,?3,?4,?5,?6)", [x.source, String(x.reply_id), x.reply_ts, p.pattern_key, p.phrase, x.ex]);
+    }
+    await q(env, "INSERT OR REPLACE INTO doc_gate_state (k,v) VALUES ('reply_hw',?1)", [nextHw]);
+
+    const hits = await q(env, "SELECT pattern_key, COUNT(*) AS n FROM false_stop_hits WHERE pattern_key IN ('sole-safeguard','text-as-output') AND ts > strftime('%Y-%m-%dT%H:%M:%SZ','now','-1 day') GROUP BY 1");
+    hits.forEach(h => { lint += h.n; });
+    if (lint > 0) {
+      const pid = "LOOP-LINT-" + now.slice(0, 10).replace(/-/g, "");
+      const ex = await q(env, "SELECT id FROM agent_issues WHERE predicate_id=?1 LIMIT 1", [pid]);
+      if (!ex.length) {
+        await q(env, "INSERT INTO agent_issues (title,description,source,category,priority,status,created_at,updated_at,predicate_id) VALUES (?1,?2,'doc-gate','code-change','high','open',?3,?3,?4)", [pid + ": " + lint + " report(s) described a gap in prose instead of closing it in code",
+          "LOOP-LINT-1 (qnfo-doc-gate): false_stop_hits in the last 24h: " + JSON.stringify(hits) + ". For each hit, find the unenforced gap the text described and file or ship the code that closes it. Source rows: SELECT * FROM false_stop_hits WHERE pattern_key IN ('sole-safeguard','text-as-output') ORDER BY id DESC.", Date.now(), pid]);
+      }
+    }
+
+    await extractItems(env);
+    await runChecks(env);
+  } catch (e) {
+    errorMsg = String(e).slice(0, 300);
+    await q(env, "INSERT OR REPLACE INTO doc_gate_state (k,v) VALUES ('last_error',?1)", [errorMsg]);
   }
 
-  await q(env,"CREATE TABLE IF NOT EXISTS doc_gate_state (k TEXT PRIMARY KEY, v TEXT)");
-  const hwr=await q(env,"SELECT v FROM doc_gate_state WHERE k='reply_hw'");
-  const since=hwr.length?hwr[0].v:new Date(Date.now()-3*86400000).toISOString().slice(0,19).replace('T',' ');
-  const nextHw=new Date(Date.now()-300000).toISOString().slice(0,19).replace('T',' ');
-  const phr=await q(env,"SELECT phrase,pattern_key FROM false_stop_phrases WHERE pattern_key IN ('sole-safeguard','text-as-output') AND scope='reply'");
-  for(const p of phr){
-    const rows=await q(env,"SELECT source,reply_id,reply_ts,substr(body,1,200) AS ex FROM v_agent_replies WHERE reply_ts > ?2 AND lower(body) LIKE ?1 LIMIT 100",["%"+p.phrase+"%",since]);
-    for(const x of rows) await q(env,"INSERT OR IGNORE INTO false_stop_hits (source,reply_id,reply_ts,pattern_key,phrase,excerpt) VALUES (?1,?2,?3,?4,?5,?6)",[x.source,String(x.reply_id),x.reply_ts,p.pattern_key,p.phrase,x.ex]);
-  }
-  await q(env,"INSERT OR REPLACE INTO doc_gate_state (k,v) VALUES ('reply_hw',?1)",[nextHw]);
-  let lint=0;
-  const hits=await q(env,"SELECT pattern_key, COUNT(*) AS n FROM false_stop_hits WHERE pattern_key IN ('sole-safeguard','text-as-output') AND ts > strftime('%Y-%m-%dT%H:%M:%SZ','now','-1 day') GROUP BY 1");
-  hits.forEach(function(h){lint+=h.n;});
-  if(lint>0){
-    const pid="LOOP-LINT-"+now.slice(0,10).replace(/-/g,"");
-    const ex=await q(env,"SELECT id FROM agent_issues WHERE predicate_id=?1 LIMIT 1",[pid]);
-    if(!ex.length){
-      await q(env,"INSERT INTO agent_issues (title,description,source,category,priority,status,created_at,updated_at,predicate_id) VALUES (?1,?2,'doc-gate','code-change','high','open',?3,?3,?4)",[pid+": "+lint+" report(s) described a gap in prose instead of closing it in code",
-        "LOOP-LINT-1 (qnfo-doc-gate): false_stop_hits in the last 24h: "+JSON.stringify(hits)+". For each hit, find the unenforced gap the text described and file or ship the code that closes it. Source rows: SELECT * FROM false_stop_hits WHERE pattern_key IN ('sole-safeguard','text-as-output') ORDER BY id DESC.",Date.now(),pid]);
-    }
-  }
-  try{ await extractItems(env); await runChecks(env); }catch(e){ await q(env,"INSERT OR REPLACE INTO doc_gate_state (k,v) VALUES ('last_error',?1)",[String(e).slice(0,300)]); }
-  const s=(await q(env,"SELECT COUNT(*) total, SUM(traced) traced, SUM(disposition LIKE 'cluster:%') clustered, SUM(traced=0 AND disposition IS NULL) orphans FROM doc_audit"))[0];
-  await q(env,"INSERT INTO doc_gate_runs (ts,total,traced,clustered,orphans,new_docs,lint_hits,note) VALUES (?1,?2,?3,?4,?5,?6,?7,'ok')",[now,s.total,s.traced||0,s.clustered||0,s.orphans||0,newDocs,lint]);
-  return {ts:now,total:s.total,traced:s.traced||0,clustered:s.clustered||0,orphans:s.orphans||0,new_docs:newDocs,lint_hits:lint};
+  const s = (await q(env, "SELECT COUNT(*) total, SUM(traced) traced, SUM(disposition LIKE 'cluster:%') clustered, SUM(traced=0 AND disposition IS NULL) orphans FROM doc_audit"))[0];
+  await q(env, "INSERT INTO doc_gate_runs (ts,total,traced,clustered,orphans,new_docs,lint_hits,note) VALUES (?1,?2,?3,?4,?5,?6,?7,?8)", [now, s.total, s.traced || 0, s.clustered || 0, s.orphans || 0, newDocs, lint, errorMsg ? ("error: " + errorMsg) : "ok"]);
+  return { ts: now, total: s.total, traced: s.traced || 0, clustered: s.clustered || 0, orphans: s.orphans || 0, new_docs: newDocs, lint_hits: lint, note: errorMsg ? ("error: " + errorMsg) : "ok" };
 }
 export default {
   async scheduled(ev, env, ctx) { ctx.waitUntil(run(env).catch(e => console.error('Scheduled run error:', e))); },
