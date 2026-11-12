@@ -126,19 +126,19 @@ activation with ratings, WHO-5, safety plan, pause, honest-AI persona, discreet 
 
 - [x] **Overwhelm reset** (`COMPANION-CALM-1`): one-tap "Calm down" on Today: 4-hour pause, paced breathing, 5-4-3-2-1, better/same/worse
       saved as a rest activity so "what helps" learns; reduced-motion safe; Worse shows 113 and the safety plan. personal-api 4.42.6.
-- [ ] **Evening recap** (`COMPANION-RECAP-1`): one card after 19:00 listing today's done items, activities and mood, plus "carry nothing
+- [x] **Evening recap** (`COMPANION-RECAP-1`): one card after 19:00 listing today's done items, activities and mood, plus "carry nothing (shipped personal-api 4.43.0: `recapFor`, card after 19:00, Let today go)
       over" for the rest. Source: cmp_activity_log, tasks. No model. code-task: repo=qnfo-workers path=personal-api/companion.js
-- [ ] **Explicit transitions** (`COMPANION-TRANSITION-1`): a "next up in 10 minutes" heads-up before appointments, naming what comes next. 
-- [ ] **Low-mood forecast from own data** (`COMPANION-FORECAST-1`): rule-based (two low days plus short sleep) gentle reach-out; no model; measure against next-day mood.
+- [x] **Explicit transitions** (`COMPANION-TRANSITION-1`): a "next up in 10 minutes" heads-up before appointments, naming what comes next.  (shipped 4.43.0: `cmp-soon` push 20 minutes before a timed event, names what follows)
+- [x] **Low-mood forecast from own data** (`COMPANION-FORECAST-1`): rule-based (two low days plus short sleep) gentle reach-out; no model; measure against next-day mood. (shipped 4.43.0: `lowMoodForecast`, two low days plus under 6 h night; prediction stored as `forecast:<day>` for scoring)
 - [ ] **AI reminder at distress** (`COMPANION-AIDISCLOSE-1`): repeat "I am an AI" once when a risk or heavy-mood reply is sent (Art. 50).
 - [ ] **Calm-tool outcome metric** (`COMPANION-CALM-MEASURE-1`): add a SELF_CHECKS entry when Worse outweighs Better over 14 days.
 - [ ] **Quarterly re-scan** (`COMPANION-RESCAN-1`): re-read the sources above plus new regulation and leading apps, append findings here.
 
 ### Scan added 2026-11-12 (owner's cutting-edge scan; the owner's daily mood check-in stays, it overrides "no mood solicitation")
-- [ ] **One source of truth** (`COMPANION-ONE-TRUTH-1`): a decision made anywhere (reply flag, done, pause) updates every surface from the same D1 row; a self-check compares Today with the row.
-- [ ] **Silence unless actionable** (`COMPANION-SILENCE-1`): Today shows only items with an action; no pinned wellbeing clutter, no repeated asks (the daily mood check-in is kept).
-- [ ] **Plain language only** (`COMPANION-PLAIN-1`): no ids, raw logs or machine output on Today; a test scans rendered Today text for them.
-- [ ] **Self-owned defects** (`COMPANION-SELFFIX-1`): extend SELF_CHECKS so a defect is filed, fixed and closed with only "done" reported.
+- [x] **One source of truth** (`COMPANION-ONE-TRUTH-1`): a decision made anywhere (reply flag, done, pause) updates every surface from the same D1 row; a self-check compares Today with the row. (shipped 4.43.0: done/Did it close every ask and task that name each other; screens reload after a decision)
+- [x] **Silence unless actionable** (`COMPANION-SILENCE-1`): Today shows only items with an action; no pinned wellbeing clutter, no repeated asks (the daily mood check-in is kept). (shipped 4.43.0: button-less check-ins hidden once mood is in, zero counts and footer removed)
+- [x] **Plain language only** (`COMPANION-PLAIN-1`): no ids, raw logs or machine output on Today; a test scans rendered Today text for them. (shipped 4.43.0: `PLAIN_BAD`, phone journey `today-plain-language`, self-check `today-plain`)
+- [x] **Self-owned defects** (`COMPANION-SELFFIX-1`): extend SELF_CHECKS so a defect is filed, fixed and closed with only "done" reported. (shipped 4.43.0: `selfHeal` repairs stale asks hourly; only unrepairable defects file an issue)
 
 ## Product research backlog (PRODUCT-RESEARCH-1, daily, owner 2026-11-12)
 

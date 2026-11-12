@@ -13,3 +13,6 @@ __pycache__/
 
 # scripts/deploy_gate.py --check writes wrangler dry-run output to <dir>/<name>/.dryrun-tmp/; never commit it
 .dryrun-tmp/
+
+# scripts/ux-journeys/run.mjs --mode local writes its result here; local journey runs must never be committed (PR 11256 merged one)
+scripts/ux-journeys/ci-status/ux-journeys-local.json

@@ -1,6 +1,6 @@
 -- APPLY-BY: ci
 -- DB: qnfo-audit
--- Rollback: DROP TRIGGER IF EXISTS product_research_tick; DROP VIEW IF EXISTS v_product_research_freshness; DELETE FROM analytics_metric_triggers WHERE metric_key = 'product_research_stale_apps' AND notes = 'PRODUCT-RESEARCH-1 2026-11-12'; DELETE FROM metric_breach_cause WHERE metric_key = 'product_research_stale_apps'; DELETE FROM metric_registry WHERE metric = 'product_research_stale_apps'; DELETE FROM ops_config WHERE key IN ('OWNER_DIRECTIVE_2026_11_12_PRODUCT_RESEARCH_1', 'product_research'); DROP TABLE IF EXISTS product_research_apps; DROP TABLE IF EXISTS product_research_runs;
+-- Rollback: DROP TRIGGER IF EXISTS product_research_tick; DROP VIEW IF EXISTS v_product_research_freshness; DELETE FROM analytics_metric_triggers WHERE metric_key = 'product_research_stale_apps' AND notes = 'PRODUCT-RESEARCH-1 2026-11-12'; DELETE FROM metric_breach_cause WHERE metric_key = 'product_research_stale_apps'; DELETE FROM metric_registry WHERE metric = 'product_research_stale_apps'; DELETE FROM ops_config WHERE key IN ('OWNER_DIRECTIVE_2026_11_12_PRODUCT_RESEARCH_1', 'app_research'); DROP TABLE IF EXISTS product_research_apps; DROP TABLE IF EXISTS product_research_runs;
 -- spof-review: two tables, one view, one measuring trigger on the fleet_tick heartbeat, one metric with its trigger, two ops_config rows. The research runs inside
 -- personal-companion's existing hourly tick (no new cron, binding, host or credential); a stopped trigger delays detection only.
 -- CAUSE-MAPPED: product_research_stale_apps maps to the existing cause key `code-loop` in this same file.
@@ -20,7 +20,7 @@ INSERT OR IGNORE INTO product_research_apps (app, host, registered_at, note) VAL
 INSERT OR IGNORE INTO ops_config (key, value, note) VALUES ('OWNER_DIRECTIVE_2026_11_12_PRODUCT_RESEARCH_1',
   'Research and development and competitive analysis is a key part of improving a product. This is all what should be baked in here. These virtual agents should be doing what a product manager would do. Implement it, code it.',
   'PRODUCT-RESEARCH-1: _shared/product-research.js (personal-companion hourly tick), product_research_runs, v_product_research_freshness, metric product_research_stale_apps, companion self-check research-stale, _shared/product-research.test.mjs (every phone-journey app is registered).');
-INSERT OR IGNORE INTO ops_config (key, value, note) VALUES ('product_research', 'on', 'PRODUCT-RESEARCH-1 kill switch: off stops the daily product research; the freshness metric then breaches by design.');
+INSERT OR IGNORE INTO ops_config (key, value, note) VALUES ('app_research', 'on', 'PRODUCT-RESEARCH-1 kill switch: off stops the daily product research; the freshness metric then breaches by design.');
 
 CREATE VIEW IF NOT EXISTS v_product_research_freshness AS
   SELECT a.app, a.host, MAX(CASE WHEN r.error IS NULL THEN r.run_at END) AS last_ok,
@@ -45,7 +45,7 @@ END;
 
 INSERT INTO analytics_metric_triggers (metric_key, title, source_table, operator, threshold, priority, action, owner, queue_target, cooldown_hours, enabled, notes)
 SELECT 'product_research_stale_apps', 'PRODUCT-RESEARCH-1: the daily product research did not run for an app', 'registry', 'gt', 0, 2,
-  'Pillar personal. Read SELECT * FROM v_product_research_freshness and the latest product_research_runs.error for the app. Find why personal-companion PR.researchTick did not write a good run (a source fetch that throws, a D1 error, ops_config product_research = off) and fix it in _shared/product-research.js, then regenerate the inline block with node scripts/inline-pipeline-modules.mjs. Definition of done: product_research_stale_apps = 0 at a refresh.
+  'Pillar personal. Read SELECT * FROM v_product_research_freshness and the latest product_research_runs.error for the app. Find why personal-companion PR.researchTick did not write a good run (a source fetch that throws, a D1 error, ops_config app_research = off) and fix it in _shared/product-research.js, then regenerate the inline block with node scripts/inline-pipeline-modules.mjs. Definition of done: product_research_stale_apps = 0 at a refresh.
 code-task: repo=qnfo-workers path=personal-companion/worker.js
 code-anchor: async function companionUsage(db, nowMs) {',
   'personal-companion', 'agent_issues', 6, 1, 'PRODUCT-RESEARCH-1 2026-11-12'

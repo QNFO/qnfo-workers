@@ -85,7 +85,7 @@ await ok("source failures do not stop the run; the kill switch does", async () =
   const f = fixture();
   const r = await PR.researchTick(f.env, { fetch: async () => { throw new Error("boom"); }, nowMs: Date.now() });
   assert(r.ran[0].sources_failed === PR.appByKey("companion").sources.length);
-  const g = fixture(); g.a.exec("INSERT INTO ops_config VALUES ('product_research', 'off')");
+  const g = fixture(); g.a.exec("INSERT INTO ops_config VALUES ('app_research', 'off')");
   assert((await PR.researchTick(g.env, { fetch: fetcher })).skipped);
 });
 await ok("status and cards are plain language", async () => {

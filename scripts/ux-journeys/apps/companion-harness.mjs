@@ -37,6 +37,10 @@ function memR2() {
 export const DICTATED = "remember to call the dentist tomorrow";
 export const CHAT_REPLY = "That sounds like a good plan. One small step: put the dentist's number on your phone now.";
 
+// A phone journey for the evening needs an evening: /__harness/clock?local=20 moves this process's clock to 20:00 Amsterdam time (reset with local=now).
+const RealDate = Date; let clockOffset = 0;
+globalThis.Date = class extends RealDate { constructor(...a) { if (a.length) super(...a); else super(RealDate.now() + clockOffset); } static now() { return RealDate.now() + clockOffset; } };
+
 export async function startCompanion({ port = 0 } = {}) {
   const raw = new DatabaseSync(":memory:");
   const mail = [];
@@ -70,6 +74,16 @@ export async function startCompanion({ port = 0 } = {}) {
       if (url.pathname === "/__harness/last-code") {
         const m = mail.length ? /Your code is (\d{6})/.exec(mail[mail.length - 1].text || "") : null;
         res.writeHead(m ? 200 : 404, { "Content-Type": "text/plain" }); res.end(m ? m[1] : ""); return;
+      }
+      if (url.pathname === "/__harness/clock") {
+        const q = url.searchParams.get("local");
+        if (q === "now") clockOffset = 0;
+        else { const real = RealDate.now(), day = C.localParts(new RealDate(real).toISOString(), C.TZ).day; clockOffset = new RealDate(C.dayStartIso(day, C.TZ)).getTime() + Number(q) * 3600e3 - real; }
+        res.writeHead(200, { "Content-Type": "text/plain" }); res.end("ok"); return;
+      }
+      if (url.pathname === "/__harness/done-one") {
+        raw.prepare("UPDATE tasks SET status = 'done', done_at = ? WHERE title = ?").run(new Date().toISOString(), url.searchParams.get("title") || "Call the dentist");
+        res.writeHead(200, { "Content-Type": "text/plain" }); res.end("ok"); return;
       }
       if (url.pathname === "/__harness/session") {
         // A phone that is already signed in (the owner's real state): a session row as verifyLoginCode writes it, without the e-mail round trip.

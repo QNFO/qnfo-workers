@@ -14,7 +14,7 @@
 //   6. is watched twice: metric product_research_stale_apps (v_product_research_freshness, migrations/2026-11-12-product-research.sql) and
 //      the companion's hourly self-check `research-stale`.
 // A new app joins APPS in the PR that ships it; the test fails a phone-journey app that has neither an entry nor a line on the shrink-only
-// scripts/product-research-allowlist.txt. Kill switch: ops_config product_research = off.
+// scripts/product-research-allowlist.txt. Kill switch: ops_config app_research = off.
 //
 // Pure ESM, no imports: personal-companion inlines it as namespace PR (scripts/inline-pipeline-modules.mjs); tests load it directly.
 
@@ -45,7 +45,10 @@ export const APPS = [
       { key: "dictate", label: "Speak instead of typing", marker: "/companion/api/dictate" },
       { key: "timer", label: "Focus timer", marker: "focusClock" },
       { key: "pause", label: "Pause the companion", marker: "export async function setPause" },
-      { key: "sleep", label: "Sleep from phone use", marker: "sleepFromTimestamps" }
+      { key: "sleep", label: "Sleep from phone use", marker: "sleepFromTimestamps" },
+      { key: "recap", label: "Evening recap", marker: "COMPANION-RECAP-1" },
+      { key: "transition", label: "Heads-up before an appointment", marker: "COMPANION-TRANSITION-1" },
+      { key: "forecast", label: "Low-mood forecast from own data", marker: "COMPANION-FORECAST-1" }
     ],
     practices: [
       { key: "grounding", label: "A quick way to calm down when overwhelmed", terms: ["breath", "grounding", "panic", "calm"], weight: 3, covered_by: "calm" },
@@ -53,16 +56,13 @@ export const APPS = [
       { key: "safety", label: "A safety plan and crisis help one tap away", terms: ["crisis", "safety plan", "helpline", "emergency"], weight: 3, covered_by: "safety-plan" },
       { key: "privacy", label: "Your data can be downloaded and deleted", terms: ["privacy", "your data", "delete", "export"], weight: 3, covered_by: "export" },
       { key: "no-typing", label: "Nothing needs typing", terms: ["voice", "one tap", "tap", "dictat"], weight: 3, covered_by: "dictate" },
-      { key: "evening-recap", label: "An evening recap of what got done today", terms: ["recap", "review your day", "end of the day", "end of day", "reflect"], weight: 2,
-        backlog: "COMPANION-RECAP-1", marker: "COMPANION-RECAP-1" },
-      { key: "transitions", label: "A heads-up before the next thing starts", terms: ["transition", "heads-up", "heads up", "visual timer", "countdown", "reminder before"], weight: 3,
-        backlog: "COMPANION-TRANSITION-1", marker: "COMPANION-TRANSITION-1" },
+      { key: "evening-recap", label: "An evening recap of what got done today", terms: ["recap", "review your day", "end of the day", "end of day", "reflect"], weight: 2, covered_by: "recap" },
+      { key: "transitions", label: "A heads-up before the next thing starts", terms: ["transition", "heads-up", "heads up", "visual timer", "countdown", "reminder before"], weight: 3, covered_by: "transition" },
       { key: "routines", label: "Visual routines: the same steps in the same order", terms: ["routine", "visual schedule", "visual planner", "morning routine"], weight: 3,
         backlog: "COMPANION-ROUTINES-1", marker: "COMPANION-ROUTINES-1" },
       { key: "task-breakdown", label: "Break a big task into small steps with one tap", terms: ["break down", "breakdown", "step by step", "smaller steps", "to-do", "todo"], weight: 2,
         backlog: "COMPANION-BREAKDOWN-1", marker: "COMPANION-BREAKDOWN-1" },
-      { key: "mood-patterns", label: "Patterns from your own days, like what lifts or drops mood", terms: ["pattern", "insight", "trend", "correlat", "what affects"], weight: 2,
-        backlog: "COMPANION-FORECAST-1", marker: "COMPANION-FORECAST-1" },
+      { key: "mood-patterns", label: "Patterns from your own days, like what lifts or drops mood", terms: ["pattern", "insight", "trend", "correlat", "what affects"], weight: 2, covered_by: "forecast" },
       { key: "ai-honesty", label: "It says it is an AI when things get heavy", terms: ["artificial intelligence", "ai system", "chatbot", "interacting with an ai", "transparency"], weight: 3,
         backlog: "COMPANION-AIDISCLOSE-1", marker: "COMPANION-AIDISCLOSE-1" },
       { key: "kind-progress", label: "Progress you can see, with no shame for missed days", terms: ["streak", "reward", "celebrate", "self-care", "progress"], weight: 1,
@@ -331,8 +331,8 @@ export async function researchApp(env, app, deps) {
 export async function researchTick(env, deps) {
   deps = Object.assign({ fetch: (u, o) => fetch(u, o), nowMs: Date.now() }, deps || {});
   if (!env || !env.AUDIT) return { skipped: "no AUDIT binding" };
-  const flag = await one(env.AUDIT, "SELECT value FROM ops_config WHERE key = 'product_research'");
-  if (flag && String(flag.value).toLowerCase() === "off") return { skipped: "ops_config product_research = off" };
+  const flag = await one(env.AUDIT, "SELECT value FROM ops_config WHERE key = 'app_research'");
+  if (flag && String(flag.value).toLowerCase() === "off") return { skipped: "ops_config app_research = off" };
   for (const ddl of AUDIT_DDL) { try { await env.AUDIT.prepare(ddl).run(); } catch (e) { /* the migration owns the tables */ } }
   const now = new Date(deps.nowMs).toISOString(), out = { ran: [], skipped: [] };
   for (const app of APPS) {
