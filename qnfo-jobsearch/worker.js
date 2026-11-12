@@ -522,7 +522,7 @@ const FETCHERS = {
     let cursor = "";
     for (let p = 0; p < pages; p++) {
       const d = await getJson("https://himalayas.app/jobs/api?limit=100" + (cursor ? "&cursor=" + encodeURIComponent(cursor) : ""));
-      for (const j of Array.isArray(d.jobs) ? d.jobs : []) out.push({ id: `him:${(j.guid || j.applicationLink || j.title || "").split("/").slice(-2).join("-").slice(0, 80)}`, source: "himalayas", company: j.companyName || "", title: j.title || "", location: "Remote - " + ((j.locationRestrictions || []).join(", ") || "Worldwide"), url: j.guid || j.applicationLink || "", desc: stripHtml(j.description || j.excerpt || "") });
+      for (const j of Array.isArray(d.jobs) ? d.jobs : []) out.push({ id: `him:${(j.guid || j.applicationLink || j.title || "").split("/").slice(-2).join("-").slice(0, 80)}`, source: "himalayas", company: j.companyName || "", title: j.title || "", location: "Remote - " + ((j.locationRestrictions || []).join(", ") || "Worldwide"), url: (j.applicationLink && atsOf(j.applicationLink).ats !== "other" ? j.applicationLink : j.guid || j.applicationLink || ""), desc: stripHtml(j.description || j.excerpt || "") });   // ATS-LINK-1: the employer form when it is one auto-apply can fill
       cursor = d.nextCursor || "";
       if (!cursor) break;
     }
@@ -3019,11 +3019,14 @@ const LANE_YES = /governance|assurance|evaluat|\bevals?\b|safety|alignment|auton
 const LANE_NO = /software engineer|\bdeveloper\b|devops|\bsre\b|security (?:operations )?engineer|account executive|\bsales\b|python|front[- ]?end|back[- ]?end|full[- ]?stack|data engineer|machine learning engineer|\bml engineer|contract manager|recruit|\bintern\b|quantum|support engineer|consultant, cloud/i;
 const SHORTLIST_MIN = 55, SHORTLIST_SIZE = 7;
 function aiReadFit(why) { for (const w of why || []) { const m = /^AI read: fit (\d+)/.exec(w); if (m) return +m[1]; } return null; }
-// the relevance gate: a posting reaches the owner only when its title is not a hands-on or sales role, it sits in a lane, scores 55 or more, is not a stretch and the model reading does not disagree
+// the relevance gate: a posting reaches the owner only when it scores 55 or more, is not a stretch, sits in a lane and the model reading does not disagree.
+// JOBSEARCH-CONTENT-FIRST-1 (CLOCKWORK-1 follow-up, issue 11155): a title never hides a posting on its own. A hands-on or sales title costs LANE_NO_PENALTY
+// points against the bar, so only a posting whose text scores well enough to clear 55 + 15 survives one; 25 postings were hidden on the title alone in 48 h.
+const LANE_NO_PENALTY = 15;
 function laneGate(row) {
   const why = Array.isArray(row.why) ? row.why : JSON.parse(row.why_json || "[]"), title = String(row.title || "");
-  if (LANE_NO.test(title)) return { pass: false, reason: "title is outside your lanes" };
-  if (Number(row.score) < SHORTLIST_MIN) return { pass: false, reason: "score " + row.score + " is under " + SHORTLIST_MIN };
+  const titlePen = LANE_NO.test(title) ? LANE_NO_PENALTY : 0;
+  if (Number(row.score) - titlePen < SHORTLIST_MIN) return { pass: false, reason: titlePen ? "score " + row.score + " less " + titlePen + " for a hands-on or sales title is under " + SHORTLIST_MIN : "score " + row.score + " is under " + SHORTLIST_MIN };
   if (row.tier === "C") return { pass: false, reason: "stretch match" };
   const ai = aiReadFit(why);
   if (ai !== null && ai < 40) return { pass: false, reason: "model reading says fit " + ai };

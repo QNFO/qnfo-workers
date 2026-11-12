@@ -691,6 +691,56 @@ def cf_token_watch(out, req=None):
     return out["cf_token_watch"]
 
 
+# CLOCKWORK-1 / CF-TOKEN-WATCH-3 (2026-11-12, issue 11155): every other account token (the R2 access keys among them) can expire
+# on a date nobody watches, and a loop that uses it stops that day. Each run lists the account's and the user's tokens (names,
+# status and expires_on only; values are never returned by this API) and writes cloudflare_tokens_expiring_7d: active tokens
+# that expire within 7 days or have already expired. A listing Cloudflare refuses leaves the last value and records why.
+def cf_tokens_expiry_values(tokens, now=None):
+    """tokens: list of Cloudflare token objects -> (expiring_or_expired_count, [names])."""
+    now = time.time() if now is None else now
+    hits = []
+    for t in tokens or []:
+        if not isinstance(t, dict) or str(t.get("status") or "").lower() not in ("active", "expired"):
+            continue
+        exp = t.get("expires_on")
+        if not exp:
+            continue
+        try:
+            ts = calendar.timegm(time.strptime(str(exp)[:19], "%Y-%m-%dT%H:%M:%S"))
+        except (ValueError, OverflowError):
+            continue
+        if ts - now < 7 * 86400:
+            hits.append(str(t.get("name") or t.get("id") or "unnamed")[:60])
+    return len(hits), sorted(hits)
+
+
+def cf_tokens_expiry_watch(out, req=None):
+    if req is None and not TOKEN:
+        out["cf_tokens_expiry"] = {"skipped": "no token in this environment"}
+        return out["cf_tokens_expiry"]
+    req = req or _req
+    tokens, listed, errors = [], [], []
+    for path in ("/accounts/%s/tokens?per_page=50" % ACCOUNT, "/user/tokens?per_page=50"):
+        try:
+            r = req("GET", CF_API + path)
+        except Exception as e:  # noqa: BLE001 - a token without the read-tokens permission answers 403 on that path
+            msg = str(e).replace(TOKEN, "***") if TOKEN else str(e)
+            errors.append(path.split("/")[1] + ": " + msg[:120])
+            continue
+        if r.get("success") and isinstance(r.get("result"), list):
+            tokens.extend(r["result"])
+            listed.append(path.split("/")[1])
+    if not listed:
+        out["cf_tokens_expiry"] = {"skipped": "Cloudflare refused both token listings, last value kept", "errors": errors}
+        return out["cf_tokens_expiry"]
+    n, names = cf_tokens_expiry_values(tokens)
+    stamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    d1("UPDATE metric_registry SET last_value = ?1, last_refreshed = ?2, state = 'MEASURED' WHERE metric = 'cloudflare_tokens_expiring_7d'",
+       [str(n), stamp])
+    out["cf_tokens_expiry"] = {"tokens": len(tokens), "expiring_7d": n, "names": names, "listed": listed, "errors": errors}
+    return out["cf_tokens_expiry"]
+
+
 def _selftest():
     # RUNTIME-PROBE-BUDGET-1 (issue 2081): a SQL backlog must not spend the runner's budget before runtime probes run.
     import sqlite3
@@ -1634,6 +1684,10 @@ def main():
         cf_token_watch(out)
     except Exception as e:  # noqa: BLE001
         out["cf_token_watch_error"] = str(e)[:200]
+    try:
+        cf_tokens_expiry_watch(out)
+    except Exception as e:  # noqa: BLE001
+        out["cf_tokens_expiry_error"] = str(e)[:200]
 
     # MIGRATION-UNAPPLIED-1: merged migrations the push-triggered runner never ran are applied here, within the hour.
     migrations_sweep(out)

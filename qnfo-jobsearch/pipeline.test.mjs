@@ -24,8 +24,11 @@ ok(T.styleLint("I like maps. I like models. I like data. I like rules. I like te
 // ---- gate
 const row = (o) => ({ id: "x", title: "Director of AI Governance", tier: "A", score: 70, why: ["title in your lane: autonomy", "AI read: fit 72 (6 of your facts match)"], ...o });
 ok(T.laneGate(row({})).pass, "a governance director role clears the gate");
-ok(!T.laneGate(row({ title: "Senior Python Developer" })).pass, "developer titles do not");
-ok(!T.laneGate(row({ title: "Commercial Account Executive, DACH" })).pass, "sales titles do not");
+ok(!T.laneGate(row({ title: "Senior Python Developer", score: 66 })).pass, "a developer title costs 15 points against the bar");
+ok(!T.laneGate(row({ title: "Commercial Account Executive, DACH", score: 66 })).pass, "a sales title costs 15 points against the bar");
+// JOBSEARCH-CONTENT-FIRST-1 (issue 11155): a title alone never hides a posting whose text carries the record
+ok(T.laneGate(row({ title: "Software Engineer, AI Safety Evaluations", score: 82 })).pass, "a hands-on title with a strong text score clears the gate");
+ok(!/title is outside/.test(T.laneGate(row({ title: "Senior Python Developer", score: 40 })).reason), "no posting is hidden for its title alone");
 ok(!T.laneGate(row({ score: 54 })).pass, "score under 55 does not");
 ok(!T.laneGate(row({ tier: "C" })).pass, "stretch matches do not");
 ok(!T.laneGate(row({ title: "Domain Researcher, Legal", why: ["AI read: fit 28 (8 of your facts match)"] })).pass, "a low model reading does not");
