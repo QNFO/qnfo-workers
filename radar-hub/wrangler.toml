@@ -37,9 +37,6 @@ binding = "EMAIL"
 service = "qnfo-email"
 environment = "production"
 
-# workflow binding: JOB_MARKET_WATCH -> class JobMarketWatchWorkflow
-# Set via CF dashboard or wrangler.toml [[workflows]] block when class is defined in main
-
 # OBSIDIAN_WRITER service binding removed 2026-10-01 (RADAR-HUB-REDEPLOY-1): its target worker obsidian-writer is no longer in the
 # account, and Cloudflare rejects an upload that binds a missing worker (error 10144). worker.js guards every use with
 # `if (env.OBSIDIAN_WRITER)`, so the vault-note step is skipped and the D1 writes (the actual output) are unaffected.
@@ -58,11 +55,7 @@ database_id = "35e2e573-92f3-46ac-83c6-22f6429fc5e5"
 binding = "VAULT"
 bucket_name = "obsidian-vault"
 
-# workflow binding (AUDIT-REMEDIATE-1 2026-09-22; verified vs live CF bindings)
-[[workflows]]
-binding = "JOB_MARKET_WATCH"
-name = "job-market-watch"
-class_name = "JobMarketWatchWorkflow"
+# JOB-MARKET-RETIRED-1 (2026-11-12): the JOB_MARKET_WATCH Workflow binding is removed with the scan it ran (qnfo-jobsearch sweeps those boards).
 
 # EVENTS-WORKFLOW-1 (RM-RADAR-WORKFLOWS-PILOT-1, 2026-11-05): the weekly events radar runs as a Workflow instance created by the
 # Monday 05:00Z table entry; worker.js falls back to the inline scan when this binding is absent or create() throws. The canonical
@@ -77,12 +70,12 @@ class_name = "EventsRadarWorkflow"
 # RADAR-HUB-REDEPLOY-1 (2026-10-01): the worker vanished unrecorded around 2026-09-25 and a deleted worker loses its schedules,
 # so they are declared here (the canonical deploy applies them). They are exactly the cron strings the default export routes:
 # events 0 5 * * 2 | arxiv 30 8 * * * | research 0 6 1 * *, 0 9 * * 7 | citation 0 11 1,15 * * |
-# job-market 0 7 * * 2 | personal 30 5 * * 2, 0 6 * * *
+# personal 30 5 * * 2, 0 6 * * *
 # EVENTS-RADAR-CF-DOW-1 (2026-10-02): events was "0 5 * * 1", which is Sunday in Cloudflare's numbering (1=Sunday..7=Saturday);
 # the radar reads its weekly sources only on Mondays, so "0 5 * * 2" (Monday 05:00Z). Same count of crons (net-zero).
 [triggers]
 # CRON-SINGLE-TRIGGER-1 (2026-10-02, #1785): ONE hourly trigger; worker.js CRON_TABLE holds the former list
-# (0 5 * * 2, 30 8 * * *, 0 6 1 * *, 0 9 * * 7, 0 11 1,15 * *, 0 7 * * 2, 30 5 * * 2, 0 6 * * *) and runs each entry in the hour it fired.
+# (0 5 * * 2, 30 8 * * *, 0 6 1 * *, 0 9 * * 7, 0 11 1,15 * *, 30 5 * * 2, 0 6 * * *; the job-market entry 0 7 * * 2 retired 2026-11-12) and runs each entry in the hour it fired.
 crons = ["0 * * * *"]
 
 [observability]
