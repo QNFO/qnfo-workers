@@ -37,7 +37,7 @@
 // Q08-ASCII-SOURCE-1 (2026-10-01): this file is ASCII-only; every typographic character is a \uXXXX escape. The deploy path
 // double-encoded raw UTF-8, so live pages read "... \u00e2 q08" and posts "\u00e2\u0080\u0094". Keep new literals escaped.
 // VERSION-NOTES-MOVED-1: release notes live in the block below
-var VERSION = "0.50.2";
+var VERSION = "0.51.0";
 /* 0.43.0 Q08-TICK-ALLOWANCE-1 (2026-11-04, pillar cost; minor: the engine now decides on its own whether a tick starts an attempt; BUDGET-SOFT-ROUTE-1, attempts slow down and never stop): ai_call_counters showed 119,552, 129,547 and 110,450 neurons on 2026-11-01..03 against the 50,000 target (ops_config q08_daily_neurons) because q08Budget() only steered the first writer model and nothing bounded the attempts a tick starts (40 a day, the attempt cap, at about 2,760 neurons each). Now the :00 cron and the :30 stall retry go through governedGenerate: tick k of 48 starts an attempt only while the day is under the pace line budget x (k + 1) / 48, an essay after a forecast attempt that spent model calls starts only while the day is still under it, and 150 minutes without an attempt starts one whatever the line says (8 a day at least). No row is written for a tick that waits. The writer gate, reader panels, fact-check, final read and accuracy audit are unchanged, and an attempt already started runs all its rounds. ops_config q08_tick_governor = off restores the old behaviour. tick-allowance.test.mjs replays a UTC day. */
 /* 0.42.0 RM-FORECAST-UPDATE-SCORING-1 (#5578; research): score the last valid update before the horizon with the resolved outcome. */
 /* 0.41.6 FORECAST-CALIBRATION-BUCKET-COVERAGE-1 (#5576, charter pillar research; patch): calibration buckets include probabilities across the full [0,1] range, including the tails, rather than silently omitting forecasts below 5% or above 96%. */
@@ -489,7 +489,41 @@ function q08TickAllowance(bud, nowMs, cfg, lastMs, tickSpent) {
 }
 function q08Paced(reason) { return { ok: false, paced: true, reason: String(reason) }; }
 // The scheduled entry to generate(): the :00 cron and the :30 stall retry. /run and /regen call generate() directly (an operator's kick).
+// CONSOLIDATE-1 (2026-11-12): q08.org is now the signal source for the Q08 Forecasts engine and an archive of its live essays. In "signals" mode (the
+// default; ops_config q08_mode = full restores the essay engine) the tick scrapes and records signals in signal_log and makes no model call:
+// the essay chain cost ~23M tokens for 9 published pieces in 14 days. Rows are keyed seen-<source>:<id>, so a repeat scrape adds nothing.
+async function q08Mode(env) {
+  if (env && String(env.Q08_MODE || "").trim().toLowerCase() === "full") return "full"; // a wrangler var or a test pins the essay engine
+  if (!env || !env.AUDIT) return "signals";
+  try {
+    var r = await env.AUDIT.prepare("SELECT value FROM ops_config WHERE key = 'q08_mode'").first();
+    return r && String(r.value == null ? "" : r.value).trim().toLowerCase() === "full" ? "full" : "signals";
+  } catch (e) { return "signals"; }
+}
+async function signalsOnly(env) {
+  var t0 = Date.now(), stories = [], domains = await q08Domains(env);
+  async function take(label, fn) { try { stories = stories.concat(await fn()); } catch (e) { console.error(JSON.stringify({ evt: "q08-signal-engine:signals-only:" + label, error: String((e && e.message) || e).slice(0, 200) })); } }
+  await take("hn", function () { return scrapeHN(); });
+  await take("github", function () { return scrapeGitHub(); });
+  await take("arxiv", function () { return scrapeArxiv(env); });
+  if (domains.science || domains.policy) {
+    await take("arxiv-domain", function () { return scrapeArxivDomain(env, domains); });
+    await take("federalregister", function () { return scrapeFederalRegister(env, domains); });
+  }
+  var added = 0;
+  for (var i = 0; i < stories.length; i++) {
+    var st = stories[i], src = st.source || "hn";
+    try {
+      var res = await env.DB.prepare("INSERT OR IGNORE INTO signal_log (id, source, source_id, title, url, points, num_comments, ratio, volatility_score, friction_point, signal_strength, status, processed_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)")
+        .bind("seen-" + src + ":" + String(st.id), src, src + ":" + String(st.id), st.title, st.url, st.points == null ? null : st.points, st.num_comments == null ? null : st.num_comments, st.ratio == null ? null : st.ratio, st.volatility_score == null ? null : st.volatility_score, "", null, "seen", nowIso()).run();
+      if (res && res.meta && res.meta.changes) added++;
+    } catch (e) { console.error(JSON.stringify({ evt: "q08-signal-engine:signals-only:insert", error: String((e && e.message) || e).slice(0, 200) })); }
+  }
+  await insertRun(env, { scraped: stories.length, scored: 0, published: 0, top: "", model: "", ms: Date.now() - t0, status: "skipped", error: "signals-only mode (ops_config q08_mode): " + added + " new of " + stories.length + " signals recorded, no model call", sourceChars: 0, sourceKind: "signals" });
+  return { ok: true, mode: "signals", scraped: stories.length, added: added };
+}
 async function governedGenerate(env) {
+  if ((await q08Mode(env)) === "signals") return await signalsOnly(env);
   var gov;
   try {
     var cfg = await q08TickConfig(env);
@@ -5460,7 +5494,7 @@ function cleanNote(v) {
 // Q08-QUALITY-1: pure helpers exposed for the offline suite (quality.test.mjs); no route uses this export.
 export const __forecast = { forecastClarificationText: forecastClarificationText, sweepForecastCriteria: sweepForecastCriteria, forecastClarification: forecastClarification, forecastResolutionGaps: forecastResolutionGaps, recordForecastUpdate: recordForecastUpdate, renderCalibration: renderCalibration, forecastPostText: forecastPostText, gatherEvidence: gatherEvidence, forecastDue: forecastDue, resolveForecasts: resolveForecasts, ensureForecastSchema: ensureForecastSchema, generateForecast: generateForecast, forecastStats: forecastStats, parseForecastBlock: parseForecastBlock, validateForecast: validateForecast, forecastXform: forecastXform, forecastProblems: forecastProblems, buildForecastPrompt: buildForecastPrompt, calibration: calibration, lastForecastUpdateScore: lastForecastUpdateScore, parseJudgeVerdict: parseJudgeVerdict, aggregateJudges: aggregateJudges, parseForecastCap: parseForecastCap, publicHttpsUrl: publicHttpsUrl, fcStatus: fcStatus, renderForecastBox: renderForecastBox, renderForecasts: renderForecasts, FORECAST_DIRECTIVE: FORECAST_DIRECTIVE, FORECAST_EVERY: FORECAST_EVERY, FORECAST_MAX_CHECKS: FORECAST_MAX_CHECKS };
 export const __domain = { parseDomains: parseDomains, q08Domains: q08Domains, resetDomains: function () { __domains = { at: 0, d: parseDomains(null) }; }, classifyDomain: classifyDomain, storyDomain: storyDomain, preferNonTech: preferNonTech, scrapeArxivDomain: scrapeArxivDomain, scrapeFederalRegister: scrapeFederalRegister, articleUrlFor: articleUrlFor, FR_API: FR_API, domainForm: domainForm, buildPrompt: buildPrompt, READER_PROMPT: READER_PROMPT, READER_PROMPT_DOMAIN: READER_PROMPT_DOMAIN, FINAL_READER_PROMPT: FINAL_READER_PROMPT, FINAL_READER_PROMPT_DOMAIN: FINAL_READER_PROMPT_DOMAIN, readerPromptFor: readerPromptFor, finalReaderPromptFor: finalReaderPromptFor, sourceKindOf: sourceKindOf, DOMAIN_ROTATE: DOMAIN_ROTATE, Q08_DIRECTIVE: Q08_DIRECTIVE };
-export const __gen = { thinPassedOver: thinPassedOver, parseArxivPool: parseArxivPool, arxivPoolSize: arxivPoolSize, resetArxivPool: function () { __arxivPool = { at: 0, n: ARXIV_POOL_DEFAULT }; }, scrapeArxiv: scrapeArxiv, ARXIV_POOL_DEFAULT: ARXIV_POOL_DEFAULT, parseComposeOrder: parseComposeOrder, q08Budget: q08Budget, Q08_DAILY_NEURONS_DEFAULT: Q08_DAILY_NEURONS_DEFAULT, resetRunColumns: function () { __runColsOk = false; __runColsTried = 0; }, sourceFloorFrom: sourceFloorFrom, groundBarFrom: groundBarFrom, learnedGroundBar: learnedGroundBar, get GROUND_BAR_CAP() { return GROUND_BAR_CAP; }, get GROUND_EXPLORE_EVERY() { return GROUND_EXPLORE_EVERY; }, learnedSourceFloor: learnedSourceFloor, thinSourceVerdict: thinSourceVerdict, sourceKindOf: sourceKindOf, markThinSkipped: markThinSkipped, ensureRunColumns: ensureRunColumns, insertRun: insertRun, meterCall: meterCall, claimClassesOf: claimClassesOf, get SOURCE_FLOOR_MIN_OK() { return SOURCE_FLOOR_MIN_OK; }, get THIN_MIN_ARTICLE() { return THIN_MIN_ARTICLE; }, get MIN_GROUND_CHARS() { return MIN_GROUND_CHARS; }, composeOrder: composeOrder, COMPOSE_MODELS: COMPOSE_MODELS, COMPOSE_MODELS_AT_CAP: COMPOSE_MODELS_AT_CAP, generate: generate, get TICK_BUDGET_MS() { return TICK_BUDGET_MS; }, get ESSAY_AFTER_FORECAST_MS() { return ESSAY_AFTER_FORECAST_MS; }, q08TickAllowance: q08TickAllowance, q08TickConfig: q08TickConfig, q08LastAttemptMs: q08LastAttemptMs, q08TickMore: q08TickMore, governedGenerate: governedGenerate };
+export const __gen = { thinPassedOver: thinPassedOver, parseArxivPool: parseArxivPool, arxivPoolSize: arxivPoolSize, resetArxivPool: function () { __arxivPool = { at: 0, n: ARXIV_POOL_DEFAULT }; }, scrapeArxiv: scrapeArxiv, ARXIV_POOL_DEFAULT: ARXIV_POOL_DEFAULT, parseComposeOrder: parseComposeOrder, q08Budget: q08Budget, Q08_DAILY_NEURONS_DEFAULT: Q08_DAILY_NEURONS_DEFAULT, resetRunColumns: function () { __runColsOk = false; __runColsTried = 0; }, sourceFloorFrom: sourceFloorFrom, groundBarFrom: groundBarFrom, learnedGroundBar: learnedGroundBar, get GROUND_BAR_CAP() { return GROUND_BAR_CAP; }, get GROUND_EXPLORE_EVERY() { return GROUND_EXPLORE_EVERY; }, learnedSourceFloor: learnedSourceFloor, thinSourceVerdict: thinSourceVerdict, sourceKindOf: sourceKindOf, markThinSkipped: markThinSkipped, ensureRunColumns: ensureRunColumns, insertRun: insertRun, meterCall: meterCall, claimClassesOf: claimClassesOf, get SOURCE_FLOOR_MIN_OK() { return SOURCE_FLOOR_MIN_OK; }, get THIN_MIN_ARTICLE() { return THIN_MIN_ARTICLE; }, get MIN_GROUND_CHARS() { return MIN_GROUND_CHARS; }, composeOrder: composeOrder, COMPOSE_MODELS: COMPOSE_MODELS, COMPOSE_MODELS_AT_CAP: COMPOSE_MODELS_AT_CAP, generate: generate, get TICK_BUDGET_MS() { return TICK_BUDGET_MS; }, get ESSAY_AFTER_FORECAST_MS() { return ESSAY_AFTER_FORECAST_MS; }, q08TickAllowance: q08TickAllowance, q08TickConfig: q08TickConfig, q08LastAttemptMs: q08LastAttemptMs, q08TickMore: q08TickMore, governedGenerate: governedGenerate, q08Mode: q08Mode, signalsOnly: signalsOnly };
 export const __stall = { stallRetryDue: stallRetryDue, stallDetector: stallDetector, stallDigest: stallDigest, stallStage: stallStage, get STALL_RETRY_H() { return STALL_RETRY_H; } };
 export const __factledger = { groundPreCheck: groundPreCheck, sourceLedger: sourceLedger, ledgerBlock: ledgerBlock, stripLedgerTags: stripLedgerTags, groundPreCheckMode: groundPreCheckMode, resetGroundPreCheck: function () { __groundPre = { at: 0, mode: "on" }; __groundPreCalls = 0; }, get groundPreCalls() { return __groundPreCalls; }, stallStage: stallStage, buildPrompt: buildPrompt, labelledGround: labelledGround, groundingProblems: groundingProblems, normalizeDraft: normalizeDraft, runLevels: runLevels, generate: generate, generateForecast: generateForecast, Q08_DIRECTIVE: Q08_DIRECTIVE, get LEDGER_MAX_LINES() { return LEDGER_MAX_LINES; }, get LEDGER_MAX_CHARS() { return LEDGER_MAX_CHARS; } };
 export const __fledger = { researchLedger: researchLedger, ledgerNames: ledgerNames, ledgerSentences: ledgerSentences, forecastLedgerOn: forecastLedgerOn, forecastLedgerFor: forecastLedgerFor, ensureForecastGroundColumn: ensureForecastGroundColumn, storedForecastLedger: storedForecastLedger, groundForPublished: groundForPublished, buildForecastPrompt: buildForecastPrompt, stripLedgerTags: stripLedgerTags, groundPreCheck: groundPreCheck, resetGroundColumn: function () { __groundColumnDone = false; }, LEDGER_MAX_LINES: RLEDGER_MAX_LINES, LEDGER_MAX_DOCS: LEDGER_MAX_DOCS, LEDGER_DOC_CHARS: LEDGER_DOC_CHARS };
@@ -6120,6 +6154,7 @@ async function q08Scheduled(controller, env, ctx) {
     // Q08-REPAIR-1: the :30 cron audits, repairs and restores pieces. Q08-STALL-RETRY-1: while q08 is stalled it also makes a second
     // generation attempt in the hour (stallRetryDue), after the audit, through the same generate() and the same caps.
     if (controller.cron === "30 * * * *") {
+      if ((await q08Mode(env)) === "signals") { ctx.waitUntil(q08Heartbeat(env, true)); return; }
       ctx.waitUntil(auditPublished(env, 3).catch(function (e) { console.error("q08 auditPublished failed: " + String(e && e.message || e).slice(0, 200)); })
         .then(function () { return stallRetryDue(env); })
         .then(function (due) { if (due) return governedGenerate(env).then(function () { return stallDetector(env); }).then(function () { return writeOwnMetrics(env); }); })
@@ -6134,7 +6169,7 @@ async function q08Scheduled(controller, env, ctx) {
       await env.DB.prepare(
         "INSERT INTO engine_runs (signals_scraped, signals_scored, piece_published, ms, status, error) VALUES (0,0,0,0,'error',?)"
       ).bind(String(e && e.message || e).slice(0, 500)).run().catch(function (e2) { console.error("q08 engine_runs error row failed: " + String(e2 && e2.message || e2).slice(0, 200)); });
-    }).then(function () { return resolveForecasts(env, 2).catch(function (e) { console.error("q08 resolveForecasts failed: " + String(e && e.message || e).slice(0, 200)); }); }).then(() => stallDetector(env)).then(() => writeOwnMetrics(env)).catch(function (e) { hbOk = false; console.error("q08 scheduled tail failed: " + String(e && e.message || e).slice(0, 200)); })
+    }).then(function () { return resolveForecasts(env, 2).catch(function (e) { console.error("q08 resolveForecasts failed: " + String(e && e.message || e).slice(0, 200)); }); }).then(async () => { if ((await q08Mode(env)) !== "signals") return stallDetector(env); }).then(() => writeOwnMetrics(env)).catch(function (e) { hbOk = false; console.error("q08 scheduled tail failed: " + String(e && e.message || e).slice(0, 200)); })
       .then(function () { return q08Heartbeat(env, hbOk); }));
 }
 export default __wm_default;
