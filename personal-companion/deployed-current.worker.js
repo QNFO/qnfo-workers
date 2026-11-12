@@ -2950,7 +2950,7 @@ var PR = (() => {
 //
 // Pure ESM, no imports: personal-companion inlines it as namespace PR (scripts/inline-pipeline-modules.mjs); tests load it directly.
 
-const RESEARCH_VERSION = "1.1.0";
+const RESEARCH_VERSION = "1.2.0";
 const DIRECTIVE_ID = "PRODUCT-RESEARCH-1";
 const RUN_EVERY_H = 20;          // one run a day per app, tolerant of the hourly tick drifting
 const STALE_AFTER_H = 26;        // daily cadence plus at most 120 minutes (QUEUE-SLA-1)
@@ -3034,8 +3034,9 @@ const APPS = [
     ],
     sources: [
       { name: "Reading Well", kind: "practice", url: "https://reading-well.org.uk/" },
-      { name: "The StoryGraph", kind: "competitor", url: "https://thestorygraph.com/" },
-      { name: "Blinkist", kind: "competitor", url: "https://www.blinkist.com/" },
+      // The StoryGraph and Blinkist answered 403 to the first run (2026-11-12 21:00 UTC); replaced by pages that let a plain fetch read them.
+      { name: "Open Library", kind: "competitor", url: "https://openlibrary.org/" },
+      { name: "Five Books", kind: "competitor", url: "https://fivebooks.com/" },
       { name: "Libby", kind: "competitor", url: "https://libbyapp.com/" }
     ],
     discover: ["reading app", "book recommendations"] },
@@ -3194,8 +3195,29 @@ function rankGaps(app, pages, usage) {
 
 function issueTitle(app, key) { return DIRECTIVE_ID + ":" + app + ":" + key; }
 
+// A source that failed this run and the two before it is a gap of its own: the registry points at a page the fleet cannot read.
+const SOURCE_FAIL_RUNS = 3;
+function sourceGaps(pages, prevRuns) {
+  const out = [];
+  for (const pg of pages) {
+    if (pg.ok) continue;
+    const prior = (prevRuns || []).slice(0, SOURCE_FAIL_RUNS - 1);
+    if (prior.length < SOURCE_FAIL_RUNS - 1) continue;
+    if (!prior.every((r) => (r || []).some((x) => x.name === pg.name && !x.ok))) continue;
+    out.push({ type: "source", key: "source-" + String(pg.name).toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 40), label: "Replace the source \"" + pg.name + "\": it could not be read " + SOURCE_FAIL_RUNS + " days running",
+      name: pg.name, url: pg.url, status: pg.status, support: [], score: 5, priority: "medium" });
+  }
+  return out;
+}
+
 function issueBody(app, gap, nowIso) {
   const day = nowIso.slice(0, 10);
+  if (gap.type === "source") {
+    return "Found by the daily product research of " + app.label + " (" + DIRECTIVE_ID + ", " + day + "): the source \"" + gap.name + "\" (" + gap.url + ") answered "
+      + (gap.status || "no reply") + " for " + SOURCE_FAIL_RUNS + " runs in a row, so the research reads one page fewer. Replace it in APPS in _shared/product-research.js with a page about the same "
+      + "kind of product that a plain fetch can read, or remove it. The research loop closes this issue on its own once no source of that name fails. Pillar personal.\n"
+      + "code-task: repo=qnfo-workers path=_shared/product-research.js";
+  }
   if (gap.type === "usage") {
     return "Found by the daily product research of " + app.label + " (" + DIRECTIVE_ID + ", " + day + "): the \"" + gap.kind + "\" ask was sent " + gap.sent
       + " times in 14 days and answered " + gap.answered + " times. Rowan does not use it as it is. Change it to one tap with a clearer reason to answer, send it at a better time, or stop sending it; "
@@ -3302,7 +3324,9 @@ async function researchApp(env, app, deps) {
   let prevNames = new Set(); try { prevNames = new Set(JSON.parse((prev && prev.players_json) || "[]").map((p) => String(p.name).toLowerCase())); } catch (e) { prevNames = new Set(); }
   const players = players0.filter((p) => !prevNames.has(p.name.toLowerCase()));
   const usage = !env.PERSONAL ? null : app.usage === "companion" ? await companionUsage(env.PERSONAL, nowMs) : app.usage === "travel" ? await travelUsage(env.PERSONAL, nowMs) : null;
-  const gaps = rankGaps(app, pages, usage);
+  const prevSrc = (await all(env.AUDIT, "SELECT sources_json FROM product_research_runs WHERE app = ? AND error IS NULL ORDER BY id DESC LIMIT ?", app.app, SOURCE_FAIL_RUNS - 1))
+    .map((r) => { try { return JSON.parse(r.sources_json || "[]"); } catch (e) { return []; } });
+  const gaps = rankGaps(app, pages, usage).concat(sourceGaps(pages, prevSrc)).sort((a, b) => b.score - a.score || a.key.localeCompare(b.key));
   const res = { filed: 0, updated: 0, closed: 0 };
   let newLeft = NEW_ISSUES_PER_RUN;
   for (const g of gaps) {
@@ -3310,7 +3334,7 @@ async function researchApp(env, app, deps) {
     const last = await one(env.AUDIT, "SELECT id, status FROM agent_issues WHERE title = ? ORDER BY id DESC LIMIT 1", title);
     if (last && last.status === "closed") {
       g.issue = last.id;
-      if (g.type !== "usage") { g.state = "shipped"; continue; }
+      if (g.type !== "usage" && g.type !== "source") { g.state = "shipped"; continue; }
       // A usage gap that regresses reopens its own row (one row per title, never a duplicate).
       try {
         await env.AUDIT.prepare("UPDATE agent_issues SET status = 'open', updated_at = ? WHERE id = ?").bind(stamp, last.id).run();
@@ -3331,13 +3355,15 @@ async function researchApp(env, app, deps) {
       g.state = "open"; g.issue = r && r.meta ? r.meta.last_row_id : null; res.filed++; newLeft--;
     } catch (e) { g.state = "queued"; console.error(JSON.stringify({ evt: "product-research:file", app: app.app, key: g.key, error: String(e && e.message || e).slice(0, 200) })); }
   }
-  // Usage gaps close on their own when the ask is answered again or no longer sent.
-  const openUsage = await all(env.AUDIT, "SELECT id, title FROM agent_issues WHERE title LIKE ? AND status <> 'closed'", issueTitle(app.app, "ignored-ask-") + "%");
+  // Usage and source gaps close on their own when the ask is answered again (or no longer sent) or the source reads again (or is gone).
+  const openUsage = (await all(env.AUDIT, "SELECT id, title FROM agent_issues WHERE title LIKE ? AND status <> 'closed'", issueTitle(app.app, "ignored-ask-") + "%"))
+    .concat(await all(env.AUDIT, "SELECT id, title FROM agent_issues WHERE title LIKE ? AND status <> 'closed'", issueTitle(app.app, "source-") + "%"));
   for (const row of openUsage) {
     if (gaps.some((g) => issueTitle(app.app, g.key) === row.title)) continue;
+    const why = row.title.indexOf(":source-") > 0 ? "the source reads again or is no longer in the registry." : "the ask is answered at least a tenth of the time over 14 days, or is no longer sent.";
     try {
       await env.AUDIT.prepare("UPDATE issue_triage SET triage_state = 'closed', close_evidence = ? WHERE issue_id = ?")
-        .bind(DIRECTIVE_ID + " measured " + now + ": the ask is answered at least a tenth of the time over 14 days, or is no longer sent.", row.id).run();
+        .bind(DIRECTIVE_ID + " measured " + now + ": " + why, row.id).run();
       await env.AUDIT.prepare("UPDATE agent_issues SET status = 'closed', updated_at = ? WHERE id = ? AND status <> 'closed'").bind(stamp, row.id).run();
       res.closed++;
     } catch (e) { /* the next run retries */ }
@@ -3404,7 +3430,7 @@ function researchCards(st) {
     + "</section>").join("");
 }
 
-return Object.freeze({ RESEARCH_VERSION, DIRECTIVE_ID, RUN_EVERY_H, STALE_AFTER_H, NEW_ISSUES_PER_RUN, FETCH_TIMEOUT_MS, MAX_TEXT, APPS, appByKey, htmlToText, headings, words, ideasFrom, supportFor, usageGaps, rankGaps, issueTitle, issueBody, digestLines, discoverPlayers, companionUsage, travelUsage, AUDIT_DDL, researchApp, researchTick, researchStatus, researchCards });
+return Object.freeze({ RESEARCH_VERSION, DIRECTIVE_ID, RUN_EVERY_H, STALE_AFTER_H, NEW_ISSUES_PER_RUN, FETCH_TIMEOUT_MS, MAX_TEXT, APPS, appByKey, htmlToText, headings, words, ideasFrom, supportFor, usageGaps, rankGaps, issueTitle, SOURCE_FAIL_RUNS, sourceGaps, issueBody, digestLines, discoverPlayers, companionUsage, travelUsage, AUDIT_DDL, researchApp, researchTick, researchStatus, researchCards });
 })(); // end inline _shared/product-research.js
 // ---- PIPELINE-ENGINE-INLINE:END ----
 
