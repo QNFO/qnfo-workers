@@ -222,14 +222,14 @@ export const clampP = (p) => Math.min(0.995, Math.max(0.005, +p));
 export const pct = (p) => (Math.round(1000 * p) / 10) + "%";
 
 // Shrink 0.5 and cap 1 logit: two cheap models move the crowd a little, with reasons, never a lot on their own.
-export function combine(prior, verdicts, { shrink = 0.5, cap = 1 } = {}) {
+export function combine(prior, verdicts, { shrink = 0.5, cap = 1, scale = 1 } = {}) {
   const ok = verdicts.filter((v) => v && v.ok);
   if (ok.length < 2) return { p: prior, shift: 0, why: "fewer than two valid model verdicts: the crowd stands" };
   const signs = new Set(ok.map((v) => Math.sign(v.shift)));
   if (signs.size === 1 && signs.has(0)) return { p: prior, shift: 0, why: "no model found evidence the crowd has not priced: the crowd stands" };
   if (signs.size > 1) return { p: prior, shift: 0, why: signs.has(0) ? "only one model saw a reason to move: the crowd stands" : "models disagree on direction: the crowd stands" };
   const mean = ok.reduce((a, v) => a + v.shift, 0) / ok.length;
-  const shift = Math.max(-cap, Math.min(cap, shrink * mean));
+  const shift = Math.max(-cap, Math.min(cap, shrink * scale * mean));
   return { p: clampP(sigmoid(logit(clampP(prior)) + shift)), shift, why: shift === 0 ? "no evidence-backed reason to move" : "evidence-backed shift" };
 }
 
@@ -396,11 +396,11 @@ export function plan(markets, signals, lastByslug, nowMs, limits = LIMITS) {
 }
 
 // Steps 5-7 for one question. ask(model, prompt) -> { text, in_tok, out_tok }.
-export async function forecastOne(q, ask, today) {
+export async function forecastOne(q, ask, today, opts = {}) {
   const prompt = buildPrompt(q, q.evidence, today), ids = q.evidence.map((e) => e.id);
   const answers = await Promise.all(MODELS.map(async (m) => { try { return { model: m, ...(await ask(m, prompt)) }; } catch (e) { return { model: m, text: "", error: String(e && e.message || e), in_tok: 0, out_tok: 0 }; } }));
   const verdicts = answers.map((a) => ({ model: a.model, ...parseShift(a.text, ids) }));
-  const c = combine(q.prior, verdicts);
+  const c = combine(q.prior, verdicts, opts);
   const tokens = answers.reduce((a, x) => a + (x.in_tok || 0) + (x.out_tok || 0), 0);
   return { slug: q.slug, title: q.title, deadline: q.deadline, category: q.category, moves: q.moves, quoted: q.quoted, prior: q.prior,
     incoherent: q.incoherent, age_h: q.age_h, p: c.p, shift: c.shift, why: c.why, trigger: q.trigger, evidence: q.evidence, verdicts, tokens, prompt_chars: prompt.length };
@@ -421,6 +421,7 @@ const SCHEMA = [
   "CREATE TABLE IF NOT EXISTS fe_experiment (id INTEGER PRIMARY KEY AUTOINCREMENT, key TEXT NOT NULL, arm TEXT NOT NULL, started_at TEXT NOT NULL, ended_at TEXT, start_json TEXT, end_json TEXT, score REAL)",
   "CREATE TABLE IF NOT EXISTS fe_config (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at TEXT, reason TEXT)",
   "CREATE TABLE IF NOT EXISTS fe_settle (slug TEXT PRIMARY KEY, checked_at TEXT NOT NULL, state TEXT)",
+  "CREATE TABLE IF NOT EXISTS fe_research (id TEXT PRIMARY KEY, source TEXT, title TEXT, url TEXT, summary TEXT, seen_at TEXT, need TEXT, score REAL, status TEXT DEFAULT 'new', issue_id INTEGER, settled_at TEXT)",
   "CREATE TABLE IF NOT EXISTS fe_pm (id INTEGER PRIMARY KEY AUTOINCREMENT, ran_at TEXT NOT NULL, metrics_json TEXT, decisions_json TEXT, filed_json TEXT)",
 ];
 export async function ensureSchema(db) { for (const s of SCHEMA) await db.prepare(s).run(); }
@@ -480,7 +481,7 @@ export async function tick(env, nowMs = Date.now()) {
   let tokens = 0, updated = 0, error = null;
   for (const q of pl.chosen) {
     try {
-      const f = await forecastOne(q, (m, p) => workersAiAsk(env, m, p), today);
+      const f = await forecastOne(q, (m, p) => workersAiAsk(env, m, p), today, { scale: cfg.shift_scale });
       tokens += f.tokens;
       const prev = await env.TRADES_DB.prepare("SELECT hash FROM fe_forecast ORDER BY id DESC LIMIT 1").first();
       const created = new Date(nowMs).toISOString();
@@ -1050,13 +1051,15 @@ export const PM_KNOBS = {
   broadcast_per_day: { def: BROADCAST.perDayDefault, min: 1, max: 6 },
 };
 export async function readConfig(db) {
-  const out = { broadcast_format: FORMATS[0] };
+  const out = { broadcast_format: FORMATS[0], shift_scale: 1 };
   for (const [k, v] of Object.entries(PM_KNOBS)) out[k] = v.def;
   try {
     for (const r of ((await db.prepare("SELECT key, value FROM fe_config").all()).results || [])) {
       const k = PM_KNOBS[r.key], n = Number(r.value);
       if (k && Number.isFinite(n)) out[r.key] = Math.max(k.min, Math.min(k.max, Math.round(n)));
     }
+    const ss = Number(((await db.prepare("SELECT value FROM fe_config WHERE key = 'shift_scale'").first()) || {}).value);
+    if (Number.isFinite(ss)) out.shift_scale = Math.max(0, Math.min(2, ss));
     const f = ((await db.prepare("SELECT value FROM fe_config WHERE key = 'broadcast_format'").first()) || {}).value;
     out.broadcast_format = FORMATS.includes(f) ? f : FORMATS[0];
   } catch (err) { out.broadcast_format = FORMATS[0]; }
@@ -1087,7 +1090,8 @@ export async function pmMetrics(env, nowMs) {
     right_side: settled.filter((r) => callOf(r).right_side).length, value_added: va.n ? va.value_added : null, halted: !!sp.halted,
     coverage: cov, tokens_per_forecast_7d: wk.length ? Math.round(wk.reduce((a, r) => a + (r.tokens || 0), 0) / wk.length) : null,
     mean_consequence_open: open.length ? +(open.reduce((a, r) => a + consequenceScore(r), 0) / open.length).toFixed(3) : null,
-    broadcasts_7d: (b7 && b7.n) || 0, posts, traffic, portfolio_clicks_7d: portfolio };
+    broadcasts_7d: (b7 && b7.n) || 0, posts, traffic, portfolio_clicks_7d: portfolio,
+    calibration: reliabilityBins(last), shift_scale: shiftScaleFit(rows) };
 }
 // Code levers: when a metric says the product is short, the PM files one issue a run for the fleet's code loop, with the file, an anchor and a
 // probe that closes it when the metric recovers. Knob levers are applied directly (bounded, logged, reverted by deleting the fe_config row).
@@ -1105,7 +1109,7 @@ export const PM_LEVERS = [
     body: (m) => `fe_broadcast queued ${m.broadcasts_7d} posts in 7 days; social_threads q08-mk-* statuses: ${JSON.stringify(m.posts)}. Read why qnfo-social holds them (error column) and fix the row shape or the drain.\ncode-task: repo=qnfo-workers path=qnfo-social/worker.js\ncode-anchor: async function pickChannelRow(env, channel, epoch) {\n${PROBE('\\"posted\\"')}` },
   { key: "Q08-PM-EDGE-1", when: (m) => m.open >= 8 && m.disagree === 0, priority: "medium",
     title: (m) => `Q08-PM-EDGE-1: none of ${m.open} open q08 forecasts leaves the market price`,
-    body: (m) => `With no disagreement there is nothing to trade, broadcast or score. Check the gate in combine (halving and the 1-logit cap) against the evidence count; if the models agree in direction on most questions, let a two-model agreement with three or more cited signals keep its full shift.\n${CT}\ncode-anchor: export function combine(prior, verdicts, { shrink = 0.5, cap = 1 } = {}) {\nAfter editing run node q08-prediction-markets/inline-forecast-engine.mjs.\n${PROBE('\\"disagree\\":')}` },
+    body: (m) => `With no disagreement there is nothing to trade, broadcast or score. Check the gate in combine (halving and the 1-logit cap) against the evidence count; if the models agree in direction on most questions, let a two-model agreement with three or more cited signals keep its full shift.\n${CT}\ncode-anchor: export function combine(prior, verdicts, { shrink = 0.5, cap = 1, scale = 1 } = {}) {\nAfter editing run node q08-prediction-markets/inline-forecast-engine.mjs.\n${PROBE('\\"disagree\\":')}` },
 ];
 // Growth, not only repair (owner 2026-11-12: "That's what a product manager is about, growth"). Each target is read from pmMetrics; a missed one
 // files a growth change below, and the experiment step tests one change to the product at a time and keeps the arm that grows.
@@ -1153,6 +1157,168 @@ export async function experimentStep(env, m, nowMs) {
   }
   return out;
 }
+// ---------- research lane (Q08-RESEARCH-1): scan outside sources for better practice, score against q08's needs, file the change, learn from the outcome ----------
+// Owner 2026-11-12: a product manager goes out, finds what the best players do now and builds it in. First pass (Metaculus "AI Forecasting in 2026",
+// AIA Forecaster technical report arXiv 2511.07678): Platt-style recalibration after aggregation, 3-7 diverse runs, agentic search, caps, live (not
+// backtested) evaluation. Each need names the file and anchor where the practice lands, so the code loop can build it.
+export const RESEARCH_NEEDS = [
+  { key: "calibration", label: "recalibrate forecasts (Platt scaling, extremizing, probability caps, reliability checks)", terms: ["platt", "calibrat", "extremi", "reliability diagram", "overconfiden", "hedging", "brier", "log score", "proper scoring"], path: "q08-prediction-markets/forecast-engine.mjs", anchor: "export function " + "combine(prior, verdicts, { shrink = 0.5, cap = 1, scale = 1 } = {}) {" },
+  { key: "aggregation", label: "aggregate more and more diverse model runs (ensembles, supervisor reconciliation)", terms: ["ensemble", "aggregat", "median", "trimmed mean", "wisdom of the crowd", "supervisor", "superforecaster"], path: "q08-prediction-markets/forecast-engine.mjs", anchor: "export async function " + "forecastOne(q, ask, today, opts = {}) {" },
+  { key: "search", label: "gather evidence better (agentic search, more sources, base rates)", terms: ["agentic search", "retrieval", "search", "base rate", "reference class", "news"], path: "q08-prediction-markets/forecast-engine.mjs", anchor: "export async function " + "newsLane(db, starved, fetchText, nowMs, { limits = LIMITS, sleep = (ms) => new Promise((r) => setTimeout(r, ms)) } = {}) {" },
+  { key: "leakage", label: "keep forecasts honest (look-ahead leakage, open questions treated as resolved, live evaluation)", terms: ["leak", "foreknowledge", "look-ahead", "backtest", "contamination", "knowledge cutoff"], path: "q08-prediction-markets/forecast-engine.mjs", anchor: "export function " + "buildPrompt(q, evidence, today) {" },
+  { key: "track-record", label: "show the record the way the best platforms do (public scoring, peer scores, intervals)", terms: ["track record", "peer score", "leaderboard", "scorecard", "confidence interval", "resolved questions", "benchmark"], path: "q08-prediction-markets/forecast-engine.mjs", anchor: "export function " + "renderTrackRecord(d, head) {" },
+  { key: "distribution", label: "distribute and grow (shareable cards, newsletters, alerts, embeds)", terms: ["newsletter", "share", "embed", "alert", "api", "launch", "subscribers", "growth"], path: "q08-prediction-markets/forecast-engine.mjs", anchor: "export function " + "renderForecast(d, head) {" },
+];
+export const RESEARCH_SOURCES = [
+  { key: "arxiv-llm-forecasting", kind: "feed", w: 1.2, url: "https://export.arxiv.org/api/query?search_query=all:%22LLM+forecasting%22+OR+all:%22judgmental+forecasting%22+OR+all:%22prediction+markets%22&sortBy=submittedDate&sortOrder=descending&max_results=20" },
+  { key: "arxiv-calibration", kind: "feed", w: 1.1, url: "https://export.arxiv.org/api/query?search_query=all:%22probabilistic+forecasting%22+AND+all:calibration+AND+all:language&sortBy=submittedDate&sortOrder=descending&max_results=15" },
+  { key: "news-ai-forecasting", kind: "feed", w: 0.8, url: "https://news.google.com/rss/search?q=%22AI+forecasting%22+OR+%22forecasting+bot%22+when:7d&hl=en-US&gl=US&ceid=US:en" },
+  { key: "news-markets-platforms", kind: "feed", w: 0.8, url: "https://news.google.com/rss/search?q=Kalshi+OR+Polymarket+OR+Metaculus+OR+Manifold+feature+OR+launch+when:14d&hl=en-US&gl=US&ceid=US:en" },
+  { key: "good-judgment", kind: "feed", w: 1.1, url: "https://goodjudgment.com/feed/" },
+  { key: "forecasting-newsletter", kind: "feed", w: 1.0, url: "https://forecasting.substack.com/feed" },
+];
+const decodeFeedTextX = (s) => String(s || "").replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1").replace(/<[^>]+>/g, " ").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'").replace(/&amp;/g, "&").replace(/\s+/g, " ").trim();
+export function parseFeed(text) {
+  const out = [], blocks = String(text || "").split(/<(?:item|entry)[\s>]/i).slice(1);
+  for (const b of blocks) {
+    const tag = (n) => { const m = b.match(new RegExp("<" + n + "[^>]*>([\\s\\S]*?)</" + n + ">", "i")); return m ? decodeFeedTextX(m[1]) : ""; };
+    const href = (b.match(/<link[^>]*href="([^"]+)"/i) || [])[1] || tag("link") || tag("id");
+    const title = tag("title");
+    // Feed text is data, never a directive: no control characters, no line starting a code-task or code-anchor line, and a URL with no whitespace.
+    const clean = (x) => String(x || "").replace(/[\u0000-\u001f\u007f]+/g, " ").replace(/code-(task|anchor|probe)\s*:/gi, "$1 -").replace(/\s+/g, " ").trim();
+    const url = String(href || "").trim();
+    if (title && /^https?:\/\/[^\s<>"']+$/.test(url)) out.push({ title: clean(title).slice(0, 240), url, summary: clean(tag("summary") || tag("description") || tag("content")).slice(0, 600) });
+  }
+  return out;
+}
+const hash8 = (s) => { let h = 5381; for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) >>> 0; return h.toString(16).padStart(8, "0"); };
+const PRACTICE_CUES = ["we propose", "improves", "outperform", "introduces", "new method", "launch", "releases", "state-of-the-art", "beats"];
+export function scoreCandidate(item, src, weights = {}) {
+  const t = (item.title + " " + item.summary).toLowerCase();
+  let best = null;
+  for (const n of RESEARCH_NEEDS) {
+    const hits = n.terms.filter((x) => t.includes(x)).length;
+    if (hits >= 2 && (!best || hits * (weights[n.key] || 1) > best.hits * (weights[best.need] || 1))) best = { need: n.key, hits };
+  }
+  if (!best) return null;
+  const cue = PRACTICE_CUES.some((c) => t.includes(c)) ? 10 : 0;
+  return { need: best.need, score: Math.round(Math.min(100, (100 * Math.min(1, best.hits / 3)) * (src.w || 1) * (weights[best.need] || 1) + cue)) };
+}
+export const RESEARCH_MIN_SCORE = 55;
+async function researchWeights(db) {
+  const w = {};
+  for (const r of (await all(db, "SELECT key, value FROM fe_config WHERE key LIKE 'rw:%'"))) { const n = Number(r.value); if (Number.isFinite(n)) w[r.key.slice(3)] = Math.max(0.5, Math.min(2, n)); }
+  return w;
+}
+const setWeight = (db, need, v, now, why) => db.prepare("INSERT OR REPLACE INTO fe_config (key, value, updated_at, reason) VALUES (?,?,?,?)").bind("rw:" + need, String(Math.max(0.5, Math.min(2, +v.toFixed(2)))), now, why).run();
+export async function researchLane(env, fetchText, nowMs, { sources = RESEARCH_SOURCES, minScore = RESEARCH_MIN_SCORE, maxFiled = 1 } = {}) {
+  const db = env.TRADES_DB, now = new Date(nowMs).toISOString(), res = { fetched: 0, new: 0, filed: [], adopted: 0, stale: 0, errors: [] };
+  const weights = await researchWeights(db);
+  const pulled = await Promise.all(sources.map(async (s) => { try { const r = await fetchText(s.url); if (!r.ok) throw new Error("status " + r.status); return { s, items: parseFeed(r.text) }; } catch (err) { res.errors.push(s.key + ": " + String(err && err.message || err).slice(0, 60)); return { s, items: [] }; } }));
+  for (const { s, items } of pulled) for (const it of items) {
+    res.fetched++;
+    const sc = scoreCandidate(it, s, weights); if (!sc) continue;
+    const r = await db.prepare("INSERT OR IGNORE INTO fe_research (id, source, title, url, summary, seen_at, need, score, status) VALUES (?,?,?,?,?,?,?,?, 'new')").bind(hash8(it.url), s.key, it.title, it.url, it.summary, now, sc.need, sc.score).run();
+    if (r.meta && r.meta.changes) res.new++;
+  }
+  // File the best new candidate per need that has no open issue (one change a run per need, at most maxFiled).
+  if (env.AUDIT) {
+    const cands = await all(db, "SELECT * FROM fe_research WHERE status = 'new' AND score >= ? AND seen_at > ? ORDER BY score DESC, seen_at DESC LIMIT 20", minScore, new Date(nowMs - 14 * 86400000).toISOString());
+    for (const c of cands) {
+      if (res.filed.length >= maxFiled) break;
+      const need = RESEARCH_NEEDS.find((n) => n.key === c.need), key = "Q08-RESEARCH-" + c.need.toUpperCase() + "-1";
+      const open = await env.AUDIT.prepare("SELECT id FROM agent_issues WHERE status = 'open' AND substr(title, 1, ?) = ? LIMIT 1").bind(key.length + 1, key + ":").first().catch(() => ({ lookup_failed: true }));
+      if (open) continue; // an open issue, or a failed lookup: never file blind
+      const t = Date.now();
+      const r = await env.AUDIT.prepare("INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at) VALUES (?,?,?,?,?,'open',?,?)")
+        .bind(key + ": " + c.title.slice(0, 110), `Research lane (Q08-RESEARCH-1) found a practice from ${c.source} that matches the q08 need "${need.label}" (score ${c.score}): ${c.title}\n${c.url}\n${c.summary}\nBuild the smallest version of it that q08 can measure (a recorded metric or a fe_config knob the product manager can revert), covered by q08-prediction-markets/growth.test.mjs.\ncode-task: repo=qnfo-workers path=${need.path}\ncode-anchor: ${need.anchor}\nAfter editing run node q08-prediction-markets/inline-forecast-engine.mjs.\nFiled by the q08 markets product manager at ${now}.`, "q08-prediction-markets", "optimization", "medium", t, t).run().catch((err) => ({ error: String(err && err.message || err) }));
+      if (r.error) { res.errors.push("file: " + r.error.slice(0, 60)); continue; }
+      const id = r.meta && r.meta.last_row_id;
+      await db.prepare("UPDATE fe_research SET status = 'filed', issue_id = ?, settled_at = ? WHERE id = ?").bind(id || null, now, c.id).run();
+      res.filed.push({ key, id: c.id, need: c.need, score: c.score });
+    }
+    // Learn from outcomes: a closed issue is adopted (the need's weight rises and the item becomes a signal); one still open after 14 days is stale (weight falls).
+    for (const f of await all(db, "SELECT id, need, title, url, issue_id, settled_at FROM fe_research WHERE status = 'filed' AND issue_id IS NOT NULL")) {
+      const st = await env.AUDIT.prepare("SELECT status FROM agent_issues WHERE id = ?").bind(f.issue_id).first().catch(() => null);
+      if (st && st.status === "closed") {
+        await db.prepare("UPDATE fe_research SET status = 'adopted', settled_at = ? WHERE id = ?").bind(now, f.id).run();
+        await setWeight(db, f.need, (weights[f.need] || 1) + 0.15, now, "research adopted: " + f.title.slice(0, 80));
+        await db.prepare("INSERT OR IGNORE INTO fe_signal (id, source, family, query, title, url, created_at) VALUES (?,?,?,?,?,?,?)").bind("research:" + f.id, "research", "tech", f.need, f.title, f.url, now).run();
+        res.adopted++;
+      } else if (st && f.settled_at && nowMs - Date.parse(f.settled_at) > 14 * 86400000) {
+        await db.prepare("UPDATE fe_research SET status = 'stale', settled_at = ? WHERE id = ?").bind(now, f.id).run();
+        await setWeight(db, f.need, (weights[f.need] || 1) - 0.1, now, "research stale: " + f.title.slice(0, 80));
+        res.stale++;
+      }
+    }
+  }
+  return res;
+}
+export async function researchStatus(db) {
+  const counts = Object.fromEntries((await all(db, "SELECT status, count(*) n FROM fe_research GROUP BY status")).map((x) => [x.status, x.n]));
+  return { sources: RESEARCH_SOURCES.map((s) => s.key), needs: RESEARCH_NEEDS.map((n) => n.key), counts, weights: await researchWeights(db),
+    top: await all(db, "SELECT source, need, score, status, title, url FROM fe_research ORDER BY seen_at DESC, score DESC LIMIT 8") };
+}
+
+// ---------- calibration (Q08-CALIB-1): the evidence shift is scaled by a factor fit on settled calls and kept only if cross-validation beats the unscaled forecast ----------
+// Best practice from the AIA Forecaster and the Metaculus bot analyses: LLM forecasts hedge toward the prior; recalibrate after aggregation.
+// Only the shift away from the crowd's price is scaled, so a question with no edge keeps the market price.
+export function reliabilityBins(rows, edges = [0, 0.2, 0.4, 0.6, 0.8, 1.0001]) {
+  const r = rows.filter((x) => x.outcome === 0 || x.outcome === 1);
+  return edges.slice(0, -1).map((lo, i) => { const b = r.filter((x) => x.p >= lo && x.p < edges[i + 1]); return { from: lo, to: Math.min(1, edges[i + 1]), n: b.length, mean_p: b.length ? +(b.reduce((a, x) => a + x.p, 0) / b.length).toFixed(3) : null, observed: b.length ? +(b.reduce((a, x) => a + x.outcome, 0) / b.length).toFixed(3) : null }; });
+}
+const scaled = (x, k) => clampP(sigmoid(logit(clampP(x.prior)) + k * (logit(clampP(x.p)) - logit(clampP(x.prior)))));
+export function shiftScaleFit(rows, { minN = 30, folds = 5 } = {}) {
+  const r = lastPerSlug(rows).filter((x) => (x.outcome === 0 || x.outcome === 1) && Math.abs(x.p - x.prior) > 1e-6);
+  if (r.length < minN) return { n: r.length, apply: false, k: 1, why: "needs " + minN + " settled calls that left the price" };
+  const grid = []; for (let k = 0; k <= 2.0001; k += 0.05) grid.push(+k.toFixed(2));
+  const best = (train) => grid.map((k) => [k, train.reduce((a, x) => a + brier(scaled(x, k), x.outcome), 0) / train.length]).sort((a, b) => a[1] - b[1])[0][0];
+  let cv = 0, base = 0;
+  for (let f = 0; f < folds; f++) { const te = r.filter((_, i) => i % folds === f), tr = r.filter((_, i) => i % folds !== f), k = best(tr); cv += te.reduce((a, x) => a + brier(scaled(x, k), x.outcome), 0); base += te.reduce((a, x) => a + brier(x.p, x.outcome), 0); }
+  const k = best(r), gain = (base - cv) / r.length;
+  return { n: r.length, k, cv_gain: +gain.toFixed(4), apply: gain > 0.001 && k !== 1, why: gain > 0.001 ? "cross-validated Brier improves by " + gain.toFixed(4) : "no cross-validated gain" };
+}
+// ---------- competitive analysis (Q08-COMPETE-1): benchmark q08 against the platforms readers compare it with; every gap becomes a filed change ----------
+// Each competitor's public pages are fetched and read for features. A feature offered by at least two competitors that q08 lacks is a gap: it enters
+// the research queue as a candidate (so the same filing, adoption and weight loop applies) and the table fe_competitor keeps the evidence.
+export const COMPETITORS = [
+  { key: "metaculus", urls: ["https://www.metaculus.com/", "https://www.metaculus.com/questions/track-record/"] },
+  { key: "polymarket", urls: ["https://polymarket.com/", "https://docs.polymarket.com/"] },
+  { key: "kalshi", urls: ["https://kalshi.com/", "https://kalshi.com/research"] },
+  { key: "manifold", urls: ["https://manifold.markets/"] },
+  { key: "good-judgment-open", urls: ["https://www.gjopen.com/"] },
+  { key: "forecastbench", urls: ["https://www.forecastbench.org/"] },
+];
+// have: what q08 ships today (kept here so a gap closes when the feature lands and this flag flips with the PR that builds it).
+export const FEATURES = [
+  { key: "track-record", terms: ["track record", "calibration", "brier"], have: true, need: "track-record", what: "a public track record with calibration" },
+  { key: "leaderboard", terms: ["leaderboard", "ranking", "top forecasters"], have: false, need: "track-record", what: "a leaderboard that ranks forecasters or models against each other and the crowd" },
+  { key: "api", terms: ["api", "developers", "data export", "download data"], have: true, need: "distribution", what: "an open API" },
+  { key: "alerts", terms: ["alerts", "notifications", "notify me", "subscribe"], have: false, need: "distribution", what: "alerts when a forecast moves or settles" },
+  { key: "embed", terms: ["embed", "widget"], have: false, need: "distribution", what: "an embeddable forecast widget" },
+  { key: "newsletter", terms: ["newsletter", "weekly digest"], have: false, need: "distribution", what: "a weekly digest of calls and settlements" },
+  { key: "comments", terms: ["comments", "discussion", "rationale"], have: false, need: "search", what: "published reasoning beside each forecast" },
+  { key: "mobile", terms: ["ios", "android", "app store"], have: false, need: "distribution", what: "a mobile app or installable page" },
+];
+export async function competitorLane(env, fetchText, nowMs, { competitors = COMPETITORS, minCompetitors = 2 } = {}) {
+  const db = env.TRADES_DB, now = new Date(nowMs).toISOString(), res = { read: 0, errors: [], gaps: [] };
+  await db.prepare("CREATE TABLE IF NOT EXISTS fe_competitor (competitor TEXT NOT NULL, feature TEXT NOT NULL, offered INTEGER, checked_at TEXT, PRIMARY KEY (competitor, feature))").run();
+  for (const c of competitors) {
+    let text = "";
+    for (const u of c.urls) { try { const r = await fetchText(u); if (r.ok) { text += " " + String(r.text).toLowerCase(); res.read++; } else res.errors.push(c.key + ": status " + r.status); } catch (err) { res.errors.push(c.key + ": " + String(err && err.message || err).slice(0, 50)); } }
+    if (!text.trim()) continue;
+    for (const f of FEATURES) await db.prepare("INSERT OR REPLACE INTO fe_competitor (competitor, feature, offered, checked_at) VALUES (?,?,?,?)").bind(c.key, f.key, f.terms.some((t) => text.includes(t)) ? 1 : 0, now).run();
+  }
+  for (const f of FEATURES.filter((x) => !x.have)) {
+    const o = await all(db, "SELECT competitor FROM fe_competitor WHERE feature = ? AND offered = 1 AND checked_at > ?", f.key, new Date(nowMs - 3 * 86400000).toISOString());
+    if (o.length < minCompetitors) continue;
+    const url = (competitors.find((c) => c.key === o[0].competitor) || competitors[0]).urls[0];
+    const r = await db.prepare("INSERT OR IGNORE INTO fe_research (id, source, title, url, summary, seen_at, need, score, status) VALUES (?,?,?,?,?,?,?,?, 'new')")
+      .bind("gap-" + f.key, "competitors", o.length + " of " + competitors.length + " competitors offer " + f.what + "; q08 does not", url, "Offered by: " + o.map((x) => x.competitor).join(", "), now, f.need, 80).run();
+    res.gaps.push({ feature: f.key, offered_by: o.length, new: !!(r.meta && r.meta.changes) });
+  }
+  return res;
+}
 export async function productManager(env, nowMs, { force = false, everyH = 23 } = {}) {
   const db = env.TRADES_DB;
   await ensureSchema(db);
@@ -1187,12 +1353,20 @@ export async function productManager(env, nowMs, { force = false, everyH = 23 } 
       break;
     }
   }
+  // Q08-CALIB-1: keep the fitted shift scale only while cross-validation says it beats the unscaled forecast; otherwise delete the knob.
+  const ss = m.shift_scale;
+  if (ss && ss.apply && cfg.shift_scale !== ss.k) { await db.prepare("INSERT OR REPLACE INTO fe_config (key, value, updated_at, reason) VALUES ('shift_scale',?,?,?)").bind(String(ss.k), now, "cv gain " + ss.cv_gain + " on " + ss.n + " settled calls").run(); decisions.push({ key: "shift_scale", from: cfg.shift_scale, to: ss.k, reason: ss.why, revert: "DELETE FROM fe_config WHERE key = 'shift_scale'" }); cfg.shift_scale = ss.k; }
+  else if (ss && !ss.apply && cfg.shift_scale !== 1) { await db.prepare("DELETE FROM fe_config WHERE key = 'shift_scale'").run(); decisions.push({ key: "shift_scale", from: cfg.shift_scale, to: 1, reason: ss.why }); cfg.shift_scale = 1; }
+  let compete = null;
+  try { compete = await competitorLane(env, env.__fetchText || defaultFetchText, nowMs); } catch (err) { compete = { error: String(err && err.message || err).slice(0, 120) }; }
+  let research = null;
+  try { research = await researchLane(env, env.__fetchText || defaultFetchText, nowMs); } catch (err) { research = { error: String(err && err.message || err).slice(0, 120) }; }
   let experiments = null;
   try { experiments = await experimentStep(env, m, nowMs); } catch (err) { experiments = [{ error: String(err && err.message || err).slice(0, 120) }]; }
   // Did last run's knob changes move what they were meant to move? Recorded beside this run, so a lever that does nothing is visible.
   const check = before ? { coverage: [before.coverage, m.coverage], broadcasts_7d: [before.broadcasts_7d, m.broadcasts_7d], pageviews_7d: [before.traffic && before.traffic.pageviews_7d, m.traffic && m.traffic.pageviews_7d], settled: [before.settled, m.settled] } : null;
-  await db.prepare("INSERT INTO fe_pm (ran_at, metrics_json, decisions_json, filed_json) VALUES (?,?,?,?)").bind(now, JSON.stringify({ ...m, growth: growthScore(m), since_last: check }), JSON.stringify(decisions.concat((experiments || []).map((x) => ({ experiment: x })))), JSON.stringify(filed)).run();
-  return { ran: true, metrics: m, growth: growthScore(m), decisions, experiments, filed, config: cfg };
+  await db.prepare("INSERT INTO fe_pm (ran_at, metrics_json, decisions_json, filed_json) VALUES (?,?,?,?)").bind(now, JSON.stringify({ ...m, growth: growthScore(m), since_last: check, research, compete }), JSON.stringify(decisions.concat((experiments || []).map((x) => ({ experiment: x })))), JSON.stringify(filed)).run();
+  return { ran: true, metrics: m, growth: growthScore(m), decisions, experiments, filed, research, compete, config: cfg };
 }
 export async function pmStatus(env, nowMs = Date.now()) {
   const db = env && env.TRADES_DB;
@@ -1202,7 +1376,7 @@ export async function pmStatus(env, nowMs = Date.now()) {
   const parse = (s) => { try { return JSON.parse(s || "null"); } catch (err) { return null; } };
   const latest = runs[0] ? parse(runs[0].metrics_json) : await pmMetrics(env, nowMs).catch(() => null);
   const exps = await all(db, "SELECT key, arm, started_at, ended_at, score FROM fe_experiment ORDER BY id DESC LIMIT 20");
-  return { product: "q08 markets", loop: "daily: measure growth and health, adjust knobs (fe_config), run one experiment at a time (fe_experiment), file the next growth or repair change (agent_issues), check the last change", config: await readConfig(db), levers: PM_LEVERS.map((l) => l.key),
+  return { product: "q08 markets", loop: "daily: measure growth and health, adjust knobs (fe_config), run one experiment at a time (fe_experiment), file the next growth or repair change (agent_issues), check the last change", config: await readConfig(db), levers: PM_LEVERS.map((l) => l.key), research: await researchStatus(db), competitors: { features: FEATURES.map((f) => ({ key: f.key, have: f.have })), matrix: await all(db, "SELECT competitor, feature, offered FROM fe_competitor") },
     ...(latest || {}), growth: latest ? growthScore(latest) : [], experiments: exps, runs: runs.map((r) => ({ ran_at: r.ran_at, decisions: parse(r.decisions_json) || [], filed: parse(r.filed_json) || [] })) };
 }
 

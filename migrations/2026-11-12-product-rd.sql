@@ -1,0 +1,92 @@
+-- PRODUCT-RD-1 (2026-11-12, charter pillar autonomy; owner: research, development and competitive analysis are what a product manager does, so the product manager personas do them in code).
+-- Extends SOTA-SCAN-1 (one daily outward scan of the fleet as a whole) to every product line, in the domain-managers workflow (hourly :45, plain SQL, no model call except the Cloudflare agent request):
+--   1. competitive analysis: product_competitors holds, per product, comparable products and cutting-edge players with what they do better, the gap here and a cited source URL.
+--      The stalest product gets one cf_agent_requests research run an hour (a product is refreshed after 30 days); a reply line without an http source is dropped, so nothing uncited is stored.
+--   2. usage signals: product_usage snapshots each product's usage metric and quality measure daily, so a trend is read from rows.
+--   3. R&D experiments: once a product has findings, one proposal request a day (rotating, one experiment in flight per product) goes through the existing ROADMAP-ORIGINATE-1 path
+--      (rm-parse, rm-file, rm-track, rm-deployed). product_experiments records the metric at deploy, measures it product_measure_days (7) later, keeps the change when the metric rose by
+--      product_min_lift_pct (2) and otherwise files a revert as a roadmap_proposals row on the same path. Products on control-plane workers or personal-* workers are not proposed for (the roadmap path rejects them).
+--   4. v_product_research reads finding -> proposal -> issue -> merged PR -> measured outcome per product.
+-- Stop: INSERT OR REPLACE INTO ops_config (key, value) VALUES ('product_research', 'off') (stops competitor research and experiments) or 'product_experiments' = 'off' (experiments only).
+-- APPLY-BY: ci
+-- REAPPLY-OK: tables are IF NOT EXISTS; the workflow update only matches while the step is absent
+-- DB: qnfo-audit
+-- BACKUP: bak_20261112_pr1_workflow
+-- Rollback: UPDATE fleet_tasks SET definition = (SELECT definition FROM bak_20261112_pr1_workflow WHERE id = 'domain-managers'), version = version + 1 WHERE id = 'domain-managers'; DROP VIEW IF EXISTS v_product_research;
+
+CREATE TABLE IF NOT EXISTS bak_20261112_pr1_workflow AS SELECT id, definition, version FROM fleet_tasks WHERE id = 'domain-managers';
+
+CREATE TABLE IF NOT EXISTS product_competitors (
+  product TEXT NOT NULL,
+  competitor TEXT NOT NULL,
+  url TEXT,
+  they_do_better TEXT,
+  gap_here TEXT,
+  source_url TEXT NOT NULL,
+  request_instance TEXT,
+  refreshed_at TEXT NOT NULL,
+  PRIMARY KEY (product, competitor)
+);
+CREATE TABLE IF NOT EXISTS product_usage (
+  day TEXT NOT NULL,
+  product TEXT NOT NULL,
+  usage REAL,
+  quality REAL,
+  PRIMARY KEY (day, product)
+);
+CREATE TABLE IF NOT EXISTS product_experiments (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  product TEXT NOT NULL,
+  program_code TEXT,
+  request_instance TEXT UNIQUE,
+  proposal_id INTEGER,
+  title TEXT,
+  hypothesis TEXT,
+  metric TEXT,
+  baseline REAL,
+  baseline_at TEXT,
+  after_value REAL,
+  lift_pct REAL,
+  status TEXT NOT NULL DEFAULT 'proposed',
+  pr_url TEXT,
+  created_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+  deployed_at TEXT,
+  decided_at TEXT
+);
+
+INSERT OR IGNORE INTO ops_config (key, value, note, updated_at) VALUES ('product_research', 'on', 'PRODUCT-RD-1 competitor research and experiments; off stops both', datetime('now'));
+INSERT OR IGNORE INTO ops_config (key, value, note, updated_at) VALUES ('product_experiments', 'on', 'PRODUCT-RD-1 product experiments; off stops proposals only', datetime('now'));
+INSERT OR IGNORE INTO ops_config (key, value, note, updated_at) VALUES ('product_measure_days', '7', 'PRODUCT-RD-1 days between deploy and the keep or revert decision', datetime('now'));
+INSERT OR IGNORE INTO ops_config (key, value, note, updated_at) VALUES ('product_min_lift_pct', '2', 'PRODUCT-RD-1 percent the metric must rise for an experiment to be kept', datetime('now'));
+
+DROP VIEW IF EXISTS v_product_research;
+CREATE VIEW v_product_research AS
+SELECT p.product, p.program_code,
+  (SELECT COUNT(*) FROM product_competitors c WHERE c.product = p.product) AS competitors,
+  (SELECT MAX(c.refreshed_at) FROM product_competitors c WHERE c.product = p.product) AS competitors_refreshed_at,
+  (SELECT group_concat(c.competitor, '; ') FROM product_competitors c WHERE c.product = p.product) AS competitor_names,
+  (SELECT u.usage FROM product_usage u WHERE u.product = p.product ORDER BY u.day DESC LIMIT 1) AS usage_now,
+  (SELECT u.usage FROM product_usage u WHERE u.product = p.product AND u.day <= date('now', '-7 days') ORDER BY u.day DESC LIMIT 1) AS usage_7d_ago,
+  e.id AS experiment_id, e.title AS finding_to_experiment, e.status AS experiment_status, e.proposal_id,
+  q.issue_id, COALESCE(e.pr_url, q.pr_url) AS pr_url, e.metric, e.baseline, e.after_value, e.lift_pct, e.deployed_at, e.decided_at,
+  (SELECT r.status FROM roadmap_proposals r WHERE r.request_instance = 'revert-' || e.id) AS revert_status
+FROM product_registry p
+LEFT JOIN product_experiments e ON e.product = p.product
+LEFT JOIN roadmap_proposals q ON q.id = e.proposal_id
+WHERE p.state = 'active';
+
+UPDATE fleet_tasks
+SET definition = json_insert(definition,
+  '$.steps[#]', json('{"type": "sql", "name": "pr-usage", "db": "AUDIT", "sql": "INSERT OR IGNORE INTO product_usage (day, product, usage, quality) SELECT date(''now''), p.product, CASE WHEN u.last_value GLOB ''*[0-9]*'' THEN CAST(u.last_value AS REAL) END, CASE WHEN q.last_value GLOB ''*[0-9]*'' THEN CAST(q.last_value AS REAL) END FROM product_registry p LEFT JOIN metric_registry u ON u.metric = p.usage_metric LEFT JOIN metric_registry q ON q.metric = p.quality_measure WHERE p.state = ''active''"}'),
+  '$.steps[#]', json('{"type": "sql", "name": "pr-compete-ask", "db": "AUDIT", "sql": "INSERT INTO cf_agent_requests (requester, kind, prompt, instance, priority) SELECT ''product-manager:'' || p.product, ''run'', ''You are the product manager of '' || p.product || '' ('' || COALESCE(p.host, '''') || ''), which is for: '' || COALESCE(p.what_for, '''') || ''. It belongs to the QNFO fleet. A product manager studies the competition. Search the web for the 3 to 5 strongest comparable products or cutting-edge players for exactly this use: live products, open-source projects and recent research systems from the last 18 months. Name only real products you found a page for; never guess. Already in the registry (find different ones if you can, or refresh these): '' || COALESCE((SELECT group_concat(c.competitor, ''; '') FROM product_competitors c WHERE c.product = p.product), ''none'') || ''. Reply with one line per competitor and nothing else, in exactly this form: COMPETITOR: <name> | <their url> | <what they do better than this product, under 25 words> | <the gap here that a single-file change could close, under 25 words> | SOURCE: <url of the page you read>'', ''compete-'' || p.product || ''-'' || strftime(''%Y%m%d'', ''now''), ''low'' FROM product_registry p WHERE p.state = ''active'' AND COALESCE((SELECT MAX(c.refreshed_at) FROM product_competitors c WHERE c.product = p.product), '''') < strftime(''%Y-%m-%dT%H:%M:%SZ'', ''now'', ''-30 days'') AND NOT EXISTS (SELECT 1 FROM cf_agent_requests r WHERE r.instance LIKE ''compete-%'' AND r.status IN (''queued'', ''running'')) AND NOT EXISTS (SELECT 1 FROM cf_agent_requests r WHERE r.instance LIKE ''compete-'' || p.product || ''-%'' AND r.created_at >= strftime(''%Y-%m-%dT%H:%M:%SZ'', ''now'', ''-20 hours'')) AND COALESCE((SELECT value FROM ops_config WHERE key = ''persona_actions''), ''on'') <> ''off'' AND COALESCE((SELECT value FROM ops_config WHERE key = ''product_research''), ''on'') <> ''off'' ORDER BY COALESCE((SELECT MAX(c.refreshed_at) FROM product_competitors c WHERE c.product = p.product), '''') ASC, p.product LIMIT 1"}'),
+  '$.steps[#]', json('{"type": "sql", "name": "pr-compete-parse", "db": "AUDIT", "sql": "INSERT INTO product_competitors (product, competitor, url, they_do_better, gap_here, source_url, request_instance, refreshed_at) WITH RECURSIVE ln(inst, rest, line) AS (SELECT instance, replace(replace(result, char(13), ''''), ''**'', '''') || char(10), NULL FROM cf_agent_requests WHERE instance LIKE ''compete-%'' AND status = ''done'' AND result LIKE ''%COMPETITOR:%'' AND created_at >= strftime(''%Y-%m-%dT%H:%M:%SZ'', ''now'', ''-3 days'') UNION ALL SELECT inst, substr(rest, instr(rest, char(10)) + 1), substr(rest, 1, instr(rest, char(10)) - 1) FROM ln WHERE rest <> ''''), l AS (SELECT inst, line, inst || char(1) || line AS k FROM ln WHERE line LIKE ''%COMPETITOR:%''), fld(k, inst, rest, n, val) AS (SELECT k, inst, substr(line, instr(line, ''COMPETITOR:'') + 11) || '' | '', 0, NULL FROM l UNION ALL SELECT k, inst, substr(rest, instr(rest, '' | '') + 3), n + 1, trim(substr(rest, 1, instr(rest, '' | '') - 1)) FROM fld WHERE rest <> ''''), piv AS (SELECT inst, MAX(CASE WHEN n = 1 THEN val END) AS nm, MAX(CASE WHEN n = 2 THEN val END) AS url, MAX(CASE WHEN n = 3 THEN val END) AS better, MAX(CASE WHEN n = 4 THEN val END) AS gap, MAX(CASE WHEN n = 5 THEN val END) AS src FROM fld GROUP BY k, inst) SELECT substr(inst, 9, length(inst) - 17), substr(nm, 1, 120), substr(url, 1, 300), substr(better, 1, 300), substr(gap, 1, 300), trim(substr(src, instr(src, ''http''), 400)), inst, strftime(''%Y-%m-%dT%H:%M:%SZ'',''now'') FROM piv WHERE nm <> '''' AND url LIKE ''http%'' AND src LIKE ''%http%'' AND substr(inst, 9, length(inst) - 17) IN (SELECT product FROM product_registry) AND true ON CONFLICT (product, competitor) DO UPDATE SET url = excluded.url, they_do_better = excluded.they_do_better, gap_here = excluded.gap_here, source_url = excluded.source_url, request_instance = excluded.request_instance, refreshed_at = excluded.refreshed_at"}'),
+  '$.steps[#]', json('{"type": "sql", "name": "pr-experiment-propose", "db": "AUDIT", "sql": "INSERT INTO cf_agent_requests (requester, kind, prompt, instance, priority) SELECT ''program-manager:'' || p.program_code, ''run'', ''You are the product manager of '' || p.product || '' ('' || COALESCE(p.host, '''') || '', worker '' || p.worker || ''), which is for: '' || COALESCE(p.what_for, '''') || ''. It is measured by '' || COALESCE(p.quality_measure, p.usage_metric) || '' (now '' || COALESCE((SELECT m.last_value FROM metric_registry m WHERE m.metric = COALESCE(p.quality_measure, p.usage_metric)), ''unmeasured'') || ''). Competitors and cutting-edge players already researched, with their sources: '' || (SELECT group_concat(c.competitor || '' ('' || c.source_url || ''): they do better: '' || c.they_do_better || ''; gap here: '' || c.gap_here, '' || '') FROM product_competitors c WHERE c.product = p.product) || ''. Earlier experiments on this product and how they ended (do not repeat them): '' || COALESCE((SELECT group_concat(substr(e.title, 1, 70) || '' => '' || e.status, ''; '') FROM product_experiments e WHERE e.product = p.product), ''none'') || ''. Design ONE experiment: a change to this product that closes a gap a competitor shows, with a prediction that the metric rises. A single-file change in '' || p.worker || ''/worker.js must deliver it. Cheap models must be used wherever they work and quality must never drop. Reply in exactly this form, each on its own line:'' || char(10) || ''TITLE: <under 80 characters, start with R&D: '' || p.product || '':>'' || char(10) || ''WHY: <the competitor, its source URL, the gap, the metric and the predicted lift, under 90 words>'' || char(10) || ''code-task: repo=qnfo-workers path='' || p.worker || ''/worker.js'' || char(10) || ''code-anchor: <verbatim text that occurs exactly once in that file, next to the edit>'' || char(10) || ''EDIT: <the exact change, under 120 words>'', ''roadmap-'' || p.program_code || ''-pr-'' || p.product || ''-'' || strftime(''%Y%m%d'', ''now''), ''medium'' FROM product_registry p WHERE p.state = ''active'' AND p.worker IS NOT NULL AND p.worker NOT IN (''qnfo-ops'',''qnfo-fleet-control'',''qnfo-deploy-guard'',''qnfo-code-orchestrator'',''qnfo-code-agent'',''qnfo-observability'',''qnfo-containers-pilot'',''qnfo-autonomy-scorer'') AND p.worker NOT LIKE ''personal-%'' AND EXISTS (SELECT 1 FROM product_competitors c WHERE c.product = p.product) AND NOT EXISTS (SELECT 1 FROM product_experiments e WHERE e.product = p.product AND e.status IN (''proposed'', ''building'', ''measuring'')) AND NOT EXISTS (SELECT 1 FROM cf_agent_requests r WHERE r.instance LIKE ''roadmap-%-pr-%'' AND r.created_at >= strftime(''%Y-%m-%dT%H:%M:%SZ'', ''now'', ''-20 hours'')) AND EXISTS (SELECT 1 FROM program_charters c WHERE c.program_code = p.program_code AND c.status = ''active'') AND COALESCE((SELECT value FROM ops_config WHERE key = ''persona_actions''), ''on'') <> ''off'' AND COALESCE((SELECT value FROM ops_config WHERE key = ''product_research''), ''on'') <> ''off'' AND COALESCE((SELECT value FROM ops_config WHERE key = ''roadmap_originate''), ''on'') <> ''off'' AND COALESCE((SELECT value FROM ops_config WHERE key = ''product_experiments''), ''on'') <> ''off'' ORDER BY COALESCE((SELECT MAX(e.created_at) FROM product_experiments e WHERE e.product = p.product), '''') ASC, p.product LIMIT 1"}'),
+  '$.steps[#]', json('{"type": "sql", "name": "pr-experiment-open", "db": "AUDIT", "sql": "INSERT OR IGNORE INTO product_experiments (product, program_code, request_instance, proposal_id, title, hypothesis, metric, baseline, baseline_at, status) SELECT q.prod, q.program_code, q.request_instance, q.id, q.title, substr(q.rationale, 1, 600), m.metric, CASE WHEN m.last_value GLOB ''*[0-9]*'' THEN CAST(m.last_value AS REAL) END, strftime(''%Y-%m-%dT%H:%M:%SZ'',''now''), CASE WHEN q.status = ''rejected'' THEN ''rejected'' ELSE ''proposed'' END FROM (SELECT q.*, substr(q.request_instance, instr(q.request_instance,''-pr-'')+4, length(q.request_instance)-(instr(q.request_instance,''-pr-'')+3)-9) AS prod FROM roadmap_proposals q WHERE q.request_instance LIKE ''roadmap-%-pr-%'') q JOIN product_registry p ON p.product = q.prod LEFT JOIN metric_registry m ON m.metric = COALESCE(p.quality_measure, p.usage_metric)"}'),
+  '$.steps[#]', json('{"type": "sql", "name": "pr-experiment-track", "db": "AUDIT", "sql": "UPDATE product_experiments SET status = CASE (SELECT q.status FROM roadmap_proposals q WHERE q.id = product_experiments.proposal_id) WHEN ''rejected'' THEN ''rejected'' WHEN ''filed'' THEN ''building'' WHEN ''building'' THEN ''building'' ELSE status END WHERE status IN (''proposed'', ''building'')"}'),
+  '$.steps[#]', json('{"type": "sql", "name": "pr-experiment-deployed", "db": "AUDIT", "sql": "UPDATE product_experiments SET status = ''measuring'', pr_url = (SELECT q.pr_url FROM roadmap_proposals q WHERE q.id = product_experiments.proposal_id), deployed_at = COALESCE((SELECT q.deployed_at FROM roadmap_proposals q WHERE q.id = product_experiments.proposal_id), strftime(''%Y-%m-%dT%H:%M:%SZ'',''now'')), baseline = (SELECT CASE WHEN m.last_value GLOB ''*[0-9]*'' THEN CAST(m.last_value AS REAL) END FROM metric_registry m WHERE m.metric = product_experiments.metric), baseline_at = strftime(''%Y-%m-%dT%H:%M:%SZ'',''now'') WHERE status IN (''proposed'', ''building'') AND (SELECT q.status FROM roadmap_proposals q WHERE q.id = product_experiments.proposal_id) = ''deployed''"}'),
+  '$.steps[#]', json('{"type": "sql", "name": "pr-experiment-decide", "db": "AUDIT", "sql": "UPDATE product_experiments SET after_value = x.after_v, lift_pct = x.lift, status = x.verdict, decided_at = strftime(''%Y-%m-%dT%H:%M:%SZ'',''now'') FROM (SELECT e.id, a.v AS after_v, CASE WHEN e.baseline > 0 AND a.v IS NOT NULL THEN ROUND(100.0 * (a.v - e.baseline) / e.baseline, 1) END AS lift, CASE WHEN e.baseline IS NULL OR e.baseline <= 0 OR a.v IS NULL THEN ''inconclusive'' WHEN 100.0 * (a.v - e.baseline) / e.baseline >= COALESCE(CAST((SELECT value FROM ops_config WHERE key = ''product_min_lift_pct'') AS REAL), 2) THEN ''kept'' ELSE ''reverted'' END AS verdict FROM product_experiments e LEFT JOIN (SELECT m.metric, CASE WHEN m.last_value GLOB ''*[0-9]*'' THEN CAST(m.last_value AS REAL) END AS v FROM metric_registry m) a ON a.metric = e.metric WHERE e.status = ''measuring'' AND e.deployed_at <= strftime(''%Y-%m-%dT%H:%M:%SZ'', ''now'', ''-'' || COALESCE(CAST((SELECT value FROM ops_config WHERE key = ''product_measure_days'') AS INTEGER), 7) || '' days'')) x WHERE product_experiments.id = x.id"}'),
+  '$.steps[#]', json('{"type": "sql", "name": "pr-experiment-revert", "db": "AUDIT", "sql": "INSERT OR IGNORE INTO roadmap_proposals (program_code, request_instance, title, rationale, path, anchor_line, status, created_at, updated_at) SELECT e.program_code, ''revert-'' || e.id, substr(''Revert: '' || e.title, 1, 120), ''Revert the change from '' || COALESCE(e.pr_url, ''roadmap proposal '' || e.proposal_id) || ''. It was an R&D experiment by the product manager of '' || e.product || '' and did not move '' || e.metric || '' (baseline '' || COALESCE(e.baseline, ''none'') || '', after '' || COALESCE(e.after_value, ''none'') || '', lift '' || COALESCE(e.lift_pct, ''none'') || '' percent) in the measurement window, so it is reverted (PRODUCT-RD-1).'', q.path, q.anchor_line, ''proposed'', strftime(''%Y-%m-%dT%H:%M:%SZ'',''now''), strftime(''%Y-%m-%dT%H:%M:%SZ'',''now'') FROM product_experiments e JOIN roadmap_proposals q ON q.id = e.proposal_id WHERE e.status = ''reverted'' AND COALESCE((SELECT value FROM ops_config WHERE key = ''roadmap_originate''), ''on'') <> ''off''"}'),
+  '$.steps[#]', json('{"type": "sql", "name": "pr-experiment-log", "db": "AUDIT", "sql": "INSERT INTO persona_actions (persona_key, kind, issue_id, from_value, to_value, evidence) SELECT ''product-manager:'' || e.product, ''product-experiment'', (SELECT q.issue_id FROM roadmap_proposals q WHERE q.id = e.proposal_id), e.metric || '' '' || COALESCE(e.baseline, ''none''), e.status, ''[exp '' || e.id || ''] '' || e.title || '': '' || e.metric || '' went from '' || COALESCE(e.baseline, ''none'') || '' to '' || COALESCE(e.after_value, ''none'') || '' ('' || COALESCE(e.lift_pct, ''n/a'') || '' percent), '' || e.status FROM product_experiments e WHERE e.status IN (''kept'', ''reverted'', ''inconclusive'') AND NOT EXISTS (SELECT 1 FROM persona_actions a WHERE a.kind = ''product-experiment'' AND a.evidence LIKE ''[exp '' || e.id || '']%'')"}')
+),
+  version = version + 1
+WHERE id = 'domain-managers' AND instr(definition, '"pr-usage"') = 0;
