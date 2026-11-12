@@ -9,7 +9,7 @@
 // JOBSEARCH-CV-1 (1.5.0): the CV is part of this worker (page /cv): a yes/no interview that builds the claim bank, review of unconfirmed claims, roles, achievements and publications edited in D1, a resume per job (summary, roles, selected work, education, skills) and a cover note, history and backup. The search is tied to that bank (evidence the owner can back up weighs more; what the CV lacks is shown as a gap), decided postings (rejected, applied, approved) never come back under another id, rejections carry a reason the search learns from, and a wider net: stretch matches outside the stated preferences, more boards and aggregators.
 // Routes: GET / (web UI) | GET /api | GET /api/matches | GET /api/matches/:id | GET /api/runs | GET /api/ledger | POST /api/run | POST /api/matches/:id/status | GET /health
 // Port of the jobsearch/ Python modules (tests: jobsearch/test_jobsearch.py, qnfo-jobsearch/worker.test.mjs).
-var VERSION = "1.27.1-codeagent";
+var VERSION = "1.28.0-codeagent";
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -875,7 +875,23 @@ function parseApplicationSnapshot(note) {
     return { tier: snapshot.tier, score: snapshot.score, features: snapshot.features.filter((feature) => OUTCOME_FEATURES.has(feature)) };
   } catch (e) { return null; }
 }
-function outcomeScoreWeights(rows, now = Date.now()) {
+function outcomeScoreWeights(rows, now = Date.now()) { return liftWeights(rows, now, (key) => OUTCOME_FEATURES.has(key)); }
+// RESUME-OUTCOME-LOOP-1 (FLOW-DIRECTIVE-1, Rowan 2026-11-12: "is there a loop here that loops this information back into ... the information that
+// goes out"): the resume as it was sent (jobsearch_apps.resume_md, frozen at "applied" on every path) is read back into the summary and the facts it
+// carried, and the same lift as the score weights says which of them went out with replies. buildResume ranks facts and summaries with those
+// weights, so what got answers leads the next resume. Only verified bank text is ever chosen; the weights change order, never content.
+const RESUME_KEY_RE = /^(sum|fact):[\w.-]+$/;
+function resumeElements(md) {
+  const text = String(md || "");
+  if (!text) return [];
+  const out = [];
+  for (const s of BANK.summaries || []) if (s && s.id && s.text && text.includes(polishProse(s.text))) out.push("sum:" + s.id);
+  for (const f of LEDGER.facts || []) if (f.id && f.text && text.includes(f.text)) out.push("fact:" + f.id);
+  return out;
+}
+function resumeOutcomeWeights(rows, now = Date.now()) { return liftWeights(rows, now, (key) => RESUME_KEY_RE.test(key)); }
+let RESUME_W = {};
+function liftWeights(rows, now, keep) {
   const lower = now - 90 * 86400000, upper = now - NO_REPLY_DAYS * 86400000;
   const mature = rows.filter((row) => row.applied_ms >= lower && row.applied_ms <= upper && Array.isArray(row.features));
   if (mature.length < MIN_N) return {};
@@ -883,7 +899,7 @@ function outcomeScoreWeights(rows, now = Date.now()) {
   let replies = 0;
   for (const row of mature) {
     if (row.replied) replies++;
-    for (const feature of new Set(row.features.filter((key) => OUTCOME_FEATURES.has(key)))) {
+    for (const feature of new Set(row.features.filter(keep))) {
       const stat = featureStats.get(feature) || { count: 0, replies: 0 };
       stat.count++;
       if (row.replied) stat.replies++;
@@ -1312,7 +1328,8 @@ function buildResume(job, m) {   // m: { clusters, judge? }
   // then the posting's own terms (weighted by how often the posting repeats them), then cluster fit, then recency. Nothing is written that the bank does not hold.
   const hot = postingTerms(job).filter((t) => t.kind !== "tool" || kwRe(t.term).test(cvCorpus())).map((t) => ({ re: kwRe(t.term), w: Math.min(3, t.count) }));
   const jm = new Set(((m.judge || {}).matched_fact_ids) || []);
-  const score = (f, i) => { const low = f.text.toLowerCase(); return (jm.has(f.id) ? 100 : 0) + hot.reduce((a, t) => a + (t.re.test(low) ? t.w * 4 : 0), 0) + f.cluster.filter((c) => cl.has(c)).length * 3 - i * 0.01; };
+  const rw = m.resumeWeights || RESUME_W || {};   // RESUME-OUTCOME-LOOP-1: facts that went out with replies rank higher, at most one cluster's worth either way
+  const score = (f, i) => { const low = f.text.toLowerCase(); return (jm.has(f.id) ? 100 : 0) + hot.reduce((a, t) => a + (t.re.test(low) ? t.w * 4 : 0), 0) + f.cluster.filter((c) => cl.has(c)).length * 3 + (rw["fact:" + f.id] || 0) * 3 / 8 - i * 0.01; };
   const ordered = LEDGER.facts.map((f, i) => [score(f, i), f]).sort((x, y) => y[0] - x[0]).map((x) => x[1]);
   const strong = {}; for (const f of ordered) if (jm.has(f.id) || hot.some((t) => t.re.test(f.text.toLowerCase()))) strong[f.role || "-"] = (strong[f.role || "-"] || 0) + 1;
   // RESUME-ONE-TEMPLATE-1 (owner 2026-11-12: PDFs for jobs he found differed from PDFs for listed jobs): the role structure never depends on the posting.
@@ -1321,7 +1338,7 @@ function buildResume(job, m) {   // m: { clusters, judge? }
   for (const f of ordered) { if (f.role && oldIds.has(f.role)) continue; const k = f.role || "-"; per[k] = (per[k] || 0) + 1; if (per[k] > ((strong[k] || 0) >= 4 ? 4 : 3)) continue; chosen.push(f); if (chosen.length >= 12) break; }
   const byRole = {};
   for (const f of chosen) (byRole[f.role] = byRole[f.role] || []).push(f);
-  const summaries = (b.summaries || []).map((s) => [(s.tags || []).filter((t) => jobTags.has(t)).length, s]).sort((x, y) => y[0] - x[0]);
+  const summaries = (b.summaries || []).map((s) => [(s.tags || []).filter((t) => jobTags.has(t)).length + (rw["sum:" + s.id] || 0) / 16, s]).sort((x, y) => y[0] - x[0]);
   const L = [tag("# " + P.name, "P"), tag(`${P.location} | ${P.email} | ${P.links.site} | ${P.links.linkedin}`, "P"), tag(`Earlier work is published under ${P.also_published_as}.`, "P"), ""];
   if (summaries.length) L.push(tag(summaries[0][1].text, "SUM:" + summaries[0][1].id), "");
   L.push(tag("## Experience", "S"));
@@ -1692,20 +1709,38 @@ async function loadCtx(env) {
   if (row) { try { answers = JSON.parse(row.v) || {}; } catch (e) { logErr("prefs-parse", e); } }
   const fb = (await env.JOBS_DB.prepare("SELECT title, company, verdict, reason FROM jobsearch_feedback ORDER BY id DESC LIMIT 800").all()).results;
   const applied = (await env.JOBS_DB.prepare(
-    `SELECT m.tier, m.score, e.ts AS applied_at, e.note,
+    `SELECT m.tier, m.score, m.why_json, e.ts AS applied_at, e.note, ap.resume_md AS sent_resume,
        EXISTS (SELECT 1 FROM jobsearch_events r WHERE r.match_id=e.match_id AND r.event IN ('replied','interview','offer') AND r.ts >= e.ts) AS replied
      FROM jobsearch_events e
      JOIN jobsearch_matches m ON m.id=e.match_id
+     LEFT JOIN jobsearch_apps ap ON ap.match_id=e.match_id
      WHERE e.event='applied'
        AND e.id=(SELECT a.id FROM jobsearch_events a WHERE a.match_id=e.match_id AND a.event='applied' ORDER BY a.ts, a.id LIMIT 1)`
   ).all()).results;
-  const outcomeRows = applied.flatMap((application) => {
-    const snapshot = parseApplicationSnapshot(application.note);
-    return snapshot ? [{ features: snapshot.features, applied_ms: Date.parse(application.applied_at), replied: !!application.replied }] : [];
-  });
+  const outcomeRows = outcomeRowsOf(applied);
   // FLOW-DIRECTIVE-1: the outcome weights are an adaptation with a prediction; a missed prediction writes flow_knob:jobs.outcome_weights = off
   const knob = await env.JOBS_DB.prepare("SELECT value FROM ops_config WHERE key = 'flow_knob:jobs.outcome_weights'").first().catch(() => null);
-  return makeCtx(answers, fb, knob && knob.value === "off" ? {} : outcomeScoreWeights(outcomeRows), OWNED);
+  const rknob = await env.JOBS_DB.prepare("SELECT value FROM ops_config WHERE key = 'flow_knob:jobs.resume_weights'").first().catch(() => null);
+  RESUME_W = rknob && rknob.value === "off" ? {} : resumeOutcomeWeights(resumeRowsOf(applied));   // RESUME-OUTCOME-LOOP-1
+  const ctx = makeCtx(answers, fb, knob && knob.value === "off" ? {} : outcomeScoreWeights(outcomeRows), OWNED);
+  ctx.resumeWeights = RESUME_W;
+  return ctx;
+}
+// An application the auto-apply runner submitted carries the runner's confirmation as its note, not a snapshot; its features are read from the
+// match's why_json so the learner counts every application, not only those marked by hand (RESUME-OUTCOME-LOOP-1).
+function outcomeRowsOf(applied) {
+  return applied.flatMap((application) => {
+    const snapshot = parseApplicationSnapshot(application.note);
+    let features = snapshot ? snapshot.features : null;
+    if (!features && application.why_json) { try { features = featuresFromWhy(JSON.parse(application.why_json)); } catch (e) { features = null; } }
+    return features ? [{ features, applied_ms: Date.parse(application.applied_at), replied: !!application.replied }] : [];
+  });
+}
+function resumeRowsOf(applied) {
+  return applied.flatMap((application) => {
+    const features = resumeElements(application.sent_resume);
+    return features.length ? [{ features, applied_ms: Date.parse(application.applied_at), replied: !!application.replied }] : [];
+  });
 }
 async function getMeta(env, k) { const r = await env.JOBS_DB.prepare("SELECT v FROM jobsearch_meta WHERE k=?").bind(k).first(); return r ? r.v : null; }
 const REASONS = ["field", "coding", "level", "location", "company", "applied", "other"];   // JOBSEARCH-FIT-1: "coding" = too much hands-on code
@@ -2239,6 +2274,7 @@ async function run(env) {
     await ensureResearchPubs(env).catch((e) => logErr("research-pubs", e));   // before loadCtx so the context sees the merged bank
     const ctx = await loadCtx(env);
     await recordWeightsAdaptation(env, ctx).catch((e) => logErr("weights-adaptation", e));   // FLOW-DIRECTIVE-1
+    await recordWeightsAdaptation(env, ctx, "resume").catch((e) => logErr("resume-weights-adaptation", e));   // RESUME-OUTCOME-LOOP-1
     const prefsHash = await sha256hex(JSON.stringify([RANK_RULES, ctx.a, [...ctx.learned.boost].sort(), [...ctx.learned.block].sort(), [...OWNED].sort(), [...ctx.learned.coPen].sort(), [...ctx.learned.coDrop].sort()]));
     const prefsChanged = (await getMeta(env, "prefs_hash")) !== prefsHash;
     let mission = null; try { mission = await missionSources(env); } catch (e) { logErr("mission-sources", e); }
@@ -3216,16 +3252,17 @@ async function syncOutcomeAsks(env, nowMs = Date.now()) {
 }
 // Each change of the outcome weights is recorded as an adaptation that predicts the reply rate will not fall; personal-companion settles it
 // after 30 days (_shared/flow-registry.js settleAdaptations) and a miss turns the weights off through ops_config flow_knob:jobs.outcome_weights.
-async function recordWeightsAdaptation(env, ctx) {
-  const w = (ctx && ctx.outcomeWeights) || {};
-  if (!Object.keys(w).length) return { recorded: false, reason: "no outcome weights yet" };
+async function recordWeightsAdaptation(env, ctx, which = "outcome") {
+  const resume = which === "resume";
+  const w = (ctx && (resume ? ctx.resumeWeights : ctx.outcomeWeights)) || {};
+  if (!Object.keys(w).length) return { recorded: false, reason: "no " + which + " weights yet" };
   const json = JSON.stringify(Object.keys(w).sort().reduce((o, k) => (o[k] = w[k], o), {}));
   const hash = (await sha256hex(json)).slice(0, 16);
   const base = await env.JOBS_DB.prepare("SELECT last_value FROM metric_registry WHERE metric = 'jobsearch_reply_rate_90d'").first().catch(() => null);
   const now = new Date().toISOString(), due = new Date(Date.now() + 30 * 86400000).toISOString();
   await env.JOBS_DB.prepare("CREATE TABLE IF NOT EXISTS flow_adaptations (id INTEGER PRIMARY KEY AUTOINCREMENT, flow TEXT NOT NULL, knob TEXT NOT NULL, new_hash TEXT NOT NULL, new_json TEXT, metric TEXT NOT NULL, op TEXT NOT NULL, baseline REAL, rollback_value TEXT NOT NULL DEFAULT 'off', created_at TEXT NOT NULL, due_at TEXT NOT NULL, settled_at TEXT, observed REAL, verdict TEXT, UNIQUE(knob, new_hash))").run();
-  const r = await env.JOBS_DB.prepare("INSERT OR IGNORE INTO flow_adaptations (flow, knob, new_hash, new_json, metric, op, baseline, rollback_value, created_at, due_at) VALUES ('jobs-outcome-learner','jobs.outcome_weights',?1,?2,'jobsearch_reply_rate_90d','>=',?3,'off',?4,?5)")
-    .bind(hash, json, base && base.last_value !== null && base.last_value !== "" ? Number(base.last_value) : null, now, due).run();
+  const r = await env.JOBS_DB.prepare("INSERT OR IGNORE INTO flow_adaptations (flow, knob, new_hash, new_json, metric, op, baseline, rollback_value, created_at, due_at) VALUES (?6,?7,?1,?2,'jobsearch_reply_rate_90d','>=',?3,'off',?4,?5)")
+    .bind(hash, json, base && base.last_value !== null && base.last_value !== "" ? Number(base.last_value) : null, now, due, resume ? 'resume-outcome-learner' : 'jobs-outcome-learner', resume ? 'jobs.resume_weights' : 'jobs.outcome_weights').run();
   return { recorded: !!(r.meta && r.meta.changes), hash };
 }
 async function applyJobMail(env, m) {
@@ -3944,7 +3981,7 @@ const handler = {
     return J({ error: "not found", see: "/api" }, 404);
   },
 };
-handler.__test = { orgKind, resumeSkeleton, canonicalSkeleton, tailoredResume, resumeConsistency, resolveQuestion, autopilotQueue, autopilotResolve, autopilotResult, autopilotStatus, githubOidcOk, parseRss, notifyOwner, followups, missionSources, saveMissionProbes, sourceCoverage, FETCHERS, styleLint, laneGate, fitLine, shortlist, relevanceSweep, intakeJob, setPipeStatus, saveQa, answerLibrary, matchQuestions, pipeline, parseJobMail, applyJobMail, linkedinJobUrl, ANSWER_BANK, bankAnswerFor, credentialBacked, dropUnbackedCredentials, ensureCredentialEvidence, refreshRecallFacts, polishProse, polishBank, copyLint, toolCase, vocabulary, TOPIC_LABEL, SOFTWARE, PROSE_CASE, linkedinSearches, LINKEDIN_SEARCHES, codingLoad, CANDIDATE_BOARDS, collectAndRank, cosine, bestSim, semanticLens, scoreJob, exploreOverlap, recordTerms, diversifyRows, recallGaps, recallQuestion, recallAnswer, recallQueue, RECALL_SEED, loadCtx, referralKit, referralList, STAGES, judgeTop, buildResume, verify, headlineVerdict, outcomes, pdfOf, pdfClean, checkAnswer, jsonLoose, PROTECTED_Q, draftAnswers, prepBrief, quizFeedback, judgeJob, calibrate, calibration, followups, atsOf, keywordReport, docxOf, resumeHtml, plainOf, applyKit, matchKit, stripTags, postingTerms, evaluate, rank, buildResume, buildNote, verify, stripHtml, locationGate, has, LEDGER, dedupeKey, feedPrefix, makeCtx, scoreJob, scoreFeatures, featuresFromWhy, applicationSnapshot, parseApplicationSnapshot, outcomeScoreWeights, loadCtx, SURVEY, BOARDS, normKey, applyBank, BANK_SEED, QUESTIONS, TAG_TO_CLUSTERS, clustersOf, cvAnswer, cvFact, cvReview, cvSet, cvImport, mutateBank, loadBank, decidedKeys, FETCHERS, getBank: () => BANK, llmRerank, llmRerankRun, ensureResearchPubs, ensureAutonomyBrand, ensureUltrastableBrand, ultrastableBank, ultrastableSkillsBank, ULTRASTABLE_SKILL_FACTS, ULTRASTABLE_SKILLS, syncSkillAsks, skillAskOptions, cvSkills, ULTRASTABLE_S1, RESEARCH_PUBS, FAMILIES, CLUSTER_KW, headline, pubLine, parseRerank, reasonOk, rerankMessages, artifactsFor, titleCandidate, sitemapUrls, slugTitle, PUBLIC_SECTOR, opsReport };
+handler.__test = { resumeElements, resumeOutcomeWeights, outcomeRowsOf, resumeRowsOf, orgKind, resumeSkeleton, canonicalSkeleton, tailoredResume, resumeConsistency, resolveQuestion, autopilotQueue, autopilotResolve, autopilotResult, autopilotStatus, githubOidcOk, parseRss, notifyOwner, followups, missionSources, saveMissionProbes, sourceCoverage, FETCHERS, styleLint, laneGate, fitLine, shortlist, relevanceSweep, intakeJob, setPipeStatus, saveQa, answerLibrary, matchQuestions, pipeline, parseJobMail, applyJobMail, linkedinJobUrl, ANSWER_BANK, bankAnswerFor, credentialBacked, dropUnbackedCredentials, ensureCredentialEvidence, refreshRecallFacts, polishProse, polishBank, copyLint, toolCase, vocabulary, TOPIC_LABEL, SOFTWARE, PROSE_CASE, linkedinSearches, LINKEDIN_SEARCHES, codingLoad, CANDIDATE_BOARDS, collectAndRank, cosine, bestSim, semanticLens, scoreJob, exploreOverlap, recordTerms, diversifyRows, recallGaps, recallQuestion, recallAnswer, recallQueue, RECALL_SEED, loadCtx, referralKit, referralList, STAGES, judgeTop, buildResume, verify, headlineVerdict, outcomes, pdfOf, pdfClean, checkAnswer, jsonLoose, PROTECTED_Q, draftAnswers, prepBrief, quizFeedback, judgeJob, calibrate, calibration, followups, atsOf, keywordReport, docxOf, resumeHtml, plainOf, applyKit, matchKit, stripTags, postingTerms, evaluate, rank, buildResume, buildNote, verify, stripHtml, locationGate, has, LEDGER, dedupeKey, feedPrefix, makeCtx, scoreJob, scoreFeatures, featuresFromWhy, applicationSnapshot, parseApplicationSnapshot, outcomeScoreWeights, loadCtx, SURVEY, BOARDS, normKey, applyBank, BANK_SEED, QUESTIONS, TAG_TO_CLUSTERS, clustersOf, cvAnswer, cvFact, cvReview, cvSet, cvImport, mutateBank, loadBank, decidedKeys, FETCHERS, getBank: () => BANK, llmRerank, llmRerankRun, ensureResearchPubs, ensureAutonomyBrand, ensureUltrastableBrand, ultrastableBank, ultrastableSkillsBank, ULTRASTABLE_SKILL_FACTS, ULTRASTABLE_SKILLS, syncSkillAsks, skillAskOptions, cvSkills, ULTRASTABLE_S1, RESEARCH_PUBS, FAMILIES, CLUSTER_KW, headline, pubLine, parseRerank, reasonOk, rerankMessages, artifactsFor, titleCandidate, sitemapUrls, slugTitle, PUBLIC_SECTOR, opsReport };
 export default handler;
 
 // ------------------------------------------------------------------ client script shared by both pages (JOBSEARCH-APPLY-1): kit handling and the Fill application bookmark

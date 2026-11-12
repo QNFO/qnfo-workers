@@ -2369,7 +2369,7 @@ var FR = (() => {
 //
 // Pure ESM, no imports: personal-companion inlines it (scripts/inline-pipeline-modules.mjs); tests load it directly.
 
-const FLOW_VERSION = "1.0.0";
+const FLOW_VERSION = "1.1.0";
 const DIRECTIVE_ID = "FLOW-DIRECTIVE-1";
 const DIRECTIVE = "Every workflow, in every product (Ultrastable, the Qniverse, jobs, outreach, resume, personal, research), declares its inflows, " +
   "outflows and bindings, and feeds its outcomes back through the signals engine so results change the next outputs. Each flow is a loop and is accounted for in code.";
@@ -2387,7 +2387,8 @@ const EXTERNAL_SOURCES = {
   "ext.social_graph": "Bluesky and Mastodon follows, replies and likes",
   "ext.reader_visits": "Cloudflare Web Analytics page loads and UTM clicks on fleet and brand pages",
   "ext.outreach_replies": "replies to outreach mail",
-  "ext.research_sources": "full texts the research pipeline grounds on (arXiv HTML, QNFO papers)"
+  "ext.research_sources": "full texts the research pipeline grounds on (arXiv HTML, QNFO papers)",
+  "ext.video_views": "YouTube views and average view duration of the QNFO Shorts (Data API statistics, Analytics retention)"
 };
 
 // Implicit signals every scheduled flow carries: its heartbeat goes to the clock watchdog, and repairs come back as deploys.
@@ -2402,9 +2403,11 @@ const FLOWS = [
     executor: b("cron", "qnfo-jobsearch hourly run()"), clock: "jobs-sweep",
     inflows: [{ signal: "ext.job_postings", via: b("external-api", "ATS feeds") }, { signal: "cv.bank", via: b("d1", "qnfo-audit.jobsearch_bank") },
       { signal: "jobs.outcome_weights", via: b("d1", "qnfo-audit.jobsearch_events (applied snapshot + outcomes)") },
-      { signal: "jobs.owner_prefs", via: b("d1", "qnfo-audit.jobsearch_prefs, jobsearch_feedback") }],
-    outflows: [{ signal: "jobs.match", via: b("d1", "qnfo-audit.jobsearch_matches") }],
-    feedback: "jobs.outcome_weights and jobs.owner_prefs re-weight every score: what got replies, and what Rowan turned down, changes what is shown next" },
+      { signal: "jobs.owner_prefs", via: b("d1", "qnfo-audit.jobsearch_prefs, jobsearch_feedback") },
+      { signal: "resume.weights", via: b("d1", "flow_adaptations jobs.resume_weights (RESUME_W in buildResume)") }],
+    outflows: [{ signal: "jobs.match", via: b("d1", "qnfo-audit.jobsearch_matches") },
+      { signal: "resume.tailored", via: b("d1", "jobsearch_matches.resume_md (tailoredResume, ranked by resume.weights)") }],
+    feedback: "jobs.outcome_weights and jobs.owner_prefs re-weight every score, and resume.weights re-rank the facts and summary each tailored resume leads with: what got replies, and what Rowan turned down, changes what is shown and sent next" },
   { id: "jobs-shortlist", label: "Shortlist: Rowan approves or turns down", scope: "personal", plane: "jobs", worker: "qnfo-jobsearch",
     executor: b("owner-tap", "jobs.q08.org"), clock: "jobs-shortlist",
     inflows: [{ signal: "jobs.match", via: b("d1", "qnfo-audit.jobsearch_matches") }, { signal: "ext.owner_tap", via: b("owner-tap", "jobs.q08.org") }],
@@ -2422,8 +2425,10 @@ const FLOWS = [
     feedback: "drift found by the surface audit is fixed in the resume; outcomes reach it through cv.skills" },
   { id: "job-apply", label: "Auto-apply runner", scope: "personal", plane: "jobs", repo: "rwnq8/personal-life",
     executor: b("gh-actions", "job-apply.yml every 2 h"), clock: "job-apply",
-    inflows: [{ signal: "jobs.approved", via: b("service", "jobs.q08.org/api/autopilot/queue") }, { signal: "resume.text", via: b("d1", "tailored resume from the CV bank") }],
+    inflows: [{ signal: "jobs.approved", via: b("service", "jobs.q08.org/api/autopilot/queue") }, { signal: "resume.text", via: b("gh-actions", "RESUME.md wording") },
+      { signal: "resume.tailored", via: b("service", "tailored resume_md served with the queue item") }],
     outflows: [{ signal: "job.applied", via: b("service", "jobs.q08.org/api/autopilot/result -> jobsearch_events applied (snapshot of score and features)") },
+      { signal: "resume.sent", via: b("d1", "jobsearch_apps.resume_md, frozen at applied on every path") },
       { signal: "job.application", to: "ext.employer", returns: "ext.employer_mail", via: b("external-api", "ATS application forms, reply-to rowan.quni@qnfo.org") }],
     feedback: "the employer's answer returns as ext.employer_mail and becomes job.outcome" },
   { id: "job-mail-in", label: "Employer mail into the job pipeline", scope: "personal", plane: "jobs", worker: "qnfo-email",
@@ -2448,12 +2453,16 @@ const FLOWS = [
     outflows: [{ signal: "jobs.outcome_weights", via: b("d1", "flow_adaptations jobs.outcome_weights (kept or rolled back)") }],
     feedback: "each change of weights is an adaptation with a prediction on jobsearch_reply_rate_90d; a miss rolls it back",
     adapts: { knob: "jobs.outcome_weights", metric: "jobsearch_reply_rate_90d" } },
+  { id: "resume-outcome-learner", label: "Resume learner: what the sent resume said, against the answer it got", scope: "personal", plane: "jobs", worker: "qnfo-jobsearch",
+    executor: b("cron", "qnfo-jobsearch resumeOutcomeWeights in loadCtx (RESUME-OUTCOME-LOOP-1)"), clock: "jobs-sweep",
+    inflows: [{ signal: "resume.sent", via: b("d1", "jobsearch_apps.resume_md read back into summary and fact ids") }, { signal: "job.outcome", via: b("d1", "jobsearch_events") }],
+    outflows: [{ signal: "resume.weights", via: b("d1", "flow_adaptations jobs.resume_weights (kept or rolled back)") }],
+    feedback: "facts and summaries that went out with replies lead the next tailored resume; each change is an adaptation on jobsearch_reply_rate_90d and a miss writes flow_knob:jobs.resume_weights = off",
+    adapts: { knob: "jobs.resume_weights", metric: "jobsearch_reply_rate_90d" } },
 
   // ------------------------------------------------------------------ outreach, touchpoints, social
   { id: "outreach-mail", label: "Outreach mail with the segment learner", scope: "qniverse", plane: "outreach", worker: "qnfo-cloud-ops",
-    executor: b("cron", "outreach send and learner (outreach_learner_arms)"), clock: null,
-    clock_reason: "no clock_ticks row yet; outreach_emails_sent_7d and outreach_reply_rate_30d are its measured beats",
-    gap: { what: "the outreach sender has no CLOCKWORK-1 clock", loop_issue: "FLOW-GAP-outreach-clock", probe: "SELECT COUNT(*) FROM clock_ticks WHERE loop = 'outreach-mail'" },
+    executor: b("cron", "qnfo-outreach send, qnfo-cloud-ops reply learner (outreach_learner_arms)"), clock: "outreach-mail",
     inflows: [{ signal: "outreach.reply", via: b("d1", "outreach_learner_arms alpha/beta") }, { signal: "paper.published", via: b("d1", "papers to announce") }],
     outflows: [{ signal: "outreach.mail", to: "ext.outreach_replies", returns: "ext.outreach_replies", via: b("email", "qnfo-email send") }],
     feedback: "replies and opt-outs update each segment's Beta(alpha, beta); a segment under 1% after 50 sends stops" },
@@ -2483,6 +2492,20 @@ const FLOWS = [
     outflows: [{ signal: "reader.engagement", via: b("metric", "external_referred_pageviews_7d, engaged_reader_sessions_7d") },
       { signal: "site.engagement", via: b("metric", "brand_site_pageviews_7d (rwnq8.github.io)") }],
     feedback: "readers, not clicks, set the research budget and the channel shares" },
+
+  { id: "subscriber-digest", label: "Weekly paper digest to subscribers", scope: "qniverse", plane: "outreach", worker: "qnfo-subscribers",
+    executor: b("cron", "qnfo-subscribers hourly grid, weekly digest run"), clock: null, clock_reason: "weekly digest; its hourly heartbeat is fleet_heartbeat qnfo-subscribers and subscriber_digest_runs is its run ledger",
+    inflows: [{ signal: "paper.published", via: b("d1", "qnfo-audit.papers -> weekly_signal_issues") }],
+    outflows: [{ signal: "digest.mail", to: "ext.subscribers", returns: "ext.reader_visits", via: b("email", "confirmed subscribers, one-click unsubscribe, UTM-tagged links") }],
+    feedback: "digest clicks are counted into reach_signals (utm), read by reader measurement, and the readers they bring set the research budget that fills the next digest; unsubscribes go to email_suppression" },
+  { id: "youtube-shorts", label: "YouTube Shorts from plain-language papers", scope: "qniverse", plane: "outreach", worker: "qnfo-youtube-shorts",
+    executor: b("cron", "qnfo-youtube-shorts hourly"), clock: null, clock_reason: "hourly heartbeat in fleet_heartbeat qnfo-youtube-shorts; youtube_uploads_30d is its measured beat",
+    inflows: [{ signal: "paper.published", via: b("d1", "living-paper.plain_article") }, { signal: "reader.engagement", via: b("d1", "paper_readership ext_30d, pv_30d (rankByInterest)") },
+      { signal: "ext.video_views", via: b("external-api", "YouTube Data API statistics, YouTube Analytics retention (readRetention)") }],
+    outflows: [{ signal: "video.short", to: "ext.video_viewers", returns: "ext.video_views", via: b("external-api", "YouTube upload") },
+      { signal: "video.retention", via: b("d1", "youtube_videos.views, avg_view_duration_s; metric youtube_avg_view_duration_s") }],
+    feedback: "papers readers already read are made into Shorts first; Short retention is read back hourly but does not yet choose the next Short",
+    gap: { what: "Short views and retention are read back but no flow uses them to choose or shape the next Short", loop_issue: "FLOW-GAP-youtube-retention", probe: "SELECT COUNT(*) FROM youtube_videos WHERE retention_read_at IS NOT NULL" } },
 
   // ------------------------------------------------------------------ brand surfaces
   { id: "surface-audit", label: "Public surface audit against the brand file", scope: "personal", plane: "profile", repo: "rwnq8/resume",
@@ -2587,7 +2610,7 @@ const ULTRASTABLE_REGISTRY = { repo: "ultrastable/ultrastable", path: "instances
 const UNDECLARED_CRON_WORKERS = [
   "idea-hub", "qnfo-agents", "qnfo-ai-calibration", "qnfo-ai-search", "qnfo-ai", "qnfo-companion-guard", "qnfo-deploy-guard", "qnfo-doc-gate",
   "qnfo-fleet-control", "qnfo-gateway", "qnfo-github-steward", "qnfo-infra", "qnfo-intent-orchestrator", "qnfo-lifecycle", "qnfo-memory-mcp",
-  "qnfo-observability", "qnfo-ops", "qnfo-pdf", "qnfo-subscribers", "qnfo-waste-agent", "qnfo-youtube-shorts"
+  "qnfo-observability", "qnfo-ops", "qnfo-pdf", "qnfo-waste-agent"
 ];
 
 // ------------------------------------------------------------------ validation
@@ -5164,7 +5187,7 @@ var __name22 = __name2;
 // line below (VERSION-LINE-NOTES-1, 2026-10-19). Its older trailing notes stay until length-lede.test.mjs stops pinning "LENGTH-LEDE-1" on that line.
 // VERSION-NOTES-MOVED-1: release notes live in the block below
 // W-META-1 (agent_issues 1002316/1002317/1002318): aiRunAttr records in_tok/out_tok/neurons per purpose.
-var VERSION = "1.54.0-codeagent";
+var VERSION = "1.54.1-codeagent";
 // 1.46.0 KERNEL-EVERYWHERE-1 (2026-11-06, owner directive "IMPLEMENT EVERYWHERE ACROSS ALL AI APPS AND SERVICES AND SURFACES", pillar personal): the travel planner CHAT_SYSTEM carries the DOCTRINE-1 kernel 8.2.1 reply recognitions (KERNEL-REPLY-4, scoped to the planner's one designed question): end on the plan or proposal, never a conditional offer or questionnaire; refusals and limits are dispositions with their reason; reversible steps are taken and reported in the same reply. prior 1.45.8-codeagent
 /* 1.44.14 COMPANION-LENGTH-HEADROOM-1 (issue 1000633, pillar personal; patch): repeated length failures alongside exhausted retry budgets expose too little headroom for model output variation. Length-only repairs now target 500 words below the unchanged ceiling while remaining inside each form's normal writer band. */
 /* 1.43.6 BP26-AI-ACT-ART50-1 and BP26-STRUCTURED-DATA-1 (2026-10-26, agent_issues 1000341 and 1000336, pillar core; patch): the visible AI-generated label of every reading.q08.org piece now has its machine-readable half. A piece page carries an Article JSON-LD block (headline, datePublished, url, an Organization as author, never an AI or invented persona, and creditText saying it was written by AI and that no human reviews pieces before they appear) and the index page a Blog block. Measured before: the reading pages carried the visible label and no JSON-LD at all. */

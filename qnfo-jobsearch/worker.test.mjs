@@ -79,6 +79,34 @@ ok(T.evaluate({ ...JOB, desc: JOB.desc + " A PhD is required." }).flags.some((f)
   ok(Object.keys(T.outcomeScoreWeights(history.slice(1), now)).length === 0, "fewer than ten mature applications do not tune weights");
   ok(Object.keys(T.outcomeScoreWeights(history.map((row) => ({ ...row, applied_ms: now - 10 * 86400000 })), now)).length === 0, "applications younger than 21 days do not tune weights");
 }
+// RESUME-OUTCOME-LOOP-1: the resume as sent is read back into its summary and facts, replies re-rank them, and the next resume leads with them
+{
+  const now = Date.now(), applied = now - 40 * 86400000;
+  const job = { title: "Senior Research Program Manager", company: "Acme", location: "Amsterdam", desc: "Research program management, research operations, urban planning, land use and spatial planning." };
+  const m0 = { clusters: T.scoreJob(job).clusters };
+  const sent = T.tailoredResume(job, m0);
+  ok(sent.verified === 1, "baseline resume verifies", sent.blocked);
+  const els = T.resumeElements(sent.resume);
+  ok(els.some((e) => e.startsWith("fact:")), "the resume as sent is read back into the facts it carried", els);
+  const facts = els.filter((e) => e.startsWith("fact:"));
+  const loser = facts[0];
+  const history = [
+    ...Array.from({ length: 5 }, (_, i) => ({ applied_ms: applied, replied: false, features: [loser] })),
+    ...Array.from({ length: 5 }, (_, i) => ({ applied_ms: applied, replied: i < 4, features: ["fact:__other"] }))
+  ];
+  const rw = T.resumeOutcomeWeights(history, now);
+  ok(rw[loser] < 0, "a fact that went out only without replies gets a negative weight", rw);
+  ok(Object.keys(T.resumeOutcomeWeights(history.slice(1), now)).length === 0, "fewer than ten mature applications do not tune the resume");
+  const next = T.tailoredResume(job, { ...m0, resumeWeights: { [loser]: -8 } });
+  ok(next.verified === 1, "a re-ranked resume still verifies", next.blocked);
+  const idx = (md, id) => { const f = T.resumeElements(md); return f.indexOf(id); };
+  ok(T.resumeSkeleton(next.resume).join("|") === T.resumeSkeleton(sent.resume).join("|"), "the weights never change the resume's structure");
+  ok(idx(next.resume, loser) === -1 || idx(next.resume, loser) >= idx(sent.resume, loser), "a fact without replies does not move up", { before: idx(sent.resume, loser), after: idx(next.resume, loser) });
+  const rows = T.outcomeRowsOf([{ note: "auto-applied by the runner", why_json: JSON.stringify(["evidence in the posting: urban_planning"]), applied_at: new Date(applied).toISOString(), replied: 1 }]);
+  ok(rows.length === 1 && rows[0].features.includes("cluster:urban_planning"), "an auto-applied application without a snapshot still teaches the score", rows);
+  const rrows = T.resumeRowsOf([{ sent_resume: sent.resume, applied_at: new Date(applied).toISOString(), replied: 0 }]);
+  ok(rrows.length === 1 && rrows[0].features.length === els.length, "resume rows carry every element of the resume as sent");
+}
 ok(T.stripHtml("&lt;p&gt;Hello &amp;amp; <b>world</b>&lt;/p&gt;").includes("Hello & world"), "html decode");
 
 // ---- D1 shim over node:sqlite
