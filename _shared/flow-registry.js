@@ -15,7 +15,7 @@
 //
 // Pure ESM, no imports: personal-companion inlines it (scripts/inline-pipeline-modules.mjs); tests load it directly.
 
-export const FLOW_VERSION = "1.2.0";
+export const FLOW_VERSION = "1.3.0";
 export const DIRECTIVE_ID = "FLOW-DIRECTIVE-1";
 export const DIRECTIVE = "Every workflow, in every product (Ultrastable, the Qniverse, jobs, outreach, resume, personal, research), declares its inflows, " +
   "outflows and bindings, and feeds its outcomes back through the signals engine so results change the next outputs. Each flow is a loop and is accounted for in code.";
@@ -147,11 +147,11 @@ export const FLOWS = [
   { id: "youtube-shorts", label: "YouTube Shorts from plain-language papers", scope: "qniverse", plane: "outreach", worker: "qnfo-youtube-shorts",
     executor: b("cron", "qnfo-youtube-shorts hourly"), clock: null, clock_reason: "hourly heartbeat in fleet_heartbeat qnfo-youtube-shorts; youtube_uploads_30d is its measured beat",
     inflows: [{ signal: "paper.published", via: b("d1", "living-paper.plain_article") }, { signal: "reader.engagement", via: b("d1", "paper_readership ext_30d, pv_30d (rankByInterest)") },
-      { signal: "ext.video_views", via: b("external-api", "YouTube Data API statistics, YouTube Analytics retention (readRetention)") }],
+      { signal: "ext.video_views", via: b("external-api", "YouTube Data API statistics, YouTube Analytics retention (readRetention)") },
+      { signal: "video.retention", via: b("d1", "youtube_videos retention/views, else social_video_posts x social_engagements (laneWeights)") }],
     outflows: [{ signal: "video.short", to: "ext.video_viewers", returns: "ext.video_views", via: b("external-api", "YouTube upload") },
       { signal: "video.retention", via: b("d1", "youtube_videos.views, avg_view_duration_s; metric youtube_avg_view_duration_s") }],
-    feedback: "papers readers already read are made into Shorts first; Short retention is read back hourly but does not yet choose the next Short",
-    gap: { what: "Short views and retention are read back but no flow uses them to choose or shape the next Short", loop_issue: "FLOW-GAP-youtube-retention", probe: "SELECT COUNT(*) FROM youtube_videos WHERE retention_read_at IS NOT NULL" } },
+    feedback: "each Short is scored by retention, else views, else engagement on the posts that carried it; per-category lane weights (laneWeights, YT-WATCH-LOOP-1) scale rankByInterest, so what earlier Shorts earned chooses the next Short" },
 
   // ------------------------------------------------------------------ brand surfaces
   { id: "surface-audit", label: "Public surface audit against the brand file", scope: "personal", plane: "profile", repo: "rwnq8/resume",
@@ -161,11 +161,10 @@ export const FLOWS = [
     feedback: "drift becomes a loop issue that the site, profile and resume flows fix" },
   { id: "site-publish", label: "Personal site rwnq8.github.io", scope: "personal", plane: "profile", repo: "rwnq8/rwnq8.github.io",
     executor: b("pages", "GitHub Pages on push"), clock: null, clock_reason: "event-driven by pushes; the surface audit is its daily check",
-    inflows: [{ signal: "brand.surface_drift", via: b("gh-actions", "surface-audit loop issues") }, { signal: "resume.text", via: b("gh-actions", "RESUME.md") }, { signal: "site.engagement", via: b("metric", "brand_site_pageviews_7d") }],
+    inflows: [{ signal: "brand.surface_drift", via: b("gh-actions", "surface-audit loop issues") }, { signal: "resume.text", via: b("gh-actions", "RESUME.md") }, { signal: "site.engagement", via: b("kv", "ops_config site_engagement_top via /api/site-engagement (daily READ-MOST rebuild, rwnq8.github.io#18)") }],
     outflows: [{ signal: "site.page", via: b("pages", "rwnq8.github.io (read back by the surface audit)") },
       { signal: "site.reach", to: "ext.reader", returns: "ext.reader_visits", via: b("pages", "rwnq8.github.io + Cloudflare Web Analytics beacon") }],
-    feedback: "page loads are measured (beacon since 2026-11-12); which pages readers reach is not yet used to choose what the site leads with",
-    gap: { what: "site engagement is measured but no flow yet changes site content from it", loop_issue: "FLOW-GAP-site-engagement", probe: "SELECT last_value FROM metric_registry WHERE metric = 'brand_site_pageviews_7d' AND last_value IS NOT NULL" } },
+    feedback: "bot-filtered top paths (SITE-ENGAGEMENT-LOOP-1) rewrite the site's Most read block daily, so what readers reach chooses what the site leads with" },
   { id: "profile-sync", label: "Profile and bio sync", scope: "personal", plane: "profile", worker: "qnfo-fleet-dashboard",
     executor: b("cron", "qnfo-fleet-dashboard every 6 h"), clock: "profile-sync",
     inflows: [{ signal: "resume.text", via: b("gh-actions", "brand wording") }, { signal: "brand.surface_drift", via: b("gh-actions", "surface-audit") }],
@@ -198,15 +197,15 @@ export const FLOWS = [
   { id: "research-exec", label: "Research pipeline: idea to paper", scope: "qniverse", plane: "research", worker: "qnfo-research-exec",
     executor: b("cron", "qnfo-research-exec hourly"), clock: "research-exec",
     inflows: [{ signal: "research.focus", via: b("d1", "owner_asks research focus -> research_lines.owner_focus") }, { signal: "reader.engagement", via: b("d1", "v_research_volume_target") },
-      { signal: "ext.research_sources", via: b("external-api", "arXiv HTML, QNFO papers") }, { signal: "signal.item", via: b("d1", "signals -> idea_proposals") }],
+      { signal: "ext.research_sources", via: b("external-api", "arXiv HTML, QNFO papers") }, { signal: "signal.item", via: b("d1", "signals -> idea_proposals") },
+      { signal: "research.run_outcome", via: b("d1", "research_queue.score via research_line_outcomes") }],
     outflows: [{ signal: "paper.published", via: b("d1", "papers (living-paper)") }],
     feedback: "readers set the research budget; Rowan's focus taps push, keep or pause lines" },
   { id: "research-run", label: "Research run (Cloudflare Workflow)", scope: "qniverse", plane: "research", worker: "personal-companion",
     executor: b("workflow", "research-run"), clock: "companion-tick",
     inflows: [{ signal: "paper.published", via: b("d1", "research_queue.status") }],
-    outflows: [{ signal: "research.run_outcome", via: b("d1", "pipeline_runs") }],
-    feedback: "run outcomes (published, parked, dropped) feed the recall loop's line questions",
-    gap: { what: "research-run outcomes are recorded but no flow reads them yet", loop_issue: "FLOW-GAP-research-run-outcome", probe: "SELECT COUNT(*) FROM pipeline_runs WHERE pipeline = 'research-run' AND status = 'done'" } },
+    outflows: [{ signal: "research.run_outcome", via: b("d1", "pipeline_runs -> research_line_outcomes (triggers pipeline_runs_research_outcome_au/_ai)") }],
+    feedback: "each finished run's outcome is recorded per research line and moves that line's waiting ideas' score (+0.02 published, -0.02 parked or dropped), so the research pipeline draws next from lines that publish; v_research_line_yield" },
   { id: "research-focus", label: "Research focus taps", scope: "qniverse", plane: "research", worker: "qnfo-fleet-dashboard",
     executor: b("owner-tap", "fleet.qnfo.org/focus, recall-loop task"), clock: null, clock_reason: "the recall-loop fleet task re-asks every 14 days",
     inflows: [{ signal: "ext.owner_tap", via: b("owner-tap", "owner_asks") }],
@@ -239,12 +238,12 @@ export const FLOWS = [
     inflows: [{ signal: "fleet.issue", via: b("d1", "agent_issues with code-task lines") }],
     outflows: [{ signal: "fleet.deploy", via: b("gh-actions", "merged PRs -> canonical-deploy.yml") }],
     feedback: "deploys are verified by probes and the clocks; a regression reverts" },
-  { id: "radar-watch", label: "Events and job-market radar (Cloudflare Workflows)", scope: "qniverse", plane: "research", worker: "radar-hub",
-    executor: b("workflow", "events-radar-watch, job-market-watch"), clock: null, clock_reason: "weekly Workflow instances; cron heartbeat in fleet_heartbeat",
-    inflows: [{ signal: "ext.job_postings", via: b("external-api", "job market sources") }, { signal: "ext.news_sources", via: b("external-api", "event sources") }],
-    outflows: [{ signal: "signal.item", via: b("d1", "idea_proposals, outreach_queue, handoffs") }],
-    feedback: "radar items enter the research and outreach queues, which are measured by reader engagement",
-    gap: { what: "job-market-watch writes handoffs that no flow reads, and its Workflow resource is absent from the account", loop_issue: "FLOW-GAP-job-market-watch", probe: "SELECT COUNT(*) FROM handoffs WHERE project_id LIKE 'job-market-watch-workflow-%' AND created_at > datetime('now','-7 days')" } },
+  { id: "radar-watch", label: "Events radar (Cloudflare Workflow)", scope: "qniverse", plane: "research", worker: "radar-hub",
+    executor: b("workflow", "events-radar-watch"), clock: null, clock_reason: "weekly Workflow instances; cron heartbeat in fleet_heartbeat",
+    inflows: [{ signal: "ext.news_sources", via: b("external-api", "event sources") },
+      { signal: "signal.item", via: b("d1", "idea_proposals decision ACCEPT seed the arXiv radar terms (NO-TOPIC-HARDCODE-1)") }],
+    outflows: [{ signal: "signal.item", via: b("d1", "events_radar, idea_proposals, outreach_queue") }],
+    feedback: "radar items enter the research and outreach queues, and the ideas accepted there seed the next radar scan's terms; the job-market scan was retired 2026-11-12 into the hourly jobs-sweep (JOB-MARKET-RETIRED-1)" },
   // ------------------------------------------------------------------ fleet workers on a cron (FLOW-DECLARE-ALL-1: the former UNDECLARED_CRON_WORKERS list)
   { id: "idea-hub", label: "Idea hub: signals and re-entering papers to proposals", scope: "qniverse", plane: "research", worker: "idea-hub",
     executor: b("cron", "idea-hub hourly ideationCycle"), clock: null, clock_reason: "hourly at :25; idea_proposals.created_at and the cron grid log are its beat",
