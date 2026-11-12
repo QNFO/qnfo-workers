@@ -40,6 +40,9 @@ def main():
     carrying = [f for f in present if RULE in Path(f).read_text(encoding="utf-8", errors="replace")]
     if not carrying:
         fail.append(f"no instruction file carries {RULE} (checked {present})")
+    pointed = [f for f in carrying if "AGENT-BOOTSTRAP-1" in Path(f).read_text(encoding="utf-8", errors="replace")]
+    if carrying and not pointed:
+        fail.append("no instruction file carries the AGENT-BOOTSTRAP-1 pointer (python3 sync_agent_bootstrap.py <file>)")
     base = sys.argv[sys.argv.index("--base") + 1] if "--base" in sys.argv else "origin/main"
     if sh("git", "rev-parse", "--verify", base).returncode != 0:
         print(f"self_closed_lint: base {base} not found; added-line scan skipped (logged, not silent)")
