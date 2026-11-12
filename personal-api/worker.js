@@ -296,7 +296,7 @@ function clampMaxTokens(requested, isReason) {
 __name(clampMaxTokens, "clampMaxTokens");
 __name2(clampMaxTokens, "clampMaxTokens");
 __name22(clampMaxTokens, "clampMaxTokens");
-var VERSION = "4.42.3";
+var VERSION = "4.42.4";
 // 4.37.2 KERNEL-PERSONAL-PRIVACY-1: preserve all ten registered reply categories across the content-free telemetry boundary.
 // 4.37.1 KERNEL-PERSONAL-PRIVACY-1: classify twin replies inside the personal plane; AUDIT receives only fixed categories and random event ids, never reply text or excerpts.
 // 4.37.0 KERNEL-EVERYWHERE-1 (2026-11-06, owner directive "IMPLEMENT EVERYWHERE ACROSS ALL AI APPS AND SERVICES AND SURFACES", pillar personal): the twin SYSTEM_PROMPT carries the DOCTRINE-1 kernel 8.2.1 reply recognitions (KERNEL-REPLY-4): end every reply on the answer or result, never on a question, conditional offer or menu; ambiguity gets a stated assumption; a refusal or limit with its reason is a disposition stated declaratively; reversible tool actions are taken and reported in the same reply, and a requested change is made with the tool, not described. Each twin reply is also mirrored to qnfo-audit.personal_replies so the kernel false-stop scan covers this surface. prior 4.36.2
@@ -8973,6 +8973,25 @@ export {
 };
 //# sourceMappingURL=worker.js.map
 
+
+// COMPANION-LOCATION-1: the voice block above defaults Permissions-Policy to geolocation=(), which made the browser refuse the companion's
+// own location prompt (Today "where am I" and nearby moments). Own origin may ask; every other origin stays blocked.
+(function (t) {
+  var inner = t.fetch;
+  t.fetch = async function (request, env, ctx) {
+    var res = await inner.call(this, request, env, ctx);
+    try {
+      if (!res || res.status === 101 || (res.headers.get("Content-Type") || "").toLowerCase().indexOf("text/html") !== 0) return res;
+      var pp = res.headers.get("Permissions-Policy") || "";
+      var fixed = /geolocation\s*=/i.test(pp) ? pp.replace(/geolocation\s*=\s*\(\s*\)/i, "geolocation=(self)") : (pp ? pp + ", " : "") + "geolocation=(self)";
+      if (fixed === pp) return res;
+      var out = new Response(res.body, res);
+      out.headers.set("Permissions-Policy", fixed);
+      return out;
+    } catch (e) { return res; }
+  };
+})(api_default);
+
 // ---- VOICE-INPUT-1:BEGIN (sourced from _shared/voice.js; applied by scripts/voice-apply.mjs; do not edit inside a worker) ----
 // VOICE-INPUT-1 (2026-11-09, pillar reach; owner directive: "everywhere there's a text box or a prompt I want the microphone to work,
 // like a Google search bar, on Android, desktop, whatever"). One block, inlined into every worker that serves HTML, that
@@ -8982,7 +9001,7 @@ export {
 //   3. injects the script tag into each 200 HTML page and sets Permissions-Policy microphone=(self) when the origin sent none or sent a
 //      policy that blocks the microphone (the *.qnfo.org zone rule had forced microphone=() until MIC-ZONE-1 changed it to (self)).
 // Opt a field out with data-novoice. Honeypots, passwords, numbers, e-mails and codes are skipped by the script itself.
-var VX_VERSION = "1.0.0";
+var VX_VERSION = "1.0.1";
 var VX_RATE = {};
 var VX_STT_URL = "https://fleet.qnfo.org/__voice/stt";
 function vxNop(e) { return e; }
@@ -9011,7 +9030,8 @@ var VX_CLIENT = "(function(){if(window.__vx)return;window.__vx=1;" +
 "function startMR(el,btn){navigator.mediaDevices.getUserMedia({audio:true}).then(function(s){var a={btn:btn,stream:s};active=a;var ch=[],mr=new MediaRecorder(s);a.mr=mr;btn.classList.add('rec');btn.setAttribute('aria-label','Stop and transcribe');mr.ondataavailable=function(e){if(e.data&&e.data.size)ch.push(e.data)};mr.onstop=function(){s.getTracks().forEach(function(t){t.stop()});var blob=new Blob(ch,{type:mr.mimeType||'audio/webm'});btn.classList.remove('rec');if(!blob.size)return;btn.disabled=true;toast('Transcribing...');fetch('/__voice/transcribe',{method:'POST',headers:{'x-voice':'1','Content-Type':blob.type},body:blob,credentials:'same-origin'}).then(function(r){return r.json()}).then(function(j){btn.disabled=false;if(j&&j.ok&&j.text){var v=el.value;setVal(el,v+sep(v)+j.text);el.focus();toastEl&&(toastEl.style.display='none')}else fail(btn,(j&&j.error)||'Could not transcribe that.')}).catch(function(){btn.disabled=false;fail(btn,'Could not reach the speech service.')})};mr.start()}).catch(function(e){fail(btn,e&&e.name==='NotAllowedError'?errMsg('not-allowed'):errMsg('audio-capture'))})}" +
 "function toggle(el,btn){if(active){var same=active.btn===btn;stop();if(same)return}try{el.focus()}catch(e){nop(e)}if(SR)startSR(el,btn);else startMR(el,btn)}" +
 "function attach(el){if(map.has(el)||!eligible(el)||hasOwnMic(el))return;var b=document.createElement('button');b.type='button';b.className='vx-b';b.innerHTML=ICON;b.setAttribute('aria-label','Speak into this box');b.title='Speak instead of typing';b.addEventListener('mousedown',function(e){e.preventDefault()});b.addEventListener('click',function(e){e.preventDefault();e.stopPropagation();toggle(el,b)});document.body.appendChild(b);map.set(el,b);place()}" +
-"function place(){if(raf)return;raf=requestAnimationFrame(function(){raf=0;var vw=innerWidth,vh=innerHeight;map.forEach(function(b,el){if(!el.isConnected){b.remove();map.delete(el);return}var r=el.getBoundingClientRect(),cs=getComputedStyle(el),ok=r.width>=80&&r.height>=20&&cs.visibility!=='hidden'&&cs.display!=='none'&&r.bottom>0&&r.top<vh&&r.right>0&&r.left<vw;if(!ok){b.classList.remove('on');return}var sz=r.height<44?28:36;b.style.width=b.style.height=sz+'px';var top=r.height<60?r.top+(r.height-sz)/2:r.bottom-sz-6,left=Math.min(r.right-sz-6,vw-sz-4);b.style.top=Math.max(2,top)+'px';b.style.left=Math.max(2,left)+'px';b.classList.add('on')})})}" +
+"function vis(el,r,vw,vh){try{if(el.checkVisibility&&!el.checkVisibility({visibilityProperty:true,contentVisibilityAuto:true}))return false;if(el.closest('details:not([open])'))return false;if(el.closest('[hidden],[inert],[aria-hidden=true]'))return false;var x=Math.min(Math.max(r.left+r.width/2,0),vw-1),y=Math.min(Math.max(r.top+Math.min(r.height/2,20),0),vh-1),t=document.elementFromPoint(x,y);return !!t&&(t===el||el.contains(t))}catch(e){nop(e);return false}}" +
+"function place(){if(raf)return;raf=requestAnimationFrame(function(){raf=0;var vw=innerWidth,vh=innerHeight;map.forEach(function(b,el){if(!el.isConnected){b.remove();map.delete(el);return}var r=el.getBoundingClientRect(),cs=getComputedStyle(el),ok=r.width>=80&&r.height>=20&&cs.visibility!=='hidden'&&cs.display!=='none'&&r.bottom>0&&r.top<vh&&r.right>0&&r.left<vw&&vis(el,r,vw,vh);if(!ok){b.classList.remove('on');return}var sz=r.height<44?28:36;b.style.width=b.style.height=sz+'px';var top=r.height<60?r.top+(r.height-sz)/2:r.bottom-sz-6,left=Math.min(r.right-sz-6,vw-sz-4);b.style.top=Math.max(2,top)+'px';b.style.left=Math.max(2,left)+'px';b.classList.add('on')})})}" +
 "function scan(root){var q=(root&&root.querySelectorAll?root:document).querySelectorAll('textarea,input');for(var i=0;i<q.length;i++)attach(q[i]);if(root&&root.tagName&&(root.tagName==='TEXTAREA'||root.tagName==='INPUT'))attach(root)}" +
 "scan(document);new MutationObserver(function(ms){var any=false;ms.forEach(function(m){m.addedNodes.forEach(function(n){if(n.nodeType===1){scan(n);any=true}})});place()}).observe(document.documentElement,{childList:true,subtree:true});" +
 "['scroll','resize','input','focusin','transitionend','animationend'].forEach(function(ev){addEventListener(ev,place,true)});setInterval(place,1500);" +
@@ -9090,20 +9110,3 @@ function vxAttach(target, workerName) {
 // ---- VOICE-INPUT-1:END ----
 // ---- VOICE-INPUT-1:ATTACH personal-api ----
 vxAttach(api_default, "personal-api");
-// COMPANION-LOCATION-1: the voice block above defaults Permissions-Policy to geolocation=(), which made the browser refuse the companion's
-// own location prompt (Today "where am I" and nearby moments). Own origin may ask; every other origin stays blocked.
-(function (t) {
-  var inner = t.fetch;
-  t.fetch = async function (request, env, ctx) {
-    var res = await inner.call(this, request, env, ctx);
-    try {
-      if (!res || res.status === 101 || (res.headers.get("Content-Type") || "").toLowerCase().indexOf("text/html") !== 0) return res;
-      var pp = res.headers.get("Permissions-Policy") || "";
-      var fixed = /geolocation\s*=/i.test(pp) ? pp.replace(/geolocation\s*=\s*\(\s*\)/i, "geolocation=(self)") : (pp ? pp + ", " : "") + "geolocation=(self)";
-      if (fixed === pp) return res;
-      var out = new Response(res.body, res);
-      out.headers.set("Permissions-Policy", fixed);
-      return out;
-    } catch (e) { return res; }
-  };
-})(api_default);
