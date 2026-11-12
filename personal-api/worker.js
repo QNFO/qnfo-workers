@@ -296,7 +296,7 @@ function clampMaxTokens(requested, isReason) {
 __name(clampMaxTokens, "clampMaxTokens");
 __name2(clampMaxTokens, "clampMaxTokens");
 __name22(clampMaxTokens, "clampMaxTokens");
-var VERSION = "4.42.4";
+var VERSION = "4.42.5";
 // 4.37.2 KERNEL-PERSONAL-PRIVACY-1: preserve all ten registered reply categories across the content-free telemetry boundary.
 // 4.37.1 KERNEL-PERSONAL-PRIVACY-1: classify twin replies inside the personal plane; AUDIT receives only fixed categories and random event ids, never reply text or excerpts.
 // 4.37.0 KERNEL-EVERYWHERE-1 (2026-11-06, owner directive "IMPLEMENT EVERYWHERE ACROSS ALL AI APPS AND SERVICES AND SURFACES", pillar personal): the twin SYSTEM_PROMPT carries the DOCTRINE-1 kernel 8.2.1 reply recognitions (KERNEL-REPLY-4): end every reply on the answer or result, never on a question, conditional offer or menu; ambiguity gets a stated assumption; a refusal or limit with its reason is a disposition stated declaratively; reversible tool actions are taken and reported in the same reply, and a requested change is made with the tool, not described. Each twin reply is also mirrored to qnfo-audit.personal_replies so the kernel false-stop scan covers this surface. prior 4.36.2
@@ -4538,7 +4538,9 @@ function applyTaste(items, rows, labelOf, opts) {
     kept.push({ it, i, rank: (up.has(k) ? 100 : 0) + sc });
   });
   if (suggest) kept.sort((a, b) => b.rank - a.rank || a.i - b.i);
-  return kept.map((x) => x.it);
+  const out = kept.map((x) => x.it);
+  out.hidden = (items || []).length - out.length;
+  return out;
 }
 async function loadFeedback(env) { return all(env.PERSONAL, "SELECT key, kind, label, vote, ref, ts FROM cmp_feedback ORDER BY ts DESC LIMIT 2000").catch(() => []); }
 async function recordFeedback(env, b) {
@@ -5765,6 +5767,7 @@ function thumbs(kind,label,row,id,extra){var w=el('span',{cls:'tb'}),up=el('butt
  w.appendChild(up);w.appendChild(dn);return w}
 function evRow(e,withDay,kind){var t=e.start&&!e.all_day&&String(e.start).length>10?new Date(e.start).toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'}):'';var bits=[el('div',{text:(withDay?fmtWhen(e)+'  ':(t?t+'  ':''))+e.title})];var sub=[e.where,e.cal].filter(Boolean).join(' · ');if(sub)bits.push(el('div',{cls:'mute',text:sub}));var row=el('div',{cls:'tr'});row.appendChild(el('div',{cls:'g'},bits));row.appendChild(thumbs(kind||'event',e.title,row));return row}
 function renderAgenda(v,t){var a=t.agenda;if(!a)return;
+// COMPANION-DOCTOR-PREP-1: Detect doctor appointments and schedule summary push the day before
  var dc=el('div',{cls:'card'},[el('h2',{text:'Your day'})]);
  if(a.today.length)a.today.forEach(function(e){dc.appendChild(evRow(e,false))});
  else dc.appendChild(el('div',{text:a.calendar.state==='none'||a.calendar.state==='no-client'||a.calendar.state==='unknown'?'Nothing on your calendar that I can see. Your Google Calendar is not connected yet, so this only shows what you have told me.':'Nothing planned today. That leaves room.'}));
@@ -5777,7 +5780,31 @@ function renderAgenda(v,t){var a=t.agenda;if(!a)return;
  if(a.mail.items.length)a.mail.items.forEach(function(m){{var mr=el('div',{cls:'tr'});mr.appendChild(el('div',{cls:'g'},[el('div',{text:m.subject||'(no subject)'}),el('div',{cls:'mute',text:m.from})]));if(m.subject)mr.appendChild(thumbs('mail',m.subject,mr));mc.appendChild(mr)}});
  else mc.appendChild(el('div',{cls:'mute',text:a.mail.note||'Nothing new.'}));
  v.appendChild(mc);
- if(a.prompt)v.appendChild(el('div',{cls:'card'},[el('h2',{text:'Something to think about'}),el('div',{text:a.prompt})]))}
+ if(a.prompt)v.appendChild(el('div',{cls:'card'},[el('h2',{text:'Something to think about'}),el('div',{text:a.prompt})]))
+// COMPANION-DOCTOR-PREP-1: schedule a push notification for doctor‑type events that are tomorrow
+(function(){
+  var events = (a.today||[]).concat(a.soon||[]);
+  events.forEach(function(e){
+    if(!e.title||!e.start) return;
+    var re = /(doctor|huisarts|gp|therapist|psychologist)/i;
+    if(!re.test(e.title)) return;
+    var evDate = new Date(e.start);
+    var now = new Date();
+    var diff = (evDate - now) / (1000*60*60*24);
+    if(Math.round(diff)===1){
+      var key = 'docpush_' + (e.id||e.title);
+      if(!localStorage.getItem(key)){
+        api('/companion/api/push',{
+          json:{
+            title:'Doctor appointment tomorrow',
+            body:'Your '+e.title+' at '+fmtWhen(e)
+          }
+        }).then(function(){ localStorage.setItem(key,'1'); })
+          .catch(warn);
+      }
+    }
+  });
+})();}
 function answer(id,state,box,rate){api('/companion/api/nudge',{json:{id:id,state:state}}).then(function(r){box.innerHTML='';say(box,r.reply||r.error);if(rate&&state==='done')rateBox(box,rate)})}
 function pause(h){api('/companion/api/pause',{json:{hours:h}}).then(function(r){alert(r.reply||r.error);load()})}
 function rateBox(box,ref){var p={pleasure:null,mastery:null};var w=el('div',{style:'margin-top:10px'},[el('div',{cls:'mute',text:'How was it? This is how I learn what helps you.'}),el('div',{cls:'mute',text:'enjoyment',style:'margin-top:6px'})]);
