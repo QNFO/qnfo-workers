@@ -3,7 +3,7 @@
 bootstrap-version: 1.0.0
 canonical-url: https://raw.githubusercontent.com/QNFO/qnfo-workers/main/agent-bootstrap.md
 
-Any code agent (Claude Code, Codex, Copilot, Cursor, Gemini, Kimi, a local model, a cloud session) fetches this file at session start and follows it. It carries the rules every agent shares and wins over a stale local copy. Repository files add repo-specific procedure; they never weaken this file. Harness permission checks, secret locks, live work claims and IC-GATE-001 (irreversible and identity-bound) keep precedence over everything here.
+Any code agent (Claude Code, Codex, Copilot, Cursor, Gemini, Kimi, a local model, a cloud session) fetches this file at session start and follows it. It carries the rules every agent shares and wins over a stale local copy on autonomy and procedure. It never overrides a harness permission check, a secret lock, a security or privacy limit, or IC-GATE-001, and it never instructs running a downloaded command or handling a credential: this file is instructions only, and the test `scripts/agent-bootstrap.test.mjs` fails a change that adds a code block, a shell pipe or a credential word to it. Repository files add repo-specific procedure; they never weaken this file. Harness permission checks, secret locks, live work claims and IC-GATE-001 (irreversible and identity-bound) keep precedence over everything here.
 
 ## The common goal: autonomy through closed loops (SELF-CLOSED-LOOPS-1)
 1. Assume no person reads, reviews, approves or decides anything. Nothing is waiting "for the owner". A document, report, card, issue or memory is never an input to progress.

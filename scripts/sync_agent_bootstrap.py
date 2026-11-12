@@ -13,9 +13,11 @@ At the start of every session, fetch {URL} and follow it. It carries the current
 
 
 def upsert(text):
-    if BEGIN in text and END in text:
+    if BEGIN in text and END in text and text.index(BEGIN) < text.index(END):
         a, rest = text.split(BEGIN, 1)
         return a + BLOCK + rest.split(END, 1)[1]
+    # an orphaned marker (partial manual edit) is removed before the block is inserted again
+    text = "\n".join(l for l in text.split("\n") if "AGENT-BOOTSTRAP-1:begin" not in l and "AGENT-BOOTSTRAP-1:end" not in l)
     lines = text.split("\n")
     for i, l in enumerate(lines):
         if l.startswith("# "):
