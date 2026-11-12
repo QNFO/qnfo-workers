@@ -1,7 +1,7 @@
 {
  "mode": "live",
- "at": "2026-11-12T10:14:25.042Z",
- "sha": "0a41b55d1dc149412ca9b3e745dcbe29a179acd4",
+ "at": "2026-11-12T10:54:14.566Z",
+ "sha": "0b74cd229e7b8596988c2831765f9cc4e66989fe",
  "apps": [
   {
    "app": "ask-qwav",
@@ -30,7 +30,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1469,
+     "ms": 3284,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -59,7 +59,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1182,
+     "ms": 3130,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -90,7 +90,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1517,
+     "ms": 1504,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -126,7 +126,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 8680,
+     "ms": 8700,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -155,7 +155,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1293,
+     "ms": 1123,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -182,7 +182,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 2716,
+     "ms": 2531,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -209,7 +209,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 302,
+     "ms": 362,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -255,7 +255,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 2787,
+     "ms": 2220,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -402,7 +402,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 3841,
+     "ms": 4961,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -542,7 +542,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 4470,
+     "ms": 6529,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -574,7 +574,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1806,
+     "ms": 1755,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -615,7 +615,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 10223,
+     "ms": 10200,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -635,7 +635,7 @@
      "ok": false,
      "error": "expected to see \"Order size\" on https://markets.q08.org/paper",
      "attempts": 2,
-     "ms": 13488,
+     "ms": 14198,
      "grade": {
       "status": "broken",
       "reasons": [
@@ -666,7 +666,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1136,
+     "ms": 1075,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -695,7 +695,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 2216,
+     "ms": 2412,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -731,7 +731,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 8529,
+     "ms": 8482,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -919,7 +919,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 4826,
+     "ms": 5688,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -1071,13 +1071,15 @@
        ]
       }
      ],
-     "consoleErrors": [],
+     "consoleErrors": [
+      "Permissions policy violation: compute-pressure is not allowed in this document."
+     ],
      "pageErrors": [],
      "badResponses": [],
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 4547,
+     "ms": 4960,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -1093,7 +1095,8 @@
     "paper-short: 22 tap target(s) under 24px, e.g. \"QNFO\" 31x19, \"QWAV\" 34x19, \"q08\" 21x19",
     "paper-short: an empty 516x3 bar (#rp) floats over the page",
     "paper-short: an empty 32x20 bar (#q-toast) floats over the page",
-    "paper-short: accessibility serious color-contrast (1x): Elements must meet minimum color contrast ratio thresholds"
+    "paper-short: accessibility serious color-contrast (1x): Elements must meet minimum color contrast ratio thresholds",
+    "console error in paper-with-short: Permissions policy violation: compute-pressure is not allowed in this document."
    ]
   },
   {
@@ -1151,7 +1154,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 15507,
+     "ms": 15935,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -1180,7 +1183,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 8605,
+     "ms": 8505,
      "grade": {
       "status": "new",
       "reasons": [
@@ -1213,7 +1216,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 3191,
+     "ms": 4061,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -1244,7 +1247,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1395,
+     "ms": 1399,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -1275,7 +1278,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 2589,
+     "ms": 2833,
      "grade": {
       "status": "new",
       "reasons": [
@@ -1312,7 +1315,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 8766,
+     "ms": 8820,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -1454,7 +1457,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1795,
+     "ms": 1926,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -2822,7 +2825,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 2504,
+     "ms": 2683,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -2947,7 +2950,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1778,
+     "ms": 2124,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -2977,8 +2980,8 @@
      "badResponses": [],
      "ok": true,
      "error": null,
-     "attempts": 1,
-     "ms": 12263,
+     "attempts": 2,
+     "ms": 11381,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3095,7 +3098,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 9122,
+     "ms": 9140,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3126,7 +3129,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 9381,
+     "ms": 9293,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3155,7 +3158,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 937,
+     "ms": 890,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3277,7 +3280,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1518,
+     "ms": 1767,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3306,7 +3309,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 8699,
+     "ms": 8681,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3362,7 +3365,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 4834,
+     "ms": 4903,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3393,7 +3396,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 3347,
+     "ms": 4896,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3424,7 +3427,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 3244,
+     "ms": 3416,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3466,7 +3469,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1020,
+     "ms": 986,
      "grade": {
       "status": "ok",
       "reasons": []
