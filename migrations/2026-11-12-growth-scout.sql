@@ -76,7 +76,7 @@ FROM v_scout_tail;
 CREATE VIEW IF NOT EXISTS v_scout_area_yield AS SELECT a.area, a.product, a.metric, a.worker, a.focus, a.players, a.cadence_days,
   (SELECT COUNT(*) FROM market_scout_findings f WHERE f.area = a.area AND f.status IN ('won','kept_flat','rolled_back')) AS decided,
   (SELECT COUNT(*) FROM market_scout_findings f WHERE f.area = a.area AND f.status = 'won') AS wins,
-  (SELECT MAX(f.created_at) FROM market_scout_findings f WHERE f.area = a.area AND f.status <> 'rejected') AS last_good,
+  (SELECT MAX(f.created_at) FROM market_scout_findings f WHERE f.area = a.area AND f.status NOT IN ('rejected','requested')) AS last_good,
   (SELECT MAX(f.created_at) FROM market_scout_findings f WHERE f.area = a.area) AS last_try
 FROM market_scout_areas a WHERE a.active = 1;
 CREATE VIEW IF NOT EXISTS v_scout_overdue AS SELECT area FROM v_scout_area_yield WHERE COALESCE(last_good, '') < strftime('%Y-%m-%dT%H:%M:%SZ','now','-' || (cadence_days * 3 + 2) || ' days');
