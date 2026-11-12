@@ -96,6 +96,7 @@ globalThis.fetch = async (u) => {
   if (u.includes("hn.algolia.com")) { hnCalls++; return new Response(JSON.stringify({ hits: Array.from({ length: 40 }, (_, i) => ({ _tags: ["story"], objectID: "h" + i, story_id: 1000 + i, title: "HN story number " + i + " about programming tools", url: "https://blog" + i + ".example/p", points: 100 + i, num_comments: 50, created_at: new Date().toISOString() })) }), { status: 200 }); }
   if (u.includes("api.github.com") || u.includes("export.arxiv.org") || u.includes("federalregister.gov")) return new Response("{}", { status: 503 });
   if (u.includes("cnbc.com")) { failingCalls++; return new Response("gone", { status: 404 }); }
+  if (u.includes("news.google.com/rss/search")) return new Response("busy", { status: 503 }); // the live failure of 2026-11-12 12:00Z
   if (u.includes("pm.internal/api/markets")) return new Response(JSON.stringify({ markets: [{ title: "Will Iran close the Strait of Hormuz?" }, { title: "Will Iran sign a deal?" }] }), { status: 200 });
   if (u.includes("pm.internal/api/forecasts")) return new Response(JSON.stringify({ forecasts: [{ evidence_json: JSON.stringify([{ url: "https://www.theguardian.com/x" }]) }] }), { status: 200 });
   if (u.includes("api.gdeltproject.org")) return new Response(JSON.stringify({ articles: [{ title: "GDELT item on " + u.length + " central bank inflation", url: "https://gd.example.org/" + u.length, seendate: "20261112T090000Z", domain: "gd.example.org" }] }), { status: 200 });
@@ -119,6 +120,7 @@ check("Hacker News is capped per tick (40 offered)", hn <= 10, hn);
 check("most signals come from elsewhere", tot > 3 * hn && tot >= 30, { tot, hn });
 check("signals carry publisher, topic and title key", db.prepare("SELECT COUNT(*) n FROM signal_log WHERE publisher IS NULL OR topic IS NULL OR title_key IS NULL").get().n === 0);
 check("demand search ran for the forecast questions' top entity", db.prepare("SELECT COUNT(*) n FROM sig_state WHERE key = 'demand:iran'").get().n === 1);
+check("a failing search lane is named in the tick actions", t1.actions.some((a) => /^search lane: \d+ of \d+ searches failed/.test(a)), t1.actions);
 check("a sig_health row was written", db.prepare("SELECT COUNT(*) n FROM sig_health").get().n === 1);
 check("an engine_runs row is not written by sigTick itself (signalsOnly owns it)", db.prepare("SELECT COUNT(*) n FROM engine_runs").get().n === 0);
 // make every source due again and run until the failing feed is quarantined and the recurring domain is discovered

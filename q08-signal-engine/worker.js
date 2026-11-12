@@ -929,6 +929,9 @@ async function sigTick(env) {
     await env.DB.prepare("UPDATE sig_sources SET state = ?2, quality = ?3, ok_count = ?4, fail_streak = ?5, items_total = items_total + ?6, added_total = added_total + ?7, cited = ?8, last_fetch_at = ?9, last_ok_at = CASE WHEN ?10 THEN ?9 ELSE last_ok_at END, last_error = ?11, next_at = ?12 WHERE id = ?1")
       .bind(src.id, ns.state, q, ns.ok_count, ns.fail_streak, res.items.length, got, Math.round(cHost * 1000), sigNow(), res.ok ? 1 : 0, res.ok ? null : res.error, ns.next_at).run();
   }
+  // a failing search lane (Google News 503, GDELT timeout) is named in the tick's actions, so sig_health and engine_runs show it the hour it starts
+  var sFail = results.filter(function (r) { return isSearch(r.src) && !r.ok; });
+  if (sFail.length) actions.push("search lane: " + sFail.length + " of " + results.filter(function (r) { return isSearch(r.src); }).length + " searches failed (" + sFail[0].src.id + ": " + String(sFail[0].error).slice(0, 60) + ")");
   // discovery: tally publisher domains, probe the most-seen unprobed ones for a feed
   var discovered = 0;
   try {
