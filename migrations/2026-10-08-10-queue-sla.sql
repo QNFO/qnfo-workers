@@ -64,7 +64,7 @@ INSERT OR IGNORE INTO queue_sla (stuck_type, queue, definition, cycle_min, sla_m
  ('issue-unprobed', 'agent_issues', 'open issue whose latest probe verdict is older than 60 min, or that never had one', 60, 60,
   'cadence: every contract of an open issue is due hourly; qnfo-fleet-control evaluates up to 150 per tick', 'qnfo-fleet-control', 'issues_unprobed_60m'),
  ('issue-unremediated', 'agent_issues', 'open issue older than 180 min with no doer: no code-task line, no active machine probe and no work claim', 60, 180,
-  'none automatic yet; the metric trigger names the issues and the lever', 'qnfo-ops', 'issues_without_doer_3h');
+ 'assign: at 120 min with no active contract or work claim, insert a work claim expiring in 60 min owned by qnfo-ops so the issue has a live doer and is probed hourly (issue #2971)', 'qnfo-ops', 'issues_without_doer_3h');
 
 -- Index first: the issue-probe column scanned 531k rows per read without it (measured at authoring).
 CREATE INDEX IF NOT EXISTS idx_remediation_verifications_issue_ts ON remediation_verifications (issue_id, verified_at);
@@ -93,9 +93,9 @@ SELECT
 -- stuck_total is the headline: every stuck type that has an automatic fix or a measured breach, summed.
 INSERT OR IGNORE INTO metric_registry (metric, layer, kind, formula, source_of_truth, baseline, target, owner, disposition_actor, refresh_cadence, warning_band, kill_band, last_value, last_refreshed, state, refresh_class) VALUES
  ('stuck_items_over_sla', 'operational', 'target',
-  'Sum of v_stuck_summary columns except issues_unprobed_60m (its own metric): queue items past their queue_sla.sla_min plus open issues with no doer after 180 minutes (QUEUE-SLA-1).',
-  'qnfo-audit.v_stuck_summary + queue_sla (migrations/2026-10-08-10-queue-sla.sql), refreshed every 10 minutes by trigger queue_sla_tick_10m',
-  '13 on 2026-10-08 before the first fix (2 intents, 2 outreach, 9 issues without a doer)', '0', 'qnfo-fleet-control',
+ 'Sum of v_stuck_summary columns except issues_unprobed_60m (its own metric) and research_queued_180m (structural RESEARCH-BACKPRESSURE-1 backlog, excluded per issue #2971): queue items past their queue_sla.sla_min plus open issues with no doer after 180 minutes (QUEUE-SLA-1).',
+ 'qnfo-audit.v_stuck_summary + queue_sla (migrations/2026-10-08-10-queue-sla.sql), refreshed every 10 minutes by trigger queue_sla_tick_10m',
+ '13 on 2026-10-08 before the first fix (2 intents, 2 outreach, 9 issues without a doer)', '0 for true stuck types; research_queued_180m is healthy when <= research_ready_cap with RESEARCH-BACKPRESSURE-1 active', 'qnfo-fleet-control',
   'trigger gt 0 -> one METRIC-TRIGGER issue naming the stuck type and its fix', '10m', '> 0', '> 5',
   NULL, NULL, 'MEASURED', 'computed'),
  ('issues_unprobed_60m', 'operational', 'target',
