@@ -699,7 +699,7 @@ function sigHealthOf(rows, srcRows) {
   (rows || []).forEach(function (r) {
     var n = Number(r.n) || 0, pub = r.publisher || (r.source === "hn" ? "news.ycombinator.com" : r.source || "unknown");
     total += n; byPub[pub] = (byPub[pub] || 0) + n; byKind[r.source || "unknown"] = (byKind[r.source || "unknown"] || 0) + n;
-    if (r.topic) byTopic[r.topic] = (byTopic[r.topic] || 0) + n;
+    byTopic[r.topic || "unclassified"] = (byTopic[r.topic || "unclassified"] || 0) + n; // pre-0.52.0 rows carry no topic; they age out of the 24-hour window
   });
   var top = Object.keys(byPub).sort(function (a, b) { return byPub[b] - byPub[a]; });
   var maxShare = total ? byPub[top[0]] / total : 0, hhi = 0;
@@ -789,7 +789,12 @@ async function sigFetchSource(env, src, domains) {
   else { parsed = sigParseFeed(r.text); if (!parsed.length && !/<(rss|feed|rdf:RDF)[\s>]/i.test(r.text)) throw new Error("not a feed"); }
   return parsed.map(function (it) {
     var pub = sigHost(it.publisher_url) || sigHost(it.url);
-    if (kind === "gnews" || kind === "demand") { it.title = it.title.replace(/\s+-\s+[^-]{2,60}$/, ""); if (!it.publisher_url) pub = ""; }
+    if (kind === "gnews" || kind === "demand") {
+      // Google News links are news.google.com redirects: the publisher is the <source url>, else the "Headline - Publisher" tail, never news.google.com.
+      var tail = /\s+-\s+([^-]{2,60})$/.exec(it.title);
+      it.title = it.title.replace(/\s+-\s+[^-]{2,60}$/, "");
+      if (!it.publisher_url) pub = tail ? "gnews:" + tail[1].trim().toLowerCase().replace(/[^a-z0-9]+/g, "-") : "gnews:unknown";
+    }
     return { sid: it.url, title: it.title, url: it.url, published: it.published, summary: it.summary, publisher: pub || sigHost(url) };
   });
 }
@@ -830,6 +835,8 @@ async function sigDemandTitles(env) {
 }
 // Probe one domain for a feed; returns the feed url and its item count, or null.
 async function sigDiscoverDomain(env, domain) {
+  // a public DNS name only (no IP literal, no port, no single-label host): discovery never reaches an address a feed item merely names
+  if (!/^(?=.{4,253}$)([a-z0-9-]{1,63}\.)+[a-z]{2,63}$/.test(String(domain || "")) ) return null;
   var base = "https://" + domain + "/", tries = [];
   try { var page = await sigFetchText(env, base, "text/html"); if (page.ok) tries = sigFeedLinks(page.text, base); } catch (e) { tries = []; }
   tries = tries.concat(["feed", "rss", "rss.xml", "feed.xml"].map(function (p) { return base + p; }));
@@ -900,7 +907,7 @@ async function sigTick(env) {
       novel++;
       var pub = it.publisher || "unknown";
       if ((pubCount[pub] || 0) >= SIG_ITEMS_PER_PUBLISHER) continue;
-      if (pub && !SIG_AGGREGATOR_HOSTS.test(pub) && kindLabel !== "hn" && kindLabel !== "github" && kindLabel !== "arxiv" && kindLabel !== "federalregister") domainSeen[pub] = (domainSeen[pub] || 0) + 1;
+      if (pub && pub.indexOf(":") < 0 && !SIG_AGGREGATOR_HOSTS.test(pub) && kindLabel !== "hn" && kindLabel !== "github" && kindLabel !== "arxiv" && kindLabel !== "federalregister") domainSeen[pub] = (domainSeen[pub] || 0) + 1;
       recentKeys.add(key); pubCount[pub] = (pubCount[pub] || 0) + 1; newHere++;
       var lg = it.legacy || {};
       var sid = it.legacy ? String(it.sid) : await sigShaHex(it.url);
