@@ -133,3 +133,9 @@ activation with ratings, WHO-5, safety plan, pause, honest-AI persona, discreet 
 - [ ] **AI reminder at distress** (`COMPANION-AIDISCLOSE-1`): repeat "I am an AI" once when a risk or heavy-mood reply is sent (Art. 50).
 - [ ] **Calm-tool outcome metric** (`COMPANION-CALM-MEASURE-1`): add a SELF_CHECKS entry when Worse outweighs Better over 14 days.
 - [ ] **Quarterly re-scan** (`COMPANION-RESCAN-1`): re-read the sources above plus new regulation and leading apps, append findings here.
+
+### Scan added 2026-11-12 (owner's cutting-edge scan; the owner's daily mood check-in stays, it overrides "no mood solicitation")
+- [ ] **One source of truth** (`COMPANION-ONE-TRUTH-1`): a decision made anywhere (reply flag, done, pause) updates every surface from the same D1 row; a self-check compares Today with the row.
+- [ ] **Silence unless actionable** (`COMPANION-SILENCE-1`): Today shows only items with an action; no pinned wellbeing clutter, no repeated asks (the daily mood check-in is kept).
+- [ ] **Plain language only** (`COMPANION-PLAIN-1`): no ids, raw logs or machine output on Today; a test scans rendered Today text for them.
+- [ ] **Self-owned defects** (`COMPANION-SELFFIX-1`): extend SELF_CHECKS so a defect is filed, fixed and closed with only "done" reported.
