@@ -1,6 +1,6 @@
 // FORECAST-ENGINE-1 tests: node q08-prediction-markets/forecast-engine.test.mjs
 import { readFileSync } from "node:fs";
-import { classify, deadlineOf, familyKey, isotonic, termStructure, properEntities, matchEvidence, needsUpdate, buildPrompt, parseShift, combine, valueAdded, plan, renderPage, forecastOne, sha256Hex } from "./forecast-engine.mjs";
+import { classify, deadlineOf, familyKey, isotonic, termStructure, properEntities, matchEvidence, needsUpdate, buildPrompt, parseShift, combine, valueAdded, plan, renderPage, spinoffStatus, bootstrapCI, lastPerSlug, forecastOne, sha256Hex } from "./forecast-engine.mjs";
 import { block, apply } from "./inline-forecast-engine.mjs";
 let pass = 0, fail = 0;
 const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL", m, x === undefined ? "" : JSON.stringify(x)); } };
@@ -86,6 +86,16 @@ const va = valueAdded([{ prior: 0.5, p: 0.7, outcome: 1 }, { prior: 0.2, p: 0.2,
 ok(va.n === 2 && va.value_added > 0, "moving toward the outcome adds value", va);
 ok((await sha256Hex("a")).length === 64, "sha256");
 
+// 7b spin-off gates and self-halt
+const mk = (n, gain) => Array.from({ length: n }, (_, i) => ({ slug: "q" + i, prior: 0.5, p: gain > 0 ? 0.7 : 0.3, outcome: 1 }));
+ok(spinoffStatus([]).next_gate === "prove" && !spinoffStatus([]).halted, "no settled forecasts: first gate, not halted");
+const good = spinoffStatus(mk(60, 1));
+ok(good.gates[0].passed && good.gates[1].passed && !good.gates[2].passed && good.next_gate === "spin-out" && !good.halted, "60 settled and clearly better than the crowd passes prove and attention", good);
+const bad = spinoffStatus(mk(60, -1));
+ok(bad.halted && bad.value_added < 0, "60 settled and provably worse than the crowd halts adjustments", bad);
+ok(!spinoffStatus(mk(59, -1)).halted, "59 settled: too few to halt");
+ok(lastPerSlug([{ slug: "a", p: 1 }, { slug: "a", p: 2 }, { slug: "b", p: 3 }]).length === 2, "one score per question");
+ok(bootstrapCI([0.1, 0.1, 0.1]).lo > 0 && bootstrapCI([]) === null, "bootstrap interval");
 // 8 page
 const rows = Object.values(res).map((r) => ({ ...r, evidence_json: JSON.stringify(r.evidence), verdicts_json: JSON.stringify(r.verdicts), hash: "abc" }));
 const head = (t, d, css) => `<meta name="viewport" content="width=device-width"><title>${t}</title><style>${css}</style>`;
@@ -101,6 +111,8 @@ for (const f of ["worker.js", "deployed-current.worker.js"]) {
 const W = (await import("./worker.js")).default;
 const fp = await (await W.fetch(new Request("https://t.invalid/forecasts"), {})).text();
 ok(fp.includes("No forecasts yet") && /<body class="ds">/.test(fp), "the /forecasts route renders its empty state without a database");
+const lp = await W.fetch(new Request("https://t.invalid/living-paper"), {});
+ok(lp.status === 301 && lp.headers.get("location") === "/whitepaper", "/living-paper lands on the white paper");
 const hj = await (await W.fetch(new Request("https://t.invalid/health"), {})).json();
 ok(hj.features.includes("forecasts"), "health lists the forecasts feature");
 console.log("forecast-engine: " + pass + " passed, " + fail + " failed");

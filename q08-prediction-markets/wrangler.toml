@@ -48,3 +48,7 @@ binding = "AI"
 binding = "SIGNAL_DB"
 database_name = "q08-signal"
 database_id = "10fd74b7-c4b3-43c7-9ca5-855213f44a69"
+
+# CONSOLIDATE-1: the price-hidden estimator lost to the crowd on 30 resolved questions (Brier 0.218 vs 0.039). "on" restores it.
+[vars]
+PM_ESTIMATE = "off"

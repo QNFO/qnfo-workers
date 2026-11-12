@@ -1,6 +1,6 @@
 // q08-prediction-markets: the paper-trading proving ground for q08's information edge (PM-CHARTER-1).
 // Paper money only. No wallet, no exchange key, no order ever leaves this worker: the only executor in this file writes D1 rows.
-var VERSION = "1.10.0-codeagent";
+var VERSION = "1.10.1-codeagent";
 
 // ---------- charter (the machine-readable form; GET /api/charter serves it with the live evidence) ----------
 export const CHARTER = {
@@ -733,7 +733,8 @@ export async function tick(env, feed, deps = {}) {
   const heldNow = new Set((await openPositions(db)).map((p) => p.slug));
   const coolNow = new Set((await db.prepare("SELECT DISTINCT slug FROM pt_position WHERE closed_at IS NOT NULL AND closed_at > ?").bind(new Date(nowMs - 6 * 3600 * 1000).toISOString()).all()).results.map((r) => r.slug));
   let est = { rows: [], status: "off" };
-  if (source === "polymarket") est = await estimate(env, db, candidates(markets, heldNow, coolNow, CFG, nowMs, offDomains(ctl0, nowMs)), nowMs, deps);
+  // CONSOLIDATE-1: the price-hidden estimator lost to the crowd on 30 resolved questions (Brier 0.218 vs 0.039) and is the pilot's only model spend; wrangler sets PM_ESTIMATE = "off". Settlement, the market feed and the frozen record keep running.
+  if (source === "polymarket" && String(env.PM_ESTIMATE || "on") !== "off") est = await estimate(env, db, candidates(markets, heldNow, coolNow, CFG, nowMs, offDomains(ctl0, nowMs)), nowMs, deps);
   if (!(await lock(db))) return { busy: true };
   let result;
   try {
@@ -1083,9 +1084,9 @@ function whitepaperDs() {
 // MARKETS-DESIGN-1 (DESIGN-SYSTEM-1, owner 2026-11-09): the dashboard on the shared design system. One primary action (Run tick now), the
 // account as stat tiles, the evidence as a verdict card, every list as phone-width rows instead of crushed tables. Also fixes the Predictions
 // list, which never rendered: the old script reused the element id "pr" as a local name for the probes, so pr.innerHTML wrote to that object.
-const PAGE = `<!doctype html><html lang="en"><head>${dsHead("Q08 Markets (paper)", "Paper-trading proving ground: does fresh reporting beat the prediction-market price? Simulated money only.", ".mk-row-acts{display:flex;gap:8px;margin-top:10px}.mk-row-acts .btn{flex:1}.mk-why{font-size:14px;color:var(--ds-ink-2);margin-top:6px}.mk-num{font-variant-numeric:tabular-nums}.mk-verdict{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px}.mk-need{margin:8px 0 0;padding-left:20px;color:var(--ds-ink-2);font-size:15px}.mk-sec{display:flex;align-items:baseline;justify-content:space-between;gap:8px}.mk-sec h2{margin-bottom:12px}.mk-foot{margin-top:40px;font-size:14px;color:var(--ds-ink-2);display:flex;gap:4px 16px;flex-wrap:wrap;align-items:center}.mk-foot a{display:inline-flex;align-items:center;min-height:44px;min-width:44px}")}</head>
+const PAGE = `<!doctype html><html lang="en"><head>${dsHead("Q08 Forecasts: paper pilot", "Paper-trading proving ground: does fresh reporting beat the prediction-market price? Simulated money only.", ".mk-row-acts{display:flex;gap:8px;margin-top:10px}.mk-row-acts .btn{flex:1}.mk-why{font-size:14px;color:var(--ds-ink-2);margin-top:6px}.mk-num{font-variant-numeric:tabular-nums}.mk-verdict{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px}.mk-need{margin:8px 0 0;padding-left:20px;color:var(--ds-ink-2);font-size:15px}.mk-sec{display:flex;align-items:baseline;justify-content:space-between;gap:8px}.mk-sec h2{margin-bottom:12px}.mk-foot{margin-top:40px;font-size:14px;color:var(--ds-ink-2);display:flex;gap:4px 16px;flex-wrap:wrap;align-items:center}.mk-foot a{display:inline-flex;align-items:center;min-height:44px;min-width:44px}")}</head>
 <body class="ds"><a class="ds-skip" href="#main">Skip to content</a>
-<header class="ds-top"><div class="ds-top-in"><a class="ds-brand" href="/">Q08 Markets <span class="ds-badge ds-badge-warn">Paper money</span></a><a class="btn btn-quiet ds-hide-sm" href="/whitepaper">White paper</a></div></header>
+<header class="ds-top"><div class="ds-top-in"><a class="ds-brand" href="/">Q08 Forecasts <span class="ds-badge ds-badge-warn">Paper pilot</span></a><a class="btn btn-quiet ds-hide-sm" href="/whitepaper">White paper</a></div></header>
 <main class="ds-main" id="main">
 <div class="ds-head"><h1>Paper-trading proving ground</h1><p>Three models read the last 3 days of Hacker News, GDELT and Wikipedia and estimate each market without seeing its price. A paper trade opens only when they agree on a gap of 10 points or more.</p></div>
 <div class="ds-note ds-note-warn" role="note"><b>Simulated money only.</b> No real orders are placed and no exchange key exists in this program.</div>
@@ -1131,7 +1132,7 @@ $('t').onclick=async()=>{const t=$('t');t.disabled=true;t.textContent='Running..
 // FORECAST-ENGINE-1:BEGIN (sourced from forecast-engine.mjs by inline-forecast-engine.mjs; do not edit inside worker.js)
 const FE = (() => {
 // forecast-engine.mjs (inside q08-prediction-markets): consequential forecasts from the signal stream, at a few thousand tokens per update (FORECAST-ENGINE-1).
-// Design, demo result and spin-off plan: q08-prediction-markets/FORECAST-ENGINE.md.
+// Gates, self-halt and the spin-off criteria are code below (GATES, spinoffStatus); the audit that motivated it is in the header above.
 //
 // Why it exists (audit 2026-11-12, numbers read from D1 that day):
 // - q08-signal-engine wrote essays first and forecasts as a by-product. In the 14 days to 2026-11-12 it ran 539 times, published 9
@@ -1363,6 +1364,38 @@ function valueAdded(rows) {
   return { n: r.length, brier_prior: +bp.toFixed(4), brier_engine: +be.toFixed(4), value_added: +(bp - be).toFixed(4) };
 }
 
+// ---------- the spin-off as code: gates the ledger evaluates on itself ----------
+// Each gate is computed from settled rows only; the tick consumes the verdict (it halts model spend when the engine is provably worse than the crowd),
+// /api/forecasts publishes it and the page shows the next gate. Nothing waits for a reader or a decision.
+function bootstrapCI(diffs, { reps = 2000, seed = 12345 } = {}) {
+  if (!diffs.length) return null;
+  let x = seed >>> 0;
+  const rnd = () => { x = (Math.imul(x, 1664525) + 1013904223) >>> 0; return x / 4294967296; };
+  const means = [];
+  for (let r = 0; r < reps; r++) { let t = 0; for (let i = 0; i < diffs.length; i++) t += diffs[Math.floor(rnd() * diffs.length)]; means.push(t / diffs.length); }
+  means.sort((a, b) => a - b);
+  return { lo: means[Math.floor(0.025 * reps)], hi: means[Math.floor(0.975 * reps) - 1] };
+}
+const GATES = [
+  { key: "prove", n: 60, need: "value added > 0 (point estimate)", test: (ci, va) => va > 0, next: "widen coverage and run on; the essay engine stays signals-only" },
+  { key: "attention", n: 60, need: "95% bootstrap interval of value added above 0", test: (ci) => !!ci && ci.lo > 0, next: "publish alerts and a weekly scorecard from the ledger" },
+  { key: "spin-out", n: 200, need: "95% bootstrap interval above 0 on 200+ settled", test: (ci) => !!ci && ci.lo > 0, next: "own repository, own account, data feed" },
+];
+// One score per question: its last forecast before it settled (re-forecasts of one question are not independent samples).
+function lastPerSlug(rows) { const m = new Map(); for (const x of rows) m.set(x.slug, x); return [...m.values()]; }
+function spinoffStatus(rows) {
+  rows = lastPerSlug(rows);
+  const r = rows.filter((x) => x.outcome === 0 || x.outcome === 1);
+  const diffs = r.map((x) => brier(x.prior, x.outcome) - brier(x.p, x.outcome));
+  const va = diffs.length ? diffs.reduce((a, d) => a + d, 0) / diffs.length : 0;
+  const ci = bootstrapCI(diffs);
+  const gates = GATES.map((g) => ({ key: g.key, n_needed: g.n, need: g.need, passed: r.length >= g.n && g.test(ci, va), next: g.next }));
+  const nextGate = gates.find((g) => !g.passed) || null;
+  // Provably worse than the crowd: stop paying for adjustments and publish the crowd until the evidence turns.
+  const halted = r.length >= 60 && !!ci && ci.hi < 0;
+  return { settled: r.length, value_added: diffs.length ? +va.toFixed(4) : null, ci95: ci ? { lo: +ci.lo.toFixed(4), hi: +ci.hi.toFixed(4) } : null, gates, next_gate: nextGate && nextGate.key, halted };
+}
+
 // ---------- the pipeline (I/O injected, so the same code runs in the cron, the tests and the demo) ----------
 const MODELS = ["@cf/deepseek-ai/deepseek-v4-flash-0731", "@cf/moonshotai/kimi-k2.6"]; // two families (deepseek, moonshot)
 // Thinking off: measured 2026-11-12 with this prompt, glm-5.3-flash (no switch) spent its whole 1200-token budget reasoning and
@@ -1451,6 +1484,9 @@ async function tick(env, nowMs = Date.now()) {
   await ensureSchema(env.TRADES_DB);
   const { markets, signals, lastBy } = await readInputs(env, nowMs);
   const pl = plan(markets, signals, lastBy, nowMs);
+  const past = (await env.TRADES_DB.prepare("SELECT slug, prior, p, outcome FROM fe_forecast WHERE outcome IS NOT NULL ORDER BY id").all()).results || [];
+  const spin = spinoffStatus(past);
+  if (spin.halted) pl.chosen = []; // self-halt: the evidence says the adjustments hurt; the ledger keeps the crowd's number until it turns
   const today = new Date(nowMs).toISOString().slice(0, 10);
   let tokens = 0, updated = 0, error = null;
   for (const q of pl.chosen) {
@@ -1466,6 +1502,7 @@ async function tick(env, nowMs = Date.now()) {
       updated++;
     } catch (e) { error = String(e && e.message || e).slice(0, 300); }
   }
+  if (spin.halted) error = "self-halted: 95% interval of value added is below zero on " + spin.settled + " settled";
   // Resolution: a closed market whose YES price sits at 0 or 1 settles every forecast on it (the pilot's fetch keeps pt_market current).
   await env.TRADES_DB.prepare("UPDATE fe_forecast SET outcome = (SELECT CASE WHEN m.yes >= 0.99 THEN 1 ELSE 0 END FROM pt_market m WHERE m.slug = fe_forecast.slug), resolved_at = ? WHERE outcome IS NULL AND EXISTS (SELECT 1 FROM pt_market m WHERE m.slug = fe_forecast.slug AND m.closed = 1 AND (m.yes >= 0.99 OR m.yes <= 0.01))").bind(new Date(nowMs).toISOString()).run().catch(() => null);
   await env.TRADES_DB.prepare("INSERT INTO fe_tick (ran_at, candidates, consequential, updated, tokens, skipped_json, error) VALUES (?,?,?,?,?,?,?)")
@@ -1496,18 +1533,20 @@ function renderPage(rows, stats, head) {
 <main class="ds-main"><div class="ds-head"><h1>Forecasts that move money</h1><p>Each number starts from the prediction-market crowd and moves only when fresh public signals justify it. Every forecast is scored against the crowd it started from.</p></div>
 <section class="ds-stats"><div class="ds-stat"><div class="k">Open forecasts</div><div class="v">${rows.length}</div></div><div class="ds-stat"><div class="k">Tokens per forecast</div><div class="v">${stats.tokens_per ? esc(stats.tokens_per) : "–"}</div></div><div class="ds-stat"><div class="k">Value added vs crowd</div><div class="v">${va.n ? esc(va.value_added) : "–"}</div></div></section>
 ${va.n ? "" : `<p class="ds-note">No forecast has settled yet. Value added (crowd Brier minus engine Brier) appears here after the first settles.</p>`}
+${stats.spinoff ? `<p class="ds-note">Next gate: <b>${esc(stats.spinoff.next_gate || "all passed")}</b>. ${esc((stats.spinoff.gates.find((g) => g.key === stats.spinoff.next_gate) || {}).need || "")} (${esc(stats.spinoff.settled)} settled).${stats.spinoff.halted ? " Adjustments are halted: the engine is publishing the crowd's number." : ""}</p>` : ""}
 ${cards || `<div class="ds-empty"><b>No forecasts yet</b>The engine runs hourly and writes its first forecasts when a consequential question has fresh signals.</div>`}
+<footer class="fe-foot"><a href="/paper">Paper-trading pilot</a><a href="/whitepaper">White paper</a><a href="/api/forecasts">Data (JSON)</a><span>Not investment advice. Paper money only.</span></footer>
 </main></body></html>`;
 }
-const FE_CSS = ".fe-top{display:flex;gap:12px;justify-content:space-between;align-items:flex-start}.fe-p{font-size:28px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--ds-accent)}.fe-why{margin:10px 0 6px}";
+const FE_CSS = ".fe-top{display:flex;gap:12px;justify-content:space-between;align-items:flex-start}.fe-p{font-size:28px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--ds-accent)}.fe-why{margin:10px 0 6px}.fe-foot{display:flex;flex-wrap:wrap;gap:8px 16px;margin-top:24px;font-size:14px;color:var(--ds-ink-2)}.fe-foot a{display:inline-flex;align-items:center;min-height:44px}";
 
 async function latestRows(env) {
   await ensureSchema(env.TRADES_DB);
   const r = await env.TRADES_DB.prepare("SELECT f.* FROM fe_forecast f JOIN (SELECT slug, max(id) id FROM fe_forecast GROUP BY slug) l ON l.id = f.id WHERE f.outcome IS NULL AND f.deadline >= date('now') ORDER BY abs(f.p - f.prior) DESC, f.id DESC LIMIT 40").all();
-  const all = await env.TRADES_DB.prepare("SELECT prior, p, outcome, tokens FROM fe_forecast").all();
+  const all = await env.TRADES_DB.prepare("SELECT slug, prior, p, outcome, tokens FROM fe_forecast ORDER BY id").all();
   const rows = all.results || [];
   const tok = rows.length ? Math.round(rows.reduce((a, x) => a + (x.tokens || 0), 0) / rows.length) : 0;
-  return { rows: r.results || [], stats: { value: valueAdded(rows), tokens_per: tok, total: rows.length } };
+  return { rows: r.results || [], stats: { value: valueAdded(lastPerSlug(rows)), spinoff: spinoffStatus(rows), tokens_per: tok, total: rows.length } };
 }
 return { tick, plan, renderPage, latestRows, ensureSchema, MODELS, LIMITS, FE_VERSION };
 })();
@@ -1521,15 +1560,17 @@ export default {
       if (p === "/api/state") return json(await d1Retry(() => state(env)));
       if (p === "/api/markets") return json((await d1Retry(() => state(env))).markets);
       if (p === "/api/charter") return json(await d1Retry(() => charterStatus(env)));
+      // CONSOLIDATE-1: the sourceless q08-living-paper worker served an older copy of the white paper; its path now lands on the one in this worker.
+      if (p === "/living-paper" || p.startsWith("/living-paper/")) return new Response(null, { status: 301, headers: { location: "/whitepaper", "cache-control": "public, max-age=86400" } });
       if (p === "/whitepaper") return new Response(whitepaperDs(), { headers: { "content-type": "text/html; charset=utf-8" } });
       if (p === "/api/track-record") return json(await d1Retry(() => trackRecord(env, Number(u.searchParams.get("limit")) || 100)));
       if (p === "/api/tick" && req.method === "POST") { const r = await tickWithRetry(env); return json(r, r.busy ? 409 : 200); }
       if (p === "/api/order" && req.method === "POST") { const r = await manualOrder(env, await req.json()); return json(r, r.error ? 400 : 200); }
       // FORECAST-ENGINE-1: consequential forecasts, started from the crowd and moved only by cited signals.
-      if (p === "/forecasts") { const d = env.TRADES_DB ? await d1Retry(() => FE.latestRows(env)) : { rows: [], stats: {} }; return new Response(FE.renderPage(d.rows, d.stats, dsHead), { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "public, max-age=300" } }); }
+      if (p === "/" || p === "/forecasts") { const d = env.TRADES_DB ? await d1Retry(() => FE.latestRows(env)) : { rows: [], stats: {} }; return new Response(FE.renderPage(d.rows, d.stats, dsHead), { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "public, max-age=300" } }); }
       if (p === "/api/forecasts") { const d = await d1Retry(() => FE.latestRows(env)); return json({ engine: "FORECAST-ENGINE-1", ledger_version: FE.FE_VERSION, models: FE.MODELS, limits: FE.LIMITS, ...d.stats, forecasts: d.rows }); }
       if (p === "/api/forecast-ticks") { await FE.ensureSchema(env.TRADES_DB); const r = await env.TRADES_DB.prepare("SELECT * FROM fe_tick ORDER BY id DESC LIMIT 48").all(); return json({ ticks: r.results || [] }); }
-      if (p === "/" || p === "/dashboard") return new Response(PAGE, { headers: { "content-type": "text/html; charset=utf-8" } });
+      if (p === "/paper" || p === "/dashboard") return new Response(PAGE, { headers: { "content-type": "text/html; charset=utf-8" } });
       return json({ error: "not found" }, 404);
     } catch (e) { return json({ error: String(e.message || e) }, 500); }
   },

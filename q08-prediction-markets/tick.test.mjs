@@ -137,7 +137,7 @@ test("manual orders: caps, duplicates, stale quotes and prices at 0 or 1 are ref
   const stale = await order(env, { slug: "d", side: "no", usd: 10 }); assert.match((await stale.json()).error, /stale/);
 });
 test("the dashboard has the evidence panel, predictions, the order form, escapes titles and posts to the API", async () => {
-  const html = await (await worker.fetch(new Request("https://x/"), {})).text();
+  const html = await (await worker.fetch(new Request("https://x/paper"), {})).text();
   for (const s of ["Does the information beat the market?", "Predictions", "Buy YES", "Buy NO", "id=\"amt\"", "fetch('/api/order'", "fetch('/api/charter')", "Not placed: ", "const E=v=>String(v==null?'':v).replace(", "$('pred').innerHTML", "DESIGN-SYSTEM-1 v", "class=\"ds\""]) assert.ok(html.includes(s), s);
   // MARKETS-DESIGN-1: the predictions list writes to its own element; the old page reused the id "pr" as a local name and never rendered it
   assert.ok(!/\bpr=cs\.probes/.test(html), "no local name shadows the predictions element");

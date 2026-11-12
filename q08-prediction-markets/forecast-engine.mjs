@@ -1,5 +1,5 @@
 // forecast-engine.mjs (inside q08-prediction-markets): consequential forecasts from the signal stream, at a few thousand tokens per update (FORECAST-ENGINE-1).
-// Design, demo result and spin-off plan: q08-prediction-markets/FORECAST-ENGINE.md.
+// Gates, self-halt and the spin-off criteria are code below (GATES, spinoffStatus); the audit that motivated it is in the header above.
 //
 // Why it exists (audit 2026-11-12, numbers read from D1 that day):
 // - q08-signal-engine wrote essays first and forecasts as a by-product. In the 14 days to 2026-11-12 it ran 539 times, published 9
@@ -231,6 +231,38 @@ export function valueAdded(rows) {
   return { n: r.length, brier_prior: +bp.toFixed(4), brier_engine: +be.toFixed(4), value_added: +(bp - be).toFixed(4) };
 }
 
+// ---------- the spin-off as code: gates the ledger evaluates on itself ----------
+// Each gate is computed from settled rows only; the tick consumes the verdict (it halts model spend when the engine is provably worse than the crowd),
+// /api/forecasts publishes it and the page shows the next gate. Nothing waits for a reader or a decision.
+export function bootstrapCI(diffs, { reps = 2000, seed = 12345 } = {}) {
+  if (!diffs.length) return null;
+  let x = seed >>> 0;
+  const rnd = () => { x = (Math.imul(x, 1664525) + 1013904223) >>> 0; return x / 4294967296; };
+  const means = [];
+  for (let r = 0; r < reps; r++) { let t = 0; for (let i = 0; i < diffs.length; i++) t += diffs[Math.floor(rnd() * diffs.length)]; means.push(t / diffs.length); }
+  means.sort((a, b) => a - b);
+  return { lo: means[Math.floor(0.025 * reps)], hi: means[Math.floor(0.975 * reps) - 1] };
+}
+export const GATES = [
+  { key: "prove", n: 60, need: "value added > 0 (point estimate)", test: (ci, va) => va > 0, next: "widen coverage and run on; the essay engine stays signals-only" },
+  { key: "attention", n: 60, need: "95% bootstrap interval of value added above 0", test: (ci) => !!ci && ci.lo > 0, next: "publish alerts and a weekly scorecard from the ledger" },
+  { key: "spin-out", n: 200, need: "95% bootstrap interval above 0 on 200+ settled", test: (ci) => !!ci && ci.lo > 0, next: "own repository, own account, data feed" },
+];
+// One score per question: its last forecast before it settled (re-forecasts of one question are not independent samples).
+export function lastPerSlug(rows) { const m = new Map(); for (const x of rows) m.set(x.slug, x); return [...m.values()]; }
+export function spinoffStatus(rows) {
+  rows = lastPerSlug(rows);
+  const r = rows.filter((x) => x.outcome === 0 || x.outcome === 1);
+  const diffs = r.map((x) => brier(x.prior, x.outcome) - brier(x.p, x.outcome));
+  const va = diffs.length ? diffs.reduce((a, d) => a + d, 0) / diffs.length : 0;
+  const ci = bootstrapCI(diffs);
+  const gates = GATES.map((g) => ({ key: g.key, n_needed: g.n, need: g.need, passed: r.length >= g.n && g.test(ci, va), next: g.next }));
+  const nextGate = gates.find((g) => !g.passed) || null;
+  // Provably worse than the crowd: stop paying for adjustments and publish the crowd until the evidence turns.
+  const halted = r.length >= 60 && !!ci && ci.hi < 0;
+  return { settled: r.length, value_added: diffs.length ? +va.toFixed(4) : null, ci95: ci ? { lo: +ci.lo.toFixed(4), hi: +ci.hi.toFixed(4) } : null, gates, next_gate: nextGate && nextGate.key, halted };
+}
+
 // ---------- the pipeline (I/O injected, so the same code runs in the cron, the tests and the demo) ----------
 export const MODELS = ["@cf/deepseek-ai/deepseek-v4-flash-0731", "@cf/moonshotai/kimi-k2.6"]; // two families (deepseek, moonshot)
 // Thinking off: measured 2026-11-12 with this prompt, glm-5.3-flash (no switch) spent its whole 1200-token budget reasoning and
@@ -319,6 +351,9 @@ export async function tick(env, nowMs = Date.now()) {
   await ensureSchema(env.TRADES_DB);
   const { markets, signals, lastBy } = await readInputs(env, nowMs);
   const pl = plan(markets, signals, lastBy, nowMs);
+  const past = (await env.TRADES_DB.prepare("SELECT slug, prior, p, outcome FROM fe_forecast WHERE outcome IS NOT NULL ORDER BY id").all()).results || [];
+  const spin = spinoffStatus(past);
+  if (spin.halted) pl.chosen = []; // self-halt: the evidence says the adjustments hurt; the ledger keeps the crowd's number until it turns
   const today = new Date(nowMs).toISOString().slice(0, 10);
   let tokens = 0, updated = 0, error = null;
   for (const q of pl.chosen) {
@@ -334,6 +369,7 @@ export async function tick(env, nowMs = Date.now()) {
       updated++;
     } catch (e) { error = String(e && e.message || e).slice(0, 300); }
   }
+  if (spin.halted) error = "self-halted: 95% interval of value added is below zero on " + spin.settled + " settled";
   // Resolution: a closed market whose YES price sits at 0 or 1 settles every forecast on it (the pilot's fetch keeps pt_market current).
   await env.TRADES_DB.prepare("UPDATE fe_forecast SET outcome = (SELECT CASE WHEN m.yes >= 0.99 THEN 1 ELSE 0 END FROM pt_market m WHERE m.slug = fe_forecast.slug), resolved_at = ? WHERE outcome IS NULL AND EXISTS (SELECT 1 FROM pt_market m WHERE m.slug = fe_forecast.slug AND m.closed = 1 AND (m.yes >= 0.99 OR m.yes <= 0.01))").bind(new Date(nowMs).toISOString()).run().catch(() => null);
   await env.TRADES_DB.prepare("INSERT INTO fe_tick (ran_at, candidates, consequential, updated, tokens, skipped_json, error) VALUES (?,?,?,?,?,?,?)")
@@ -364,17 +400,19 @@ export function renderPage(rows, stats, head) {
 <main class="ds-main"><div class="ds-head"><h1>Forecasts that move money</h1><p>Each number starts from the prediction-market crowd and moves only when fresh public signals justify it. Every forecast is scored against the crowd it started from.</p></div>
 <section class="ds-stats"><div class="ds-stat"><div class="k">Open forecasts</div><div class="v">${rows.length}</div></div><div class="ds-stat"><div class="k">Tokens per forecast</div><div class="v">${stats.tokens_per ? esc(stats.tokens_per) : "–"}</div></div><div class="ds-stat"><div class="k">Value added vs crowd</div><div class="v">${va.n ? esc(va.value_added) : "–"}</div></div></section>
 ${va.n ? "" : `<p class="ds-note">No forecast has settled yet. Value added (crowd Brier minus engine Brier) appears here after the first settles.</p>`}
+${stats.spinoff ? `<p class="ds-note">Next gate: <b>${esc(stats.spinoff.next_gate || "all passed")}</b>. ${esc((stats.spinoff.gates.find((g) => g.key === stats.spinoff.next_gate) || {}).need || "")} (${esc(stats.spinoff.settled)} settled).${stats.spinoff.halted ? " Adjustments are halted: the engine is publishing the crowd's number." : ""}</p>` : ""}
 ${cards || `<div class="ds-empty"><b>No forecasts yet</b>The engine runs hourly and writes its first forecasts when a consequential question has fresh signals.</div>`}
+<footer class="fe-foot"><a href="/paper">Paper-trading pilot</a><a href="/whitepaper">White paper</a><a href="/api/forecasts">Data (JSON)</a><span>Not investment advice. Paper money only.</span></footer>
 </main></body></html>`;
 }
-export const FE_CSS = ".fe-top{display:flex;gap:12px;justify-content:space-between;align-items:flex-start}.fe-p{font-size:28px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--ds-accent)}.fe-why{margin:10px 0 6px}";
+export const FE_CSS = ".fe-top{display:flex;gap:12px;justify-content:space-between;align-items:flex-start}.fe-p{font-size:28px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--ds-accent)}.fe-why{margin:10px 0 6px}.fe-foot{display:flex;flex-wrap:wrap;gap:8px 16px;margin-top:24px;font-size:14px;color:var(--ds-ink-2)}.fe-foot a{display:inline-flex;align-items:center;min-height:44px}";
 
 export async function latestRows(env) {
   await ensureSchema(env.TRADES_DB);
   const r = await env.TRADES_DB.prepare("SELECT f.* FROM fe_forecast f JOIN (SELECT slug, max(id) id FROM fe_forecast GROUP BY slug) l ON l.id = f.id WHERE f.outcome IS NULL AND f.deadline >= date('now') ORDER BY abs(f.p - f.prior) DESC, f.id DESC LIMIT 40").all();
-  const all = await env.TRADES_DB.prepare("SELECT prior, p, outcome, tokens FROM fe_forecast").all();
+  const all = await env.TRADES_DB.prepare("SELECT slug, prior, p, outcome, tokens FROM fe_forecast ORDER BY id").all();
   const rows = all.results || [];
   const tok = rows.length ? Math.round(rows.reduce((a, x) => a + (x.tokens || 0), 0) / rows.length) : 0;
-  return { rows: r.results || [], stats: { value: valueAdded(rows), tokens_per: tok, total: rows.length } };
+  return { rows: r.results || [], stats: { value: valueAdded(lastPerSlug(rows)), spinoff: spinoffStatus(rows), tokens_per: tok, total: rows.length } };
 }
 
