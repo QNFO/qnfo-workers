@@ -34,6 +34,7 @@ export const EXTERNAL_SOURCES = {
   "ext.reader_visits": "Cloudflare Web Analytics page loads and UTM clicks on fleet and brand pages",
   "ext.outreach_replies": "replies to outreach mail",
   "ext.research_sources": "full texts the research pipeline grounds on (arXiv HTML, QNFO papers)",
+  "ext.market_practices": "what leading players publish about how they run their products: product pages, changelogs, engineering blogs, papers, pricing and onboarding flows (fetched by the market scout)",
   "ext.video_views": "YouTube views and average view duration of the QNFO Shorts (Data API statistics, Analytics retention)"
 };
 
@@ -255,6 +256,17 @@ export const FLOWS = [
     inflows: [{ signal: "fleet.issue", via: b("d1", "agent requests from the console, ops intake and issues") }, { signal: "fleet.memory", via: b("service", "qnfo-memory-mcp fleet graph and memory") }],
     outflows: [{ signal: "fleet.deploy", via: b("gh-actions", "pull requests the agent runs open -> canonical deploy") }],
     feedback: "a run's pull request deploys, the probes and clocks re-measure, and a failure comes back as a new issue the agent drains" },
+  { id: "growth-pm", label: "Growth product manager: targets, ranked experiments, knobs, repairs", scope: "qniverse", plane: "fleet", worker: "qnfo-code-orchestrator",
+    executor: b("cron", "fleet_tasks growth-pm hourly at :05 (fleet-exec, folded into qnfo-code-orchestrator)"), clock: null, clock_reason: "growth_pm_heartbeat_age_min reads product_growth_readings, written every run",
+    inflows: [{ signal: "growth.finding", via: b("d1", "growth_experiments status proposed (from the market scout)") }, { signal: "job.applied", via: b("d1", "jobsearch_events applied") },
+      { signal: "ext.reader_visits", via: b("d1", "reader_yield_daily") }, { signal: "ext.social_graph", via: b("d1", "touch_actions outcomes") }],
+    outflows: [{ signal: "fleet.issue", via: b("d1", "agent_issues GROWTH-1, GROWTH-REPAIR-1, GROWTH-ROLLBACK-1 with code-task lines") }, { signal: "growth.outcome", via: b("d1", "growth_experiments won, kept_flat, rolled_back") }],
+    feedback: "a shipped experiment is measured after 7 days against its logged prediction: a win is built on, a miss is rolled back, and growth.outcome tells the scout which areas pay" },
+  { id: "market-scout", label: "Market scout: best practices, competitor analysis and R&D to ranked growth experiments", scope: "qniverse", plane: "fleet", worker: "qnfo-code-orchestrator",
+    executor: b("cron", "fleet_tasks growth-scout hourly at :35 (MARKET-SCOUT-1)"), clock: null, clock_reason: "scout_heartbeat_age_min reads market_scout_beats, written every run; scout_areas_overdue and scout_reply_accuracy_7d judge it",
+    inflows: [{ signal: "ext.market_practices", via: b("external-api", "web_search and web_fetch through cf_agent_requests") }, { signal: "growth.outcome", via: b("d1", "growth_experiments verdicts per finding") }],
+    outflows: [{ signal: "growth.finding", via: b("d1", "market_scout_findings ranked, promoted to growth_experiments") }, { signal: "signal.item", via: b("d1", "signals source market-scout (practices and outcomes)") }],
+    feedback: "practice, competitor (18 tracked) and R&D findings alike: one without a fetched source is rejected; verdicts return to the finding and the signals table; areas whose findings win are scouted daily and areas that never win slow down" },
   { id: "ai-calibration", label: "Model route prober and calibration", scope: "qniverse", plane: "fleet", worker: "qnfo-ai-calibration",
     executor: b("cron", "qnfo-ai-calibration every 30 min runProbe, checkFreshness, checkHealthCoverage"), clock: null, clock_reason: "fleet_heartbeat qnfo-ai-calibration (CRON-ONLY-HEARTBEAT-1)",
     inflows: [{ signal: "ai.spend", via: b("d1", "ai_call_counters, ai_spend_ledger (which models the fleet actually calls)") }, { signal: "fleet.deploy", via: b("gh-actions", "canonical deploy of qnfo-ai") }],
