@@ -1,6 +1,6 @@
 {
  "mode": "live",
- "at": "2026-11-12T10:01:16.144Z",
+ "at": "2026-11-12T10:07:43.970Z",
  "sha": "4420c9382afacbdc7d8dc69108a5133726db68ec",
  "apps": [
   {
@@ -30,7 +30,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 2270,
+     "ms": 3558,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -59,7 +59,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 2027,
+     "ms": 2705,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -90,7 +90,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1455,
+     "ms": 1698,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -126,7 +126,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 8627,
+     "ms": 8837,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -155,7 +155,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1039,
+     "ms": 1346,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -182,7 +182,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 2862,
+     "ms": 2744,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -209,7 +209,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 315,
+     "ms": 416,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -255,7 +255,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 2272,
+     "ms": 2581,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -402,7 +402,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 3353,
+     "ms": 4407,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -542,7 +542,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 3467,
+     "ms": 1640,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -574,7 +574,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1877,
+     "ms": 1903,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -594,26 +594,31 @@
      "app": "markets",
      "id": "paper-dashboard",
      "title": "Open the paper-trading dashboard and run a tick",
-     "taps": 0,
+     "taps": 1,
      "typing": 0,
-     "steps": [],
-     "screens": [],
-     "consoleErrors": [
-      "Failed to load resource: the server responded with a status of 404 ()"
+     "steps": [
+      "tap Run tick now"
      ],
+     "screens": [
+      {
+       "label": "paper-dashboard",
+       "overflowPx": 0,
+       "emptyOverlays": [],
+       "smallTargets": [],
+       "narrowOverflowPx": 0,
+       "axe": []
+      }
+     ],
+     "consoleErrors": [],
      "pageErrors": [],
-     "badResponses": [
-      "404 https://markets.q08.org/paper"
-     ],
-     "ok": false,
-     "error": "expected to see \"Simulated money only\" on https://markets.q08.org/paper",
-     "attempts": 2,
-     "ms": 6695,
+     "badResponses": [],
+     "ok": true,
+     "error": null,
+     "attempts": 1,
+     "ms": 9693,
      "grade": {
-      "status": "broken",
-      "reasons": [
-       "did not finish: expected to see \"Simulated money only\" on https://markets.q08.org/paper"
-      ]
+      "status": "ok",
+      "reasons": []
      }
     },
     {
@@ -630,7 +635,7 @@
      "ok": false,
      "error": "expected to see \"Order size\" on https://markets.q08.org/paper",
      "attempts": 2,
-     "ms": 11413,
+     "ms": 13675,
      "grade": {
       "status": "broken",
       "reasons": [
@@ -661,7 +666,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1146,
+     "ms": 1331,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -690,17 +695,14 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1362,
+     "ms": 1659,
      "grade": {
       "status": "ok",
       "reasons": []
      }
     }
    ],
-   "screenFindings": [
-    "console error in paper-dashboard: Failed to load resource: the server responded with a status of 404 ()",
-    "HTTP 404 https://markets.q08.org/paper during paper-dashboard"
-   ]
+   "screenFindings": []
   },
   {
    "app": "me-companion-regression-guard",
@@ -729,7 +731,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 8414,
+     "ms": 8676,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -799,14 +801,44 @@
          "h": 20
         },
         {
-         "name": "Autonomous systems",
-         "w": 128,
+         "name": "Logic & formalism",
+         "w": 108,
          "h": 20
         },
         {
          "name": "Rowan Brad Quni-Gudzinas",
          "w": 223,
          "h": 17
+        },
+        {
+         "name": "Autonomous systems",
+         "w": 125,
+         "h": 20
+        },
+        {
+         "name": "Formal verification",
+         "w": 105,
+         "h": 20
+        },
+        {
+         "name": "LLM systems",
+         "w": 74,
+         "h": 20
+        },
+        {
+         "name": "AI agents",
+         "w": 54,
+         "h": 20
+        },
+        {
+         "name": "Benchmarking",
+         "w": 83,
+         "h": 20
+        },
+        {
+         "name": "Teaching",
+         "w": 55,
+         "h": 20
         },
         {
          "name": "report it here",
@@ -887,7 +919,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 3962,
+     "ms": 4979,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -1045,7 +1077,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 3397,
+     "ms": 5008,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -1053,7 +1085,7 @@
     }
    ],
    "screenFindings": [
-    "paper: 19 tap target(s) under 24px, e.g. \"QNFO\" 31x19, \"QWAV\" 34x19, \"q08\" 21x19",
+    "paper: 25 tap target(s) under 24px, e.g. \"QNFO\" 31x19, \"QWAV\" 34x19, \"q08\" 21x19",
     "paper: an empty 412x3 bar (#rp) floats over the page",
     "paper: an empty 32x20 bar (#q-toast) floats over the page",
     "paper: accessibility serious color-contrast (1x): Elements must meet minimum color contrast ratio thresholds",
@@ -1119,7 +1151,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 13927,
+     "ms": 15549,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -1148,7 +1180,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 8519,
+     "ms": 8677,
      "grade": {
       "status": "new",
       "reasons": [
@@ -1181,7 +1213,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 3576,
+     "ms": 4386,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -1212,7 +1244,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1331,
+     "ms": 1573,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -1243,7 +1275,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1858,
+     "ms": 2008,
      "grade": {
       "status": "new",
       "reasons": [
@@ -1280,7 +1312,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 8675,
+     "ms": 8894,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -1422,7 +1454,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1691,
+     "ms": 2013,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -1493,6 +1525,16 @@
          "name": "Ask about it",
          "w": 77,
          "h": 20
+        },
+        {
+         "name": "Formal verification",
+         "w": 118,
+         "h": 21
+        },
+        {
+         "name": "LLM systems",
+         "w": 87,
+         "h": 21
         },
         {
          "name": "Read",
@@ -2780,7 +2822,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 2255,
+     "ms": 3065,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -2905,7 +2947,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1360,
+     "ms": 1927,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -2936,7 +2978,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 11250,
+     "ms": 14453,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3053,7 +3095,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 9126,
+     "ms": 9379,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3084,7 +3126,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 9210,
+     "ms": 9569,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3113,7 +3155,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 880,
+     "ms": 1034,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3235,7 +3277,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1402,
+     "ms": 1771,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3264,7 +3306,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 8678,
+     "ms": 8905,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3275,7 +3317,7 @@
     "home q08.org: 5 tap target(s) under 24px, e.g. \"QNFO\" 34x20, \"QWAV\" 36x20, \"q08\" 22x20",
     "home travel.q08.org: 1 tap target(s) under 24px, e.g. \"Email me a code\" 115x21",
     "home qnfo.org: 22 tap target(s) under 24px, e.g. \"QNFO\" 37x20, \"QWAV\" 36x20, \"q08\" 22x20",
-    "home papers.qnfo.org: 264 tap target(s) under 24px, e.g. \"QNFO\" 31x19, \"QWAV\" 34x19, \"q08\" 21x19",
+    "home papers.qnfo.org: 266 tap target(s) under 24px, e.g. \"QNFO\" 31x19, \"QWAV\" 34x19, \"q08\" 21x19",
     "home papers.qnfo.org: an empty 32x20 bar (#q-toast) floats over the page",
     "home archive.qnfo.org: 19 tap target(s) under 24px, e.g. \"QNFO\" 37x20, \"QWAV\" 36x20, \"q08\" 22x20",
     "home ideas.qnfo.org: 17 tap target(s) under 24px, e.g. \"QNFO\" 37x20, \"QWAV\" 36x20, \"q08\" 22x20",
@@ -3320,7 +3362,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 4004,
+     "ms": 4553,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3351,7 +3393,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 2701,
+     "ms": 4493,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3382,7 +3424,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 2966,
+     "ms": 3258,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3424,7 +3466,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 940,
+     "ms": 1065,
      "grade": {
       "status": "ok",
       "reasons": []
