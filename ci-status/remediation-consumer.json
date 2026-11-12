@@ -1,23 +1,23 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@4984be6b9e1f",
- "due": 680,
- "pass": 537,
- "fail": 124,
- "skipped": 19,
- "deferred": 18,
+ "verifier": "remediation-consumer@988fad6c5c34",
+ "due": 520,
+ "pass": 339,
+ "fail": 171,
+ "skipped": 10,
+ "deferred": 8,
  "contracts": [
   {
-   "class": "rt-live-q08-signal-engine",
-   "issue_id": 1001466,
-   "verdict": "fail",
+   "class": "rt-fleet-dashboard",
+   "issue_id": null,
+   "verdict": "pass",
    "expected": "ok",
-   "observed": "slow=10578ms",
+   "observed": "ok",
    "written": true
   },
   {
-   "class": "rt-fleet-dashboard",
+   "class": "rt-gateway",
    "issue_id": null,
    "verdict": "pass",
    "expected": "ok",
@@ -33,7 +33,15 @@
    "written": true
   },
   {
-   "class": "rt-gateway",
+   "class": "rt-live-qnfo-containers-pilot",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-live-q08-mind",
    "issue_id": null,
    "verdict": "pass",
    "expected": "ok",
@@ -57,47 +65,7 @@
    "written": true
   },
   {
-   "class": "rt-live-q08-mind",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-live-qnfo-containers-pilot",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-page-fleet-managers",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "issue-1001982",
-   "issue_id": 1001982,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
    "class": "rt-idea-hub",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "fm-area-without-page",
    "issue_id": null,
    "verdict": "pass",
    "expected": "ok",
@@ -121,11 +89,11 @@
    "written": true
   },
   {
-   "class": "rt-q08",
+   "class": "rt-page-fleet-managers",
    "issue_id": null,
-   "verdict": "pass",
+   "verdict": "fail",
    "expected": "ok",
-   "observed": "ok",
+   "observed": "error:TimeoutError",
    "written": true
   },
   {
@@ -153,6 +121,38 @@
    "written": true
   },
   {
+   "class": "issue-1001982",
+   "issue_id": 1001982,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-q08",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "fm-area-without-page",
+   "issue_id": null,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "error:TimeoutError",
+   "written": true
+  },
+  {
+   "class": "slice-gh-app-broker-live",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
    "class": "rt-page-fleet-api-watchmaker",
    "issue_id": null,
    "verdict": "pass",
@@ -163,14 +163,6 @@
   {
    "class": "rt-page-qwav-sitemap",
    "issue_id": 1000994,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "slice-gh-app-broker-live",
-   "issue_id": null,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
@@ -201,15 +193,15 @@
    "written": true
   },
   {
-   "class": "slice-gh-webhook-route-live",
-   "issue_id": null,
+   "class": "rt-live-q08-signal-engine",
+   "issue_id": 1001466,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
    "written": true
   },
   {
-   "class": "rt-live-qnfo-fleet-control",
+   "class": "slice-gh-webhook-route-live",
    "issue_id": null,
    "verdict": "pass",
    "expected": "ok",
@@ -222,6 +214,14 @@
    "verdict": "fail",
    "expected": "ok",
    "observed": "status=404",
+   "written": true
+  },
+  {
+   "class": "rt-live-qnfo-fleet-control",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
    "written": true
   },
   {
@@ -257,8 +257,8 @@
    "written": true
   },
   {
-   "class": "issue-1002088",
-   "issue_id": 1002088,
+   "class": "issue-1002273",
+   "issue_id": 1002273,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
@@ -273,35 +273,11 @@
    "written": true
   },
   {
-   "class": "issue-1002220",
-   "issue_id": 1002220,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "status=403",
-   "written": true
-  },
-  {
-   "class": "issue-1002273",
-   "issue_id": 1002273,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
    "class": "rt-page-fleet-kpi",
    "issue_id": null,
-   "verdict": "pass",
+   "verdict": "fail",
    "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "issue-1001690",
-   "issue_id": 1001690,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
+   "observed": "error:TimeoutError",
    "written": true
   },
   {
@@ -321,6 +297,14 @@
    "written": true
   },
   {
+   "class": "issue-1002088",
+   "issue_id": 1002088,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
    "class": "issue-1002056",
    "issue_id": 1002056,
    "verdict": "pass",
@@ -329,31 +313,15 @@
    "written": true
   },
   {
-   "class": "rt-page-fleet-changelog",
-   "issue_id": null,
-   "verdict": "pass",
+   "class": "issue-1001690",
+   "issue_id": 1001690,
+   "verdict": "fail",
    "expected": "ok",
-   "observed": "ok",
+   "observed": "error:TimeoutError",
    "written": true
   },
   {
    "class": "rt-ai-router",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-live-qnfo-deploy-guard",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-live-qnfo-ops",
    "issue_id": null,
    "verdict": "pass",
    "expected": "ok",
@@ -369,14 +337,6 @@
    "written": true
   },
   {
-   "class": "issue-1002146",
-   "issue_id": 1002146,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
    "class": "rt-live-qnfo-infra",
    "issue_id": null,
    "verdict": "pass",
@@ -385,7 +345,7 @@
    "written": true
   },
   {
-   "class": "rt-page-paper-scholar-tags",
+   "class": "rt-live-qnfo-ops",
    "issue_id": null,
    "verdict": "pass",
    "expected": "ok",
@@ -393,8 +353,16 @@
    "written": true
   },
   {
-   "class": "issue-1002044",
-   "issue_id": 1002044,
+   "class": "rt-live-qnfo-deploy-guard",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-1002146",
+   "issue_id": 1002146,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
@@ -425,4 +393,30 @@
    "written": true
   },
   {
-   "class"
+   "class": "rt-page-fleet-changelog",
+   "issue_id": null,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "error:TimeoutError",
+   "written": true
+  },
+  {
+   "class": "rt-page-paper-scholar-tags",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "fm-mcp-front-door-open-memory",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "fm-mcp-front-door-open-ops",
+   "issue_id": null,
+   "verdict": "pas
