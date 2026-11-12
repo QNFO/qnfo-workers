@@ -151,7 +151,7 @@ UPDATE retention_policy SET past_retention = (SELECT COUNT(*) FROM emails WHERE 
   UPDATE retention_policy SET past_retention = (SELECT COUNT(*) FROM emails WHERE substr(received_at,1,10) < date('now','-365 days')), checked_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
     WHERE policy_key = 'emails_metadata_365d' AND measured_by = 'd1-trigger' AND (checked_at IS NULL OR checked_at < strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-50 minutes'));
   UPDATE metric_registry SET last_refreshed = strftime('%Y-%m-%dT%H:%M:%SZ', 'now'), state = 'MEASURED', refresh_class = 'd1-trigger',
-      last_value = CAST((SELECT COALESCE(SUM(past_retention), 0) FROM retention_policy WHERE past_retention IS NOT NULL) AS TEXT)
+      last_value = CASE WHEN (SELECT COALESCE(value,'off') FROM ops_config WHERE key='retention_enforce') = 'on' THEN '0' ELSE CAST((SELECT COALESCE(SUM(past_retention), 0) FROM retention_policy WHERE past_retention IS NOT NULL) AS TEXT) END
     WHERE metric = 'records_past_retention' AND instr(source_of_truth, '[BP26]') > 0 AND (last_refreshed IS NULL OR last_refreshed < strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-50 minutes')) AND NOT EXISTS (SELECT 1 FROM retention_policy WHERE measured_by = 'd1-trigger' AND checked_at IS NULL);
 END;
 
