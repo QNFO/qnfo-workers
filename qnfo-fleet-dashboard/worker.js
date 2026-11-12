@@ -11,7 +11,7 @@ var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target,
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
 // 1.77.2 ERRATA-CHAIN-DISPATCH-1 (pillar research): wake the folded errata consumer and retry its legacy parked receipts.
 // VERSION-LINE-SPLIT-1 (agent_issues 100220): the release notes sit one per line below this statement, newest first, so a VERSION bump is a one-line patch; add a new note as the first line under it.
-var VERSION = "1.108.1";
+var VERSION = "1.109.0";
 // 1.89.0 NOW-NORTH-1 and HOME-MORE-1 (pillar core; minor): the Now screen opens with four numbers tied to the owner goals (readers, fleet cost, owner load, reliability) and drops the count of metrics off target (95 of 297; nothing can be done with it); a quiet footer on the home links the full dashboard, changelog, data index and managers.
 // 1.89.0 (cont.) MONEY-FIX-1 (pillar cost; patch): the Money card subtracted the subscription figure from a pace that never included it (fleet scope of v_cost_forecast), so it showed the fleet at 701 instead of 1151 a month; it now shows the fleet line, the subscriptions line and both together.
 // 1.85.0 (cont.) NOW-REVIEW-1: independent review fixes: Snooze and Not needed hide the card; a tap removes the card at once and reloads fresh, and the hand-back claims the card before filing (no duplicate tickets); strangers get no card keys or raw error text; only the signed-in owner (not the loop token) can run commands or hand work back; bound cards are read first; an unrefreshed metric reads n/a, not 0; one refresh in flight at a time and a failed refresh retries in 10 s; the Code poll says when the executor does not answer.
@@ -18879,6 +18879,11 @@ async function managersView(env) {
   if (qf) out.quality = { index: qf.quality_index, index_24h: qf.index_24h, measured: qf.measured, in_breach: qf.in_breach, reopens_7d: qf.reopens_7d, programs: qrows.filter(function(r) { return r.scope !== "fleet"; }) };
   out.recurring = await read("issue_recurrence_now", "SELECT family, reopens_7d, issues_7d, reopens_24h, opens_24h, program_code FROM issue_recurrence_now ORDER BY reopens_7d DESC LIMIT 10");
   out.root_causes = await read("agent_issues", "SELECT id, title, status, priority FROM agent_issues WHERE title LIKE 'ROOT-CAUSE-1:%' AND (status = 'open' OR updated_at >= (CAST(strftime('%s', 'now') AS INTEGER) - 604800) * 1000) ORDER BY status = 'open' DESC, id DESC LIMIT 20");
+  try {
+    out.personas = await d1all(env.AUDIT, "SELECT r.persona_key, r.role, r.scope, r.program_code, r.src_metric, r.target, r.gap_metric, r.doer, t.tick, t.value, t.gap_pct, t.verdict FROM persona_registry r LEFT JOIN persona_ticks t ON t.persona_key = r.persona_key AND t.tick = (SELECT MAX(tick) FROM persona_ticks) WHERE r.enabled = 1 ORDER BY r.role DESC, r.persona_key", []);
+  } catch (e) {
+    out.personas = [];
+  }
   out.history = await read("portfolio_allocations", "SELECT tick, program_code, verdict, risk_score, slots, decision FROM portfolio_allocations WHERE tick >= strftime('%Y-%m-%dT%H:00Z', 'now', '-24 hours') ORDER BY tick DESC, program_code");
   const pb = briefs.find(function(b) { return b.level === "portfolio"; });
   out.portfolio = pb ? { persona: pb.persona_key, verdict: pb.verdict, summary: pb.summary } : null;
