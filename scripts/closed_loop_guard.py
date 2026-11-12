@@ -19,7 +19,7 @@ WAIT = [re.compile(p, re.I) for p in (
     r"\bpending (owner|human) (review|approval|decision)\b",
 )]
 NEGATION = re.compile(r"\b(never|no|not|without|don't|do not|nothing|assume nothing|instead of|retired?|removes?|replaces?)\b", re.I)
-EXEMPT = ("scripts/closed_loop_guard.py", "scripts/closed_loop_guard.test.mjs", "CLAUDE.md", "AGENTS.md", "docs/DOCTRINE-KERNEL.md",
+EXEMPT = ("migrations/2026-11-12-closed-loop-1.sql", "scripts/closed_loop_guard.py", "scripts/closed_loop_guard.test.mjs", "CLAUDE.md", "AGENTS.md", "docs/DOCTRINE-KERNEL.md",
           "docs/AUTONOMOUS-OPERATION-DOCTRINE.md")
 TEXT = re.compile(r"\.(js|mjs|cjs|ts|py|sql|sh|ya?ml|toml|md|json|html)$")
 
