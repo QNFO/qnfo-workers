@@ -57,6 +57,18 @@
       "contains": [
         "sign in first"
       ]
+    },
+    {
+      "url": "https://qnfo-jobsearch.q08.workers.dev/api/shortlist",
+      "contains": [
+        "\"bar\":\"score 55"
+      ]
+    },
+    {
+      "url": "https://qnfo-jobsearch.q08.workers.dev/api/pipeline",
+      "contains": [
+        "\"counts\""
+      ]
     }
   ]
 }

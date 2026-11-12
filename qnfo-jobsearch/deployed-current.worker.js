@@ -9,7 +9,7 @@
 // JOBSEARCH-CV-1 (1.5.0): the CV is part of this worker (page /cv): a yes/no interview that builds the claim bank, review of unconfirmed claims, roles, achievements and publications edited in D1, a resume per job (summary, roles, selected work, education, skills) and a cover note, history and backup. The search is tied to that bank (evidence the owner can back up weighs more; what the CV lacks is shown as a gap), decided postings (rejected, applied, approved) never come back under another id, rejections carry a reason the search learns from, and a wider net: stretch matches outside the stated preferences, more boards and aggregators.
 // Routes: GET / (web UI) | GET /api | GET /api/matches | GET /api/matches/:id | GET /api/runs | GET /api/ledger | POST /api/run | POST /api/matches/:id/status | GET /health
 // Port of the jobsearch/ Python modules (tests: jobsearch/test_jobsearch.py, qnfo-jobsearch/worker.test.mjs).
-var VERSION = "1.22.1-codeagent";
+var VERSION = "1.23.0-codeagent";
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -352,6 +352,7 @@ const DDL = [
   "CREATE TABLE IF NOT EXISTS jobsearch_bank (k TEXT PRIMARY KEY, v TEXT NOT NULL, rev INTEGER NOT NULL DEFAULT 0, updated_at TEXT)",
   "CREATE TABLE IF NOT EXISTS jobsearch_bank_history (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL, rev INTEGER NOT NULL, v TEXT NOT NULL)",
   "CREATE TABLE IF NOT EXISTS jobsearch_history (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL, title TEXT, company TEXT, url TEXT, fit INTEGER, verdict TEXT, resume_md TEXT, note_md TEXT)",
+  "CREATE TABLE IF NOT EXISTS jobsearch_apps (match_id TEXT PRIMARY KEY, source TEXT, resume_md TEXT, qa_json TEXT, resume_version TEXT, notes TEXT, updated_at TEXT)",
   "CREATE TABLE IF NOT EXISTS jobsearch_calib (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL, title TEXT, company TEXT, rubric_fit INTEGER, judge_fit INTEGER, owner TEXT NOT NULL)",
 ];
 let ensured = false;
@@ -1815,7 +1816,28 @@ async function judgeJob(env, job) {
   return { fit: Math.max(0, Math.min(100, Math.round(+j.fit))), verdict: String(j.verdict || ""), reasons: (j.reasons || []).slice(0, 4).map(String), gaps: (j.gaps || []).slice(0, 4).map(String), matched_fact_ids: (j.matched_fact_ids || []).filter((x) => known.has(x)), location_ok: j.location_ok !== false };
 }
 // JOBSEARCH-ANSWERS-1: free-response drafts built from the record only; protected questions are left to the owner; every number and tool name is re-checked.
-const ANSWER_SYSTEM = "You draft one answer to a job application question for the candidate, in first person, plain and specific. Rules: use ONLY facts in the candidate record; no invented numbers, employers, tools or dates; answer the question in the first sentence, then give one or two concrete pieces of evidence that match what the posting asks for; never write 'see resume'; no filler praise of the employer; respect any word or character limit in the question, otherwise 90 to 160 words. Reply with the answer text only.";
+const ANSWER_SYSTEM = "You draft one answer to a job application question for the candidate, in first person, plain and specific. Rules: use ONLY facts in the candidate record; no invented numbers, employers, tools or dates; answer the question in the first sentence, then give one or two concrete pieces of evidence that match what the posting asks for; never write 'see resume'; no filler praise of the employer; write like a careful person: plain words, contractions where natural, sentences of different lengths, no dashes as pauses, none of these words: leverage, delve, robust, seamless, passionate, spearhead, landscape, pivotal, holistic, cutting-edge, excited to; respect any word or character limit in the question, otherwise 90 to 160 words. Reply with the answer text only.";
+
+// ------------------------------------------------------------------ STYLE-LINT-1: writing that reads as a careful person wrote it
+// Owner 2026-11-12: answers, cover text and resume "look like AI generated". The lint fails on the tells; it is deterministic and runs on every drafted answer,
+// the answer bank and (in rwnq8/resume scripts/style_lint.py, same list) the resume.
+const AI_WORDS = /\b(?:leverag(?:e|es|ed|ing)|delv(?:e|es|ed|ing)|tapestry|testament|spearhead(?:s|ed|ing)?|synerg(?:y|ies|istic)|cutting[- ]edge|state[- ]of[- ]the[- ]art|robust|seamless(?:ly)?|holistic(?:ally)?|passionate|game[- ]chang(?:er|ing)|fast[- ]paced|ever[- ]evolving|myriad|pivotal|underscor(?:e|es|ed|ing)|showcas(?:e|es|ed|ing)|realm|endeavou?rs?|thrilled|unlock(?:s|ed|ing)?|elevat(?:e|es|ed|ing)|foster(?:s|ed|ing)?|navigat(?:e|es|ed|ing) (?:the|this|a) (?:complex|landscape|world)|landscape|paradigm|multifaceted|nuanced|commendable|meticulous(?:ly)?|dynamic (?:environment|team)|proven track record|results[- ]driven|detail[- ]oriented|team player|hit the ground running|deeply committed|excited (?:to|about|by)|i am eager|keen to)\b/i;
+const AI_PHRASES = [[/—|–(?=\s)|\s--\s/, "dash used as a pause"], [/\bnot (?:just|only|merely)\b[^.?!]{0,80}\bbut (?:also )?\b/i, "not-just-but construction"], [/\b(?:it(?:'|’)s|it is) not\b[^.?!]{0,60}[,;] it(?:'|’)s\b/i, "it's-not-X-it's-Y construction"], [/\b(?:great|excellent|fascinating) question\b|\bas an ai\b|\bi hope this (?:finds|helps)\b/i, "chat-assistant opener"], [/\bin today(?:'|’)s\b|\bin the (?:rapidly )?(?:evolving|changing) world of\b/i, "stock opener"], [/\bi (?:am|'m) (?:writing|reaching out) to (?:express|apply)\b/i, "form-letter opener"], [/\bplays? a (?:crucial|vital|key|pivotal) role\b/i, "stock phrase: plays a role"], [/\bbridg(?:e|ing) the gap\b|\bbest practices\b|\bstakeholder alignment\b|\bdrive(?:s|n)? (?:innovation|impact|results)\b/i, "consulting filler"]];
+function styleLint(text) {
+  const t = String(text || ""), out = [];
+  for (const x of new Set([...t.matchAll(new RegExp(AI_WORDS.source, "gi"))].map((m) => m[0].toLowerCase()))) out.push("stock word: " + x);
+  for (const [re, label] of AI_PHRASES) if (re.test(t)) out.push(label);
+  const sents = t.split(/(?<=[.!?])\s+/).map((s) => s.trim()).filter((s) => s.split(/\s+/).length >= 3);
+  if (sents.length >= 5) {
+    const lens = sents.map((s) => s.split(/\s+/).length), mean = lens.reduce((a, b) => a + b, 0) / lens.length, sd = Math.sqrt(lens.reduce((a, b) => a + (b - mean) ** 2, 0) / lens.length);
+    if (sd / mean < 0.2) out.push("every sentence is about the same length");
+    const first = {}; for (const s of sents) { const f = s.split(/\s+/)[0].toLowerCase(); first[f] = (first[f] || 0) + 1; }
+    const worst = Object.entries(first).sort((a, b) => b[1] - a[1])[0];
+    if (worst && worst[1] >= 4 && worst[1] / sents.length > 0.6) out.push("most sentences start with \"" + worst[0] + "\"");
+  }
+  if ((t.match(/\b\w+, \w+,? and \w+\b/g) || []).length >= 3) out.push("three-item lists everywhere");
+  return out;
+}
 function checkAnswer(text, job) {
   const problems = [];
   const allowed = new Set([...nums(JSON.stringify(BANK)), ...nums(job.title), ...nums(job.company), ...nums(job.desc || "")]);
@@ -1824,6 +1846,7 @@ function checkAnswer(text, job) {
   const low = String(text).toLowerCase(), rec = LEDGER_LOW + " " + String(job.desc || "").toLowerCase();
   for (const f of FORBIDDEN) if (kwRe(f).test(low) && !rec.includes(f)) problems.push("tool or claim not in your record: " + f);
   if (/see (my )?(resume|cv)/i.test(text)) problems.push("answer refers to the resume instead of answering");
+  for (const s of styleLint(text)) problems.push("reads as machine-written: " + s);   // STYLE-LINT-1
   return problems;
 }
 // ANSWER-BANK-1 (owner input 2026-11-12, INFO-USEFUL-1): screening answers Rowan wrote himself, in his own words, for the Magic
@@ -1856,8 +1879,16 @@ async function draftAnswers(env, body) {
     try {
       const text = (await askModel(env, ANSWER_SYSTEM, `CANDIDATE RECORD\n${bankDigest()}\n\nPOSTING\n${job.title} at ${job.company}\n${String(job.desc || "").slice(0, 5000)}\n\nQUESTION\n${q}`)).trim();
       if (!text) { out.push({ question: q, status: "model_empty", answer: null }); continue; }
-      const problems = checkAnswer(text, job);
-      out.push({ question: q, status: problems.length ? "needs_review" : "draft", answer: text, problems });
+      let final = text, problems = checkAnswer(text, job);
+      const tells = problems.filter((x) => /^reads as machine-written/.test(x));
+      if (tells.length) {   // STYLE-LINT-1: one rewrite that names the tells
+        try {
+          const again = (await askModel(env, ANSWER_SYSTEM, `CANDIDATE RECORD\n${bankDigest()}\n\nQUESTION\n${q}\n\nYOUR EARLIER DRAFT\n${text}\n\nRewrite it so it reads as written by a person. Fix: ${tells.join("; ")}. Keep every fact. Answer text only.`)).trim();
+          const p2 = again ? checkAnswer(again, job) : problems;
+          if (again && p2.length <= problems.length) { final = again; problems = p2; }
+        } catch (e) { logErr("answers-rewrite", e); }
+      }
+      out.push({ question: q, status: problems.length ? "needs_review" : "draft", answer: final, problems });
     } catch (e) { logErr("answers", e); out.push({ question: q, status: "model_unavailable", answer: null }); }
   }
   return { title: job.title, company: job.company, answers: out };
@@ -2281,7 +2312,7 @@ const normKey = (j) => {
   const ti = String(j.title || "").toLowerCase().replace(/\[[^\]]*\]|\([^)]*\)/g, " ").replace(/[^a-z0-9]+/g, " ").trim();
   return co + "|" + ti;
 };
-const DECIDED = ["rejected", "applied", "approved", "replied", "interview", "offer", "no_reply"];
+const DECIDED = ["rejected", "applied", "approved", "saved", "screening", "withdrawn", "replied", "interview", "offer", "no_reply"];
 async function decidedKeys(env) {
   const keys = new Set();
   const rows = (await env.JOBS_DB.prepare('SELECT company, title FROM jobsearch_matches WHERE status IN (' + DECIDED.map(() => '?').join(',') + ')').bind(...DECIDED).all()).results;
@@ -2804,7 +2835,7 @@ async function tokenOk(request, env) {
 // Every status change is an append-only event. The outcome measure is the reply rate of applications old enough to have had a reply
 // (21 days): replies, interviews and offers per application. Under MIN_N mature applications it is unknown and nothing is written.
 const OUTCOME_STATUSES = ["applied", "replied", "interview", "offer", "no_reply"];
-const ALL_STATUSES = ["pending_owner_approval", "approved", "rejected", ...OUTCOME_STATUSES];
+const ALL_STATUSES = ["pending_owner_approval", "approved", "rejected", "saved", "screening", "withdrawn", ...OUTCOME_STATUSES];
 const REPLY_EVENTS = ["replied", "interview", "offer"], NO_REPLY_DAYS = 21, MIN_N = 10;
 async function outcomes(env) {
   await ensure(env);
@@ -2941,17 +2972,205 @@ const INDEX = {
   worker: WORKER, version: VERSION,
   routes: {
     "GET /": "web UI", "GET /api/matches?tier=A|B&status=&q=&limit=": "ranked matches without artifacts; default lists only undecided ones, status=mine lists your applications, status=all everything", "GET /api/matches/:id": "one match with resume_md and note_md",
-    "GET /api/cv-skills": "open: the CV skills, the evidenced Ultrastable facts and the skills the owner confirmed by tap, read by rwnq8/resume (JOBSEARCH-SKILLS-1)", "GET /api/linkedin": "what to search on LinkedIn: boolean searches for the owner's target roles with LinkedIn, Google and Indeed links (JOBSEARCH-LINKEDIN-1)", "GET /api/runs": "recent pipeline runs", "GET /api/funnel": "applications to replies, interviews and offers by board kind and score band", "GET /api/ledger": "the claim ledger every output sentence must come from", "GET /api/ops": "operational self-report: the fm-jobsearch-* checks, feed health, counts", "GET /api/prefs": "the yes/no search survey with your answers; POST {answers:{id:true|false|null}} saves and re-runs the search", "POST /api/analyze": "{input: link or pasted posting text, title?, company?} -> fit, strengths, gaps, whether it would appear in your search, verified draft", "POST /api/feedback": "{title, company, verdict: like|dislike} teaches the search", "GET /api/outcomes": "funnel (matches, approved, applied, replies, interviews, offers), reply rate of applications older than 21 days, by tier", "POST /api/auth/request": "e-mail a 6-digit sign-in code to the owner", "POST /api/auth/verify": "{code} -> owner session (cookie jobs_session, 12 h)", "GET /api/auth/me": "signed-in state", "POST /api/auth/logout": "revoke the session", "POST /api/run": "trigger a run (10-minute cooldown)",
+    "GET /api/shortlist": "today's short list: the few postings that clear the relevance gate, each with a one-line reason", "POST /api/intake": "any job from anywhere: {input: link or text, title?, company?, status?: saved|applied}; LinkedIn links are tracked, never fetched", "GET /api/pipeline": "every tracked job with dated events", "POST /api/matches/:id/event": "{event: saved|applied|screening|interview|offer|rejected|withdrawn|note, note?, ts?}", "POST /api/matches/:id/qa": "{items: [{q, a}]} what was submitted", "GET /api/qa?q=": "owner: searchable answer library", "POST /api/qa/match": "owner: {questions: [..]} prefilled from the bank and earlier answers", "POST /api/mail": "owner or loop token: {from, subject, body} updates the pipeline from a status mail", "GET /api/cv-skills": "open: the CV skills, the evidenced Ultrastable facts and the skills the owner confirmed by tap, read by rwnq8/resume (JOBSEARCH-SKILLS-1)", "GET /api/linkedin": "what to search on LinkedIn: boolean searches for the owner's target roles with LinkedIn, Google and Indeed links (JOBSEARCH-LINKEDIN-1)", "GET /api/runs": "recent pipeline runs", "GET /api/funnel": "applications to replies, interviews and offers by board kind and score band", "GET /api/ledger": "the claim ledger every output sentence must come from", "GET /api/ops": "operational self-report: the fm-jobsearch-* checks, feed health, counts", "GET /api/prefs": "the yes/no search survey with your answers; POST {answers:{id:true|false|null}} saves and re-runs the search", "POST /api/analyze": "{input: link or pasted posting text, title?, company?} -> fit, strengths, gaps, whether it would appear in your search, verified draft", "POST /api/feedback": "{title, company, verdict: like|dislike} teaches the search", "GET /api/outcomes": "funnel (matches, approved, applied, replies, interviews, offers), reply rate of applications older than 21 days, by tier", "POST /api/auth/request": "e-mail a 6-digit sign-in code to the owner", "POST /api/auth/verify": "{code} -> owner session (cookie jobs_session, 12 h)", "GET /api/auth/me": "signed-in state", "POST /api/auth/logout": "revoke the session", "POST /api/run": "trigger a run (10-minute cooldown)",
     "GET /api/referrals": "the best open matches with a referral kit link each", "GET /api/matches/:id/referral": "people-search links and a verified-facts message to ask someone you know for a referral (owner session)", "POST /api/matches/:id/stage": "record an interview stage {stage: recruiter_screen|hiring_manager|technical|take_home|panel|final|reference_check, note} (owner session)",
     "POST /api/matches/:id/status": "owner decision or outcome {status: approved|rejected|applied|replied|interview|offer|no_reply|pending_owner_approval}, logged as an event; needs an owner session or x-loop-token", "POST /api/answers": "draft free-response application answers {input, questions[]} from the verified record; pay, authorization and demographic questions come back owner_only", "POST /api/prep": "interview brief for a posting {input}: role summary, offer, gaps, STAR story picks, likely questions", "POST /api/prep/quiz": "feedback on one spoken answer {question, answer, role}", "POST /api/calibrate": "record your verdict {owner: qualified|stretch|not_qualified, title, company, rubric_fit, judge_fit}", "GET /api/calibration": "how often the rubric and the model reading agree with you", "GET /api/matches/:id/resume.pdf": "text PDF of the tailored resume (one column, selectable text)", "GET /health": "version", "GET /prep": "phone page: check fit with calibration, draft answers, interview brief and quiz", "GET /cv": "the CV page: interview, review, edit, resume per job, history", "GET /api/cv": "the CV bank, questions with answers, review queue (owner session)", "POST /api/cv/answer|fact|review|set|import": "edit the CV bank (owner session); GET /api/cv/export is the backup", "GET /api/cv/history": "resumes built for jobs", "GET /api/recall?match=": "prompted recall: yes/no/not sure questions about what a posting asks for and the CV cannot back yet (owner session); without match, the queue across open matches", "POST /api/recall/answer": "{key, answer: yes|no|unsure, role, depth: led|hands|team} -> a yes adds the shown sentence to the CV as a verified fact (owner session)",
   },
   policy: "nothing is sent; approval is a status change only",
 };
 
+// ------------------------------------------------------------------ JOBS-PIPELINE-1 (1.23.0, owner 2026-11-12)
+// Owner: "my jobs feed is crap", jobs seen on LinkedIn never show up, pasted questions cannot be found again, no record of what was applied for or what came back.
+// Root cause of the missing LinkedIn jobs: the search reads public ATS and aggregator feeds only (LinkedIn forbids scraping, User Agreement 8.2), and a pasted job went to
+// /api/analyze, which scored it and kept a history line but never created a match, so it could not be tracked. One intake now takes a job from anywhere.
+const PIPE_OPEN = ["saved", "approved", "applied", "screening", "replied", "interview", "offer"];
+const PIPE_EVENTS = ["saved", "applied", "screening", "replied", "interview", "offer", "rejected", "withdrawn", "no_reply", "note"];
+const LANE_YES = /governance|assurance|evaluat|\bevals?\b|safety|alignment|autonom|agentic|\bagents?\b|policy|strateg|founder|research (?:lead|director|manager|program)|program(?:me)? (?:manager|director|lead)|head of|principal|director|\brisk\b|responsible|trustworthy|\btrust\b|simulation|modell?ing/i;
+const LANE_NO = /software engineer|\bdeveloper\b|devops|\bsre\b|security (?:operations )?engineer|account executive|\bsales\b|python|front[- ]?end|back[- ]?end|full[- ]?stack|data engineer|machine learning engineer|\bml engineer|contract manager|recruit|\bintern\b|quantum|support engineer|consultant, cloud/i;
+const SHORTLIST_MIN = 55, SHORTLIST_SIZE = 7;
+function aiReadFit(why) { for (const w of why || []) { const m = /^AI read: fit (\d+)/.exec(w); if (m) return +m[1]; } return null; }
+// the relevance gate: a posting reaches the owner only when its title is not a hands-on or sales role, it sits in a lane, scores 55 or more, is not a stretch and the model reading does not disagree
+function laneGate(row) {
+  const why = Array.isArray(row.why) ? row.why : JSON.parse(row.why_json || "[]"), title = String(row.title || "");
+  if (LANE_NO.test(title)) return { pass: false, reason: "title is outside your lanes" };
+  if (Number(row.score) < SHORTLIST_MIN) return { pass: false, reason: "score " + row.score + " is under " + SHORTLIST_MIN };
+  if (row.tier === "C") return { pass: false, reason: "stretch match" };
+  const ai = aiReadFit(why);
+  if (ai !== null && ai < 40) return { pass: false, reason: "model reading says fit " + ai };
+  if (!LANE_YES.test(title) && !why.some((w) => /uncommon intersection|title in your lane: (?:autonomy|governance|policy)/i.test(w))) return { pass: false, reason: "no lane in the title or evidence" };
+  return { pass: true, reason: "" };
+}
+function fitLine(row) {
+  const why = Array.isArray(row.why) ? row.why : JSON.parse(row.why_json || "[]");
+  const llm = why.find((w) => /^LLM: [A-Z]/.test(w) && !/^LLM: rank/.test(w));
+  const pick = llm ? llm.replace(/^LLM: /, "") : why.filter((w) => !/^LLM|^AI read|^no seniority/.test(w)).slice(0, 2).join("; ");
+  return String(pick || "Fits your record.").replace(/\s+/g, " ").slice(0, 200);
+}
+async function shortlist(env, n = SHORTLIST_SIZE) {
+  await ensure(env);
+  const rows = (await env.JOBS_DB.prepare("SELECT id, first_seen, company, title, location, url, tier, score, why_json, flags_json, verified, status FROM jobsearch_matches WHERE status='pending_owner_approval' AND verified=1 ORDER BY score DESC, last_seen DESC LIMIT 400").all()).results.map(parseRow);
+  const items = rows.filter((r) => laneGate(r).pass).slice(0, n).map((r) => ({ id: r.id, title: r.title, company: r.company, location: r.location, url: r.url, score: r.score, tier: r.tier, why_it_fits: fitLine(r), checks: r.flags }));
+  return { size: items.length, max: n, bar: "score " + SHORTLIST_MIN + " or more, not a stretch, in a lane, no hands-on coding or sales titles", items };
+}
+// hides what fails the gate (status expired + an event that says why); never touches a job the owner decided on
+async function relevanceSweep(env) {
+  if (env.RELEVANCE_GATE === "off") return { checked: 0, hidden: 0, kept: 0, off: true };   // ops_config-style kill switch: set the variable to off to show everything again
+  await ensure(env);
+  const rows = (await env.JOBS_DB.prepare("SELECT id, title, tier, score, why_json FROM jobsearch_matches WHERE status='pending_owner_approval'").all()).results;
+  const now = new Date().toISOString(), stmts = [];
+  let hidden = 0;
+  for (const r of rows) {
+    const g = laneGate(r);
+    if (g.pass) continue;
+    hidden++;
+    stmts.push(env.JOBS_DB.prepare("UPDATE jobsearch_matches SET status='expired', decided_at=?2 WHERE id=?1 AND status='pending_owner_approval'").bind(r.id, now));
+    stmts.push(env.JOBS_DB.prepare("INSERT INTO jobsearch_events (match_id, event, ts, note) VALUES (?1,'hidden',?2,?3)").bind(r.id, now, ("relevance gate: " + g.reason).slice(0, 200)));
+  }
+  for (let i = 0; i < stmts.length; i += 90) await env.JOBS_DB.batch(stmts.slice(i, i + 90));
+  return { checked: rows.length, hidden, kept: rows.length - hidden };
+}
+// ---- intake: any job from anywhere (pasted link or text, LinkedIn share, e-mail, manual)
+const sourceOf = (u) => { const h = (() => { try { return new URL(u).hostname.replace(/^www\./, ""); } catch (e) { return ""; } })(); return /linkedin\./.test(h) ? "linkedin" : /indeed\./.test(h) ? "indeed" : h || "pasted"; };
+function linkedinJobUrl(raw) {
+  const s = String(raw || ""); const m = /linkedin\.com\/(?:comm\/)?jobs\/view\/(?:[^/?\s]*-)?(\d{6,})/.exec(s) || /currentJobId=(\d{6,})/.exec(s);
+  return m ? "https://www.linkedin.com/jobs/view/" + m[1] : "";
+}
+async function intakeJob(env, b) {
+  await ensure(env);
+  const raw = String(b.input || b.text || b.url || "").trim();
+  if (!raw) throw Object.assign(new Error("send {input: link or posting text}"), { status: 400 });
+  const status = PIPE_OPEN.includes(b.status) ? b.status : "saved";
+  const li = linkedinJobUrl(raw) || linkedinJobUrl(b.url);
+  // a LinkedIn link is never fetched (their terms): the title and employer come with the share, or from pasted text
+  let p;
+  if (li && !b.text && /^https?:\/\/\S+$/.test(raw)) {
+    if (!b.title) throw Object.assign(new Error("LinkedIn links are not fetched; add the job title, or paste the posting text instead"), { status: 422 });
+    p = { title: String(b.title), company: String(b.company || ""), location: String(b.location || ""), desc: String(b.description || b.title), url: li };
+  } else {
+    p = await postingFrom(env, { ...b, input: raw });
+    if (li) p.url = li;
+  }
+  if (!p.title) throw Object.assign(new Error("could not find the job title; send {title}"), { status: 400 });
+  const key = normKey({ company: p.company, title: p.title });
+  const dupe = (await env.JOBS_DB.prepare("SELECT id, status, company, title FROM jobsearch_matches").all()).results.find((r) => normKey(r) === key);
+  if (dupe) {
+    if (b.status && PIPE_OPEN.includes(b.status) && dupe.status !== b.status && !["rejected", "withdrawn"].includes(dupe.status)) await setPipeStatus(env, dupe.id, b.status, "intake");
+    return { id: dupe.id, duplicate: true, status: dupe.status, note: "already tracked; not added twice" };
+  }
+  const ctx = await loadCtx(env);
+  const job = { id: "manual:" + (await sha256hex(key)).slice(0, 12), source: b.source || sourceOf(p.url), company: p.company || "the employer", title: p.title, location: p.location, url: p.url, desc: p.desc };
+  const sc = scoreJob(job, ctx, "analyze");
+  let judge = null; try { judge = await judgeJob(env, job); } catch (e) { logErr("intake-judge", e); }
+  const m = { clusters: sc.clusters, judge }, res = buildResume(job, m), note = buildNote(job, m), bad = verify(res, job).concat(verify(note, job));
+  const why = (sc.why || []).concat(judge && Number.isFinite(+judge.fit) ? ["AI read: fit " + judge.fit + " (" + ((judge.matched_fact_ids || []).length) + " of your facts match)"] : []);
+  const now = new Date().toISOString();
+  await env.JOBS_DB.batch([
+    env.JOBS_DB.prepare("INSERT INTO jobsearch_matches (id, first_seen, last_seen, company, title, location, url, tier, score, why_json, flags_json, verified, blocked_reason, resume_md, note_md, status, decided_at) VALUES (?1,?2,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?2)")
+      .bind(job.id, now, job.company, job.title, job.location, job.url, sc.tier, sc.fit, JSON.stringify(why), JSON.stringify(sc.flags || []), bad.length ? 0 : 1, bad.length ? bad.join("; ").slice(0, 300) : null, bad.length ? null : stripTags(res), bad.length ? null : stripTags(note), status),
+    env.JOBS_DB.prepare("INSERT INTO jobsearch_events (match_id, event, ts, note) VALUES (?1,?2,?3,?4)").bind(job.id, status, now, "intake from " + job.source),
+    env.JOBS_DB.prepare("INSERT INTO jobsearch_apps (match_id, source, resume_md, notes, updated_at) VALUES (?1,?2,?3,'',?4)").bind(job.id, job.source, bad.length ? null : stripTags(res), now),
+  ]);
+  return { id: job.id, duplicate: false, status, title: job.title, company: job.company, fit: sc.fit, verdict: fitWord(sc.fit), source: job.source };
+}
+async function setPipeStatus(env, id, status, note, ts) {
+  const now = ts || new Date().toISOString();
+  const cur = await env.JOBS_DB.prepare("SELECT status, resume_md FROM jobsearch_matches WHERE id=?").bind(id).first();
+  if (!cur) throw Object.assign(new Error("not found"), { status: 404 });
+  const stmts = [env.JOBS_DB.prepare("UPDATE jobsearch_matches SET status=?2, decided_at=?3 WHERE id=?1").bind(id, status, now), env.JOBS_DB.prepare("INSERT INTO jobsearch_events (match_id, event, ts, note) VALUES (?1,?2,?3,?4)").bind(id, status, now, String(note || "").slice(0, 400))];
+  // the exact application is frozen the moment it is marked applied: the resume as it was sent
+  if (status === "applied") stmts.push(env.JOBS_DB.prepare("INSERT INTO jobsearch_apps (match_id, source, resume_md, notes, updated_at) VALUES (?1,'',?2,'',?3) ON CONFLICT(match_id) DO UPDATE SET resume_md=COALESCE(jobsearch_apps.resume_md, ?2), updated_at=?3").bind(id, cur.resume_md || null, now));
+  await env.JOBS_DB.batch(stmts);
+  return { ok: true, id, status };
+}
+// ---- what was submitted: every question and answer for one application, kept with the job
+async function saveQa(env, id, items, resumeVersion) {
+  await ensure(env);
+  const list = (Array.isArray(items) ? items : []).map((x) => ({ q: String(x.q || x.question || "").trim().slice(0, 600), a: String(x.a || x.answer || "").trim().slice(0, 6000) })).filter((x) => x.q && x.a).slice(0, 40);
+  if (!list.length) throw Object.assign(new Error("send {items: [{q, a}]}"), { status: 400 });
+  if (!(await env.JOBS_DB.prepare("SELECT 1 AS x FROM jobsearch_matches WHERE id=?").bind(id).first())) throw Object.assign(new Error("not found"), { status: 404 });
+  const row = await env.JOBS_DB.prepare("SELECT qa_json FROM jobsearch_apps WHERE match_id=?").bind(id).first();
+  const have = row ? JSON.parse(row.qa_json || "[]") : [];
+  for (const x of list) { const i = have.findIndex((h) => h.q.toLowerCase() === x.q.toLowerCase()); const rec = { ...x, type: (bankAnswerFor(x.q) || {}).type || questionType(x.q), saved: new Date().toISOString() }; if (i >= 0) have[i] = rec; else have.push(rec); }
+  const now = new Date().toISOString();
+  await env.JOBS_DB.prepare("INSERT INTO jobsearch_apps (match_id, source, qa_json, resume_version, notes, updated_at) VALUES (?1,'',?2,?3,'',?4) ON CONFLICT(match_id) DO UPDATE SET qa_json=?2, resume_version=COALESCE(?3, jobsearch_apps.resume_version), updated_at=?4").bind(id, JSON.stringify(have), resumeVersion || null, now).run();
+  await env.JOBS_DB.prepare("INSERT INTO jobsearch_events (match_id, event, ts, note) VALUES (?1,'note',?2,?3)").bind(id, now, "saved " + list.length + " question" + (list.length > 1 ? "s" : "") + " and answer" + (list.length > 1 ? "s" : "")).run();
+  return { ok: true, id, saved: list.length, total: have.length };
+}
+const QTYPES = [["motivation", /why (do you want|are you interested|us|this (role|company))|what (excites|interests|attracts) you/i], ["experience", /describe (your|a) (experience|time|project)|tell us about (a|your)/i], ["strengths", /strength|weakness/i], ["salary", /salary|compensation|pay/i], ["authorization", /authori[sz]|visa|sponsor|right to work/i], ["links", /linkedin|github|portfolio|website/i], ["cover", /cover letter|why should we/i]];
+const questionType = (q) => { for (const [t, re] of QTYPES) if (re.test(q)) return t; return "other"; };
+const qTokens = (s) => new Set(String(s).toLowerCase().replace(/[^a-z0-9 ]+/g, " ").split(/\s+/).filter((w) => w.length > 3 && !/^(what|your|would|about|have|this|that|with|from|tell|please|describe|explain)$/.test(w)));
+const overlap = (a, b) => { if (!a.size || !b.size) return 0; let n = 0; for (const w of a) if (b.has(w)) n++; return n / Math.min(a.size, b.size); };
+// searchable answer bank: the four banked answers plus every question the owner has submitted, per job and per question type
+async function answerLibrary(env, q) {
+  await ensure(env);
+  const rows = (await env.JOBS_DB.prepare("SELECT a.match_id, a.qa_json, a.updated_at, m.company, m.title, m.status FROM jobsearch_apps a JOIN jobsearch_matches m ON m.id=a.match_id WHERE a.qa_json IS NOT NULL").all()).results;
+  const items = [];
+  for (const b of ANSWER_BANK) items.push({ source: "bank", type: b.type, question: b.type.replace(/-/g, " "), answer: b.answer, job: (b.used || [])[0] || "", match_id: null });
+  for (const r of rows) for (const x of JSON.parse(r.qa_json || "[]")) items.push({ source: "submitted", type: x.type || questionType(x.q), question: x.q, answer: x.a, job: r.title + " at " + r.company, match_id: r.match_id, status: r.status, saved: x.saved });
+  const needle = String(q || "").toLowerCase().trim();
+  const out = needle ? items.filter((i) => (i.question + " " + i.answer + " " + i.job + " " + i.type).toLowerCase().includes(needle)) : items;
+  const types = {}; for (const i of items) types[i.type] = (types[i.type] || 0) + 1;
+  return { count: out.length, types, items: out.slice(0, 200) };
+}
+// paste the questions an application asks: each is matched to the bank or to an earlier answer to a similar question; protected ones are left to the owner
+async function matchQuestions(env, qs) {
+  const lib = (await answerLibrary(env, "")).items, out = [];
+  for (const q of (Array.isArray(qs) ? qs : [qs]).map((x) => String(x || "").trim()).filter(Boolean).slice(0, 20)) {
+    if (PROTECTED_Q.test(q)) { out.push({ question: q, status: "owner_only", answer: null, note: "work authorization, pay and demographic questions are yours to answer" }); continue; }
+    const banked = bankAnswerFor(q);
+    if (banked) { out.push({ question: q, status: "from_bank", type: banked.type, answer: banked.answer, used_on: banked.used }); continue; }
+    const t = qTokens(q); let best = null, bs = 0;
+    for (const i of lib) { if (i.source !== "submitted") continue; const s = overlap(t, qTokens(i.question)); if (s > bs) { bs = s; best = i; } }
+    if (best && bs >= 0.6) out.push({ question: q, status: "similar_earlier_answer", type: best.type, answer: best.answer, used_on: [best.job], similarity: Math.round(bs * 100) / 100 });
+    else out.push({ question: q, status: "new", type: questionType(q), answer: null, note: "no earlier answer fits; draft it on the Apply page" });
+  }
+  return { answers: out };
+}
+// ---- the pipeline: every tracked job with its dated events, notes and what was submitted
+async function pipeline(env) {
+  await ensure(env);
+  const ph = PIPE_OPEN.map(() => "?").join(",");
+  const jobs = (await env.JOBS_DB.prepare(`SELECT id, company, title, location, url, status, score, decided_at FROM jobsearch_matches WHERE status IN (${ph}) OR id IN (SELECT match_id FROM jobsearch_events WHERE event='applied') ORDER BY decided_at DESC`).bind(...PIPE_OPEN).all()).results;
+  const ev = (await env.JOBS_DB.prepare("SELECT match_id, event, ts, note FROM jobsearch_events WHERE event NOT IN ('hidden') ORDER BY ts").all()).results;
+  const apps = (await env.JOBS_DB.prepare("SELECT match_id, source, qa_json, resume_version, notes, (resume_md IS NOT NULL) AS has_resume FROM jobsearch_apps").all()).results;
+  const by = (a) => { const m = {}; for (const x of a) (m[x.match_id] = m[x.match_id] || []).push(x); return m; }, E = by(ev), A = Object.fromEntries(apps.map((x) => [x.match_id, x]));
+  const items = jobs.map((j) => { const a = A[j.id] || {}; const events = (E[j.id] || []).filter((e) => e.event !== "feedback").map((e) => ({ event: e.event, ts: e.ts, note: /^\{/.test(e.note || "") ? "" : e.note })); const stage = events.slice().reverse().find((e) => ["rejected", "withdrawn", "offer", "interview", "screening", "applied", "saved"].includes(e.event)); return { ...j, stage: stage ? stage.event : j.status, source: a.source || "", questions: a.qa_json ? JSON.parse(a.qa_json).length : 0, has_resume: !!a.has_resume, notes: a.notes || "", events }; });
+  const counts = {}; for (const i of items) counts[i.stage] = (counts[i.stage] || 0) + 1;
+  return { count: items.length, counts, items };
+}
+// ---- e-mail: confirmation, interview and rejection mails are read into the pipeline (Cloudflare Email Routing -> email() below, or POST /api/mail)
+function parseJobMail(from, subject, body) {
+  const t = (subject + "\n" + body).toLowerCase();
+  let event = "";
+  if (/unfortunately|not (?:be )?(?:moving|proceeding) forward|decided not to|will not be (?:moving|progressing)|other candidates|regret to inform|no longer (?:under )?consider/.test(t)) event = "rejected";
+  else if (/schedule (?:a|an|your) (?:call|interview)|invite you to (?:an? )?interview|interview (?:with|invitation)|like to (?:speak|talk|meet) with you|book a (?:time|slot)/.test(t)) event = "interview";
+  else if (/offer of employment|pleased to offer|offer letter/.test(t)) event = "offer";
+  else if (/(?:thank|thanks) you for (?:applying|your application|your interest)|we(?:'|’)?ve received your application|application (?:was )?(?:received|submitted|sent)|your application to/.test(t)) event = "applied";
+  const co = (/(?:application (?:to|for|at|with)|applying (?:to|for)|interest in (?:joining )?|joining )([A-Z][\w&.\- ]{1,40}?)(?:[.,!:]|\s+(?:for|as|has|is|we|was)\b)/.exec(subject + " " + body) || [])[1] || "";
+  const dom = (/@([\w-]+)\./.exec(from) || [])[1] || "";
+  return { event, company: co.trim() || (dom && !/^(greenhouse|ashbyhq|lever|workable|linkedin|mail|notifications?|noreply|no-reply)$/.test(dom) ? dom : ""), subject };
+}
+async function applyJobMail(env, m) {
+  const p = parseJobMail(m.from || "", m.subject || "", m.body || "");
+  if (!p.event) return { matched: false, reason: "not a job status mail" };
+  if (!p.company) return { matched: false, reason: "could not tell which employer" };
+  await ensure(env);
+  const key = p.company.toLowerCase().replace(/[^a-z0-9]+/g, "");
+  const rows = (await env.JOBS_DB.prepare(`SELECT id, company, title, status FROM jobsearch_matches WHERE status IN (${PIPE_OPEN.map(() => "?").join(",")})`).bind(...PIPE_OPEN).all()).results.filter((r) => { const c = String(r.company || "").toLowerCase().replace(/[^a-z0-9]+/g, ""); return c && (c.includes(key) || key.includes(c)); });
+  if (rows.length !== 1) return { matched: false, reason: rows.length ? "more than one open application at " + p.company : "no tracked application at " + p.company, company: p.company, event: p.event };
+  await setPipeStatus(env, rows[0].id, p.event, "from e-mail: " + String(m.subject || "").slice(0, 120), m.date);
+  return { matched: true, id: rows[0].id, company: rows[0].company, event: p.event };
+}
 const handler = {
   async scheduled(event, env, ctx) {
     env = __aiAttrEnv(env, "qnfo-jobsearch", "AI", "JOBS_DB");
-    ctx.waitUntil(run(env).catch((e) => console.log("[jobsearch] run failed " + e.message)));
+    ctx.waitUntil(run(env).then(() => relevanceSweep(env)).catch((e) => console.log("[jobsearch] run failed " + e.message)));   // JOBS-PIPELINE-1: what fails the relevance gate is hidden after every run
+  },
+  // JOBS-PIPELINE-1: Cloudflare Email Routing hands application confirmations, interview invitations and rejections to this address; they update the pipeline
+  async email(message, env, ctx) {
+    let body = ""; try { body = stripHtml(await new Response(message.raw).text()).slice(0, 20000); } catch (e) { logErr("mail-read", e); }
+    const subj = message.headers && message.headers.get ? message.headers.get("subject") || "" : "";
+    try { const r = await applyJobMail(env, { from: message.from || "", subject: subj, body }); console.log(JSON.stringify({ worker: WORKER, event: "mail", ...r })); } catch (e) { logErr("mail-apply", e); }
   },
   async fetch(request, env, ctx) {
     env = __aiAttrEnv(env, "qnfo-jobsearch", "AI", "JOBS_DB");
@@ -3013,6 +3232,29 @@ const handler = {
       } catch (e) { return J({ error: e.message }, e.status || 422); }
     }
     if (p === "/api/calibration" && m === "GET") { if (!(await ownerSession(request, env))) return J({ error: "sign in first: POST /api/auth/request, then POST /api/auth/verify" }, 401); await ensure(env); return J(await calibration(env)); }
+    if (p === "/manifest.webmanifest") return new Response(JSON.stringify({ name: "Jobs", short_name: "Jobs", start_url: "/", display: "standalone", share_target: { action: "/add", method: "GET", params: { url: "url", title: "title", text: "text" } } }), { headers: { "content-type": "application/manifest+json" } });
+    if (p === "/api/shortlist" && m === "GET") return J(await shortlist(env, Math.min(20, +url.searchParams.get("n") || SHORTLIST_SIZE)));   // JOBS-PIPELINE-1
+    if (p === "/api/pipeline" && m === "GET") return J(await pipeline(env));
+    if (p === "/add" && m === "GET") return Response.redirect(new URL("/?add=" + encodeURIComponent(JSON.stringify({ url: url.searchParams.get("url") || "", title: url.searchParams.get("title") || "", company: url.searchParams.get("company") || "", text: url.searchParams.get("text") || "" })), url).toString(), 302);   // share target and bookmarklet land here
+    if (["/api/intake", "/api/qa", "/api/qa/match", "/api/mail", "/api/sweep"].includes(p) || /^\/api\/matches\/.+\/(event|qa)$/.test(p)) {
+      if (!(await ownerSession(request, env)) && !(await tokenOk(request, env))) return J({ error: "sign in first: POST /api/auth/request, then POST /api/auth/verify" }, 401);
+      let b = {}; if (m === "POST") { try { b = await request.json(); } catch (e) { logErr("bad-json-body", e); } }
+      try {
+        if (p === "/api/intake" && m === "POST") return J(await intakeJob(env, b));
+        if (p === "/api/qa" && m === "GET") return J(await answerLibrary(env, url.searchParams.get("q") || ""));
+        if (p === "/api/qa/match" && m === "POST") return J(await matchQuestions(env, b.questions || b.question));
+        if (p === "/api/mail" && m === "POST") return J(await applyJobMail(env, b));
+        if (p === "/api/sweep" && m === "POST") return J(await relevanceSweep(env));
+        const ev = p.match(/^\/api\/matches\/(.+?)\/(event|qa)$/);
+        if (ev && m === "POST") {
+          const id = decodeURIComponent(ev[1]);
+          if (ev[2] === "qa") return J(await saveQa(env, id, b.items, b.resume_version));
+          if (!PIPE_EVENTS.includes(b.event)) return J({ error: "event must be one of " + PIPE_EVENTS.join("|") }, 400);
+          if (b.event === "note") { await env.JOBS_DB.prepare("INSERT INTO jobsearch_events (match_id, event, ts, note) VALUES (?1,'note',?2,?3)").bind(id, b.ts || new Date().toISOString(), String(b.note || "").slice(0, 600)).run(); return J({ ok: true, id }); }
+          return J(await setPipeStatus(env, id, b.event, b.note || (b.event === "rejected" ? "employer" : ""), b.ts));
+        }
+      } catch (e) { return J({ error: e.message }, e.status || 422); }
+    }
     if (p === "/api/answer-bank" && m === "GET") { const full = !!(await ownerSession(request, env)); return J({ count: ANSWER_BANK.length, items: ANSWER_BANK.map((b) => ({ type: b.type, used: b.used.length, ...(full ? { answer: b.answer, used_on: b.used } : {}) })) }); }   // ANSWER-BANK-1
     if (p === "/api/cv-skills" && m === "GET") { await ensure(env); return J(await cvSkills(env)); }   // JOBSEARCH-SKILLS-1, open read for rwnq8/resume
     if (p === "/api/recall" || p === "/api/recall/answer") {
@@ -3077,7 +3319,7 @@ const handler = {
       const tier = url.searchParams.get("tier"), status = url.searchParams.get("status"), q = (url.searchParams.get("q") || "").toLowerCase();
       // PROMPTED-RECALL-1 / JOBSEARCH-NEW-ONLY-1 (owner 2026-11-09: "if I've already applied to something, why are you still showing it to me?"): the default list is
       // only what is still undecided; status=mine is the applications (approved, applied, replied, interview, offer); status=all is everything.
-      const MINE = ["approved", "applied", "replied", "interview", "offer"];
+      const MINE = ["saved", "approved", "applied", "screening", "replied", "interview", "offer"];
       const lim = Math.min(200, +url.searchParams.get("limit") || 100);
       // filter in SQL before the window: rejected and expired rows used to fill the 500-row window and push live matches out of it
       const where = [], args = [];
@@ -3136,7 +3378,7 @@ const handler = {
       const id = decodeURIComponent(mm[1]);
       const cur = await env.JOBS_DB.prepare("SELECT verified FROM jobsearch_matches WHERE id=?").bind(id).first();
       if (!cur) return J({ error: "not found" }, 404);
-      if (!cur.verified && body.status !== "rejected" && body.status !== "pending_owner_approval") return J({ error: "artifacts failed verification; only rejected is allowed" }, 409);
+      if (!cur.verified && !id.startsWith("manual:") && body.status !== "rejected" && body.status !== "pending_owner_approval") return J({ error: "artifacts failed verification; only rejected is allowed" }, 409);
       const tsNow = new Date().toISOString();
       let applicationNote = "owner";
       if (body.status === "rejected" || body.status === "applied" || body.status === "approved") {
@@ -3148,6 +3390,7 @@ const handler = {
         env.JOBS_DB.prepare("UPDATE jobsearch_matches SET status=?, decided_at=? WHERE id=?").bind(body.status, tsNow, id),
         env.JOBS_DB.prepare("INSERT INTO jobsearch_events (match_id, event, ts, note) VALUES (?1, ?2, ?3, ?4)").bind(id, body.status, tsNow, applicationNote),
       ]);
+      if (body.status === "applied") await env.JOBS_DB.prepare("INSERT INTO jobsearch_apps (match_id, source, resume_md, notes, updated_at) SELECT id,'',resume_md,'',?2 FROM jobsearch_matches WHERE id=?1 ON CONFLICT(match_id) DO UPDATE SET resume_md=COALESCE(jobsearch_apps.resume_md, excluded.resume_md), updated_at=?2").bind(id, tsNow).run().catch((e) => logErr("freeze-application", e));   // the resume as it was sent
       return J({ ok: true, id, status: body.status });
     }
     if (p === "/api/run" && m === "POST") {
@@ -3159,7 +3402,7 @@ const handler = {
     return J({ error: "not found", see: "/api" }, 404);
   },
 };
-handler.__test = { ANSWER_BANK, bankAnswerFor, credentialBacked, dropUnbackedCredentials, ensureCredentialEvidence, refreshRecallFacts, polishProse, polishBank, copyLint, toolCase, vocabulary, TOPIC_LABEL, SOFTWARE, PROSE_CASE, linkedinSearches, LINKEDIN_SEARCHES, codingLoad, CANDIDATE_BOARDS, collectAndRank, cosine, bestSim, semanticLens, scoreJob, exploreOverlap, recordTerms, diversifyRows, recallGaps, recallQuestion, recallAnswer, recallQueue, RECALL_SEED, loadCtx, referralKit, referralList, STAGES, judgeTop, buildResume, verify, headlineVerdict, outcomes, pdfOf, pdfClean, checkAnswer, jsonLoose, PROTECTED_Q, draftAnswers, prepBrief, quizFeedback, judgeJob, calibrate, calibration, followups, atsOf, keywordReport, docxOf, resumeHtml, plainOf, applyKit, matchKit, stripTags, postingTerms, evaluate, rank, buildResume, buildNote, verify, stripHtml, locationGate, has, LEDGER, dedupeKey, feedPrefix, makeCtx, scoreJob, scoreFeatures, featuresFromWhy, applicationSnapshot, parseApplicationSnapshot, outcomeScoreWeights, loadCtx, SURVEY, BOARDS, normKey, applyBank, BANK_SEED, QUESTIONS, TAG_TO_CLUSTERS, clustersOf, cvAnswer, cvFact, cvReview, cvSet, cvImport, mutateBank, loadBank, decidedKeys, FETCHERS, getBank: () => BANK, llmRerank, llmRerankRun, ensureResearchPubs, ensureAutonomyBrand, ensureUltrastableBrand, ultrastableBank, ultrastableSkillsBank, ULTRASTABLE_SKILL_FACTS, ULTRASTABLE_SKILLS, syncSkillAsks, skillAskOptions, cvSkills, ULTRASTABLE_S1, RESEARCH_PUBS, FAMILIES, CLUSTER_KW, headline, pubLine, parseRerank, reasonOk, rerankMessages, artifactsFor, titleCandidate, sitemapUrls, slugTitle, PUBLIC_SECTOR, opsReport };
+handler.__test = { styleLint, laneGate, fitLine, shortlist, relevanceSweep, intakeJob, setPipeStatus, saveQa, answerLibrary, matchQuestions, pipeline, parseJobMail, applyJobMail, linkedinJobUrl, ANSWER_BANK, bankAnswerFor, credentialBacked, dropUnbackedCredentials, ensureCredentialEvidence, refreshRecallFacts, polishProse, polishBank, copyLint, toolCase, vocabulary, TOPIC_LABEL, SOFTWARE, PROSE_CASE, linkedinSearches, LINKEDIN_SEARCHES, codingLoad, CANDIDATE_BOARDS, collectAndRank, cosine, bestSim, semanticLens, scoreJob, exploreOverlap, recordTerms, diversifyRows, recallGaps, recallQuestion, recallAnswer, recallQueue, RECALL_SEED, loadCtx, referralKit, referralList, STAGES, judgeTop, buildResume, verify, headlineVerdict, outcomes, pdfOf, pdfClean, checkAnswer, jsonLoose, PROTECTED_Q, draftAnswers, prepBrief, quizFeedback, judgeJob, calibrate, calibration, followups, atsOf, keywordReport, docxOf, resumeHtml, plainOf, applyKit, matchKit, stripTags, postingTerms, evaluate, rank, buildResume, buildNote, verify, stripHtml, locationGate, has, LEDGER, dedupeKey, feedPrefix, makeCtx, scoreJob, scoreFeatures, featuresFromWhy, applicationSnapshot, parseApplicationSnapshot, outcomeScoreWeights, loadCtx, SURVEY, BOARDS, normKey, applyBank, BANK_SEED, QUESTIONS, TAG_TO_CLUSTERS, clustersOf, cvAnswer, cvFact, cvReview, cvSet, cvImport, mutateBank, loadBank, decidedKeys, FETCHERS, getBank: () => BANK, llmRerank, llmRerankRun, ensureResearchPubs, ensureAutonomyBrand, ensureUltrastableBrand, ultrastableBank, ultrastableSkillsBank, ULTRASTABLE_SKILL_FACTS, ULTRASTABLE_SKILLS, syncSkillAsks, skillAskOptions, cvSkills, ULTRASTABLE_S1, RESEARCH_PUBS, FAMILIES, CLUSTER_KW, headline, pubLine, parseRerank, reasonOk, rerankMessages, artifactsFor, titleCandidate, sitemapUrls, slugTitle, PUBLIC_SECTOR, opsReport };
 export default handler;
 
 // ------------------------------------------------------------------ client script shared by both pages (JOBSEARCH-APPLY-1): kit handling and the Fill application bookmark
@@ -3462,25 +3705,84 @@ const JOBS_PAGE_CSS = ".js-search{margin:12px 0 16px}.js-search input{width:100%
  + "h4{font-size:15px;margin:16px 0 6px}pre{white-space:pre-wrap;background:var(--ds-surface-2);border-radius:8px;padding:12px;font:14px/1.5 var(--ds-mono)}"
  + "ul{padding-left:20px;margin:6px 0}#signbox{margin-bottom:12px}#signbox input{width:10ch}"
  + ".lis{border-top:1px solid var(--ds-line);padding:12px 0}.lis:first-of-type{border-top:0}"   // JOBSEARCH-LINKEDIN-1
- + ".js-tools h2{margin-top:32px}.js-links{display:flex;flex-wrap:wrap;gap:4px 16px;margin-top:12px;font-size:15px}";
-const UI = `<!doctype html><html lang="en"><head>${dsHead("Job matches", "Job matches for an autonomous AI systems researcher, each resume line checked against the claim ledger.", JOBS_PAGE_CSS)}</head><body class="ds">
+ + ".pg{font-size:16px;margin:24px 0 8px}.js-tools h2{margin-top:32px}.js-links{display:flex;flex-wrap:wrap;gap:4px 16px;margin-top:12px;font-size:15px}";
+
+const PIPE_UI_JS = String.raw`
+// JOBS-PIPELINE-1 front end: Today (the short list), My applications (the pipeline), Answers (the library) and one box to add a job from anywhere.
+var VIEW='today',ANS=[];
+var PL={offer:'Offer',interview:'Interview',screening:'Screening',applied:'Applied',saved:'Saved',rejected:'Rejected',withdrawn:'Withdrawn'},PORDER=['offer','interview','screening','applied','saved','rejected','withdrawn'];
+var PSTEPS=[['screening','Screening'],['interview','Interview'],['offer','Offer'],['rejected','Rejected'],['withdrawn','I withdrew']];
+MINE_STEPS=PSTEPS;
+function setView(v){VIEW=v;$('#tier').value='';$('#status').value=v==='mine'?'mine':'';load()}
+$('#vnew').onclick=function(){$('#q').value='';setView('today')};
+$('#vmine').onclick=function(){$('#q').value='';setView('mine')};
+$('#ready').onclick=function(){$('#q').value='';setView('answers')};
+function segSync(){var s=$('#status').value,t=$('#tier').value;[['#vnew',!s&&!t&&VIEW==='today'],['#vmine',s==='mine'],['#ready',!s&&!t&&VIEW==='answers']].forEach(function(x){$(x[0]).setAttribute('aria-pressed',x[1]?'true':'false')});$('#recallbtn').setAttribute('aria-pressed','false');$('#recallpanel').style.display='none'}
+window.VIEW_HOOK=async function(){
+ if($('#q').value||$('#tier').value)return false;var s=$('#status').value;
+ if(s==='mine'){VIEW='mine';await loadPipe();return true}
+ if(!s&&VIEW==='answers'){await loadAnswers();return true}
+ if(!s){VIEW='today';await loadToday();return true}
+ return false};
+async function loadToday(){segSync();var d=await api('/api/shortlist');
+ $('#meta').textContent=d.size?('Today: '+d.size+' job'+(d.size>1?'s':'')+' worth your time. Bar: '+d.bar+'.'):'Nothing new clears the bar today.';
+ $('#list').innerHTML=d.items.length?d.items.map(function(x){return cardHtml({id:x.id,title:x.title,company:x.company,location:x.location,url:x.url,tier:x.tier,score:x.score,why:[x.why_it_fits],flags:x.checks||[],verified:1,status:'pending_owner_approval',first_seen:'',recall_open:0})}).join(''):'<div class="ds-empty"><b>Nothing new clears the bar today</b>The search reads the open boards every hour and hides what is not in your lanes. Found one on LinkedIn? Add it above and it is tracked like any other.</div>'}
+function fmtD(t){return String(t||'').slice(0,10)}
+function pipeCard(x){var ap=(x.events.filter(function(e){return e.event==='applied'})[0]||{}).ts;
+ var h='<div class="card" id="p-'+esc(x.id)+'"><div class="row"><span class="badge '+(x.stage==='rejected'||x.stage==='withdrawn'?'C':'A')+'">'+esc(PL[x.stage]||x.stage)+'</span><span class="t">'+esc(x.title)+'</span></div><div class="mute">'+esc(x.company)+(x.source?' | via '+esc(x.source):'')+(ap?' | applied '+fmtD(ap):'')+(x.questions?' | '+x.questions+' answer'+(x.questions>1?'s':'')+' kept':'')+'</div>';
+ h+='<div class="acts big">'+(x.stage==='saved'?'<button class="p" data-pe="applied" data-id="'+esc(x.id)+'">I applied</button>':'')+PSTEPS.map(function(o){return '<button data-pe="'+o[0]+'" data-id="'+esc(x.id)+'" aria-pressed="'+(x.stage===o[0])+'">'+o[1]+'</button>'}).join('')+'<a href="'+esc(x.url)+'" target="_blank" rel="noopener"><button>Open posting</button></a></div>';
+ h+='<details class="ds-more"><summary>History, notes and what I submitted</summary><div class="ds-more-body">'+(x.events.map(function(e){return '<div class="mute">'+fmtD(e.ts)+' | '+esc(e.event)+(e.note?' | '+esc(e.note):'')+'</div>'}).join('')||'<div class="mute">No events yet.</div>')
+  +'<div class="bar"><input data-note-in placeholder="Add a note (who wrote, what was said)" aria-label="Add a note"><button data-note data-id="'+esc(x.id)+'">Save note</button></div>'
+  +(x.has_resume?'<div class="acts"><a href="/api/matches/'+encodeURIComponent(x.id)+'/resume.pdf"><button>Resume as sent .pdf</button></a></div>':'')
+  +'<h4>Questions and answers I submitted</h4><div class="mute">Paste each question, then its answer, with a blank line between pairs.</div><textarea data-qa-in rows="5" aria-label="Questions and answers"></textarea><div class="bar"><button data-qa data-id="'+esc(x.id)+'">Keep these answers</button><span class="mute" data-qa-msg role="status"></span></div></div></details></div>';
+ return h}
+async function loadPipe(){segSync();var d=await api('/api/pipeline');
+ $('#meta').textContent=d.count?PORDER.filter(function(k){return d.counts[k]}).map(function(k){return d.counts[k]+' '+PL[k].toLowerCase()}).join(' | '):'No applications yet';
+ $('#list').innerHTML=d.count?PORDER.map(function(k){var g=d.items.filter(function(x){return x.stage===k});return g.length?'<h3 class="pg">'+PL[k]+' ('+g.length+')</h3>'+g.map(pipeCard).join(''):''}).join(''):'<div class="ds-empty"><b>No applications yet</b>Jobs you apply to, save or add from LinkedIn appear here with every step, from the first application to the last reply.</div>'}
+function parseQa(t){return String(t||'').split(/\n\s*\n/).map(function(b){var l=b.trim().split('\n');return {q:(l.shift()||'').replace(/^Q[:.]\s*/i,'').trim(),a:l.join('\n').replace(/^A[:.]\s*/i,'').trim()}}).filter(function(x){return x.q&&x.a})}
+$('#list').addEventListener('click',async function(e){var b=e.target.closest&&e.target.closest('[data-pe],[data-note],[data-qa],[data-copy]');if(!b)return;var card=b.closest('.card');
+ try{if(b.dataset.copy!==undefined){navigator.clipboard.writeText(ANS[+b.dataset.copy]||'');b.textContent='Copied';return}
+ if(b.dataset.pe){await authed(function(){return api('/api/matches/'+encodeURIComponent(b.dataset.id)+'/event',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({event:b.dataset.pe})})});loadPipe()}
+ else if(b.dataset.note!==undefined){var v=card.querySelector('[data-note-in]').value.trim();if(!v)return;await authed(function(){return api('/api/matches/'+encodeURIComponent(b.dataset.id)+'/event',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({event:'note',note:v})})});loadPipe()}
+ else if(b.dataset.qa!==undefined){var items=parseQa(card.querySelector('[data-qa-in]').value),m=card.querySelector('[data-qa-msg]');if(!items.length){m.textContent='Put a question, then its answer, then a blank line.';return}await authed(function(){return api('/api/matches/'+encodeURIComponent(b.dataset.id)+'/qa',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({items:items})})});m.textContent='Kept '+items.length+'.';setTimeout(loadPipe,700)}}
+ catch(err){alert(err.message)}});
+function ansCard(x){var i=ANS.push(x.answer||'')-1;var st={from_bank:'From your own answers',similar_earlier_answer:'Close to an earlier answer',new:'New question',owner_only:'Yours to answer'}[x.status]||x.status;
+ return '<div class="card"><div class="mute">'+esc(st)+(x.type?' | '+esc(String(x.type).replace(/-/g,' ')):'')+'</div><div class="t">'+esc(x.question)+'</div>'+(x.answer?'<pre>'+esc(x.answer)+'</pre><div class="acts"><button class="p" data-copy="'+i+'">Copy</button></div>'+(x.used_on&&x.used_on[0]?'<div class="mute">Used on '+esc(x.used_on[0])+'</div>':''):'<div class="mute">'+esc(x.note||'')+'</div>')+'</div>'}
+async function loadAnswers(){segSync();$('#meta').textContent='Every answer you have given, and answers ready for new questions.';
+ $('#list').innerHTML='<div class="card"><h4>Paste the questions an application asks</h4><textarea id="qin" rows="4" aria-label="Questions" placeholder="One question per line"></textarea><div class="bar"><button class="p" id="qgo">Find my answers</button></div><div id="qout"></div></div><div class="card"><h4>What I have submitted</h4><input id="qsearch" type="search" placeholder="Search questions, answers or jobs" aria-label="Search answers"><div id="qlib" class="mute">Loading...</div></div>';
+ $('#qgo').onclick=async function(){var qs=$('#qin').value.split('\n').map(function(s){return s.trim()}).filter(Boolean);if(!qs.length)return;ANS=[];try{var d=await authed(function(){return api('/api/qa/match',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({questions:qs})})});$('#qout').innerHTML=d.answers.map(ansCard).join('')}catch(err){$('#qout').innerHTML='<div class="flag">'+esc(err.message)+'</div>'}};
+ async function lib(){try{var d=await authed(function(){return api('/api/qa?q='+encodeURIComponent($('#qsearch').value))});ANS=[];$('#qlib').innerHTML=d.items.length?Object.keys(d.types).map(function(t){return '<span class="badge C">'+esc(t.replace(/-/g,' '))+' '+d.types[t]+'</span>'}).join(' ')+d.items.map(function(x){return ansCard({question:x.question,answer:x.answer,type:x.type,used_on:[x.job],status:x.source==='bank'?'from_bank':'similar_earlier_answer'})}).join(''):'<div class="ds-empty"><b>Nothing yet</b>Answers you keep on an application appear here.</div>'}catch(err){$('#qlib').textContent=err.message}}
+ $('#qsearch').oninput=function(){clearTimeout(window._qt);window._qt=setTimeout(lib,300)};lib()}
+// one box for any job: pasted link or text, LinkedIn share, the bookmark
+async function addJob(status){var r=$('#addmsg');r.textContent='Reading the posting...';
+ try{var d=await authed(function(){return api('/api/intake',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({input:$('#addin').value,title:$('#addtitle').value,company:$('#addco').value,status:status})})});
+  r.innerHTML=d.duplicate?'Already tracked ('+esc(d.status)+'), not added twice.':'Added: '+esc(d.title)+' at '+esc(d.company)+' ('+esc(d.verdict)+'). It is in My applications.';$('#addin').value='';$('#addtitle').value='';$('#addco').value='';if(VIEW==='mine')load()}
+ catch(err){r.textContent=err.message}}
+$('#addsave').onclick=function(){addJob('saved')};$('#addapplied').onclick=function(){addJob('applied')};
+(function(){try{var a=new URLSearchParams(location.search).get('add');if(a){var o=JSON.parse(a);$('#addin').value=o.text||o.url||'';$('#addtitle').value=o.title||'';$('#addco').value=o.company||'';$('#addjob').open=true;history.replaceState(null,'','/')}}catch(e){console.warn('add: '+e.message)}
+ var bm="(function(){var t=(document.querySelector('h1')||{}).innerText||document.title,c=(document.querySelector('[class*=company-name]')||{}).innerText||'';window.open(location.origin.indexOf('linkedin')>-1?'https://jobs.q08.org/add?url='+encodeURIComponent(location.href)+'&title='+encodeURIComponent(t.trim())+'&company='+encodeURIComponent(c.trim()):'https://jobs.q08.org/add?url='+encodeURIComponent(location.href)+'&title='+encodeURIComponent(t.trim()),'_blank')})()";
+ $('#bm2').href='javascript:'+encodeURIComponent(bm)})();
+`;
+const UI = `<!doctype html><html lang="en"><head>${dsHead("Job matches", "Job matches for an autonomous AI systems researcher, each resume line checked against the claim ledger.", JOBS_PAGE_CSS)}<link rel="manifest" href="/manifest.webmanifest"></head><body class="ds">
 <a class="ds-skip" href="#list">Skip to the job list</a>
 <header class="ds-top"><div class="ds-top-in"><a class="ds-brand" href="/">Jobs</a><a class="btn btn-quiet" href="/cv">My CV</a><span id="who" class="ds-muted ds-hide-sm"></span><button class="btn" id="signin" onclick="signIn()">Sign in</button><button class="btn btn-quiet" id="signout" style="display:none" onclick="api(\'/api/auth/logout\',{method:\'POST\'}).then(who)">Sign out</button></div></header>
 <main class="ds-main"><div class="ds-head"><h1>Your job matches</h1><p id="meta">Loading your matches…</p></div>
-<div class="ds-seg" role="group" aria-label="Which jobs to show"><button id="vnew" aria-pressed="true">New jobs</button><button id="vmine" aria-pressed="false">My applications</button><button id="ready" aria-pressed="false">Ready to apply</button><button id="recallbtn" aria-pressed="false">Questions about you</button></div>
+<div class="ds-seg" role="group" aria-label="Which jobs to show"><button id="vnew" aria-pressed="true">Today</button><button id="vmine" aria-pressed="false">My applications</button><button id="ready" aria-pressed="false">Answers</button><button id="recallbtn" aria-pressed="false">Questions about you</button></div>
 <div class="js-search"><label class="ds-sr" for="q">Search</label><input id="q" type="search" placeholder="Search title, company or place" autocomplete="off"></div>
+<details class="ds-more" id="addjob"><summary>Add a job from anywhere</summary><div class="ds-more-body"><label class="ds-sr" for="addin">Job link or posting text</label><textarea id="addin" rows="3" placeholder="Paste a job link (LinkedIn too) or the posting text"></textarea><div class="bar"><input id="addtitle" placeholder="Job title (needed for LinkedIn links)" aria-label="Job title"><input id="addco" placeholder="Employer" aria-label="Employer"></div><div class="bar"><button class="p" id="addsave">Save this job</button><button id="addapplied">I already applied</button><span id="addmsg" class="mute" role="status"></span></div><p class="mute">LinkedIn jobs: drag <a id="bm2" href="#" class="btn">Send to Jobs</a> to your bookmarks bar, open a LinkedIn job, and click it. On a phone, share the job to this site. LinkedIn pages are never fetched by the server.</p></div></details>
 <div id="recallpanel" class="card" style="display:none"></div><div id="follow"></div><div id="list" aria-live="polite"></div>
 <section class="js-tools" aria-labelledby="tools-h"><h2 id="tools-h">Tools</h2>
 <details class="ds-more" id="lisearch"><summary>What to search on LinkedIn</summary><div class="ds-more-body"><div id="lilist" class="mute">Loading the searches…</div></div></details>
 <details class="ds-more" id="check"><summary>Check a job I found</summary><div class="ds-more-body"><label class="ds-sr" for="jin">Job link or posting text</label><textarea id="jin" rows="4" placeholder="Paste a job link, or the whole posting text"></textarea><div class="bar"><input id="jtitle" placeholder="Title (optional)" aria-label="Title (optional)"><input id="jco" placeholder="Employer (optional)" aria-label="Employer (optional)"><button class="p" id="jgo">How good a match am I?</button></div><div id="jres"></div></div></details>
 <details class="ds-more" id="prefs"><summary>Search preferences: yes or no questions</summary><div class="ds-more-body"><div id="survey" class="mute">Loading…</div><div class="bar"><button id="psave">Save and re-run the search</button><span id="prefmsg" class="mute" role="status"></span></div></div></details>
 <details class="ds-more" id="fillsetup"><summary>One-click apply: set up once</summary><div class="ds-more-body"><p>1. Drag this button to your bookmarks bar: <a id="bm" href="#" class="btn btn-primary">Fill application</a></p><p class="mute">2. On any match press <b>Apply</b>: your tailored resume downloads, the form kit is copied and the application opens. 3. On the application page click the <b>Fill application</b> bookmark: it fills your details, adds the cover note and attaches the resume. 4. Answer the questions only you can answer, check the page, press Submit. Works on Greenhouse, Lever, Ashby, Workable and Recruitee; other sites open with the resume and note ready to paste. Nothing is submitted for you: employer systems reject unattended submissions, and an unreviewed application costs more than it saves.</p></div></details>
-<details class="ds-more"><summary>Filters and search runs</summary><div class="ds-more-body"><div class="bar"><label class="ds-field"><span>Tier</span><select id="tier"><option value="">All tiers</option><option value="A">A: strong fit</option><option value="B">B: good fit</option><option value="C">C: stretch</option></select></label><label class="ds-field"><span>Status</span><select id="status"><option value="">New jobs only</option><option value="mine">My applications</option><option value="all">Everything, including turned down</option><option value="pending_owner_approval">Pending</option><option>approved</option><option>rejected</option><option>applied</option><option>replied</option><option>interview</option><option>offer</option><option>no_reply</option><option>expired</option></select></label></div><div class="bar"><button id="run">Run the search now</button></div><p class="mute">Every sentence in a resume or note is copied from the claim ledger and re-checked line by line; a failed check blocks the draft. Nothing is sent for you.</p><div class="js-links"><a href="/prep">Apply and prepare</a><a href="/api/ledger">Claim ledger</a><a href="/api/ops">Operations</a><a href="/api">API</a></div></div></details>
+<details class="ds-more"><summary>Filters and search runs</summary><div class="ds-more-body"><div class="bar"><label class="ds-field"><span>Tier</span><select id="tier"><option value="">All tiers</option><option value="A">A: strong fit</option><option value="B">B: good fit</option><option value="C">C: stretch</option></select></label><label class="ds-field"><span>Status</span><select id="status"><option value="">Today's short list</option><option value="mine">My applications</option><option value="all">Everything, including turned down</option><option value="pending_owner_approval">Pending</option><option>approved</option><option>rejected</option><option>applied</option><option>replied</option><option>interview</option><option>offer</option><option>no_reply</option><option>expired</option></select></label></div><div class="bar"><button id="run">Run the search now</button></div><p class="mute">Every sentence in a resume or note is copied from the claim ledger and re-checked line by line; a failed check blocks the draft. Nothing is sent for you.</p><div class="js-links"><a href="/prep">Apply and prepare</a><a href="/api/ledger">Claim ledger</a><a href="/api/ops">Operations</a><a href="/api">API</a></div></div></details>
 </section></main>
 <script>
 const $=s=>document.querySelector(s);const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 async function api(path,opt){const r=await fetch(path,opt);const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||r.status);return j}
 async function load(){
+  if(window.VIEW_HOOK&&await window.VIEW_HOOK())return;
   const q=new URLSearchParams();for(const k of['tier','status','q']){const v=$('#'+k).value;if(v)q.set(k,v)}
   const [m,r,oc]=await Promise.all([api('/api/matches?'+q),api('/api/runs'),api('/api/outcomes')]);
   const last=r.runs[0];$('#meta').textContent=(m.matches.length+' shown')+(last?(' · '+last.passed+' of '+last.fetched+' postings passed the checks · last search '+String(last.started_at).slice(0,16)+(last.errors.length?' · '+last.errors.length+' feed errors':'')):' · no search run yet')+' · applied '+oc.funnel.applied+', replies '+oc.funnel.replied+', interviews '+oc.funnel.interview;segSync();
@@ -3546,6 +3848,7 @@ api('/api/followups').then(function(f){if(!f.count)return;window.FU=f.items;$('#
 $('#follow').addEventListener('click',function(e){var b=e.target.closest&&e.target.closest('[data-fu]');if(b)navigator.clipboard.writeText(window.FU[+b.dataset.fu].note)});
 $('#ready').onclick=function(){$('#tier').value='A';$('#status').value='';load()};
 ${RECALL_UI_JS}
+${PIPE_UI_JS}
 load();who();loadPrefs();
 </script></body></html>`;
 
