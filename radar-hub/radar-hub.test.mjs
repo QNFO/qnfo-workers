@@ -67,22 +67,11 @@ const JOB_MARKET_WATCH = { create() { throw new Error("the cron must not depend 
 const env = { AUDIT, AUDIT_DB: AUDIT, RADAR_DB: AUDIT, VAULT, JOB_MARKET_WATCH, RADAR_TOKEN: "t" };
 const today = new Date().toISOString().slice(0, 10);
 
+// JOB-MARKET-RETIRED-1 (2026-11-12): the scan is retired; qnfo-jobsearch sweeps its boards. The hub no longer routes or exports it.
 await W.scheduled({ cron: "0 7 * * 2" }, env, { waitUntil() {} });
-let h = db.prepare("SELECT * FROM handoffs ORDER BY id DESC LIMIT 1").get();
-ok(h && h.session_id === "cloud-workflow" && h.project_id === "job-market-watch-workflow-" + today && h.wbs_code === "JOB-MARKET-WATCH", "the Monday cron writes the handoffs row itself (no Workflow instance)");
-const cs = h && JSON.parse(h.claim_sheet);
-ok(cs && /3 boards \(1 GREEN \/ 2 RED\), 3 read, 4 roles/.test(cs.claim) && cs.status === "verified" && cs.boards.length === 3, "the claim_sheet states what was read (" + (cs && cs.claim) + ")");
-ok(h.r2_handoff_path === "notes/v1/" + today.slice(0, 4) + "/" + today.slice(5, 7) + "/" + today + "/_job-market-watch-workflow-" + today + ".md" && puts.length === 1 && /Research Scientist/.test(puts[0].body), "the vault note is written and its key recorded");
-ok(/Monday 07:00Z \(cron 0 7 \* \* 2\)/.test(h.next_action), "the next-run note names the real weekday");
-ok(calls.filter((c) => /lever|ashby|forecasting/.test(c.u)).every((c) => /^QNFO-job-market-watch\//.test(c.ua || "")), "board reads name the client honestly");
-// The watchmaker proof query (qnfo-fleet-dashboard WATCHMAKER_OPS job-market-watch).
-const proof = db.prepare("SELECT MAX(timestamp) AS last FROM handoffs WHERE project_id >= 'job-market-watch-workflow-' AND project_id < 'job-market-watch-workflow.'").get().last;
-ok(proof === h.timestamp && /^\d{4}-\d{2}-\d{2}T/.test(proof), "the watchmaker proof query reads the run");
-vaultFails = true; lever = 503;
-await W.scheduled({ cron: "0 7 * * 2" }, env, { waitUntil() {} });
-h = db.prepare("SELECT * FROM handoffs ORDER BY id DESC LIMIT 1").get();
-ok(db.prepare("SELECT COUNT(*) n FROM handoffs").get().n === 2 && h.r2_handoff_path === null && /vault note not written: R2 put failed/.test(h.claim_sheet) && /epoch:error HTTP 503/.test(h.claim_sheet), "a vault failure or a dead board still records the run, saying what failed");
-ok(typeof mod.JobMarketWatchWorkflow === "function", "JobMarketWatchWorkflow stays exported for the declared binding and manual instances");
+ok(db.prepare("SELECT COUNT(*) n FROM handoffs").get().n === 0 && !calls.some((c) => /lever|ashby|forecasting/.test(c.u)), "the retired Monday 07:00Z entry reads no board and writes no handoff");
+ok(typeof mod.JobMarketWatchWorkflow === "function" && !/runJobMarket|jmwScan/.test(src) && !/^binding = "JOB_MARKET_WATCH"/m.test(readFileSync(new URL("./wrangler.toml", import.meta.url), "utf8")), "only a no-op JobMarketWatchWorkflow stub stays (for a live binding); the scan and the declared binding are gone");
+ok(!src.includes('p === "/jobs"'), "/jobs is no longer routed");
 
 // ---------- MENTION-RADAR-LEDGER-1 ----------
 const run = async () => (await W.fetch(new Request("https://radar-hub.example/mentions/run", { method: "POST", headers: { authorization: "Bearer t" } }), env, {})).json();
@@ -109,11 +98,11 @@ const toml = readFileSync(new URL("./wrangler.toml", import.meta.url), "utf8");
 ok(/^crons = \["0 \* \* \* \*"\]$/m.test(toml), "wrangler.toml declares the single hourly tick");
 const m = /var CRON_TABLE = \[([^\]]*)\];/.exec(src);
 const crons = m ? [...m[1].matchAll(/"([^"]*)"/g)].map((x) => x[1]) : [];
-ok(crons.length === 8, "eight table entries after the NOZ-DOI-1 weekly-job removal (got " + crons.length + ")");
+ok(crons.length === 7, "seven table entries after the job-market retirement (got " + crons.length + ")");
 const sched = src.slice(src.indexOf("    return cronTickDispatch(event, async function (event) {\n    const c = event.cron;"));
 ok(crons.every((c) => sched.includes('"' + c + '"')), "every declared cron is routed by the hub's scheduled handler");
 ok(crons.includes("0 5 * * 2") && !crons.includes("0 5 * * 1") && cfDays("2").join() === "MON", "the events radar cron fires Monday, the day it reads its weekly sources");
-ok(cfDays(crons.find((c) => c.startsWith("0 7 ")).split(" ")[4]).join() === "MON", "the job-market cron fires Monday 07:00Z");
+ok(!crons.includes("0 7 * * 2"), "the retired job-market entry is out of CRON_TABLE");
 ok(/strftime\('%w','now'\) AS INTEGER\)=1/.test(src), "the events radar still reads weekly sources on strftime %w = 1 (Monday)");
 const h1 = await (await W.fetch(new Request("https://radar-hub.example/health"), {}, {})).json();
 ok(h1.version === (/var VERSION = "([^"]+)"/.exec(src) || [])[1], "/health reports the hub VERSION (" + h1.version + ")");

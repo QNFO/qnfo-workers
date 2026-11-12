@@ -9,7 +9,7 @@
 // INBOUND-SLA-1: the inbound SLA step counts when its runner is stalled, disabled or not yet run after its first due date,
 // or when a human inbound message is older than 120 min with no fleet action (a decision row or sent_at is one; SLA-120M).
 // REACH-LOOPS-WATCH-1: the delegated identity and reach loops read their run records (social ledgers by meta.last_ok,
-// stale job-market handoffs count, an error run proves nothing, a weekend is not a weekday job's stall).
+// a stale job sweep counts, an error run proves nothing, a weekend is not a weekday job's stall).
 // WORK-WITH-ME-METRIC-1: the work-with-me contacts op reads its own reach_signals rows (stalled after 48h, never ran).
 // GRANT-FOLLOWUP-HONEST-1: a grant-followup run that left a mailbox unread is dated as a run and counted with its reason
 // (gmail_pass_unset, errors) until a full read; only no run at all reads "never ran".
@@ -49,6 +49,7 @@ CREATE TABLE cron_fire_log (cron_name TEXT, task_id TEXT, cron_expr TEXT, fired_
 CREATE TABLE errata_watch (key TEXT PRIMARY KEY, value TEXT);
 CREATE TABLE social_channels (channel_id TEXT PRIMARY KEY, service TEXT, name TEXT, connected INTEGER, checked_at TEXT, checked_day TEXT);
 CREATE TABLE handoffs (id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT NOT NULL, project_id TEXT NOT NULL, timestamp TEXT NOT NULL, claim_sheet TEXT);
+CREATE TABLE jobsearch_runs (id INTEGER PRIMARY KEY AUTOINCREMENT, started_at TEXT NOT NULL, finished_at TEXT);
 CREATE TABLE events_radar (slug TEXT PRIMARY KEY, scanned_at TEXT);
 CREATE TABLE reach_signals (date TEXT NOT NULL, source TEXT NOT NULL, channel TEXT NOT NULL, entity_type TEXT NOT NULL, entity_id TEXT NOT NULL, metric TEXT NOT NULL, value REAL, quality TEXT, collected_at TEXT DEFAULT (datetime('now')), PRIMARY KEY (date, source, channel, entity_type, entity_id, metric));
 CREATE TABLE email_reply_queue (id INTEGER PRIMARY KEY AUTOINCREMENT, email_id INTEGER, sender TEXT, received_at TEXT, decision TEXT, skip_reason TEXT, sent_at TEXT);
@@ -126,8 +127,8 @@ db.prepare("INSERT INTO cloud_ops_events (id, ts, status) VALUES ('jr-radar-r1',
 db.prepare("INSERT INTO cloud_ops_events (id, ts, status) VALUES ('ol-tick-2026-10-06', ?, 'ok')").run(ago(2.7));
 db.prepare("INSERT INTO cloud_ops_events (id, ts, status) VALUES ('jr-outreach-o1', '2026-10-05T09:00:40.000Z', 'capped')").run();
 db.prepare("INSERT INTO cloud_ops_events (id, ts, status) VALUES ('ol-alloc-2026-10-05-a1', '2026-10-05T09:00:39.000Z', 'ok')").run();
-db.prepare("INSERT INTO handoffs (session_id, project_id, timestamp, claim_sheet) VALUES ('cloud-workflow', 'job-market-watch-workflow-2026-10-05', ?, '{}')").run(ago(25));
-db.prepare("INSERT INTO handoffs (session_id, project_id, timestamp, claim_sheet) VALUES ('s', 'job-market-watch-2026-10-06', ?, '{}')").run(ago(0.5));   // a session note, outside the id range
+db.prepare("INSERT INTO jobsearch_runs (started_at, finished_at) VALUES (?, ?)").run(ago(2.1), ago(2));
+db.prepare("INSERT INTO jobsearch_runs (started_at, finished_at) VALUES (?, NULL)").run(ago(0.5));   // a run still going proves nothing yet
 db.prepare("INSERT INTO events_radar (slug, scanned_at) VALUES ('events-radar-2026-10-05', ?)").run(ago(27));
 // WORK-WITH-ME-METRIC-1: the snapshot rows the reach ingest writes (collected_at in D1's space format).
 const wwmAt = (h) => new Date(NOW - h * 36e5).toISOString().replace("T", " ").slice(0, 19);
@@ -393,11 +394,11 @@ m = await api.watchmakerMeasure(env, NOW);
 ok(!op(m, "grant-followup").counted && /^ok, last run 4h ago$/.test(op(m, "grant-followup").state) && m.index === 0, "a fresh full grant-followup run clears the op, earlier degraded runs included");
 
 // REACH-LOOPS-WATCH-1: the delegated identity and reach loops.
-const REACH = ["social-profile-sync", "social-posting", "social-scan", "buffer-channel-audit", "social-engagement", "social-learner", "engagement-feed", "email-triage", "mention-radar", "cloud-ops-radar", "job-market-watch", "events-radar"];
+const REACH = ["social-profile-sync", "social-posting", "social-scan", "buffer-channel-audit", "social-engagement", "social-learner", "engagement-feed", "email-triage", "mention-radar", "cloud-ops-radar", "jobs-sweep", "events-radar"];
 m = await api.watchmakerMeasure(env, NOW);
 ok(REACH.every((k) => op(m, k) && op(m, k).state.startsWith("ok")) && m.index === 0, "every reach loop is listed and reads fresh (" + REACH.filter((k) => !op(m, k) || !op(m, k).state.startsWith("ok")).join(",") + ")");
-ok(op(m, "social-posting").runner === "cron:qnfo-social" && op(m, "job-market-watch").runner === "cron:radar-hub", "each loop names its Cloudflare runner");
-ok(op(m, "job-market-watch").age_h === 25, "job-market reads the handoffs id range (not a session note)");
+ok(op(m, "social-posting").runner === "cron:qnfo-social" && op(m, "jobs-sweep").runner === "cron:qnfo-jobsearch", "each loop names its Cloudflare runner");
+ok(op(m, "jobs-sweep").age_h === 2, "the job sweep reads its last finished run (not one still going)");
 // A failed tick after a good one: status error, but meta.last_ok still proves the last completed run.
 socialRow("profile-sync", "2026-10-06", "error", 1, 0.2);
 m = await api.watchmakerMeasure(env, NOW);
@@ -429,11 +430,11 @@ db.exec("UPDATE cloud_ops_events SET status = 'error' WHERE id = 'mention-radar-
 m = await api.watchmakerMeasure(env, NOW);
 ok(op(m, "mention-radar").counted && op(m, "mention-radar").state === "never ran", "a mention-radar run whose every source failed does not prove the radar");
 db.exec("UPDATE cloud_ops_events SET status = 'degraded' WHERE id = 'mention-radar-2026-10-05'");
-// Stale data: the job market silent since 2026-09-08 counts.
-db.exec("UPDATE handoffs SET timestamp = '2026-09-08T09:31:27.810Z' WHERE project_id = 'job-market-watch-workflow-2026-10-05'");
+// Stale data: a job sweep silent for a day counts.
+db.prepare("UPDATE jobsearch_runs SET finished_at = ? WHERE finished_at IS NOT NULL").run(ago(25));
 m = await api.watchmakerMeasure(env, NOW);
-ok(op(m, "job-market-watch").counted && /cadence 168h/.test(op(m, "job-market-watch").state) && m.index === 1, "the job market silent since 2026-09-08 counts as stalled");
-db.prepare("UPDATE handoffs SET timestamp = ? WHERE project_id = 'job-market-watch-workflow-2026-10-05'").run(ago(25));
+ok(op(m, "jobs-sweep").counted && /cadence 3h/.test(op(m, "jobs-sweep").state) && m.index === 1, "a job sweep silent for a day counts as stalled");
+db.prepare("UPDATE jobsearch_runs SET finished_at = ? WHERE finished_at IS NOT NULL").run(ago(2));
 // Weekday-only jobs: the weekend is not a stall, a missed Monday is.
 const MON = Date.parse("2026-10-05T07:05:00Z");
 db.prepare("UPDATE cloud_ops_events SET ts = '2026-10-02T07:30:02.000Z' WHERE id = 'jr-radar-r1'").run();

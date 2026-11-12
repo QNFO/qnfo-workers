@@ -1,0 +1,31 @@
+// FLOW-GAP-research-run-outcome (agent_issues 1003164): a finished research-run moves the score of its line's waiting ideas and is recorded per line.
+import { DatabaseSync } from "node:sqlite";
+import { readFileSync } from "node:fs";
+let pass = 0, fail = 0;
+const ok = (c, m) => { if (c) { pass++; console.log("  ok   " + m); } else { fail++; console.log("  FAIL " + m); } };
+const db = new DatabaseSync(":memory:");
+db.exec(`CREATE TABLE pipeline_runs (id TEXT PRIMARY KEY, pipeline TEXT, version TEXT, subject_ref TEXT, status TEXT, stage TEXT, output_json TEXT);
+CREATE TABLE research_queue (id TEXT PRIMARY KEY, idea TEXT, score REAL, status TEXT);
+CREATE TABLE research_line_terms (line TEXT, pattern TEXT);
+INSERT INTO research_line_terms VALUES ('qec','%error correction%'),('ai-systems','%llm%');
+INSERT INTO research_queue VALUES ('done-1','quantum error correction codes',0.9,'published'),('w-qec','a new error correction bound',0.5,'queued'),
+  ('w-qec-paused','error correction paused',0.5,'owner_paused'),('w-ai','llm audit',0.5,'queued'),('done-2','llm agents fail',0.5,'wontfix');
+INSERT INTO pipeline_runs VALUES ('old','research-run','1','done-1','done','done','{"outcome":"published","research_id":"done-1"}');`);
+db.exec(readFileSync(new URL("./2026-11-12-research-run-outcome-loop.sql", import.meta.url), "utf8"));
+const sc = (id) => db.prepare("SELECT score FROM research_queue WHERE id = ?").get(id).score;
+ok(db.prepare("SELECT COUNT(*) n FROM research_line_outcomes WHERE run_id = 'old' AND line = 'qec'").get().n === 1, "backfill records the finished run under its line");
+ok(sc("w-qec") === 0.5, "the backfill changes no score");
+db.exec("INSERT INTO pipeline_runs VALUES ('r1','research-run','1','done-1','running','research',NULL)");
+db.exec(`UPDATE pipeline_runs SET status='done', output_json='{"outcome":"published","research_id":"done-1"}' WHERE id='r1'`);
+ok(Math.abs(sc("w-qec") - 0.52) < 1e-9, "a published run raises the line's waiting idea");
+ok(sc("w-qec-paused") === 0.5, "an owner-paused idea is untouched");
+ok(sc("w-ai") === 0.5, "another line is untouched");
+db.exec("INSERT INTO pipeline_runs VALUES ('r2','research-run','1','done-2','running','research',NULL)");
+db.exec(`UPDATE pipeline_runs SET status='done', output_json='{"outcome":"dropped"}' WHERE id='r2'`);
+ok(Math.abs(sc("w-ai") - 0.48) < 1e-9, "a dropped run lowers the line's waiting idea (research id read from subject_ref)");
+db.exec(`UPDATE pipeline_runs SET stage='x' WHERE id='r2'`);
+ok(Math.abs(sc("w-ai") - 0.48) < 1e-9, "an update that leaves status alone does not apply twice");
+const y = db.prepare("SELECT * FROM v_research_line_yield ORDER BY line").all();
+ok(y.length === 2 && y.find((r) => r.line === "qec").published === 2 && y.find((r) => r.line === "ai-systems").dropped === 1, "v_research_line_yield counts outcomes per line");
+console.log(`\n${pass} passed, ${fail} failed`);
+if (fail) process.exit(1);

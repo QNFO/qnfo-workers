@@ -5,7 +5,7 @@ import { WorkflowEntrypoint } from "cloudflare:workers";
 // 1.1.3 (2026-10-02, pillar: reach): JOB-MARKET-INLINE-1 (the weekly job-market scan runs from the cron and records a
 // handoffs row with a claim_sheet), MENTION-RADAR-LEDGER-1 (one cloud_ops_events row per mention-radar run day),
 // EVENTS-RADAR-CF-DOW-1 (events cron moved from Sunday to Monday, the day its weekly sources are read).
-var VERSION = "1.6.3-codeagent";
+var VERSION = "1.7.0-codeagent";
 // agent_issues 1000854, 1000787 (#5485): bounded transient D1 heartbeat retries; one bumpable hub VERSION.
 // 1.5.0 RADAR-VENUE-RECOVERED-1 (agent_issues 2573, pillar personal; minor: a decision radar-hub now takes on its own): a venue that yields usable candidates again closes the open RADAR-VENUE-SILENT-1 issue this worker filed, through issue_triage.close_evidence (close_channel auto-recovery); the run result lists recoveredVenues. The counter already reset on recovery, but nothing closed the issue, so it sat open until the 48 h stale probe. venue-recovered.test.mjs. // 1.4.4 BAD-TAG-FILTER-1 (2026-10-19): HTML-to-text helpers handle odd end tags, unclosed blocks and entity order. // 1.4.3 WORKERS-BP-LOGGING-radar-hub-1 (2026-10-14, agent_issues 2540, child of 2342, pillar autonomy): the 13 swallowed catches log as a structured console.error (worker, where, error); control flow unchanged. // 1.4.2 FAMILIES-WINDOW-CLOCK-1: signal_source_families_7d counts its 7 days from the run clock, not the database clock.
 function rhex(n) { var b = new Uint8Array(Math.ceil(n / 2)); crypto.getRandomValues(b); return Array.prototype.map.call(b, function (x) { return ("0" + x.toString(16)).slice(-2); }).join("").slice(0, n); } // 1.3.5 CRYPTO-IDS-1: outreach_queue ids draw from crypto.getRandomValues. // 1.3.4-doi-scrub NOZ-DOI-1 (2026-10-10): the weekly attribution-audit job and its cron branch are gone; the citation watch tracks no static DOIs; the mention radar tracks only non-retired DOIs. // // 1.3.3 NO-TOPIC-HARDCODE-1 (owner directive 2026-10-10): the arXiv radar builds its query, keyword list and classes from the owner's accepted ideas in idea_proposals instead of fixed tables; with none on file it skips. // 1.3.2 RADAR-VENUE-SILENT-1 (2026-10-06, pillar: personal): a per-venue consecutive-zero counter kept as one row in the existing personal_radar table; a normally productive venue (>= 2 productive days) with zero usable candidates for 3 consecutive days files ONE agent_issues row "RADAR-VENUE-SILENT-1: <venue>" (source radar-hub, personal, low, epoch-ms), a failed fetch is a gap not a zero, a same-day re-run does not double count, and the run report names silent venues. 1.3.1 (2026-10-06): the intake run result never echoes exception text (CodeQL js/stack-trace-exposure on PR 662); details go to the worker log. 1.3.0 SIGNAL-INTAKE-SOURCES-1 (2026-10-06, agent_issues 1947, pillar: research): a D1-driven interdisciplinary feed intake (radar_sources kind 'signal': arXiv beyond quant-ph, journals, science news, community feeds) scored by lexicon with no model call into idea_proposals (name intake:<family>), bounded per run and per family, deduped by URL in signal_intake_seen, in the 08:30Z slot (no new cron); metric signal_source_families_7d; GET /intake, POST /intake/run; the events radar skips kind 'signal' rows. 1.2.4 RADAR-TASTE-SHRINK-1 + RADAR-TITLE-NOISE-2 (pillar: personal): taste prior shrunk by n/(n+3) with a 0.6 floor under 5 feedback rows and a half-the-day safety valve; Stedelijk date-range, Iamsterdam navigation and Eventbrite chrome titles dropped or cleaned. 1.2.3 RADAR-TITLE-NOISE-1 (pillar: personal): clean readable calendar titles for personal radar rows, dedupe key unchanged. 1.2.2 RADAR-TASTE-LEARN-1 (pillar: personal): the personal radar learns per-venue and per-domain taste from calendar_feedback. 1.2.1 AWAY-GATE-1 (pillar: personal): the personal radar skips Amsterdam events while a lodging row places the owner elsewhere. 1.2.0 CRON-SINGLE-TRIGGER-1 (#1785): one hourly trigger, CRON_TABLE in code
@@ -716,136 +716,10 @@ async function run(env) {
 
 return citationModDefault;
 })();
-var jmwMod = (function(){
-var __defProp = Object.defineProperty;
-var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
-
-// worker.js
-// JOB-MARKET-INLINE-1 (radar-hub 1.1.3, 2026-10-02, pillar: reach). The weekly job-market watch had not recorded a run
-// since 2026-09-08 (handoffs project_id job-market-watch-workflow-*; that row and the two of 09-01 came from manual
-// Workflow instances, never the cron: commit 3fda8b34 already found the cron "DETACHED ... zero fires"). Three defects:
-//   1. The cron only called env.JOB_MARKET_WATCH.create(). A Workflow is its own resource that `wrangler deploy` creates;
-//      radar-hub is deployed through qnfo-ops' raw script upload, which installs the binding (without a workflow_name)
-//      but never creates or re-points the Workflow, and the Workflow the binding named belonged to the job-market-watch
-//      script, retired on 2026-09-27. A created instance had no class to run.
-//   2. Since 2026-09-27 qnfo-audit refuses any handoffs row without a claim_sheet (trigger
-//      handoffs_claim_sheet_required_ins, FRAMEWORK-DOGFOOD-1). The record step wrote none, so even a running instance
-//      could not record.
-//   3. The D1 record came after the R2 vault write, so a vault failure lost the run.
-// The cron now runs the scan inline (three HTTP reads and two writes fit a scheduled invocation easily), writes the vault
-// note best-effort, and always writes the handoffs row with a claim_sheet. JobMarketWatchWorkflow stays exported, with the
-// same steps, so a manually created instance still works. Cron 0 7 * * 2 is Monday 07:00Z (Cloudflare numbers 1=Sunday).
-var JMW_PROJECT = "job-market-watch-workflow-";
-async function jmwScan(f) {
-  const opt = { headers: { "User-Agent": "QNFO-job-market-watch/1.1 (+https://qnfo.org)" }, signal: AbortSignal.timeout(20e3) };
-  const out = [];
-  try {
-    const r = await f("https://api.lever.co/v0/postings/epoch-ai?mode=json", opt);
-    if (r.ok) {
-      const j = await r.json();
-      out.push({ source: "epoch", channel: "RED", roles: (Array.isArray(j) ? j : []).map((x) => x.text || "").filter(Boolean).slice(0, 12) });
-    } else out.push({ source: "epoch", channel: "RED", error: "HTTP " + r.status });
-  } catch (e) {
-    out.push({ source: "epoch", channel: "RED", error: String(e && e.message || e).slice(0, 120) });
-  }
-  try {
-    const r = await f("https://api.ashbyhq.com/posting-api/job-board/quantware", opt);
-    if (r.ok) {
-      const j = await r.json();
-      out.push({ source: "quantware", channel: "RED", roles: (j.jobs || []).map((x) => x.title).slice(0, 12) });
-    } else out.push({ source: "quantware", channel: "RED", error: "HTTP " + r.status });
-  } catch (e) {
-    out.push({ source: "quantware", channel: "RED", error: String(e && e.message || e).slice(0, 120) });
-  }
-  try {
-    const r = await f("https://forecastingresearch.org/careers", opt);
-    if (r.ok) {
-      const html = await r.text();
-      const titles = [];
-      for (const m of html.matchAll(/<a[^>]+href="([^"]+)"[^>]*>([^<]{8,80})/g)) {
-        const t = m[2].trim();
-        if (/Senior|Research|Analyst|Fellow|Researcher|Data/.test(t) && titles.length < 12) titles.push(t);
-      }
-      out.push({ source: "fri", channel: "GREEN", roles: titles, email: html.includes("info@forecastingresearch.org") });
-    } else out.push({ source: "fri", channel: "GREEN", error: "HTTP " + r.status });
-  } catch (e) {
-    out.push({ source: "fri", channel: "GREEN", error: String(e && e.message || e).slice(0, 120) });
-  }
-  return out;
-}
-function jmwReport(boards, iso) {
-  const lines = ["# JOB MARKET WATCH", "", "> Generated " + iso, "", "## Scan results", ""];
-  for (const b of boards) {
-    lines.push("### " + b.source + " [" + b.channel + "]");
-    if (b.roles && b.roles.length) lines.push(b.roles.map(function(x) {
-      return "- " + x;
-    }).join(String.fromCharCode(10)));
-    if (b.error) lines.push("- ERROR: " + b.error);
-    if (b.email !== void 0) lines.push("- email channel: " + (b.email ? "yes (GREEN - automated application possible)" : "no"));
-  }
-  lines.push("", "## CHANNEL-1 POLICY", "GREEN = direct email application (automatable). RED = form-ATS (track only, recruit-at-large).");
-  return lines.join(String.fromCharCode(10));
-}
-function jmwKey(date) {
-  return "notes/v1/" + date.slice(0, 4) + "/" + date.slice(5, 7) + "/" + date + "/_job-market-watch-workflow-" + date + ".md";
-}
-async function jmwDeliver(env, key, report) {
-  if (!env.VAULT) return { key: null, error: "no VAULT binding" };
-  try {
-    await env.VAULT.put(key, report, { httpMetadata: { contentType: "text/markdown" } });
-    return { key, error: null };
-  } catch (e) {
-    return { key: null, error: String(e && e.message || e).slice(0, 120) };
-  }
-}
-async function jmwRecord(env, boards, date, iso, trigger, delivered) {
-  const ok = boards.filter((b) => !b.error).length;
-  const roles = boards.reduce((n, b) => n + (b.roles ? b.roles.length : 0), 0);
-  const green = boards.filter((b) => b.channel === "GREEN").length, red = boards.filter((b) => b.channel === "RED").length;
-  const summary = "Job market scan (" + trigger + "): " + boards.length + " boards (" + green + " GREEN / " + red + " RED), " + ok + " read, " + roles + " roles";
-  const claim = JSON.stringify({ claim: summary, evidence: delivered.key ? "R2 obsidian-vault " + delivered.key : "board reads only (vault note not written: " + (delivered.error || "?") + ")", boards: boards.map((b) => b.source + ":" + (b.error ? "error " + b.error : (b.roles || []).length + " roles")), confidence: "measured", status: ok ? "verified" : "unverified" });
-  const res = await env.AUDIT.prepare("INSERT INTO handoffs (session_id, project_id, phase_completed, summary, pending_work, next_action, r2_handoff_path, timestamp, wbs_code, claim_sheet) VALUES (?,?,?,?,?,?,?,?,?,?)").bind("cloud-workflow", JMW_PROJECT + date, "1", summary, "none - autonomous", "next: weekly Monday 07:00Z (cron 0 7 * * 2)", delivered.key, iso, "JOB-MARKET-WATCH", claim).run();
-  return res && res.meta ? res.meta.last_row_id : null;
-}
-async function runJobMarket(env, opts) {
-  opts = opts || {};
-  const f = opts.fetch || ((u, i) => fetch(u, i));
-  const iso = new Date(opts.now || Date.now()).toISOString(), date = iso.slice(0, 10);
-  const boards = await jmwScan(f);
-  const delivered = await jmwDeliver(env, jmwKey(date), jmwReport(boards, iso));
-  const handoff_id = await jmwRecord(env, boards, date, iso, opts.trigger || "cron", delivered);
-  return { boards: boards.length, read: boards.filter((b) => !b.error).length, key: delivered.key, vault_error: delivered.error, handoff_id };
-}
-var worker_default = {
-  async scheduled(event, env, ctx) {
-    try {
-      console.log("job-market-watch", JSON.stringify(await runJobMarket(env, { trigger: "cron" })));
-    } catch (e) {
-      console.error("job-market-watch", String(e && e.message || e));
-    }
-  },
-  async fetch(request) {
-    const url = new URL(request.url);
-    if (url.pathname === "/health") {
-      return new Response(JSON.stringify({ ok: true, worker: "job-market-watch", version: "1.2.0" }), { headers: { "content-type": "application/json" } });
-    }
-    return new Response("not found", { status: 404 });
-  }
-};
-var JobMarketWatchWorkflow = class extends WorkflowEntrypoint {
-  static {
-    __name(this, "JobMarketWatchWorkflow");
-  }
-  async run(event, step) {
-    const iso = (/* @__PURE__ */ new Date()).toISOString(), date = iso.slice(0, 10);
-    const boards = await step.do("scan-sources", { retries: { limit: 3, delay: "5 seconds", backoff: "exponential" }, timeout: "90 seconds" }, async () => jmwScan((u, i) => fetch(u, i)));
-    const delivered = await step.do("deliver-r2", {}, async () => jmwDeliver(this.env, jmwKey(date), jmwReport(boards, iso)));
-    const handoff_id = await step.do("record-d1", {}, async () => jmwRecord(this.env, boards, date, iso, "workflow", delivered));
-    return { boards: boards.length, key: delivered.key, handoff_id };
-  }
-};
-return { JobMarketWatchWorkflow: JobMarketWatchWorkflow, default: worker_default, runJobMarket: runJobMarket };
-})();
+// JOB-MARKET-RETIRED-1 (2026-11-12, FLOW-GAP-job-market-watch, agent_issues 1003165): the weekly job-market scan (three boards into handoffs
+// and a vault note) is retired. No flow read its handoffs, its Workflow resource was absent from the account, and qnfo-jobsearch already
+// sweeps ATS boards every hour against the owner's record and feeds the shortlist; its two ATS boards (Lever epoch-ai, Ashby quantware)
+// moved into qnfo-jobsearch BOARDS, where each posting is scored, shown and learned from.
 //# sourceMappingURL=worker.js.map
 
 var perMod = (function(){
@@ -2202,7 +2076,11 @@ var intakeMod = (function(){
 })();
 // SIGNAL-INTAKE-SOURCES-1 end
 
-const JobMarketWatchWorkflow = jmwMod.JobMarketWatchWorkflow;
+// JOB-MARKET-RETIRED-1: the deploy path keeps live bindings it was not told about (qnfo-ops: live wins), so the account's JOB_MARKET_WATCH
+// binding can outlive the toml line and still name this class. A stub keeps every upload valid; an instance does nothing and says so.
+class JobMarketWatchWorkflow extends WorkflowEntrypoint {
+  async run() { return { retired: "JOB-MARKET-RETIRED-1", read_by: "qnfo-jobsearch hourly sweep" }; }
+}
 export { JobMarketWatchWorkflow, intakeMod };
 
 // ---- EVENTS-WORKFLOW-1:BEGIN (RM-RADAR-WORKFLOWS-PILOT-1, 2026-11-05, pillar research; roadmap_implementation row 43)
@@ -2315,7 +2193,7 @@ eventsFlow.watch = eventsFlowWatch;
 // unchanged) that fired in the hour ending at the tick, through the same dispatcher as before. An entry on the hour runs
 // at its minute; one at :15 or :30 runs at the next full hour. Hourly keeps the 15-minute CPU limit of a cron trigger.
 var TICK_CRON = "0 * * * *";
-var CRON_TABLE = ["0 5 * * 2", "30 8 * * *", "0 6 1 * *", "0 9 * * 7", "0 11 1,15 * *", "0 7 * * 2", "30 5 * * 2", "0 6 * * *"];
+var CRON_TABLE = ["0 5 * * 2", "30 8 * * *", "0 6 1 * *", "0 9 * * 7", "0 11 1,15 * *", "30 5 * * 2", "0 6 * * *"];
 var TICK_PARALLEL = true;
 function cronFieldMatch(spec, v) {
   return String(spec).split(",").some(function (part) {
@@ -2414,7 +2292,6 @@ var hubRun = {
     }
     if (c === "0 6 1 * *" || c === "0 9 * * 7") return researchMod.scheduled(event, env, ctx);
     if (c === "0 11 1,15 * *") return citationMod.scheduled(event, env, ctx);
-    if (c === "0 7 * * 2") return jmwMod.default.scheduled(event, env, ctx);
     if (c === "30 5 * * 2") return perMod.default.scheduled(event, env, ctx);
     if (c === "0 6 * * *") return perMod.default.scheduled(event, env, ctx);
     });
@@ -2438,7 +2315,6 @@ export default {
     function sub(prefix) { const u = new URL(request.url); u.pathname = p.slice(prefix.length) || "/"; return new Request(u.toString(), request); }
     if (p === "/events" || p.startsWith("/events/")) return eventsMod.default.fetch(sub("/events"), env, ctx);
     if (p === "/citation" || p.startsWith("/citation/")) return citationMod.fetch(sub("/citation"), env, ctx);
-    if (p === "/jobs" || p.startsWith("/jobs/")) return jmwMod.default.fetch(sub("/jobs"), env, ctx);
     if (p === "/personal" || p.startsWith("/personal/")) return perMod.default.fetch(sub("/personal"), env, ctx);
     if (p === "/mentions" || p.startsWith("/mentions/")) return mentionMod.fetch(sub("/mentions"), env, ctx);
     if (p === "/intake" || p.startsWith("/intake/")) return intakeMod.fetch(sub("/intake"), env, ctx);

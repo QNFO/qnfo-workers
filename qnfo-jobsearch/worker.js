@@ -9,7 +9,7 @@
 // JOBSEARCH-CV-1 (1.5.0): the CV is part of this worker (page /cv): a yes/no interview that builds the claim bank, review of unconfirmed claims, roles, achievements and publications edited in D1, a resume per job (summary, roles, selected work, education, skills) and a cover note, history and backup. The search is tied to that bank (evidence the owner can back up weighs more; what the CV lacks is shown as a gap), decided postings (rejected, applied, approved) never come back under another id, rejections carry a reason the search learns from, and a wider net: stretch matches outside the stated preferences, more boards and aggregators.
 // Routes: GET / (web UI) | GET /api | GET /api/matches | GET /api/matches/:id | GET /api/runs | GET /api/ledger | POST /api/run | POST /api/matches/:id/status | GET /health
 // Port of the jobsearch/ Python modules (tests: jobsearch/test_jobsearch.py, qnfo-jobsearch/worker.test.mjs).
-var VERSION = "1.30.0-codeagent";
+var VERSION = "1.30.1-codeagent";
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -413,7 +413,9 @@ const BOARDS = {
   greenhouse: ["anthropic", "scaleai", "mongodb", "elastic", "gitlab", "databricks", "stripe", "adyen", "bird", "datadog", "cloudflare", "canonical", "grafanalabs", "mozilla", "wikimedia", "khanacademy",
     "codeforamerica", "givewell", "dataiku", "fivetran", "nesta", "gallup", "rti", "ideo", "waymo", "nuro", "lyft",
     "givedirectly", "goodfire", "turing", "via", "catawiki", "labelbox", "isomorphiclabs", "kodiak", "motional", "thoughtworks"],   // JOBSEARCH-AUTONOMY-1: ionq, psiquantum and riverlane (quantum) dropped
-  lever: ["palantir", "mendix", "brookings", "oliverwyman", "zoox", "apolloresearch", "metr"],   // JS-7 (2026-11-05): mistral left Lever (HTTP 404 on Lever, Ashby and Greenhouse, 0 postings on SmartRecruiters) and held fm-jobsearch-feed-down red at 3 failed runs
+  // JOB-MARKET-RETIRED-1 (2026-11-12): epoch-ai joins from the retired radar-hub job-market scan (8-9 live postings a week there, read 2026-11-09); its other boards stay out:
+  // quantware is quantum hardware (JOBSEARCH-AUTONOMY-1 dropped quantum boards) and the Forecasting Research Institute careers page is HTML with no ATS feed.
+  lever: ["palantir", "mendix", "brookings", "oliverwyman", "zoox", "apolloresearch", "metr", "epoch-ai"],   // JS-7 (2026-11-05): mistral left Lever (HTTP 404 on Lever, Ashby and Greenhouse, 0 postings on SmartRecruiters) and held fm-jobsearch-feed-down red at 3 failed runs
   ashby: ["openai", "cohere", "notion", "elevenlabs", "mollie", "mapbox", "perplexity", "snowflake", "faculty", "wayve", "cerebras", "anyscale", "modal", "fireworks", "redwoodresearch", "pinecone", "runway", "miro", "meter"],
   recruitee: ["bunq", "msf", "solvinity", "sweco"],   // sweco: transport, urban and water planning consultancy (probed 2026-11-05: 179 offers, Netherlands among them)
   smartrecruiters: ["oecd"],                           // JOBSEARCH-SOURCES-1 (JS-7): OECD policy research and statistics roles (probed 2026-11-05: 22 postings)
