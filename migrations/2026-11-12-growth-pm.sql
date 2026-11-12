@@ -18,6 +18,7 @@
 -- APPLY-BY: ci
 -- DB: qnfo-audit
 -- BACKUP: bak_20261112_growth_pm_queue_v2
+-- REAPPLY-OK: first apply on 5653a35 failed before any statement ran (backup table created after the first DROP); this repaired file has never applied ok.
 -- Rollback: UPDATE fleet_tasks SET enabled = 0 WHERE id = 'growth-pm'; UPDATE fleet_crons SET enabled = 0 WHERE name = 'growth-pm-hourly'; UPDATE ops_config SET value = '1' WHERE key = 'growth_priority_weight'; UPDATE ops_config SET value = 'off' WHERE key = 'growth_pm'
 
 
