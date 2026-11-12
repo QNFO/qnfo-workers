@@ -139,3 +139,16 @@ activation with ratings, WHO-5, safety plan, pause, honest-AI persona, discreet 
 - [ ] **Silence unless actionable** (`COMPANION-SILENCE-1`): Today shows only items with an action; no pinned wellbeing clutter, no repeated asks (the daily mood check-in is kept).
 - [ ] **Plain language only** (`COMPANION-PLAIN-1`): no ids, raw logs or machine output on Today; a test scans rendered Today text for them.
 - [ ] **Self-owned defects** (`COMPANION-SELFFIX-1`): extend SELF_CHECKS so a defect is filed, fixed and closed with only "done" reported.
+
+## Product research backlog (PRODUCT-RESEARCH-1, daily, owner 2026-11-12)
+
+The fleet's product-manager loop (`_shared/product-research.js`, run by personal-companion's hourly tick, once a day per app) files one issue per
+gap below that is not yet in the code, in weight order, three new a day, and the code loop builds it. Each id is the text the code carries when
+it ships (the issue's closing probe). Practices already covered are in `APPS` in that file. Read the latest run: `SELECT digest FROM
+product_research_runs ORDER BY id DESC`.
+
+- [ ] **Visual routines** (`COMPANION-ROUTINES-1`): the same few steps in the same order each morning and evening, one tap per step.
+- [ ] **Break a task into steps** (`COMPANION-BREAKDOWN-1`): one tap splits a big action into three small ones from a fixed template, no model.
+- [ ] **Kind progress** (`COMPANION-KIND-PROGRESS-1`): a weekly look at what got done, no streaks and no shame for missed days.
+- [ ] **Body doubling** (`COMPANION-BODY-DOUBLE-1`): a "work alongside me" timer that says what it is doing, no model.
+- [ ] **Audio for each book** (`MIND-AUDIO-1`), **free library link** (`MIND-LIBRARY-1`), **content notes** (`MIND-CONTENT-NOTES-1`), **read it or not for me** (`MIND-PROGRESS-1`) in `q08-mind/data/books.json` and its page.
