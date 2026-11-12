@@ -1055,7 +1055,7 @@ async function escalate(env, deps, { text, source }) {
   if (sig.level < 2) return { level: sig.level, sent: false };
   const body = block.text + "\n\n" + BASE + "/wb/checkin" + (env.WELLBEING_TOKEN ? "?t=" + encodeURIComponent(env.WELLBEING_TOKEN) : "");
   let sent = null;
-  try { sent = deps.send ? await deps.send(env, OWNER, "not alone", body, "crisis") : null; } catch (e) { sent = { ok: false, error: String(e && e.message || e) }; }
+  try { sent = deps.send ? await deps.send(env, c.owner, "not alone", body, "crisis") : null; } catch (e) { sent = { ok: false, error: String(e && e.message || e) }; }
   try {
     await env.PERSONAL.prepare(
       "INSERT INTO companion_nudges (ts, day, kind, ladder_step, ask, minutes, expected, due_at, state, sent_at, reason) VALUES (?, ?, 'crisis', 0, ?, 0, NULL, ?, 'sent', ?, ?)"
@@ -1237,7 +1237,7 @@ async function handleWellbeing(request, env, deps = {}) {
       });
       if (!rowC) return new Response(JSON.stringify({ ok: false, skipped: "already-sent-today" }, null, 2), { headers: { "Content-Type": "application/json" } });
       const mailC = nudgeMail(rowC, c0, env.WELLBEING_TOKEN);
-      const sentC = deps.send ? await deps.send(env, OWNER, mailC.subject, mailC.body) : null;
+      const sentC = deps.send ? await deps.send(env, c0.owner, mailC.subject, mailC.body) : null;
       await markSent(env, rowC.id, sentC, nowC);
       return new Response(JSON.stringify({ ok: !!(sentC && sentC.ok !== false), id: rowC.id, subject: mailC.subject }, null, 2), { headers: { "Content-Type": "application/json; charset=utf-8" } });
     }
@@ -3735,7 +3735,7 @@ var __name22 = __name2;
 // line below (VERSION-LINE-NOTES-1, 2026-10-19). Its older trailing notes stay until length-lede.test.mjs stops pinning "LENGTH-LEDE-1" on that line.
 // VERSION-NOTES-MOVED-1: release notes live in the block below
 // W-META-1 (agent_issues 1002316/1002317/1002318): aiRunAttr records in_tok/out_tok/neurons per purpose.
-var VERSION = "1.48.7-codeagent";
+var VERSION = "1.48.8-codeagent";
 // 1.46.0 KERNEL-EVERYWHERE-1 (2026-11-06, owner directive "IMPLEMENT EVERYWHERE ACROSS ALL AI APPS AND SERVICES AND SURFACES", pillar personal): the travel planner CHAT_SYSTEM carries the DOCTRINE-1 kernel 8.2.1 reply recognitions (KERNEL-REPLY-4, scoped to the planner's one designed question): end on the plan or proposal, never a conditional offer or questionnaire; refusals and limits are dispositions with their reason; reversible steps are taken and reported in the same reply. prior 1.45.8-codeagent
 /* 1.44.14 COMPANION-LENGTH-HEADROOM-1 (issue 1000633, pillar personal; patch): repeated length failures alongside exhausted retry budgets expose too little headroom for model output variation. Length-only repairs now target 500 words below the unchanged ceiling while remaining inside each form's normal writer band. */
 /* 1.43.6 BP26-AI-ACT-ART50-1 and BP26-STRUCTURED-DATA-1 (2026-10-26, agent_issues 1000341 and 1000336, pillar core; patch): the visible AI-generated label of every reading.q08.org piece now has its machine-readable half. A piece page carries an Article JSON-LD block (headline, datePublished, url, an Organization as author, never an AI or invented persona, and creditText saying it was written by AI and that no human reviews pieces before they appear) and the index page a Blog block. Measured before: the reading pages carried the visible label and no JSON-LD at all. */
