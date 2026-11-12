@@ -92,5 +92,25 @@ check(w == [] and "skipped" in res, "an unreadable answer -> nothing written", (
 res, w = run(raiser("down", "HTTP 401 from https://api.cloudflare.com/y: " + os.environ["CLOUDFLARE_API_TOKEN"]))
 check(os.environ["CLOUDFLARE_API_TOKEN"] not in repr(res) and "***" in repr(res), "recorded errors never carry the token", res)
 
+# CF-TOKEN-WATCH-3 (CLOCKWORK-1, issue 11155): every listed account token's expiry, values never involved.
+NOW3 = calendar.timegm(time.strptime("2026-11-12T00:00:00", "%Y-%m-%dT%H:%M:%S"))
+toks = [{"name": "r2-a", "status": "active", "expires_on": "2026-11-15T00:00:00Z"},
+        {"name": "r2-b", "status": "active", "expires_on": "2027-01-01T00:00:00Z"},
+        {"name": "old", "status": "expired", "expires_on": "2026-11-01T00:00:00Z"},
+        {"name": "noexp", "status": "active"},
+        {"name": "off", "status": "disabled", "expires_on": "2026-11-13T00:00:00Z"}]
+n3, names3 = rc.cf_tokens_expiry_values(toks, NOW3)
+check(n3 == 2 and names3 == ["old", "r2-a"], "expiring within 7 days or already expired are counted; disabled and no-expiry are not", (n3, names3))
+w3 = []
+rc.d1 = lambda sql, params=None: w3.append((sql, params)) or []
+o3 = {}
+res3 = rc.cf_tokens_expiry_watch(o3, lambda m, u, b=None: {"success": True, "result": toks})
+check(res3["expiring_7d"] >= 1 and len(w3) == 1 and "cloudflare_tokens_expiring_7d" in w3[0][0], "a listing writes the metric once", (res3, w3))
+w3.clear()
+def refuse(m, u, b=None):
+    raise RuntimeError("HTTP 403 from https://api.cloudflare.com/x: forbidden")
+res3 = rc.cf_tokens_expiry_watch({}, refuse)
+check(w3 == [] and "skipped" in res3, "both listings refused -> nothing written, the last value kept", res3)
+
 print("FAILS=%d" % fails)
 sys.exit(1 if fails else 0)
