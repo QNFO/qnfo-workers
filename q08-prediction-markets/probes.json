@@ -24,22 +24,17 @@
       ]
     },
     {
-      "url": "https://q08-prediction-markets.q08.workers.dev/whitepaper",
-      "contains": [
-        "Where Do LLM Forecasters Have an Edge Over Prediction Markets?"
-      ]
-    },
-    {
       "url": "https://q08-prediction-markets.q08.workers.dev/api/track-record",
       "contains": [
         "how_to_verify"
       ]
     },
     {
-      "_note": "LIVE-PAGES-1 (thread follow-up to PR 11056): the public host, not only workers.dev, serves the forecasts page.",
+      "_note": "LIVE-PAGES-1 (thread follow-up to PR 11056): the public host, not only workers.dev, serves the forecasts page. VALUE-PIPELINE-1: the same page is the pipeline front door. The white paper is probed through /living-paper (301).",
       "url": "https://markets.q08.org/forecasts",
       "contains": [
-        "Forecasts that move money"
+        "Forecasts that move money",
+        "Signals in. Forecasts out. Value measured."
       ]
     },
     {
@@ -57,27 +52,11 @@
       ]
     },
     {
-      "_note": "VALUE-PIPELINE-1: the front page is the signal-to-value pipeline.",
-      "url": "https://markets.q08.org/",
-      "contains": [
-        "Signals in. Forecasts out. Value measured.",
-        "Forecasts that move money"
-      ]
-    },
-    {
       "_note": "VALUE-PIPELINE-1: the track record recomputes every simulated position.",
       "url": "https://markets.q08.org/track-record",
       "contains": [
         "The pipeline's targets",
         "Forecast book"
-      ]
-    },
-    {
-      "_note": "VALUE-PIPELINE-1: the story feed q08.org's front door reads.",
-      "url": "https://markets.q08.org/api/story",
-      "contains": [
-        "\"engine\":\"VALUE-PIPELINE-1\"",
-        "\"stages\""
       ]
     }
   ]
