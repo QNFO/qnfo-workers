@@ -18,7 +18,7 @@
 //
 // Pure ESM, no imports: personal-companion inlines it as namespace PR (scripts/inline-pipeline-modules.mjs); tests load it directly.
 
-export const RESEARCH_VERSION = "1.2.0";
+export const RESEARCH_VERSION = "1.2.1";
 export const DIRECTIVE_ID = "PRODUCT-RESEARCH-1";
 export const RUN_EVERY_H = 20;          // one run a day per app, tolerant of the hourly tick drifting
 export const STALE_AFTER_H = 26;        // daily cadence plus at most 120 minutes (QUEUE-SLA-1)
@@ -139,11 +139,12 @@ export const APPS = [
     ],
     sources: [
       { name: "GOV.UK foreign travel advice", kind: "practice", url: "https://www.gov.uk/foreign-travel-advice" },
-      { name: "US traveler's checklist", kind: "practice", url: "https://travel.state.gov/content/travel/en/international-travel/before-you-go/travelers-checklist.html" },
+      // The US traveler's checklist and Rome2Rio answered 403 to the first run (2026-11-12 22:00 UTC); replaced.
+      { name: "Smartraveller", kind: "practice", url: "https://www.smartraveller.gov.au/" },
       { name: "TripIt", kind: "competitor", url: "https://www.tripit.com/web" },
       { name: "Wanderlog", kind: "competitor", url: "https://wanderlog.com/" },
       { name: "Polarsteps", kind: "competitor", url: "https://www.polarsteps.com/" },
-      { name: "Rome2Rio", kind: "competitor", url: "https://www.rome2rio.com/" }
+      { name: "Roadtrippers", kind: "competitor", url: "https://roadtrippers.com/" }
     ],
     discover: ["travel planner", "trip itinerary"] },
   { app: "jobs", label: "the job search", host: "jobs.q08.org", code: "qnfo-jobsearch/worker.js", journeys: ["jobs"], usage: null,
@@ -334,19 +335,22 @@ async function fetchPage(src, fetcher) {
 // Keyless discovery of new products: Show HN posts of the last 30 days.
 export async function discoverPlayers(app, fetcher, nowMs) {
   const since = Math.floor(nowMs / 1000) - 30 * 86400, out = [], seen = new Set();
-  for (const q of app.discover || []) {
+  const answers = await Promise.all((app.discover || []).map(async (q) => {
     try {
       const r = await fetcher("https://hn.algolia.com/api/v1/search_by_date?tags=show_hn&hitsPerPage=5&numericFilters=created_at_i%3E" + since + "&query=" + encodeURIComponent(q),
         { cf: { cacheTtl: 86400, cacheEverything: true } });
-      if (!r || !r.ok) continue;
+      if (!r || !r.ok) return { q, hits: [] };
       const j = await r.json();
-      for (const h of (j && j.hits) || []) {
-        const name = String(h.title || "").replace(/^show hn:\s*/i, "").split(/\s[-–—:|]\s/)[0].trim().slice(0, 60);
-        if (!name || seen.has(name.toLowerCase())) continue;
-        seen.add(name.toLowerCase());
-        out.push({ name, url: h.url || ("https://news.ycombinator.com/item?id=" + h.objectID), query: q, at: h.created_at || null });
-      }
-    } catch (e) { /* discovery is best effort; the fixed sources carry the run */ }
+      return { q, hits: (j && j.hits) || [] };
+    } catch (e) { return { q, hits: [] }; /* discovery is best effort; the fixed sources carry the run */ }
+  }));
+  for (const { q, hits } of answers) {
+    for (const h of hits) {
+      const name = String(h.title || "").replace(/^show hn:\s*/i, "").split(/\s[-–—:|]\s/)[0].trim().slice(0, 60);
+      if (!name || seen.has(name.toLowerCase())) continue;
+      seen.add(name.toLowerCase());
+      out.push({ name, url: h.url || ("https://news.ycombinator.com/item?id=" + h.objectID), query: q, at: h.created_at || null });
+    }
   }
   return out.slice(0, 10);
 }
@@ -385,8 +389,9 @@ export const AUDIT_DDL = [
 // One research run for one app. deps: { fetch, nowMs }.
 export async function researchApp(env, app, deps) {
   const nowMs = deps.nowMs, now = new Date(nowMs).toISOString(), stamp = now.replace("T", " ").slice(0, 19), fetcher = deps.fetch;
-  const pages = [];
-  for (const src of app.sources) pages.push(await fetchPage(src, fetcher));
+  // In parallel: read one after another, six sources and two searches took long enough that the hourly tick ended before the
+  // next app (jobs, 2026-11-12 22:00 UTC: travel ran, jobs never wrote a row). One app now costs one fetch timeout at most.
+  const pages = await Promise.all(app.sources.map((src) => fetchPage(src, fetcher)));
   const players0 = await discoverPlayers(app, fetcher, nowMs);
   const prev = await one(env.AUDIT, "SELECT players_json FROM product_research_runs WHERE app = ? ORDER BY id DESC LIMIT 1", app.app);
   let prevNames = new Set(); try { prevNames = new Set(JSON.parse((prev && prev.players_json) || "[]").map((p) => String(p.name).toLowerCase())); } catch (e) { prevNames = new Set(); }
