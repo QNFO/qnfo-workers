@@ -5276,7 +5276,7 @@ async function clockEscalate(env, loop, v, st, nowIso) {
       .bind(title, desc, nowIso, "CLOCKWORK-" + loop.id + ":%").run();
     var row = await env.AUDIT.prepare("SELECT id FROM agent_issues WHERE title LIKE ?1 AND status = 'open' ORDER BY id DESC LIMIT 1").bind("CLOCKWORK-" + loop.id + ":%").first();
     if (row && row.id) {
-      await env.AUDIT.prepare("UPDATE remediation_contracts SET verify_transport = 'd1-query', verify_probe = ?2 WHERE class = ?1").bind("issue-" + row.id, "SELECT CASE WHEN state IN ('ok','late') THEN 'ok' ELSE 'fail' END AS verdict FROM clock_ticks WHERE loop = '" + loop.id + "'").run().catch(function() {});
+      await env.AUDIT.prepare("UPDATE remediation_contracts SET verify_transport = 'd1-query', verify_probe = ?2 WHERE class = ?1").bind("issue-" + row.id, "SELECT CASE WHEN state IN ('ok','late') THEN 'ok' ELSE 'fail' END AS verdict FROM clock_ticks WHERE loop = '" + loop.id + "'").run().catch(function(e) { console.error(JSON.stringify({ worker: WORKER_NAME, where: "clockwork.contract", error: String(e && e.message || e).slice(0, 160) })); });
       return row.id;
     }
   } catch (e) {
@@ -5290,7 +5290,7 @@ async function jobClockwork(env) {
   for (var i = 0; i < CLOCK_LOOPS.length; i++) {
     var loop = CLOCK_LOOPS[i], o = await clockObserve(env, loop, nowMs), v = clockJudge(loop, o, nowMs);
     var st = {};
-    try { st = JSON.parse(await stateGet(env, "clock:" + loop.id, "{}")) || {}; } catch (e) { st = {}; }
+    try { st = JSON.parse(await stateGet(env, "clock:" + loop.id, "{}")) || {}; } catch (e) { console.error(JSON.stringify({ worker: WORKER_NAME, where: "clockwork.state", loop: loop.id, error: String(e && e.message || e).slice(0, 160) })); st = {}; }
     var a = clockAction(loop, v, st, nowMs), action = "", actionStatus = "";
     st.bad_ticks = a.bad_ticks;
     if (a.dispatch) {
