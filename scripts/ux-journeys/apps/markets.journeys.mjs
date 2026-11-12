@@ -32,7 +32,19 @@ export const journeys = [
     async run(u) {
       await u.open("/forecasts");
       await u.see("Forecasts that move money");
-      await u.see("Value added vs crowd");
+      await u.see("Value captured");
       await u.screen("forecasts");
+    } },
+  { id: "pipeline-to-value", title: "Follow a forecast from its signals to its simulated value on a phone (VALUE-PIPELINE-1)", modes: ["live"],
+    async run(u) {
+      await u.open("/");
+      await u.see("Signals in. Forecasts out. Value measured.");
+      await u.see("Edge vs the market");
+      await u.open("/track-record");
+      await u.see("The pipeline's targets");
+      await u.see("Forecast book");
+      await u.see("Paper desk");
+      await u.expect(async () => await u.page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), "the track record scrolls sideways on a phone");
+      await u.screen("track-record");
     } }
 ];
