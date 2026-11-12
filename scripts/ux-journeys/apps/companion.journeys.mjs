@@ -11,6 +11,15 @@ const CLASSIC = "/companion/classic";
 const signedIn = async (u) => { await u.open("/__harness/session"); await u.open(CLASSIC); await u.see("What can I do right now?"); };
 
 export const journeys = [
+  { id: "calm-down", title: "Overwhelmed: tap Calm down and get through breathing and grounding",
+    async run(u) {
+      await u.open("/__harness/session"); await u.open("/companion"); await u.see("Too much right now?");
+      await u.tap("Calm down"); await u.see("Nothing has to happen right now."); await u.screen("calm");
+      await u.tap("Next", { within: "#calm" }); await u.see("Breathe with me");
+      await u.tap("Skip", { within: "#calm" }); await u.see("Find 5 things you can see.");
+      await u.tap("Skip", { within: "#calm" }); await u.see("How is it now?");
+      await u.tap("Better", { within: "#calm" }); await u.see("Rest for a bit");
+    } },
   { id: "sign-in", title: "Sign in on a new phone with the e-mailed code",
     async run(u, env) {
       await u.open(CLASSIC); await u.see("E-mail me a code"); await u.screen("sign-in");
