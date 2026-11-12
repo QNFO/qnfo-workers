@@ -363,7 +363,7 @@ async function ensure(env) {
   for (const q of DDL) await env.JOBS_DB.prepare(q).run();
   try { await env.JOBS_DB.prepare("ALTER TABLE jobsearch_feedback ADD COLUMN reason TEXT").run(); } catch (e) { if (!/duplicate column/i.test(String((e && e.message) || e))) throw e; }
   try { await env.JOBS_DB.prepare("ALTER TABLE jobsearch_matches ADD COLUMN gaps_json TEXT").run(); } catch (e) { if (!/duplicate column/i.test(String((e && e.message) || e))) throw e; }   // PROMPTED-RECALL-1: what the posting asks for that the CV cannot back   // why a posting was rejected: the search learns from it
-  for (const [t, c] of [["jobsearch_matches", "desc_text TEXT"], ["jobsearch_matches", "resume_rev TEXT"], ["jobsearch_apps", "contact_email TEXT"]]) {   // RESUME-ONE-TEMPLATE-1, FOLLOWUP-ONLY-INTERVIEW-1
+  for (const [t, c] of [["jobsearch_matches", "desc_text TEXT"], ["jobsearch_matches", "resume_rev TEXT"], ["jobsearch_matches", "posted_at TEXT"], ["jobsearch_apps", "contact_email TEXT"]]) {   // RESUME-ONE-TEMPLATE-1, FOLLOWUP-ONLY-INTERVIEW-1
     try { await env.JOBS_DB.prepare(`ALTER TABLE ${t} ADD COLUMN ${c}`).run(); } catch (e) { if (!/duplicate column/i.test(String((e && e.message) || e))) throw e; } // standards-ok: table and column names are fixed constants of the DDL list, never input
   }
   ensured = true; try { await generateWeeklyDossier(env); } catch (e) { logErr("dossier", e); }   // JOBSEARCH-DOSSIER-SOFT-1: a side job never takes a request down (the Monday query on a missing column returned 1101 on 2026-11-09)
@@ -448,6 +448,13 @@ function decodeEntities(s) {
     .replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(parseInt(d, 10)))
     .replace(/&nbsp;/g, " ").replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
 }
+// POSTING-AGE-1: when the employer posted the job (ISO), from whatever the source gives (ISO text, epoch ms or epoch seconds); "" when unknown or implausible
+function isoDate(v) {
+  if (v == null || v === "") return "";
+  const n = typeof v === "number" || /^\d{9,13}$/.test(String(v)) ? Number(v) : NaN;
+  const t = Number.isFinite(n) ? (n < 1e11 ? n * 1000 : n) : Date.parse(String(v));
+  return Number.isFinite(t) && t > Date.parse("2015-01-01") && t < Date.now() + 864e5 ? new Date(t).toISOString() : "";
+}
 function stripHtml(s) {
   s = decodeEntities(s);
   s = s.replace(/<(br|\/p|\/li|\/h\d)[^>]*>/gi, "\n").replace(/<[^>]+>/g, " ");
@@ -475,24 +482,24 @@ async function getHtml(url) {
 const FETCHERS = {
   async greenhouse(slug) {
     const d = await getJson(`https://boards-api.greenhouse.io/v1/boards/${slug}/jobs?content=true`);
-    return (d.jobs || []).map((j) => ({ id: `gh:${slug}:${j.id}`, source: "greenhouse", company: slug, title: j.title || "", location: (j.location || {}).name || "", url: j.absolute_url || "", desc: stripHtml(j.content || "") }));
+    return (d.jobs || []).map((j) => ({ id: `gh:${slug}:${j.id}`, source: "greenhouse", posted: isoDate(j.first_published || j.updated_at), company: slug, title: j.title || "", location: (j.location || {}).name || "", url: j.absolute_url || "", desc: stripHtml(j.content || "") }));
   },
   async lever(slug) {
     const d = await getJson(`https://api.lever.co/v0/postings/${slug}?mode=json`);
-    return d.map((j) => ({ id: `lv:${slug}:${j.id}`, source: "lever", company: slug, title: j.text || "", location: (j.categories || {}).location || "", url: j.hostedUrl || "", desc: (j.descriptionPlain || "") + "\n" + (j.additionalPlain || "") }));
+    return d.map((j) => ({ id: `lv:${slug}:${j.id}`, source: "lever", posted: isoDate(j.createdAt), company: slug, title: j.text || "", location: (j.categories || {}).location || "", url: j.hostedUrl || "", desc: (j.descriptionPlain || "") + "\n" + (j.additionalPlain || "") }));
   },
   async ashby(slug) {
     const d = await getJson(`https://api.ashbyhq.com/posting-api/job-board/${slug}`);
-    return (d.jobs || []).filter((j) => j.isListed !== false).map((j) => ({ id: `ab:${slug}:${j.id}`, source: "ashby", company: slug, title: j.title || "", location: (j.location || "") + (j.isRemote ? " (Remote)" : ""), url: j.jobUrl || "", desc: j.descriptionPlain || stripHtml(j.descriptionHtml || "") }));
+    return (d.jobs || []).filter((j) => j.isListed !== false).map((j) => ({ id: `ab:${slug}:${j.id}`, source: "ashby", posted: isoDate(j.publishedAt), company: slug, title: j.title || "", location: (j.location || "") + (j.isRemote ? " (Remote)" : ""), url: j.jobUrl || "", desc: j.descriptionPlain || stripHtml(j.descriptionHtml || "") }));
   },
   // JOBSEARCH-FIT-1: Workable public job widget (used by many EU research institutes and AI-governance start-ups); details=true carries the posting text
   async workable(slug) {
     const d = await getJson(`https://apply.workable.com/api/v1/widget/accounts/${encodeURIComponent(slug)}?details=true`);
-    return (Array.isArray(d.jobs) ? d.jobs : []).map((j) => ({ id: `wk:${slug}:${j.shortcode || j.id || j.title}`, source: "workable", company: d.name || slug, title: j.title || "", location: [j.city, j.state, j.country].filter(Boolean).join(", ") + (j.telecommuting ? " (Remote)" : ""), url: j.url || j.application_url || `https://apply.workable.com/${slug}/j/${j.shortcode || ""}`, desc: stripHtml((j.description || "") + " " + (j.requirements || "")) }));
+    return (Array.isArray(d.jobs) ? d.jobs : []).map((j) => ({ id: `wk:${slug}:${j.shortcode || j.id || j.title}`, source: "workable", posted: isoDate(j.published || j.published_on), company: d.name || slug, title: j.title || "", location: [j.city, j.state, j.country].filter(Boolean).join(", ") + (j.telecommuting ? " (Remote)" : ""), url: j.url || j.application_url || `https://apply.workable.com/${slug}/j/${j.shortcode || ""}`, desc: stripHtml((j.description || "") + " " + (j.requirements || "")) }));
   },
   async remotive(cat) {
     const d = await getJson(cat.startsWith("q=") ? `https://remotive.com/api/remote-jobs?search=${encodeURIComponent(cat.slice(2))}&limit=100` : `https://remotive.com/api/remote-jobs?category=${cat}`);
-    return (d.jobs || []).map((j) => ({ id: `rm:${j.id}`, source: "remotive", company: j.company_name || "", title: j.title || "", location: "Remote - " + (j.candidate_required_location || ""), url: j.url || "", desc: stripHtml(j.description || "") }));
+    return (d.jobs || []).map((j) => ({ id: `rm:${j.id}`, source: "remotive", posted: isoDate(j.publication_date), company: j.company_name || "", title: j.title || "", location: "Remote - " + (j.candidate_required_location || ""), url: j.url || "", desc: stripHtml(j.description || "") }));
   },
   // The Muse: all industries (consulting, public sector, nonprofits, product, data); arg is "location|category", 3 pages of 20
   async muse(arg) {
@@ -507,17 +514,17 @@ const FETCHERS = {
   // Jobicy: remote roles by region
   async jobicy(geo) {
     const d = await getJson(geo.startsWith("tag:") ? `https://jobicy.com/api/v2/remote-jobs?count=100&tag=${encodeURIComponent(geo.slice(4))}` : `https://jobicy.com/api/v2/remote-jobs?count=100&geo=${geo}`);
-    return (d.jobs || []).map((j) => ({ id: `jb:${j.id}`, source: "jobicy", company: j.companyName || "", title: j.jobTitle || "", location: "Remote - " + (Array.isArray(j.jobGeo) ? j.jobGeo.join(", ") : j.jobGeo || ""), url: j.url || "", desc: stripHtml(j.jobDescription || j.jobExcerpt || "") }));
+    return (d.jobs || []).map((j) => ({ id: `jb:${j.id}`, source: "jobicy", posted: isoDate(j.pubDate), company: j.companyName || "", title: j.jobTitle || "", location: "Remote - " + (Array.isArray(j.jobGeo) ? j.jobGeo.join(", ") : j.jobGeo || ""), url: j.url || "", desc: stripHtml(j.jobDescription || j.jobExcerpt || "") }));
   },
   // JOBSEARCH-CV-1 wider net: Recruitee company boards, RemoteOK, Himalayas, and the monthly Hacker News "Who is hiring" thread. Every fetcher tolerates an unexpected answer shape (returns nothing).
   async recruitee(slug) {
     const d = await getJson(`https://${slug}.recruitee.com/api/offers/`);
-    return (Array.isArray(d.offers) ? d.offers : []).map((j) => ({ id: `rc:${slug}:${j.id}`, source: "recruitee", company: slug, title: j.title || "", location: [j.city, j.country].filter(Boolean).join(", ") + (j.remote ? " (Remote)" : ""), url: j.careers_url || "", desc: stripHtml((j.description || "") + " " + (j.requirements || "")) }));
+    return (Array.isArray(d.offers) ? d.offers : []).map((j) => ({ id: `rc:${slug}:${j.id}`, source: "recruitee", posted: isoDate(j.published_at || j.created_at), company: slug, title: j.title || "", location: [j.city, j.country].filter(Boolean).join(", ") + (j.remote ? " (Remote)" : ""), url: j.careers_url || "", desc: stripHtml((j.description || "") + " " + (j.requirements || "")) }));
   },
   // RemoteOK terms: link back to the listing and name RemoteOK as the source; every match keeps the RemoteOK url and shows "via RemoteOK".
   async remoteok() {
     const d = await getJson("https://remoteok.com/api");
-    return (Array.isArray(d) ? d.slice(1) : []).filter((j) => j && j.position).map((j) => ({ id: `rok:${j.id}`, source: "remoteok", company: j.company || "", title: j.position || "", location: "Remote - " + (j.location || "Worldwide"), url: j.url || (j.slug ? "https://remoteok.com/remote-jobs/" + j.slug : ""), desc: stripHtml(j.description || "") }));
+    return (Array.isArray(d) ? d.slice(1) : []).filter((j) => j && j.position).map((j) => ({ id: `rok:${j.id}`, source: "remoteok", posted: isoDate(j.date), company: j.company || "", title: j.position || "", location: "Remote - " + (j.location || "Worldwide"), url: j.url || (j.slug ? "https://remoteok.com/remote-jobs/" + j.slug : ""), desc: stripHtml(j.description || "") }));
   },
   async himalayas(pages) {
     const out = [];
@@ -550,7 +557,7 @@ const FETCHERS = {
     const out = [];
     for (let p = 1; p <= 3; p++) {
       const d = await getJson(`https://www.arbeitnow.com/api/job-board-api?page=${p}`);
-      for (const j of d.data || []) out.push({ id: `an:${j.slug}`, source: "arbeitnow", company: j.company_name || "", title: j.title || "", location: (j.location || "") + (j.remote ? " (Remote)" : ""), url: j.url || "", desc: stripHtml(j.description || "") });
+      for (const j of d.data || []) out.push({ id: `an:${j.slug}`, source: "arbeitnow", posted: isoDate(j.created_at), company: j.company_name || "", title: j.title || "", location: (j.location || "") + (j.remote ? " (Remote)" : ""), url: j.url || "", desc: stripHtml(j.description || "") });
     }
     return out;
   },
@@ -2315,13 +2322,13 @@ async function run(env) {
       const a = artifactsFor(j), rv = resumeRev();
       if (!a.verified) blocked++;
       stmts.push(env.JOBS_DB.prepare(
-        `INSERT INTO jobsearch_matches (id, first_seen, last_seen, run_id, company, title, location, url, tier, score, why_json, flags_json, verified, blocked_reason, resume_md, note_md, status, gaps_json, desc_text, resume_rev)
-         VALUES (?1,?2,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,'pending_owner_approval',?16,?17,?18)
-         ON CONFLICT(id) DO UPDATE SET last_seen=?2, run_id=?3, tier=?8, score=?9, why_json=?10, flags_json=?11, verified=?12, blocked_reason=?13, title=?5, location=?6, url=CASE WHEN jobsearch_matches.url GLOB '*greenhouse.io/*' OR jobsearch_matches.url GLOB '*lever.co/*' OR jobsearch_matches.url GLOB '*ashbyhq.com/*' OR jobsearch_matches.url GLOB '*workable.com/*' OR jobsearch_matches.url GLOB '*recruitee.com/*' THEN jobsearch_matches.url ELSE ?7 END, gaps_json=?16, desc_text=?17,
+        `INSERT INTO jobsearch_matches (id, first_seen, last_seen, run_id, company, title, location, url, tier, score, why_json, flags_json, verified, blocked_reason, resume_md, note_md, status, gaps_json, desc_text, resume_rev, posted_at)
+         VALUES (?1,?2,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,'pending_owner_approval',?16,?17,?18,?19)
+         ON CONFLICT(id) DO UPDATE SET last_seen=?2, run_id=?3, tier=?8, score=?9, why_json=?10, flags_json=?11, verified=?12, blocked_reason=?13, title=?5, location=?6, url=CASE WHEN jobsearch_matches.url GLOB '*greenhouse.io/*' OR jobsearch_matches.url GLOB '*lever.co/*' OR jobsearch_matches.url GLOB '*ashbyhq.com/*' OR jobsearch_matches.url GLOB '*workable.com/*' OR jobsearch_matches.url GLOB '*recruitee.com/*' THEN jobsearch_matches.url ELSE ?7 END, gaps_json=?16, desc_text=?17, posted_at=COALESCE(NULLIF(?19,''), jobsearch_matches.posted_at),
            resume_md=CASE WHEN jobsearch_matches.status IN ('pending_owner_approval','approved','saved','expired') THEN ?14 ELSE jobsearch_matches.resume_md END,
            note_md=CASE WHEN jobsearch_matches.status IN ('pending_owner_approval','approved','saved','expired') THEN ?15 ELSE jobsearch_matches.note_md END,
            resume_rev=CASE WHEN jobsearch_matches.status IN ('pending_owner_approval','approved','saved','expired') THEN ?18 ELSE jobsearch_matches.resume_rev END`
-      ).bind(j.id, now, rid, j.company, j.title, j.location, j.url, j.match.tier, j.match.score, JSON.stringify(j.match.why || []), JSON.stringify(j.match.flags || []), a.verified, a.blocked, a.resume, a.note, JSON.stringify(recallGaps(j)), String(j.desc || "").slice(0, 8000), rv));
+      ).bind(j.id, now, rid, j.company, j.title, j.location, j.url, j.match.tier, j.match.score, JSON.stringify(j.match.why || []), JSON.stringify(j.match.flags || []), a.verified, a.blocked, a.resume, a.note, JSON.stringify(recallGaps(j)), String(j.desc || "").slice(0, 8000), rv, j.posted || ""));
     }
     // feed health: success resets the streak, failure extends it (detector fm-jobsearch-feed-down reads 3 in a row)
     for (const f of feedResults) {
@@ -3960,7 +3967,7 @@ const handler = {
       else if (status && status !== "all") { where.push("status = ?"); args.push(status); } else if (!status) where.push("status = 'pending_owner_approval'");
       if (tier) { where.push("tier = ?"); args.push(tier); }
       await ensure(env); await loadBank(env);
-      const r = await env.JOBS_DB.prepare("SELECT id, first_seen, last_seen, company, title, location, url, tier, score, why_json, flags_json, verified, blocked_reason, status, decided_at, gaps_json FROM jobsearch_matches" + (where.length ? " WHERE " + where.join(" AND ") : "") + " ORDER BY tier ASC, score DESC, last_seen DESC LIMIT 500").bind(...args).all();   // A, then B, then the stretch matches, each by score
+      const r = await env.JOBS_DB.prepare("SELECT id, first_seen, last_seen, company, title, location, url, tier, score, why_json, flags_json, verified, blocked_reason, status, decided_at, gaps_json, posted_at FROM jobsearch_matches" + (where.length ? " WHERE " + where.join(" AND ") : "") + " ORDER BY tier ASC, score DESC, last_seen DESC LIMIT 500").bind(...args).all();   // A, then B, then the stretch matches, each by score
       const cv = cvCorpus();
       let rows = r.results.map((x) => { const o = parseRow(x); o.recall_open = openGaps(parseGaps(x.gaps_json), cv).length; delete o.gaps_json; return o; });
       if (q) rows = rows.filter((x) => (x.title + " " + x.company + " " + x.location).toLowerCase().includes(q));
@@ -4041,7 +4048,7 @@ const handler = {
     return J({ error: "not found", see: "/api" }, 404);
   },
 };
-handler.__test = { findEmployerForm, FORM_SLUGS, sameTitle, autoGateOk, resumeElements, resumeOutcomeWeights, outcomeRowsOf, resumeRowsOf, orgKind, resumeSkeleton, canonicalSkeleton, tailoredResume, resumeConsistency, resolveQuestion, autopilotQueue, autopilotResolve, autopilotResult, autopilotStatus, githubOidcOk, parseRss, notifyOwner, followups, missionSources, saveMissionProbes, sourceCoverage, FETCHERS, styleLint, laneGate, fitLine, shortlist, relevanceSweep, intakeJob, setPipeStatus, saveQa, answerLibrary, matchQuestions, pipeline, parseJobMail, applyJobMail, linkedinJobUrl, ANSWER_BANK, bankAnswerFor, credentialBacked, dropUnbackedCredentials, ensureCredentialEvidence, refreshRecallFacts, polishProse, polishBank, copyLint, toolCase, vocabulary, TOPIC_LABEL, SOFTWARE, PROSE_CASE, linkedinSearches, LINKEDIN_SEARCHES, codingLoad, CANDIDATE_BOARDS, collectAndRank, cosine, bestSim, semanticLens, scoreJob, exploreOverlap, recordTerms, diversifyRows, recallGaps, recallQuestion, recallAnswer, recallQueue, RECALL_SEED, loadCtx, referralKit, referralList, STAGES, judgeTop, buildResume, verify, headlineVerdict, outcomes, pdfOf, pdfClean, checkAnswer, jsonLoose, PROTECTED_Q, draftAnswers, prepBrief, quizFeedback, judgeJob, calibrate, calibration, followups, atsOf, keywordReport, docxOf, resumeHtml, plainOf, applyKit, matchKit, stripTags, postingTerms, evaluate, rank, buildResume, buildNote, verify, stripHtml, locationGate, has, LEDGER, dedupeKey, feedPrefix, makeCtx, scoreJob, scoreFeatures, featuresFromWhy, applicationSnapshot, parseApplicationSnapshot, outcomeScoreWeights, loadCtx, SURVEY, BOARDS, normKey, applyBank, BANK_SEED, QUESTIONS, TAG_TO_CLUSTERS, clustersOf, cvAnswer, cvFact, cvReview, cvSet, cvImport, mutateBank, loadBank, decidedKeys, FETCHERS, getBank: () => BANK, llmRerank, llmRerankRun, ensureResearchPubs, ensureAutonomyBrand, ensureUltrastableBrand, ultrastableBank, ultrastableSkillsBank, ULTRASTABLE_SKILL_FACTS, ULTRASTABLE_SKILLS, syncSkillAsks, skillAskOptions, cvSkills, ULTRASTABLE_S1, RESEARCH_PUBS, FAMILIES, CLUSTER_KW, headline, pubLine, parseRerank, reasonOk, rerankMessages, artifactsFor, titleCandidate, sitemapUrls, slugTitle, PUBLIC_SECTOR, opsReport };
+handler.__test = { isoDate, findEmployerForm, FORM_SLUGS, sameTitle, autoGateOk, resumeElements, resumeOutcomeWeights, outcomeRowsOf, resumeRowsOf, orgKind, resumeSkeleton, canonicalSkeleton, tailoredResume, resumeConsistency, resolveQuestion, autopilotQueue, autopilotResolve, autopilotResult, autopilotStatus, githubOidcOk, parseRss, notifyOwner, followups, missionSources, saveMissionProbes, sourceCoverage, FETCHERS, styleLint, laneGate, fitLine, shortlist, relevanceSweep, intakeJob, setPipeStatus, saveQa, answerLibrary, matchQuestions, pipeline, parseJobMail, applyJobMail, linkedinJobUrl, ANSWER_BANK, bankAnswerFor, credentialBacked, dropUnbackedCredentials, ensureCredentialEvidence, refreshRecallFacts, polishProse, polishBank, copyLint, toolCase, vocabulary, TOPIC_LABEL, SOFTWARE, PROSE_CASE, linkedinSearches, LINKEDIN_SEARCHES, codingLoad, CANDIDATE_BOARDS, collectAndRank, cosine, bestSim, semanticLens, scoreJob, exploreOverlap, recordTerms, diversifyRows, recallGaps, recallQuestion, recallAnswer, recallQueue, RECALL_SEED, loadCtx, referralKit, referralList, STAGES, judgeTop, buildResume, verify, headlineVerdict, outcomes, pdfOf, pdfClean, checkAnswer, jsonLoose, PROTECTED_Q, draftAnswers, prepBrief, quizFeedback, judgeJob, calibrate, calibration, followups, atsOf, keywordReport, docxOf, resumeHtml, plainOf, applyKit, matchKit, stripTags, postingTerms, evaluate, rank, buildResume, buildNote, verify, stripHtml, locationGate, has, LEDGER, dedupeKey, feedPrefix, makeCtx, scoreJob, scoreFeatures, featuresFromWhy, applicationSnapshot, parseApplicationSnapshot, outcomeScoreWeights, loadCtx, SURVEY, BOARDS, normKey, applyBank, BANK_SEED, QUESTIONS, TAG_TO_CLUSTERS, clustersOf, cvAnswer, cvFact, cvReview, cvSet, cvImport, mutateBank, loadBank, decidedKeys, FETCHERS, getBank: () => BANK, llmRerank, llmRerankRun, ensureResearchPubs, ensureAutonomyBrand, ensureUltrastableBrand, ultrastableBank, ultrastableSkillsBank, ULTRASTABLE_SKILL_FACTS, ULTRASTABLE_SKILLS, syncSkillAsks, skillAskOptions, cvSkills, ULTRASTABLE_S1, RESEARCH_PUBS, FAMILIES, CLUSTER_KW, headline, pubLine, parseRerank, reasonOk, rerankMessages, artifactsFor, titleCandidate, sitemapUrls, slugTitle, PUBLIC_SECTOR, opsReport };
 export default handler;
 
 // ------------------------------------------------------------------ client script shared by both pages (JOBSEARCH-APPLY-1): kit handling and the Fill application bookmark
@@ -4084,12 +4091,13 @@ function bookmarkHref(){return 'javascript:'+encodeURIComponent('('+FILL.toStrin
 const RECALL_UI_JS = String.raw`
 // PROMPTED-RECALL-1 front end: simple cards (Apply, Not for me, Open posting, More) and yes / no / not sure questions before every application.
 var LASTV=(function(){try{var v=localStorage.getItem('jobs_last_visit')||'';localStorage.setItem('jobs_last_visit',new Date().toISOString());return v}catch(e){return ''}})();
+function postedAgo(t){var d=Math.floor((Date.now()-Date.parse(t))/864e5);if(!(d>=0))return '';return d<1?'Posted today':d===1?'Posted yesterday':d<31?'Posted '+d+' days ago':'Posted '+Math.round(d/30)+' months ago'}
 function shortLoc(s){s=String(s||'').trim();if(!s)return 'Location not stated';var m=s.match(/^(Remote)\s*-\s*(.*)$/i),rest=m?m[2]:s,parts=rest.split(/,|\|/).map(function(p){return p.trim()}).filter(Boolean);if(parts.length<=3&&s.length<=70)return s;return (m?'Remote':'Multiple locations')+' ('+parts.length+' places, starting with '+parts.slice(0,2).join(', ')+')'}
 var MINE_STEPS=[['replied','Got a reply'],['interview','Interview'],['offer','Offer'],['no_reply','No reply']];
 function cardHtml(x){
  var id=esc(x.id),mine=['approved','applied','replied','interview','offer'].indexOf(x.status)>=0,nq=x.recall_open||0;
  var h='<div class="card" id="c-'+id+'"><div class="row"><span class="badge '+x.tier+'">'+x.tier+' '+x.score+'</span>'+(LASTV&&x.first_seen>LASTV?'<span class="badge new">New</span>':'')+'<span class="t">'+esc(x.title)+'</span></div>'
-  +'<div class="mute">'+esc(x.company)+' | '+esc(shortLoc(x.location))+(via(x.id)?' | via '+esc(via(x.id)):'')+(mine||x.status!=='pending_owner_approval'?' | <span class="st '+esc(x.status)+'">'+esc(x.status.replace(/_/g,' '))+'</span>':'')+'</div>'
+  +'<div class="mute">'+esc(x.company)+' | '+esc(shortLoc(x.location))+(x.posted_at?' | '+postedAgo(x.posted_at):'')+(via(x.id)?' | via '+esc(via(x.id)):'')+(mine||x.status!=='pending_owner_approval'?' | <span class="st '+esc(x.status)+'">'+esc(x.status.replace(/_/g,' '))+'</span>':'')+'</div>'
   +'<div class="mute">'+esc(x.why.join(' | '))+'</div>'+x.flags.map(function(f){return '<div class="flag">Check: '+esc(f)+'</div>'}).join('')
   +(x.verified?'':'<div class="flag">Draft blocked by the checker: '+esc(x.blocked_reason)+'</div>');
  h+='<div class="acts big">';

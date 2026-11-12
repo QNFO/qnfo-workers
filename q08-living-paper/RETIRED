@@ -1,0 +1,11 @@
+q08-living-paper is RETIRED (2026-11-12, CONSOLIDATE-1, GitHub issue #11069, charter pillar cost): the worker has no source in this
+repository and no route since PR #11056 (route markets.q08.org/living-paper* deleted; /living-paper now 301s to /whitepaper from
+q08-prediction-markets). Its last script was exported to R2 qnfo-backups/q08-consolidation-2026-11-12/q08-living-paper.worker.js
+before retirement.
+
+This marker is the repository's retirement record that cf-ops-actions.yml `delete-worker q08-living-paper` requires
+(scripts/cf_ops_actions.py delete_worker: marker, protected list and live service-binder census). Closing probe: Cloudflare API
+GET /accounts/{id}/workers/scripts/q08-living-paper/settings returns 404.
+
+canonical-deploy.yml skips any directory containing a RETIRED or FOLDED file. Bringing it back is a charter net-zero decision
+recorded in a PR that removes this file.
