@@ -335,6 +335,16 @@ jobs:
       # CONSUMER-SPEED-1: the daily snapshot and the table sweeps that follow it (BAK-TABLE-SWEEP-1, BLOB-TRIM-1, COLD-TIER-1) stay in this job so they run every cycle
       # and the 1260-minute cadence_sla of `continuity-snapshot` keeps its slack (a snapshot that failed on a D1 overload retries 40 minutes later, not 3 hours).
       # The weekly export is the heavy part and moved to the heavy job.
+      # CONSUMER-SPEED-METRIC-1: the speed of this workflow as metrics consumer_run_median_min_24h and consumer_run_cap_cancellations_24h (one runs list, at most 12 jobs
+      # reads, schedule and push runs only), judged by v_metric_trigger_state so a regression files its own issue. Never fails the job.
+      - name: Measure the consumer run speed
+        continue-on-error: true
+        timeout-minutes: 3
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 scripts/consumer_speed_metric.py --selftest && python3 scripts/consumer_speed_metric.py
+
       - name: Snapshot qnfo-audit state for resurrection
         id: continuity
         continue-on-error: true
