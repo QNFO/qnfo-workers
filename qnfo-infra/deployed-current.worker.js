@@ -84,7 +84,7 @@ function infraManifestRoute(url, env) {
 }
 __name(infraManifestRoute, "infraManifestRoute");
 __name2(infraManifestRoute, "infraManifestRoute");
-var VERSION = "1.17.11-codeagent";
+var VERSION = "1.17.12-codeagent";
 // D1-RESULT-CAP-1 (#9794, DATA-SPINE-W0-1): D1 refuses a result payload over 50 MB. d1ReadAll runs a read; a statement that fails with a result-size
 // error is retried once as LIMIT/OFFSET pages over the same statement, and a payload at or over D1_RESULT_NEAR_BYTES is logged either way as a
 // cloud_ops_events row of kind d1_result_cap_near (fail-soft, never blocks the read).
@@ -1062,6 +1062,7 @@ const chunks = [];
             await env.PAPER_VZ.deleteByIds(slice);
             vectorsDeleted += slice.length;
           } catch (e) {
+            console.error(JSON.stringify({ worker: "qnfo-paper-indexer", where: "handlePurge", step: "deleteByIds", error: String(e && e.message || e) }));
           }
         }
         for (let i = 0; i < legacyIds.length; i += VZ_BATCH) {
@@ -1070,11 +1071,13 @@ const chunks = [];
             await env.PAPER_VZ.deleteByIds(lslice);
             vectorsDeleted += lslice.length;
           } catch (e) {
+            console.error(JSON.stringify({ worker: "qnfo-paper-indexer", where: "handlePurge", step: "deleteLegacyIds", error: String(e && e.message || e) }));
           }
         }
         try {
           await env.LIVING_PAPER.prepare("DELETE FROM index_state WHERE slug = ?1").bind(t.slug).run();
         } catch (e) {
+          console.error(JSON.stringify({ worker: "qnfo-paper-indexer", where: "handlePurge", step: "deleteIndexState", error: String(e && e.message || e) }));
         }
       }
       detail.push({ slug: t.slug, chunks: t.chunks, reason: t.reason });
@@ -1105,11 +1108,13 @@ const chunks = [];
               await env.PAPER_VZ.deleteByIds(lslice);
               legacyCorpusDeleted += lslice.length;
             } catch (e) {
+              console.error(JSON.stringify({ worker: "qnfo-paper-indexer", where: "handlePurge", step: "legacyCorpusDelete", error: String(e && e.message || e) }));
             }
           }
         }
       }
     } catch (e) {
+      console.error(JSON.stringify({ worker: "qnfo-paper-indexer", where: "handlePurge", step: "fetchCorpusRows", error: String(e && e.message || e) }));
     }
     return { success: true, dry_run: !!dryRun, records: targets.length, vectors_deleted: vectorsDeleted, legacy_corpus_ids_deleted: legacyCorpusDeleted, legacy_corpus_slugs: legacySlugs.length, detail };
   }
