@@ -36,15 +36,24 @@
       ]
     },
     {
-      "url": "https://q08-prediction-markets.q08.workers.dev/api/forecasts",
+      "_note": "LIVE-PAGES-1 (thread follow-up to PR 11056): the public host, not only workers.dev, serves the forecasts page.",
+      "url": "https://markets.q08.org/forecasts",
       "contains": [
-        "\"engine\":\"FORECAST-ENGINE-1\""
+        "Forecasts that move money"
       ]
     },
     {
-      "url": "https://q08-prediction-markets.q08.workers.dev/forecasts",
+      "_note": "CONSOLIDATE-1: the retired living-paper path lands on the one white paper (the runner follows the 301).",
+      "url": "https://markets.q08.org/living-paper",
       "contains": [
-        "Forecasts that move money"
+        "Where Do LLM Forecasters Have an Edge Over Prediction Markets?"
+      ]
+    },
+    {
+      "_note": "Issue 11057 closing probe: the engine route answers on the public host.",
+      "url": "https://markets.q08.org/api/forecasts",
+      "contains": [
+        "\"engine\":\"FORECAST-ENGINE-1\""
       ]
     }
   ]

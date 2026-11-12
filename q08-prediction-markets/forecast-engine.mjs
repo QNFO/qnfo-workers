@@ -15,7 +15,8 @@
 //   2 prior    start from the crowd: the market price, repaired for coherence across the dates of one question (a "by Dec 31"
 //              leg can never be below a "by Nov 13" leg). Incoherent or stale legs are themselves a signal. 0 tokens.
 //   3 match    link the signal stream (q08-signal.signal_log: Hacker News, arXiv, Federal Register) to each question by
-//              entity overlap. 0 tokens.
+//              entity overlap. 0 tokens. A family with no matched evidence is fetched for by name (NEWS-LANE-1, issue 11057):
+//              GDELT doc search on the question's own entities, Google News RSS as the second path, rows kept in fe_signal.
 //   4 trigger  re-forecast only when new matched evidence arrived or the prior moved 5 points. Most hours cost nothing.
 //   5 adjust   two models from different families each propose a bounded log-odds shift from the prior, citing evidence ids.
 //              About 1.5k tokens in and a few hundred out per model.
@@ -274,11 +275,81 @@ export function noThinking(model) {
   if (m.includes("gpt-oss")) return { reasoning: { effort: "low" } };
   return {};
 }
-export const LIMITS = { maxUpdatesPerTick: 4, evidencePerQuestion: 6, maxTokens: 400, horizonDaysMax: 120 };
+export const LIMITS = { maxUpdatesPerTick: 4, evidencePerQuestion: 6, maxTokens: 400, horizonDaysMax: 120, newsFetchPerTick: 6, newsRefetchMin: 180 };
+
+// ---------- 3b news lane (NEWS-LANE-1, issue 11057) ----------
+// On 2026-11-12 948 of 1,205 signals were Hacker News front-page stories, so Iran, Hegseth and macro questions matched nothing and were
+// skipped. The question itself names what to look for: each starved family is searched by its proper entities, at most newsFetchPerTick
+// families an hour, each family again only after newsRefetchMin minutes. GDELT is the first path, Google News RSS the second; either may fail alone.
+const HINT = { monetary: "interest rates", macro: "economy", "energy-geopolitics": "oil", leadership: "CEO", capital: "IPO", "officials-rules": "government" };
+export function newsQuery(title, category) {
+  const ents = properEntities(title).filter((e) => /^[a-z0-9]/.test(e)).slice(0, 4);
+  if (!ents.length) return "";
+  const q = ents.join(" ");
+  return q.length < 6 && HINT[category] ? q + " " + HINT[category] : q;
+}
+const decodeXml = (s) => String(s || "").replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'").replace(/&amp;/g, "&").trim();
+const sqlTime = (ms) => new Date(ms).toISOString().slice(0, 19).replace("T", " ");
+export function parseGdelt(text) {
+  let j; try { j = JSON.parse(text); } catch (e) { return null; } // GDELT answers its rate limit and query errors in plain text
+  return (j.articles || []).map((a) => {
+    const m = /^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})/.exec(String(a.seendate || ""));
+    return { title: String(a.title || "").trim(), url: String(a.url || ""), created_at: m ? `${m[1]}-${m[2]}-${m[3]} ${m[4]}:${m[5]}:${m[6]}` : null };
+  }).filter((a) => a.title && /^https?:\/\//.test(a.url));
+}
+export function parseNewsRss(xml) {
+  const out = [];
+  for (const it of String(xml || "").match(/<item>[\s\S]*?<\/item>/g) || []) {
+    const tag = (n) => decodeXml((new RegExp("<" + n + "[^>]*>([\\s\\S]*?)<\\/" + n + ">").exec(it) || [])[1]);
+    const t = Date.parse(tag("pubDate"));
+    const title = tag("title").replace(/\s+-\s+[^-]{2,60}$/, ""); // "Headline - Publisher"
+    if (title && /^https?:\/\//.test(tag("link"))) out.push({ title, url: tag("link"), created_at: Number.isFinite(t) ? sqlTime(t) : null });
+  }
+  return out;
+}
+// fetchText(url) -> { ok, status, text }. Returns { source, items, tried } with source "gdelt", "gnews" or "" when both paths came back empty.
+export async function fetchNews(query, fetchText) {
+  const tried = [];
+  try {
+    const r = await fetchText("https://api.gdeltproject.org/api/v2/doc/doc?mode=artlist&format=json&maxrecords=10&sort=datedesc&timespan=7d&query=" + encodeURIComponent(query + " sourcelang:english"));
+    const items = r.ok ? parseGdelt(r.text) : null;
+    tried.push("gdelt:" + (items ? items.length : "error " + r.status));
+    if (items && items.length) return { source: "gdelt", items, tried };
+  } catch (e) { tried.push("gdelt:" + String(e && e.message || e).slice(0, 60)); }
+  try {
+    const r = await fetchText("https://news.google.com/rss/search?hl=en-US&gl=US&ceid=US:en&q=" + encodeURIComponent(query + " when:7d"));
+    const items = r.ok ? parseNewsRss(r.text).slice(0, 10) : [];
+    tried.push("gnews:" + (r.ok ? items.length : "error " + r.status));
+    if (items.length) return { source: "gnews", items, tried };
+  } catch (e) { tried.push("gnews:" + String(e && e.message || e).slice(0, 60)); }
+  return { source: "", items: [], tried };
+}
+// Fetches for the starved families of one plan and stores what it found; returns the rows it added (for the re-plan) and a log.
+export async function newsLane(db, starved, fetchText, nowMs, { limits = LIMITS, sleep = (ms) => new Promise((r) => setTimeout(r, ms)) } = {}) {
+  const recent = new Set(((await db.prepare("SELECT family FROM fe_fetch WHERE fetched_at > ?").bind(new Date(nowMs - limits.newsRefetchMin * 60000).toISOString()).all()).results || []).map((r) => r.family));
+  const todo = starved.filter((q) => !recent.has(q.family) && newsQuery(q.title, q.category)).slice(0, limits.newsFetchPerTick);
+  const added = [], log = [];
+  for (let i = 0; i < todo.length; i++) {
+    const q = todo[i], query = newsQuery(q.title, q.category);
+    if (i) await sleep(5500); // GDELT asks for one request every 5 seconds
+    const res = await fetchNews(query, fetchText);
+    let n = 0;
+    for (const it of res.items) {
+      const id = res.source + ":" + (await sha256Hex(it.url)).slice(0, 24);
+      const row = { source: res.source, title: it.title.slice(0, 300), url: it.url.slice(0, 1000), created_at: it.created_at || sqlTime(nowMs) };
+      const ins = await db.prepare("INSERT OR IGNORE INTO fe_signal (id, source, family, query, title, url, created_at) VALUES (?,?,?,?,?,?,?)").bind(id, row.source, q.family, query, row.title, row.url, row.created_at).run();
+      if (ins?.meta?.changes !== 0) { added.push(row); n++; }
+    }
+    await db.prepare("INSERT OR REPLACE INTO fe_fetch (family, query, fetched_at, source, found) VALUES (?,?,?,?,?)").bind(q.family, query, new Date(nowMs).toISOString(), res.source || res.tried.join(","), n).run();
+    log.push({ family: q.family, query, source: res.source, found: res.items.length, added: n, tried: res.tried });
+  }
+  return { added, log };
+}
 
 // Steps 1-4 for every candidate market: returns the questions to update this tick and why the rest were skipped.
 export function plan(markets, signals, lastByslug, nowMs, limits = LIMITS) {
-  const kept = [], skipped = { trivial: 0, no_deadline: 0, past_or_far: 0, unchanged: 0 };
+  const kept = [], skipped = { trivial: 0, no_deadline: 0, past_or_far: 0, unchanged: 0, no_evidence: 0 };
+  const starved = new Map(), coverage = {};
   const consequential = markets.filter((m) => { const c = classify(m.title); if (!c) skipped.trivial++; return !!c; });
   const legs = termStructure(consequential, nowMs);
   skipped.no_deadline = consequential.length - legs.length;
@@ -287,7 +358,15 @@ export function plan(markets, signals, lastByslug, nowMs, limits = LIMITS) {
     if (days < 1 || days > limits.horizonDaysMax) { skipped.past_or_far++; continue; }
     const c = classify(q.title);
     const evidence = matchEvidence(q, signals, { max: limits.evidencePerQuestion, sinceMs: nowMs - 21 * 86400000 });
-    if (!evidence.length) { skipped.unchanged++; continue; }
+    const cv = coverage[c.key] || (coverage[c.key] = { legs: 0, with_evidence: 0 });
+    cv.legs++;
+    if (!evidence.length) {
+      skipped.no_evidence++;
+      const s0 = starved.get(q.family);
+      if (!s0 || Math.abs(days - 30) < Math.abs(s0.days - 30)) starved.set(q.family, { family: q.family, slug: q.slug, title: q.title, category: c.key, days });
+      continue;
+    }
+    cv.with_evidence++;
     const t = needsUpdate(lastByslug[q.slug], q.prior, evidence);
     if (!t.yes) { skipped.unchanged++; continue; }
     kept.push({ ...q, category: c.key, moves: c.moves, evidence, trigger: t.why, days: Math.round(days) });
@@ -296,7 +375,7 @@ export function plan(markets, signals, lastByslug, nowMs, limits = LIMITS) {
   const best = new Map();
   for (const q of kept) { const b = best.get(q.family); if (!b || Math.abs(q.days - 30) < Math.abs(b.days - 30)) best.set(q.family, q); }
   const chosen = [...best.values()].sort((a, b) => (b.incoherent - a.incoherent) || (b.evidence.length - a.evidence.length)).slice(0, limits.maxUpdatesPerTick);
-  return { chosen, skipped, candidates: markets.length, consequential: consequential.length };
+  return { chosen, skipped, candidates: markets.length, consequential: consequential.length, coverage, starved: [...starved.values()].sort((a, b) => a.days - b.days) };
 }
 
 // Steps 5-7 for one question. ask(model, prompt) -> { text, in_tok, out_tok }.
@@ -314,6 +393,9 @@ export async function forecastOne(q, ask, today) {
 const SCHEMA = [
   "CREATE TABLE IF NOT EXISTS fe_forecast (id INTEGER PRIMARY KEY AUTOINCREMENT, created_at TEXT NOT NULL, slug TEXT NOT NULL, title TEXT NOT NULL, deadline TEXT, category TEXT, moves TEXT, quoted REAL, prior REAL NOT NULL, p REAL NOT NULL, shift REAL, why TEXT, trig TEXT, evidence_json TEXT, verdicts_json TEXT, tokens INTEGER, outcome INTEGER, resolved_at TEXT, prev_hash TEXT, hash TEXT NOT NULL)",
   "CREATE INDEX IF NOT EXISTS fe_forecast_slug ON fe_forecast(slug, id)",
+  "CREATE TABLE IF NOT EXISTS fe_signal (id TEXT PRIMARY KEY, source TEXT NOT NULL, family TEXT, query TEXT, title TEXT NOT NULL, url TEXT NOT NULL, created_at TEXT NOT NULL)",
+  "CREATE INDEX IF NOT EXISTS fe_signal_created ON fe_signal(created_at)",
+  "CREATE TABLE IF NOT EXISTS fe_fetch (family TEXT PRIMARY KEY, query TEXT, fetched_at TEXT NOT NULL, source TEXT, found INTEGER)",
   "CREATE TABLE IF NOT EXISTS fe_tick (id INTEGER PRIMARY KEY AUTOINCREMENT, ran_at TEXT NOT NULL, candidates INTEGER, consequential INTEGER, updated INTEGER, tokens INTEGER, skipped_json TEXT, error TEXT)",
 ];
 export async function ensureSchema(db) { for (const s of SCHEMA) await db.prepare(s).run(); }
@@ -322,10 +404,11 @@ async function readInputs(env, nowMs) {
   if (!env.SIGNAL_DB) throw new Error("SIGNAL_DB (q08-signal) is not bound");
   const m = await env.TRADES_DB.prepare("SELECT slug, title, yes, vol24, updated_at, ends_at FROM pt_market WHERE closed = 0 AND yes > 0.01 AND yes < 0.99 AND updated_at > ?").bind(new Date(nowMs - 7 * 86400000).toISOString()).all();
   const s = await env.SIGNAL_DB.prepare("SELECT source, title, url, created_at FROM signal_log WHERE created_at > datetime('now','-21 days') AND source IN ('hn','federalregister','arxiv') ORDER BY created_at DESC LIMIT 1500").all();
+  const n = await env.TRADES_DB.prepare("SELECT source, title, url, created_at FROM fe_signal WHERE created_at > ? ORDER BY created_at DESC LIMIT 1500").bind(sqlTime(nowMs - 21 * 86400000)).all();
   const last = await env.TRADES_DB.prepare("SELECT f.* FROM fe_forecast f JOIN (SELECT slug, max(id) id FROM fe_forecast GROUP BY slug) l ON l.id = f.id").all();
   const lastBy = {};
   for (const r of last.results || []) lastBy[r.slug] = r;
-  return { markets: m.results || [], signals: s.results || [], lastBy };
+  return { markets: m.results || [], signals: (n.results || []).concat(s.results || []), lastBy };
 }
 
 // Workers AI binding first (it takes the thinking switch); the fleet router is the second path if the binding is missing or fails.
@@ -347,10 +430,20 @@ async function workersAiAsk(env, model, prompt) {
   return { text: String(j.choices?.[0]?.message?.content || ""), in_tok: j.usage?.prompt_tokens || 0, out_tok: j.usage?.completion_tokens || 0, path: "router" };
 }
 
+async function defaultFetchText(url) {
+  const r = await fetch(url, { headers: { "user-agent": "q08-forecasts/1 (+https://markets.q08.org/forecasts)", accept: "application/json, application/rss+xml, text/xml" }, signal: AbortSignal.timeout(10000) });
+  return { ok: r.ok, status: r.status, text: await r.text() };
+}
 export async function tick(env, nowMs = Date.now()) {
   await ensureSchema(env.TRADES_DB);
   const { markets, signals, lastBy } = await readInputs(env, nowMs);
-  const pl = plan(markets, signals, lastBy, nowMs);
+  let pl = plan(markets, signals, lastBy, nowMs), news = { added: [], log: [] };
+  if (String(env.FE_NEWS || "on") !== "off" && pl.starved.length) {
+    try {
+      news = await newsLane(env.TRADES_DB, pl.starved, env.__fetchText || defaultFetchText, nowMs);
+      if (news.added.length) pl = plan(markets, news.added.concat(signals), lastBy, nowMs);
+    } catch (e) { news.log.push({ error: String(e && e.message || e).slice(0, 200) }); }
+  }
   const past = (await env.TRADES_DB.prepare("SELECT slug, prior, p, outcome FROM fe_forecast WHERE outcome IS NOT NULL ORDER BY id").all()).results || [];
   const spin = spinoffStatus(past);
   if (spin.halted) pl.chosen = []; // self-halt: the evidence says the adjustments hurt; the ledger keeps the crowd's number until it turns
@@ -373,11 +466,12 @@ export async function tick(env, nowMs = Date.now()) {
   // Resolution: a closed market whose YES price sits at 0 or 1 settles every forecast on it (the pilot's fetch keeps pt_market current).
   await env.TRADES_DB.prepare("UPDATE fe_forecast SET outcome = (SELECT CASE WHEN m.yes >= 0.99 THEN 1 ELSE 0 END FROM pt_market m WHERE m.slug = fe_forecast.slug), resolved_at = ? WHERE outcome IS NULL AND EXISTS (SELECT 1 FROM pt_market m WHERE m.slug = fe_forecast.slug AND m.closed = 1 AND (m.yes >= 0.99 OR m.yes <= 0.01))").bind(new Date(nowMs).toISOString()).run().catch(() => null);
   await env.TRADES_DB.prepare("INSERT INTO fe_tick (ran_at, candidates, consequential, updated, tokens, skipped_json, error) VALUES (?,?,?,?,?,?,?)")
-    .bind(new Date(nowMs).toISOString(), pl.candidates, pl.consequential, updated, tokens, JSON.stringify(pl.skipped), error).run();
-  return { candidates: pl.candidates, consequential: pl.consequential, updated, tokens, skipped: pl.skipped, error };
+    .bind(new Date(nowMs).toISOString(), pl.candidates, pl.consequential, updated, tokens, JSON.stringify({ ...pl.skipped, coverage: pl.coverage, news: news.log }), error).run();
+  return { candidates: pl.candidates, consequential: pl.consequential, updated, tokens, skipped: pl.skipped, coverage: pl.coverage, news: news.log, error };
 }
 
 // ---------- 8 card: the page ----------
+const COVER_LABEL = { monetary: "Interest rates", macro: "Economic data", leadership: "Company leadership", capital: "Deals and listings", "energy-geopolitics": "Energy and geopolitics", "officials-rules": "Officials and rules" };
 export function renderPage(rows, stats, head) {
   const esc = (s) => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   const cards = rows.map((r) => {
@@ -401,6 +495,7 @@ export function renderPage(rows, stats, head) {
 <section class="ds-stats"><div class="ds-stat"><div class="k">Open forecasts</div><div class="v">${rows.length}</div></div><div class="ds-stat"><div class="k">Tokens per forecast</div><div class="v">${stats.tokens_per ? esc(stats.tokens_per) : "–"}</div></div><div class="ds-stat"><div class="k">Value added vs crowd</div><div class="v">${va.n ? esc(va.value_added) : "–"}</div></div></section>
 ${va.n ? "" : `<p class="ds-note">No forecast has settled yet. Value added (crowd Brier minus engine Brier) appears here after the first settles.</p>`}
 ${stats.spinoff ? `<p class="ds-note">Next gate: <b>${esc(stats.spinoff.next_gate || "all passed")}</b>. ${esc((stats.spinoff.gates.find((g) => g.key === stats.spinoff.next_gate) || {}).need || "")} (${esc(stats.spinoff.settled)} settled).${stats.spinoff.halted ? " Adjustments are halted: the engine is publishing the crowd's number." : ""}</p>` : ""}
+${stats.coverage ? `<details class="ds-more"><summary>Coverage: ${esc(Object.values(stats.coverage).reduce((a, c) => a + c.with_evidence, 0))} of ${esc(Object.values(stats.coverage).reduce((a, c) => a + c.legs, 0))} questions have fresh evidence</summary><div class="ds-more-body"><ul>${Object.entries(stats.coverage).map(([k, c]) => `<li>${esc(COVER_LABEL[k] || k)}: ${esc(c.with_evidence)} of ${esc(c.legs)}</li>`).join("")}</ul></div></details>` : ""}
 ${cards || `<div class="ds-empty"><b>No forecasts yet</b>The engine runs hourly and writes its first forecasts when a consequential question has fresh signals.</div>`}
 <footer class="fe-foot"><a href="/paper">Paper-trading pilot</a><a href="/whitepaper">White paper</a><a href="/api/forecasts">Data (JSON)</a><span>Not investment advice. Paper money only.</span></footer>
 </main></body></html>`;
@@ -413,6 +508,9 @@ export async function latestRows(env) {
   const all = await env.TRADES_DB.prepare("SELECT slug, prior, p, outcome, tokens FROM fe_forecast ORDER BY id").all();
   const rows = all.results || [];
   const tok = rows.length ? Math.round(rows.reduce((a, x) => a + (x.tokens || 0), 0) / rows.length) : 0;
-  return { rows: r.results || [], stats: { value: valueAdded(lastPerSlug(rows)), spinoff: spinoffStatus(rows), tokens_per: tok, total: rows.length } };
+  const lt = await env.TRADES_DB.prepare("SELECT skipped_json FROM fe_tick ORDER BY id DESC LIMIT 1").first().catch(() => null);
+  let coverage = null; try { coverage = JSON.parse(lt?.skipped_json || "{}").coverage || null; } catch (e) { coverage = null; }
+  const src = await env.TRADES_DB.prepare("SELECT source, count(*) n FROM fe_signal WHERE created_at > datetime('now','-21 days') GROUP BY source").all().catch(() => ({ results: [] }));
+  return { rows: r.results || [], stats: { value: valueAdded(lastPerSlug(rows)), spinoff: spinoffStatus(rows), tokens_per: tok, total: rows.length, coverage, news_signals: Object.fromEntries((src.results || []).map((x) => [x.source, x.n])) } };
 }
 
