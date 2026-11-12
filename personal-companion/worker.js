@@ -1381,7 +1381,7 @@ var PE = (() => {
 //
 // Pure ESM, no imports: personal-companion inlines it (scripts/inline-pipeline-modules.mjs); tests load it directly.
 
-const ENGINE_VERSION = "1.0.0";
+const ENGINE_VERSION = "1.1.0";
 
 const ENGINE_DDL = [
   `CREATE TABLE IF NOT EXISTS pipeline_runs (
@@ -1446,7 +1446,8 @@ function definePipeline(def) {
   for (const s of stages) {
     if (!s.key || seen.has(s.key)) throw new Error("pipeline " + def.name + ": stage key " + s.key);
     seen.add(s.key);
-    if (def.mode === "observed" ? false : typeof s.run !== "function") throw new Error("pipeline " + def.name + ": stage " + s.key + " has no run()");
+    // a funnel view (observed, or executed by a sibling pipeline named in def.runs) projects stages and needs no run()
+    if (def.mode === "observed" || typeof def.project === "function" ? false : typeof s.run !== "function") throw new Error("pipeline " + def.name + ": stage " + s.key + " has no run()");
     if (s.wait && (typeof s.wait.poll !== "function" || typeof s.wait.resume !== "function")) throw new Error("pipeline " + def.name + ": stage " + s.key + " wait needs poll and resume");
   }
   if (def.mode === "observed" && typeof def.project !== "function") throw new Error("pipeline " + def.name + ": observed needs project()");
@@ -1606,8 +1607,9 @@ async function resumeDue(db, def, ctx = {}, limit = 20) {
 
 // ------------------------------------------------------------------ status
 // Counts only: no input, state or output leaves the plane through this view.
-async function statusOf(db, def, nowMs = Date.now()) {
-  await ensureEngine(db);
+// opts.ensure=false reads a plane this worker does not own: no DDL, and a missing table reads as an error the caller catches.
+async function statusOf(db, def, nowMs = Date.now(), opts = {}) {
+  if (opts.ensure !== false) await ensureEngine(db);
   const rows = (await db.prepare("SELECT status, stage, COUNT(*) AS n, MIN(updated_at) AS oldest FROM pipeline_runs WHERE pipeline = ? GROUP BY status, stage").bind(def.name).all()).results || [];
   const since = new Date(nowMs - 864e5).toISOString();
   const f = await db.prepare("SELECT COUNT(*) AS n FROM pipeline_runs WHERE pipeline = ? AND status = 'failed' AND updated_at >= ?").bind(def.name, since).first();
@@ -1640,7 +1642,7 @@ function summarise(def, rows, nowMs, extra) {
     if (["queued", "running", "waiting", "active"].includes(r.state) && r.oldest && (!oldestActive || r.oldest < oldestActive)) oldestActive = r.oldest;
   }
   return Object.assign({
-    pipeline: def.name, label: def.label || def.name, plane: def.plane, version: def.version, mode: def.mode,
+    pipeline: def.name, label: def.label || def.name, plane: def.plane, version: def.version, mode: def.mode, executor: def.executor || null,
     stages: def.stages.map((s) => ({ key: s.key, label: s.label || s.key, active: by_stage[s.key] || 0 })),
     total, by_state, oldest_active_min: oldestActive ? Math.round((nowMs - Date.parse(oldestActive)) / 6e4) : null
   }, extra);
@@ -1656,6 +1658,12 @@ var PD = (() => {
 // engine's Workflow executor is tracked by the PIPELINE-ENGINE-PORT loop issue; until then nothing here writes to their tables.
 //
 // The engine is passed in, so this file has no imports (it is inlined next to the engine).
+//
+// PIPELINE-ENGINE-PORT-1 (2026-11-12): the job pipeline is executed. jobApplicationPipeline is one run per application, opened
+// when jobsearch_matches.status reaches `applied` (or later), and its waits are Workflow sleeps that read the status once a day
+// instead of the hourly status scan. It reads jobsearch_matches and writes only pipeline_runs and pipeline_evidence in qnfo-audit:
+// match ids and job statuses, nothing from the personal plane. Owner rule (2026-11-12, FOLLOWUP-ONLY-INTERVIEW-1): no reply is
+// not a rejection, so the run never writes a status; a quiet application ends as "quiet" and the status stays applied.
 
 function researchPipeline(E) {
   // qnfo-audit.research_queue.status, measured 2026-11-12: owner_paused 956, published 546, deferred 499, merged 154, queued 152,
@@ -1701,8 +1709,12 @@ function jobsPipeline(E) {
     expired: { stage: "found", state: "dropped" },
     withdrawn: { stage: "applied", state: "dropped" }
   };
+  // PIPELINE-ENGINE-PORT-1 (2026-11-12): executed. Every application from `applied` onward is a run of jobApplicationPipeline below
+  // (Cloudflare Workflow `job-application`, class JobApplicationFlow in personal-companion, state in qnfo-audit pipeline_runs); the
+  // funnel before it (found, shortlisted) is still read from jobsearch_matches.status.
   return E.definePipeline({
-    name: "jobs", label: "Jobs: posting to offer", plane: "jobs", version: "1.0.0", mode: "observed",
+    name: "jobs", label: "Jobs: posting to offer", plane: "jobs", version: "1.0.0", mode: "executed", runs: "job-application",
+    executor: "Cloudflare Workflow job-application, one run per application",
     source: { db: "qnfo-audit", table: "jobsearch_matches", status: "status", ts: "first_seen" },
     stages: [
       { key: "found", label: "Found" }, { key: "shortlist", label: "Shortlisted" }, { key: "applied", label: "Applied" },
@@ -1715,7 +1727,94 @@ function jobsPipeline(E) {
 // The milestones of the job pipeline that become events in the personal pipeline (how it landed, a win to count).
 const JOB_MILESTONES = ["applied", "replied", "screening", "interview", "offer", "no_reply"];
 
-return Object.freeze({ researchPipeline, jobsPipeline, JOB_MILESTONES });
+// ------------------------------------------------------------------ PIPELINE-ENGINE-PORT-1: the executed job pipeline
+const JOB_CONVERSATION = ["replied", "screening", "interview"];
+const JOB_TERMINAL = ["offer", "rejected", "withdrawn", "no_reply"];
+const JOB_OPEN = ["applied"].concat(JOB_CONVERSATION);
+const JOB_FOLLOWUP_DAYS = 45;      // a reply can come weeks later; the status is never flipped (owner 2026-11-12)
+const JOB_CONVERSATION_DAYS = 60;
+
+async function jobStatus(ctx, id) {
+  const r = await ctx.jobsDb.prepare("SELECT status FROM jobsearch_matches WHERE id = ?").bind(id).first();
+  return r ? String(r.status || "") : "gone";
+}
+
+function jobApplicationPipeline(E) {
+  return E.definePipeline({
+    name: "job-application", label: "Job application: applied to outcome", plane: "jobs", version: "1.0.0",
+    input: { type: "object", required: ["match_id"], props: { match_id: { type: "string" } } },
+    stages: [
+      { key: "applied", label: "Applied", out: { type: "object", required: ["status"] },
+        async run(s, ctx) { const st = await jobStatus(ctx, s.match_id); return { out: { status: st }, state: { status: st } }; } },
+      { key: "followup", label: "Waiting for a reply",
+        async run(s, ctx) {
+          const st = await jobStatus(ctx, s.match_id);
+          if (st === "applied") return { wait: true, detail: { days: JOB_FOLLOWUP_DAYS } };
+          return { out: { moved: st }, state: { moved: st } };
+        },
+        wait: { every: "1 day", max: JOB_FOLLOWUP_DAYS,
+          poll: async (s, ctx) => { const st = await jobStatus(ctx, s.match_id); return st === "applied" ? null : st; },
+          resume: async (s, got, ctx, info) => ({ out: { moved: got, quiet: !!info.timedOut }, state: { moved: got } }) } },
+      { key: "conversation", label: "In conversation",
+        async run(s, ctx) {
+          if (!JOB_CONVERSATION.includes(s.moved)) return { out: { skipped: true }, state: { final: s.moved || null } };
+          const st = await jobStatus(ctx, s.match_id);
+          if (JOB_TERMINAL.includes(st) || st === "gone") return { out: { final: st }, state: { final: st } };
+          return { wait: true, detail: { days: JOB_CONVERSATION_DAYS } };
+        },
+        wait: { every: "1 day", max: JOB_CONVERSATION_DAYS,
+          poll: async (s, ctx) => { const st = await jobStatus(ctx, s.match_id); return JOB_TERMINAL.includes(st) || st === "gone" ? st : null; },
+          resume: async (s, got, ctx, info) => ({ out: { final: got, quiet: !!info.timedOut }, state: { final: got || s.moved } }) } },
+      { key: "outcome", label: "Outcome", out: { type: "object", required: ["outcome"] },
+        async run(s) {
+          const f = s.final || s.moved || null;
+          const outcome = f === "offer" ? "offer" : f === "rejected" ? "rejected" : f === "withdrawn" ? "withdrawn" : f === "no_reply" ? "no_reply"
+            : JOB_CONVERSATION.includes(f) ? "conversation_quiet" : f === "gone" ? "gone" : "quiet";
+          return { out: { outcome }, state: { outcome } };
+        } }
+    ],
+    output: (s) => ({ outcome: s.outcome, match_id: s.match_id })
+  });
+}
+
+// One tick (personal-companion hourly cron): open a run per application that reached `applied` and has none, start it on the
+// Workflow (inline when the binding is absent or create() throws), adopt Workflow runs that went quiet for 3 days (a poll writes
+// updated_at once a day), and resume inline runs that are due. db is qnfo-audit.
+async function jobsTick(E, env, opts = {}) {
+  const db = env.AUDIT, def = jobApplicationPipeline(E), now = (opts.now || (() => new Date().toISOString()))();
+  if (!db) return { skipped: "no AUDIT binding" };
+  await E.ensureEngine(db);
+  const res = { opened: 0, workflow: 0, inline: 0, adopted: 0 };
+  // An open application always counts; a closed status counts only when the role was applied for (a rejected posting the owner
+  // turned down never was an application).
+  const q = (a) => a.map(() => "?").join(",");
+  const rows = (await db.prepare("SELECT m.id FROM jobsearch_matches m WHERE (m.status IN (" + q(JOB_OPEN) + ") OR (m.status IN (" + q(JOB_TERMINAL) + ") AND EXISTS (SELECT 1 FROM jobsearch_events e WHERE e.match_id = m.id AND e.event = 'applied'))) AND NOT EXISTS (SELECT 1 FROM pipeline_runs r WHERE r.pipeline = 'job-application' AND r.subject_ref = m.id) ORDER BY m.id LIMIT ?")
+    .bind(...JOB_OPEN, ...JOB_TERMINAL, opts.limit || 25).all()).results || [];
+  for (const r of rows) {
+    const o = await E.openRun(db, def, { match_id: String(r.id) }, { subjectRef: String(r.id), now });
+    if (!o.created) continue;
+    res.opened++;
+    let started = false;
+    if (env.JOB_FLOW && typeof env.JOB_FLOW.create === "function") {
+      try { await env.JOB_FLOW.create({ id: o.id, params: { runId: o.id } }); await E.setMode(db, o.id, "workflow", now); started = true; res.workflow++; }
+      catch (e) { await E.evidence(db, o.id, def.name, "start", false, { workflow_create: String(e && e.message || e).slice(0, 200), fallback: "inline" }, now); }
+    }
+    if (!started) res.inline++;
+  }
+  const stale = new Date(Date.parse(now) - 3 * 864e5).toISOString();
+  const ad = await db.prepare("UPDATE pipeline_runs SET mode = 'inline', next_check_at = ?, updated_at = ? WHERE pipeline = 'job-application' AND mode = 'workflow' AND status IN ('queued','running','waiting') AND updated_at < ?").bind(now, now, stale).run();
+  res.adopted = ad && ad.meta ? Number(ad.meta.changes) || 0 : 0;
+  res.resume = await E.resumeDue(db, def, { jobsDb: db, now: opts.now }, 20);
+  return res;
+}
+
+// The Workflow body: the same runPipeline the inline path uses, with the Workflow's own step.
+async function runJobWorkflow(E, env, payload, step) {
+  const id = payload && payload.runId;
+  return E.runPipeline(env.AUDIT, jobApplicationPipeline(E), id, step, { jobsDb: env.AUDIT });
+}
+
+return Object.freeze({ researchPipeline, jobsPipeline, JOB_MILESTONES, JOB_CONVERSATION, JOB_TERMINAL, JOB_OPEN, JOB_FOLLOWUP_DAYS, JOB_CONVERSATION_DAYS, jobApplicationPipeline, jobsTick, runJobWorkflow });
 })(); // end inline _shared/pipeline-defs.js
 var PP = (() => {
 // personal-companion/personal-pipeline.js: PERSONAL-PIPELINE-1 (Rowan 2026-11-12).
@@ -2086,7 +2185,13 @@ async function statusAll(env, nowMs = Date.now()) {
       if (!env.AUDIT) throw new Error("no AUDIT binding");
       const s = def.source;
       const rows = (await env.AUDIT.prepare("SELECT " + s.status + " AS status, COUNT(*) AS n, MIN(" + s.ts + ") AS oldest FROM " + s.table + " GROUP BY " + s.status).all()).results || [];
-      out.pipelines.push(PE.projectStatus(def, rows, nowMs));
+      const view = PE.projectStatus(def, rows, nowMs);
+      // PIPELINE-ENGINE-PORT-1: an executed funnel carries its runs (counts only), read without DDL from the plane that owns them
+      if (def.runs === "job-application") {
+        try { const r = await PE.statusOf(env.AUDIT, PD.jobApplicationPipeline(PE), nowMs, { ensure: false }); view.runs = { pipeline: r.pipeline, total: r.total, by_state: r.by_state, stages: r.stages, done_24h: r.done_24h, failed_24h: r.failed_24h, stuck: r.stuck }; }
+        catch (e) { view.runs = { pipeline: "job-application", total: 0, by_state: {}, note: "no runs yet" }; }
+      }
+      out.pipelines.push(view);
     } catch (e) { out.pipelines.push({ pipeline: def.name, error: String(e && e.message || e).slice(0, 200) }); }
   }
   // CLOCKWORK-1: the clock of every scheduled loop, as qnfo-cloud-ops judges it every 10 minutes (clock_ticks in qnfo-audit).
@@ -2097,9 +2202,10 @@ async function statusAll(env, nowMs = Date.now()) {
     out.clock = { loops: rows, checked_at: checked || null, watchdog_age_min: checked ? Math.round((nowMs - Date.parse(checked)) / 6e4) : null };
   } catch (e) { const m = String(e && e.message || e).slice(0, 200); out.clock = /no such table/i.test(m) ? { loops: [], skipped: "no clock reading yet" } : { error: m, loops: [] }; }
   const p = out.pipelines[0] || {};
+  const jr = (out.pipelines.find((x) => x.runs) || {}).runs || {};
   const clockBad = (out.clock.loops || []).filter((r) => r.state === "stopped" || r.state === "inaccurate" || r.state === "unreadable").length;
   out.clock.not_ok = clockBad;
-  out.healthy = !p.error && (p.failed_24h || 0) === 0 && (p.stuck || 0) === 0 && clockBad === 0 && !out.clock.error && !(Number(out.clock.watchdog_age_min) > 30);
+  out.healthy = !p.error && (p.failed_24h || 0) === 0 && (p.stuck || 0) === 0 && (jr.failed_24h || 0) === 0 && (jr.stuck || 0) === 0 && clockBad === 0 && !out.clock.error && !(Number(out.clock.watchdog_age_min) > 30);
   return out;
 }
 
@@ -2109,8 +2215,16 @@ function statusPage(st, head) {
     if (p.error) return '<section class="ds-card"><h2>' + esc(p.pipeline) + '</h2><p class="pp-bad">Could not read this pipeline: ' + esc(p.error) + "</p></section>";
     const stages = p.stages.map((s) => '<li><span>' + esc(s.label) + '</span><b>' + s.active + "</b></li>").join("");
     const states = Object.keys(p.by_state).sort().map((k) => esc(k) + " " + p.by_state[k]).join(" · ");
-    const extra = p.plane === "personal" ? '<p class="pp-mute">Last 24 hours: ' + (p.done_24h || 0) + " finished, " + (p.failed_24h || 0) + " failed, " + (p.stuck || 0) + " stuck.</p>" : "";
-    return '<section class="ds-card"><h2>' + esc(p.label) + '</h2><p class="pp-mute">' + (p.mode === "observed" ? "Runs in its own worker; stages read from its status." : "Runs on Cloudflare Workflows, inline when needed.") + "</p>"
+    let extra = p.plane === "personal" ? '<p class="pp-mute">Last 24 hours: ' + (p.done_24h || 0) + " finished, " + (p.failed_24h || 0) + " failed, " + (p.stuck || 0) + " stuck.</p>" : "";
+    if (p.runs) {
+      const rs = (p.runs.stages || []).filter((s) => s.active).map((s) => esc(s.label) + " " + s.active).join(" · ");
+      const done = (p.runs.by_state && p.runs.by_state.done) || 0;
+      extra += '<p class="pp-mute">Application runs: ' + (p.runs.total || 0) + " in total, " + done + " finished" + (rs ? ", now " + rs : "") + ". "
+        + (p.runs.failed_24h || 0) + " failed and " + (p.runs.stuck || 0) + " stuck in 24 hours.</p>";
+    }
+    const how = p.mode === "observed" ? "Runs in its own worker; stages read from its status."
+      : p.runs ? "Each application runs on Cloudflare Workflows; earlier stages read from its status." : "Runs on Cloudflare Workflows, inline when needed.";
+    return '<section class="ds-card"><h2>' + esc(p.label) + '</h2><p class="pp-mute">' + how + "</p>"
       + '<ol class="pp-stages">' + stages + "</ol><p class=\"pp-mute\">" + p.total + " in total: " + states + "</p>" + extra + "</section>";
   };
   const css = ".pp-clock{align-items:center;gap:var(--ds-s2,8px)}" + ".pp-stages{list-style:none;padding:0;margin:var(--ds-s2,8px) 0;display:grid;gap:4px}.pp-stages li{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--ds-line,#ddd)}.pp-mute{color:var(--ds-mute,#666);font-size:14px}.pp-bad{color:var(--ds-bad,#b00020)}";
@@ -4507,7 +4621,7 @@ var __name22 = __name2;
 // line below (VERSION-LINE-NOTES-1, 2026-10-19). Its older trailing notes stay until length-lede.test.mjs stops pinning "LENGTH-LEDE-1" on that line.
 // VERSION-NOTES-MOVED-1: release notes live in the block below
 // W-META-1 (agent_issues 1002316/1002317/1002318): aiRunAttr records in_tok/out_tok/neurons per purpose.
-var VERSION = "1.50.0-codeagent";
+var VERSION = "1.51.0-codeagent";
 // 1.46.0 KERNEL-EVERYWHERE-1 (2026-11-06, owner directive "IMPLEMENT EVERYWHERE ACROSS ALL AI APPS AND SERVICES AND SURFACES", pillar personal): the travel planner CHAT_SYSTEM carries the DOCTRINE-1 kernel 8.2.1 reply recognitions (KERNEL-REPLY-4, scoped to the planner's one designed question): end on the plan or proposal, never a conditional offer or questionnaire; refusals and limits are dispositions with their reason; reversible steps are taken and reported in the same reply. prior 1.45.8-codeagent
 /* 1.44.14 COMPANION-LENGTH-HEADROOM-1 (issue 1000633, pillar personal; patch): repeated length failures alongside exhausted retry budgets expose too little headroom for model output variation. Length-only repairs now target 500 words below the unchanged ceiling while remaining inside each form's normal writer band. */
 /* 1.43.6 BP26-AI-ACT-ART50-1 and BP26-STRUCTURED-DATA-1 (2026-10-26, agent_issues 1000341 and 1000336, pillar core; patch): the visible AI-generated label of every reading.q08.org piece now has its machine-readable half. A piece page carries an Article JSON-LD block (headline, datePublished, url, an Organization as author, never an AI or invented persona, and creditText saying it was written by AI and that no human reviews pieces before they appear) and the index page a Blog block. Measured before: the reading pages carried the visible label and no JSON-LD at all. */
@@ -9304,6 +9418,8 @@ var worker_default = {
         try { var _wb = await WBW.wellbeingTick(env, { send: wellbeingSend }); if (_wb && (_wb.sent || _wb.skipped || _wb.drift)) console.log("wellbeing-tick: " + JSON.stringify(_wb)); } catch (eWb) { console.error("wellbeing-tick:", String(eWb && eWb.message || eWb)); }
         // PERSONAL-PIPELINE-1: evening tap, new inputs (taps, moods, moments, activities, job milestones) into runs, inline resumes.
         try { var _pp = await PP.tick(env); if (_pp && (_pp.opened || _pp.adopted || (_pp.resume && _pp.resume.failed))) console.log(JSON.stringify({ evt: "personal-pipeline-tick", result: _pp })); } catch (ePp) { console.error("personal-pipeline-tick:", String(ePp && ePp.message || ePp)); }
+        // PIPELINE-ENGINE-PORT-1: one job-application run per application (qnfo-audit pipeline_runs), started on the job-application Workflow.
+        try { var _jp = await PD.jobsTick(PE, env); if (_jp && (_jp.opened || _jp.adopted || (_jp.resume && _jp.resume.failed))) console.log(JSON.stringify({ evt: "job-pipeline-tick", result: _jp })); } catch (eJp) { console.error("job-pipeline-tick:", String(eJp && eJp.message || eJp)); }
         // TRAVEL-PLANNER-1: next-stop proposals, weekly ideas and the day-before check-in note. Idempotent per hour.
         try { var _tr = await TRV.travelTick(env, travelDeps(env)); if (_tr && (_tr.proposed || _tr.notices || _tr.booked || _tr.error)) console.log(JSON.stringify({ evt: "travel-tick", result: _tr })); } catch (eTr) { console.error(JSON.stringify({ evt: "travel-tick:caught", error: String(eTr && eTr.message || eTr).slice(0, 300) })); }
         try { var _lf = await queueLedgerFollowUp(env); if (_lf.error) console.error("ledger-followup:", _lf.error); } catch (eLf) { console.error("ledger-followup:", String(eLf && eLf.message || eLf)); }
@@ -10138,6 +10254,13 @@ var PersonalPipelineFlow = class extends WorkflowEntrypoint {
     return await PP.runWorkflow(this.env, event && event.payload || {}, step);
   }
 };
+// PIPELINE-ENGINE-PORT-1: the job pipeline's durable executor. One instance per application (instance id = run id); it reads
+// jobsearch_matches once a day while it waits and writes only pipeline_runs and pipeline_evidence in qnfo-audit.
+var JobApplicationFlow = class extends WorkflowEntrypoint {
+  async run(event, step) {
+    return await PD.runJobWorkflow(PE, this.env, event && event.payload || {}, step);
+  }
+};
 // WORKERS-AI-SPEND-UNATTRIBUTED-RISING-1 (#1681): every env.AI.run in this worker goes through aiRunAttr, which adds a
 // per-worker/purpose call counter to D1 ai_call_counters (one UPSERT per call, fail-soft, never blocks or alters the AI call).
 // Copied from qnfo-fleet-control (workers cannot import across directories); same table/columns. No new paid service.
@@ -10201,6 +10324,7 @@ export {
   __verify,
   GenerationFlow,
   PersonalPipelineFlow,
+  JobApplicationFlow,
   deliverOwnerPrompts,
   broadcast,
   confirmedSubscribers,

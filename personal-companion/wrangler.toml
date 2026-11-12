@@ -61,6 +61,15 @@ name = "personal-pipeline"
 binding = "PERSONAL_FLOW"
 class_name = "PersonalPipelineFlow"
 
+# PIPELINE-ENGINE-PORT-1 (2026-11-12): one instance per job application (instance id = pipeline_runs.id in qnfo-audit), created by
+# the hourly tick (PD.jobsTick); waits are daily Workflow sleeps that read jobsearch_matches. Created once with
+# PUT /accounts/{id}/workflows/job-application {script_name: personal-companion, class_name: JobApplicationFlow}; without it the
+# run continues inline on the hourly tick.
+[[workflows]]
+name = "job-application"
+binding = "JOB_FLOW"
+class_name = "JobApplicationFlow"
+
 [triggers]
 # CRON-SINGLE-TRIGGER-1 (2026-10-02, #1785): ONE hourly trigger; worker.js CRON_TABLE holds the former list
 # (0 * * * *, 0 21 * * *) and runs each entry in the hour it fired.
