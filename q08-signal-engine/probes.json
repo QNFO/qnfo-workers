@@ -26,6 +26,19 @@
       "contains": [
         "\"criteria_clarification\""
       ]
+    },
+    {
+      "url": "https://q08.org/api/signals/health",
+      "contains": [
+        "\"engine\":\"SIGNALS-ENGINE-2\"",
+        "\"max_publisher_share\""
+      ]
+    },
+    {
+      "url": "https://q08.org/api/signals?limit=5",
+      "contains": [
+        "\"items\""
+      ]
     }
   ]
 }

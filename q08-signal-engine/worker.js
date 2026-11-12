@@ -37,7 +37,7 @@
 // Q08-ASCII-SOURCE-1 (2026-10-01): this file is ASCII-only; every typographic character is a \uXXXX escape. The deploy path
 // double-encoded raw UTF-8, so live pages read "... \u00e2 q08" and posts "\u00e2\u0080\u0094". Keep new literals escaped.
 // VERSION-NOTES-MOVED-1: release notes live in the block below
-var VERSION = "0.51.0";
+var VERSION = "0.52.0";
 /* 0.43.0 Q08-TICK-ALLOWANCE-1 (2026-11-04, pillar cost; minor: the engine now decides on its own whether a tick starts an attempt; BUDGET-SOFT-ROUTE-1, attempts slow down and never stop): ai_call_counters showed 119,552, 129,547 and 110,450 neurons on 2026-11-01..03 against the 50,000 target (ops_config q08_daily_neurons) because q08Budget() only steered the first writer model and nothing bounded the attempts a tick starts (40 a day, the attempt cap, at about 2,760 neurons each). Now the :00 cron and the :30 stall retry go through governedGenerate: tick k of 48 starts an attempt only while the day is under the pace line budget x (k + 1) / 48, an essay after a forecast attempt that spent model calls starts only while the day is still under it, and 150 minutes without an attempt starts one whatever the line says (8 a day at least). No row is written for a tick that waits. The writer gate, reader panels, fact-check, final read and accuracy audit are unchanged, and an attempt already started runs all its rounds. ops_config q08_tick_governor = off restores the old behaviour. tick-allowance.test.mjs replays a UTC day. */
 /* 0.42.0 RM-FORECAST-UPDATE-SCORING-1 (#5578; research): score the last valid update before the horizon with the resolved outcome. */
 /* 0.41.6 FORECAST-CALIBRATION-BUCKET-COVERAGE-1 (#5576, charter pillar research; patch): calibration buckets include probabilities across the full [0,1] range, including the tails, rather than silently omitting forecasts below 5% or above 96%. */
@@ -500,27 +500,503 @@ async function q08Mode(env) {
     return r && String(r.value == null ? "" : r.value).trim().toLowerCase() === "full" ? "full" : "signals";
   } catch (e) { return "signals"; }
 }
-async function signalsOnly(env) {
-  var t0 = Date.now(), stories = [], domains = await q08Domains(env);
-  async function take(label, fn) { try { stories = stories.concat(await fn()); } catch (e) { console.error(JSON.stringify({ evt: "q08-signal-engine:signals-only:" + label, error: String((e && e.message) || e).slice(0, 200) })); } }
-  await take("hn", function () { return scrapeHN(); });
-  await take("github", function () { return scrapeGitHub(); });
-  await take("arxiv", function () { return scrapeArxiv(env); });
-  if (domains.science || domains.policy) {
-    await take("arxiv-domain", function () { return scrapeArxivDomain(env, domains); });
-    await take("federalregister", function () { return scrapeFederalRegister(env, domains); });
+// ---------------------------------------------------------------------------
+// SIGNALS-ENGINE-2 (2026-11-12, charter pillar research; owner, 2026-11-12: "we need a more full-featured signals engine that definitely
+// doesn't rely on certain hard-coded sources ... why are you just relying on Hacker News? That's irresponsible.").
+// Measured before this change in q08-signal.signal_log, 21 days to 2026-11-12: 442 of 583 signals (76%) were Hacker News front-page stories,
+// from five scrapers wired into the code (HN, GitHub, arXiv twice, Federal Register). The forecast engine (q08-prediction-markets
+// FORECAST-ENGINE-1) matches questions on rates, energy, geopolitics and companies against these titles and found nothing for most of them.
+//
+// What the engine is now:
+//   registry   sig_sources (D1) is the authority: every source is a row with a kind, a topic, a quality score and a state. The seed list
+//              below only bootstraps an empty registry (INSERT OR IGNORE); it never overrides a row the engine has scored or retired.
+//   discover   every publisher domain an item names (feed links, GDELT's domain field, Google News' <source url>) is tallied in sig_domains;
+//              a domain seen SIG_DISCOVER_MIN_SEEN times is probed for an RSS or Atom feed (autodiscovery <link rel=alternate>, then common
+//              paths) and a feed that parses enters the registry on probation. Topic and demand searches (GDELT, Google News) reach the
+//              whole web for each topic and for the entities of the open forecast questions (q08-prediction-markets /api/markets).
+//   schedule   each tick fetches the most valuable due sources: quality x topic deficit (topics under-covered in the last 24 h first).
+//   score      success, new-item yield, freshness, novelty and citations (hosts the forecast engine cited) feed an EWMA quality score;
+//              probation -> active after 3 good fetches; 3 failures -> quarantined with exponential backoff; long failure -> retired.
+//   balance    per-tick caps per source and per publisher; a publisher above SIG_MAX_SHARE of 24-hour signals has its cap halved for 24 h.
+//   monitor    signalHealth() grades the stream (max publisher share, active sources, topics covered, volume) every tick, writes sig_health
+//              and three metric_registry rows, and remediates: halve the dominant cap, widen discovery, release the oldest quarantined
+//              sources, reseed when a tick finds nothing. GET /api/signals/health shows the verdict; GET /api/signals serves the stream.
+// The legacy scrapers stay as registry kinds (api:hn, api:arxiv ...) and are scored like every other source. No model call anywhere.
+// ---------------------------------------------------------------------------
+var SIG_TOPICS = {
+  macro: { re: /\b(inflation|interest rates?|central bank|federal reserve|the fed|fomc|ecb|bank of england|gdp|recession|unemployment|jobs report|payrolls|treasur(y|ies)|bond yields?|cpi|tariffs?|economy|economic)\b/gi, q: '(inflation OR "interest rates" OR "central bank" OR recession)' },
+  markets: { re: /\b(stocks?|shares|ipo|mergers?|acquisitions?|acquires?|earnings|ceo|investors?|valuation|funding round|bankrupt\w*|nasdaq|s&p|dow jones|layoffs?|revenue|profit)\b/gi, q: '(earnings OR merger OR acquisition OR IPO OR CEO)' },
+  energy: { re: /\b(oil|natural gas|opec|crude|lng|power grid|electricity|nuclear power|solar|wind power|coal|energy|refiner\w*|pipeline)\b/gi, q: '(oil OR OPEC OR "natural gas" OR electricity prices)' },
+  geopolitics: { re: /\b(war|military|missiles?|sanctions?|ukraine|russia|china|iran|israel|gaza|nato|troops|ceasefire|diplomat\w*|summit|invasion|strikes?)\b/gi, q: '(sanctions OR ceasefire OR military OR NATO OR diplomacy)' },
+  policy: { re: /\b(regulat\w+|legislat\w+|bill|congress|senate|parliament|court|ruling|lawsuit|antitrust|supreme court|election\w*|government|minister|agency|executive order)\b/gi, q: '(regulation OR legislation OR "supreme court" OR antitrust)' },
+  science: { re: /\b(study|researchers?|scientists?|physics|astronom\w+|species|genom\w+|telescope|journal|discovery|experiment|quantum)\b/gi, q: '(scientists OR researchers OR study) discovery' },
+  health: { re: /\b(health|disease|virus|vaccin\w+|outbreak|hospital|drugs?|fda|cancer|patients?|pandemic|medical)\b/gi, q: '(outbreak OR vaccine OR FDA OR "public health")' },
+  climate: { re: /\b(climate|emissions?|carbon|warming|heatwave|floods?|drought|wildfires?|hurricanes?|storms?)\b/gi, q: '(climate OR emissions OR wildfire OR drought)' },
+  technology: { re: /\b(software|chips?|semiconductors?|apple|google|microsoft|amazon|meta|smartphones?|linux|cloud|open[- ]source|programming|database|startup|browser)\b/gi, q: '(semiconductor OR software OR "big tech")' },
+  ai: { re: /\b(ai|artificial intelligence|llms?|openai|anthropic|machine learning|neural|chatgpt|gemini|deepseek|language models?)\b/gi, q: '("artificial intelligence" OR OpenAI OR "AI model")' },
+  security: { re: /\b(hack\w*|breach\w*|ransomware|vulnerabilit\w+|cve|malware|cyber\w*|exploit\w*|phishing|spyware)\b/gi, q: '(ransomware OR cyberattack OR "data breach" OR vulnerability)' }
+};
+var SIG_TOPIC_KEYS = Object.keys(SIG_TOPICS);
+// Bootstrap only (see the header): a broad, multi-publisher, multi-topic start. The engine scores, quarantines and retires these like any other row.
+var SIG_SEEDS = [
+  ["api:hn", "hn", "", "technology"], ["api:github", "github", "", "technology"], ["api:arxiv", "arxiv", "", "science"],
+  ["api:arxiv-domain", "arxiv-domain", "", "science"], ["api:federalregister", "federalregister", "", "policy"],
+  ["rss:bbc-world", "rss", "https://feeds.bbci.co.uk/news/world/rss.xml", "geopolitics"],
+  ["rss:bbc-business", "rss", "https://feeds.bbci.co.uk/news/business/rss.xml", "markets"],
+  ["rss:bbc-science", "rss", "https://feeds.bbci.co.uk/news/science_and_environment/rss.xml", "science"],
+  ["rss:npr-news", "rss", "https://feeds.npr.org/1001/rss.xml", "policy"],
+  ["rss:npr-business", "rss", "https://feeds.npr.org/1006/rss.xml", "markets"],
+  ["rss:aljazeera", "rss", "https://www.aljazeera.com/xml/rss/all.xml", "geopolitics"],
+  ["rss:guardian-world", "rss", "https://www.theguardian.com/world/rss", "geopolitics"],
+  ["rss:guardian-business", "rss", "https://www.theguardian.com/business/rss", "markets"],
+  ["rss:guardian-science", "rss", "https://www.theguardian.com/science/rss", "science"],
+  ["rss:guardian-environment", "rss", "https://www.theguardian.com/environment/rss", "climate"],
+  ["rss:nyt-world", "rss", "https://rss.nytimes.com/services/xml/rss/nyt/World.xml", "geopolitics"],
+  ["rss:nyt-business", "rss", "https://rss.nytimes.com/services/xml/rss/nyt/Business.xml", "markets"],
+  ["rss:cnbc-top", "rss", "https://www.cnbc.com/id/100003114/device/rss/rss.html", "markets"],
+  ["rss:marketwatch", "rss", "https://feeds.marketwatch.com/marketwatch/topstories/", "markets"],
+  ["rss:techcrunch", "rss", "https://techcrunch.com/feed/", "markets"],
+  ["rss:fed-press", "rss", "https://www.federalreserve.gov/feeds/press_all.xml", "macro"],
+  ["rss:ecb-press", "rss", "https://www.ecb.europa.eu/rss/press.html", "macro"],
+  ["rss:boe-news", "rss", "https://www.bankofengland.co.uk/rss/news", "macro"],
+  ["rss:sec-press", "rss", "https://www.sec.gov/news/pressreleases.rss", "policy"],
+  ["rss:politico", "rss", "https://rss.politico.com/politics-news.xml", "policy"],
+  ["rss:eia", "rss", "https://www.eia.gov/rss/todayinenergy.xml", "energy"],
+  ["rss:oilprice", "rss", "https://oilprice.com/rss/main", "energy"],
+  ["rss:un-news", "rss", "https://news.un.org/feed/subscribe/en/news/all/rss.xml", "geopolitics"],
+  ["rss:dw", "rss", "https://rss.dw.com/rdf/rss-en-all", "geopolitics"],
+  ["rss:france24", "rss", "https://www.france24.com/en/rss", "geopolitics"],
+  ["rss:who", "rss", "https://www.who.int/rss-feeds/news-english.xml", "health"],
+  ["rss:statnews", "rss", "https://www.statnews.com/feed/", "health"],
+  ["rss:nature", "rss", "https://www.nature.com/nature.rss", "science"],
+  ["rss:sciencedaily", "rss", "https://www.sciencedaily.com/rss/all.xml", "science"],
+  ["rss:physorg", "rss", "https://phys.org/rss-feed/", "science"],
+  ["rss:carbonbrief", "rss", "https://www.carbonbrief.org/feed", "climate"],
+  ["rss:insideclimate", "rss", "https://insideclimatenews.org/feed/", "climate"],
+  ["rss:techreview", "rss", "https://www.technologyreview.com/feed/", "ai"],
+  ["rss:arstechnica", "rss", "https://feeds.arstechnica.com/arstechnica/index", "technology"],
+  ["rss:theverge", "rss", "https://www.theverge.com/rss/index.xml", "technology"],
+  ["rss:lobsters", "rss", "https://lobste.rs/rss", "technology"],
+  ["rss:krebs", "rss", "https://krebsonsecurity.com/feed/", "security"],
+  ["rss:bleeping", "rss", "https://www.bleepingcomputer.com/feed/", "security"],
+  ["rss:cisa", "rss", "https://www.cisa.gov/cybersecurity-advisories/all.xml", "security"]
+].concat(SIG_TOPIC_KEYS.map(function (t) { return ["gnews:" + t, "gnews", "", t]; }), SIG_TOPIC_KEYS.map(function (t) { return ["gdelt:" + t, "gdelt", "", t]; }));
+var SIG_FETCH_PER_TICK = 24, SIG_GDELT_PER_TICK = 1, SIG_DEMAND_PER_TICK = 3, SIG_DISCOVER_PER_TICK = 2, SIG_DISCOVER_MIN_SEEN = 3;
+var SIG_ITEMS_PER_SOURCE = 10, SIG_ITEMS_PER_PUBLISHER = 12, SIG_MAX_SHARE = 0.35, SIG_MIN_ACTIVE = 20, SIG_MIN_TOPICS = 8, SIG_MIN_ITEMS_24H = 60;
+var SIG_INTERVAL_MIN = 50, SIG_FETCH_TIMEOUT_MS = 12000, SIG_MAX_FEED_BYTES = 1500000;
+var SIG_AGGREGATOR_HOSTS = /(^|\.)(news\.google\.com|google\.com|youtube\.com|youtu\.be|x\.com|twitter\.com|facebook\.com|instagram\.com|reddit\.com|msn\.com|linkedin\.com|t\.co|bit\.ly|wikipedia\.org|archive\.org|medium\.com|substack\.com|github\.com|apple\.news)$/i;
+var SIG_UA = "q08-signal-engine/2 (+https://q08.org/api/signals/health)";
+
+function sigNow() { return new Date().toISOString(); }
+function sigSql(ms) { return new Date(ms).toISOString().slice(0, 19).replace("T", " "); }
+function sigHost(u) { try { return new URL(String(u)).hostname.toLowerCase().replace(/^www\./, ""); } catch (e) { return ""; } }
+function sigTitleKey(t) { return String(t || "").toLowerCase().replace(/&[a-z#0-9]+;/g, " ").replace(/[^a-z0-9 ]+/g, " ").replace(/\b(the|a|an|of|to|in|on|for|and|is|at|by|with)\b/g, " ").replace(/\s+/g, " ").trim().slice(0, 120); }
+function sigDecode(s) {
+  return String(s == null ? "" : s).replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1").replace(/<[^>]+>/g, " ")
+    .replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;|&apos;|&#x27;/g, "'").replace(/&#8217;|&rsquo;/g, "\u2019")
+    .replace(/&#8216;|&lsquo;/g, "\u2018").replace(/&#8220;|&ldquo;/g, "\u201c").replace(/&#8221;|&rdquo;/g, "\u201d").replace(/&#8212;|&mdash;/g, "\u2014")
+    .replace(/&#8211;|&ndash;/g, "\u2013").replace(/&nbsp;|&#160;/g, " ").replace(/&amp;/g, "&").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+}
+// The topic of a text: the topic with the most keyword hits; the hint (the source's own topic) wins ties and an empty text.
+function sigTopicOf(text, hint) {
+  var t = String(text || ""), best = hint && SIG_TOPICS[hint] ? hint : "general", bestN = 0;
+  for (var i = 0; i < SIG_TOPIC_KEYS.length; i++) {
+    var k = SIG_TOPIC_KEYS[i], n = (t.match(SIG_TOPICS[k].re) || []).length;
+    if (n > bestN || (n === bestN && n > 0 && k === hint)) { best = k; bestN = n; }
   }
-  var added = 0;
-  for (var i = 0; i < stories.length; i++) {
-    var st = stories[i], src = st.source || "hn";
+  return best;
+}
+function sigTag(block, name) {
+  var m = new RegExp("<" + name + "(?:\\s[^>]*)?>([\\s\\S]*?)<\\/" + name + ">", "i").exec(block);
+  return m ? m[1] : "";
+}
+// RSS 2.0, RSS 1.0 (RDF) and Atom. Returns [{ title, url, published, summary, publisher_url }].
+function sigParseFeed(xml) {
+  var s = String(xml || ""), out = [];
+  if (!/<(rss|feed|rdf:RDF)[\s>]/i.test(s)) return out;
+  var blocks = s.match(/<item[\s>][\s\S]*?<\/item>/gi) || s.match(/<entry[\s>][\s\S]*?<\/entry>/gi) || [];
+  for (var i = 0; i < blocks.length && out.length < 60; i++) {
+    var b = blocks[i];
+    var title = sigDecode(sigTag(b, "title"));
+    var link = sigDecode(sigTag(b, "link"));
+    if (!/^https?:\/\//.test(link)) {
+      var lm = /<link\b[^>]*?href=["']([^"']+)["'][^>]*>/i.exec(b);
+      if (lm && !/rel=["'](?!alternate)/i.test(lm[0])) link = sigDecode(lm[1]);
+      else if (lm) { var alt = /<link\b[^>]*rel=["']alternate["'][^>]*href=["']([^"']+)["']/i.exec(b) || /<link\b[^>]*href=["']([^"']+)["'][^>]*rel=["']alternate["']/i.exec(b); link = sigDecode(alt ? alt[1] : lm[1]); }
+    }
+    if (!/^https?:\/\//.test(link)) { var g = sigDecode(sigTag(b, "guid")); if (/^https?:\/\//.test(g)) link = g; }
+    var when = sigDecode(sigTag(b, "pubDate") || sigTag(b, "published") || sigTag(b, "updated") || sigTag(b, "dc:date"));
+    var t = Date.parse(when);
+    var summary = sigDecode(sigTag(b, "description") || sigTag(b, "summary") || sigTag(b, "content")).slice(0, 600);
+    var srcm = /<source\b[^>]*url=["']([^"']+)["']/i.exec(b);
+    if (title && /^https?:\/\//.test(link)) out.push({ title: title.slice(0, 300), url: link.slice(0, 1000), published: Number.isFinite(t) ? t : null, summary: summary, publisher_url: srcm ? srcm[1] : "" });
+  }
+  return out;
+}
+// GDELT DOC 2.0 artlist JSON; GDELT answers rate limits and query errors in plain text, which reads as null (a failure, not an empty result).
+function sigParseGdelt(text) {
+  var j; try { j = JSON.parse(text); } catch (e) { return null; }
+  return (j && Array.isArray(j.articles) ? j.articles : []).map(function (a) {
+    var m = /^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})/.exec(String(a.seendate || ""));
+    return { title: sigDecode(a.title).slice(0, 300), url: String(a.url || "").slice(0, 1000), published: m ? Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]) : null, summary: "", publisher_url: a.domain ? "https://" + a.domain : "" };
+  }).filter(function (a) { return a.title && /^https?:\/\//.test(a.url); });
+}
+// Feed autodiscovery on a page: <link rel="alternate" type="application/rss+xml|atom+xml" href="...">, resolved against the page.
+function sigFeedLinks(html, base) {
+  var out = [], re = /<link\b[^>]*>/gi, m;
+  while ((m = re.exec(String(html || ""))) && out.length < 4) {
+    var tag = m[0];
+    if (!/rel=["']?alternate/i.test(tag) || !/type=["']?application\/(rss|atom)\+xml/i.test(tag)) continue;
+    var h = /href=["']([^"']+)["']/i.exec(tag);
+    if (!h) continue;
+    try { out.push(new URL(sigDecode(h[1]), base).toString()); } catch (e) { /* a malformed href is skipped */ }
+  }
+  return out;
+}
+// EWMA quality in [0,1] from one fetch. cited is the share of current forecast citations this source's publisher holds (0..1).
+function sigQuality(prev, obs) {
+  var a = 0.3, ok = obs.ok ? 1 : 0;
+  var inst = obs.ok ? (0.4 + 0.25 * Math.min(1, (obs.added || 0) / 4) + 0.15 * (obs.fresh == null ? 0.5 : obs.fresh) + 0.1 * (obs.novelty == null ? 0.5 : obs.novelty) + 0.1 * Math.min(1, (obs.cited || 0) * 5)) : 0;
+  var p = prev == null || !isFinite(prev) ? 0.5 : prev;
+  return Math.round(((1 - a) * p + a * inst) * 1000) / 1000;
+}
+// The next state of a source after a fetch. Pure: (row, ok, added, nowMs) -> { state, fail_streak, ok_count, next_at }.
+function sigNextState(row, ok, added, nowMs) {
+  var st = row.state || "probation", fails = ok ? 0 : (row.fail_streak || 0) + 1, oks = (row.ok_count || 0) + (ok ? 1 : 0);
+  var next = nowMs + SIG_INTERVAL_MIN * 60000;
+  if (ok) {
+    if (st === "probation" && oks >= 3) st = "active";
+    else if (st === "quarantined") st = "active";
+  } else if (fails >= 3) {
+    var lastOk = row.last_ok_at ? Date.parse(row.last_ok_at) : 0;
+    if (fails >= 12 && (!lastOk || nowMs - lastOk > 14 * 864e5)) st = "retired";
+    else { st = "quarantined"; next = nowMs + Math.min(24, Math.pow(2, Math.min(fails - 2, 5))) * 3600000; }
+  }
+  return { state: st, fail_streak: fails, ok_count: oks, next_at: new Date(next).toISOString() };
+}
+// Pick this tick's sources: due, not retired, ordered by quality x (1 + topic deficit), searches (gdelt) bounded separately.
+function sigSchedule(rows, topicShare, nowMs, opts) {
+  var o = opts || {}, perTick = o.perTick || SIG_FETCH_PER_TICK, gdelt = o.gdelt == null ? SIG_GDELT_PER_TICK : o.gdelt, boost = o.boostTopics || {};
+  var target = 1 / SIG_TOPIC_KEYS.length;
+  var due = (rows || []).filter(function (r) { return r.state !== "retired" && (!r.next_at || Date.parse(r.next_at) <= nowMs); });
+  due.forEach(function (r) {
+    var share = topicShare && topicShare[r.topic] != null ? topicShare[r.topic] : 0;
+    var deficit = Math.max(0, (target - share) / target);
+    var q = r.quality == null ? 0.5 : r.quality;
+    r._prio = (r.state === "probation" ? Math.max(q, 0.6) : q) * (1 + deficit + (boost[r.topic] ? 1 : 0));
+  });
+  due.sort(function (a, b) { return b._prio - a._prio || String(a.id).localeCompare(String(b.id)); });
+  var out = [], g = 0;
+  for (var i = 0; i < due.length && out.length < perTick; i++) {
+    if (due[i].kind === "gdelt") { if (g >= gdelt) continue; g++; }
+    out.push(due[i]);
+  }
+  return out;
+}
+// Health of the stream. rows: [{ publisher, source, topic, n }] for the last 24 h; srcRows: sig_sources. Pure.
+function sigHealthOf(rows, srcRows) {
+  var total = 0, byPub = {}, byTopic = {}, byKind = {};
+  (rows || []).forEach(function (r) {
+    var n = Number(r.n) || 0, pub = r.publisher || (r.source === "hn" ? "news.ycombinator.com" : r.source || "unknown");
+    total += n; byPub[pub] = (byPub[pub] || 0) + n; byKind[r.source || "unknown"] = (byKind[r.source || "unknown"] || 0) + n;
+    if (r.topic) byTopic[r.topic] = (byTopic[r.topic] || 0) + n;
+  });
+  var top = Object.keys(byPub).sort(function (a, b) { return byPub[b] - byPub[a]; });
+  var maxShare = total ? byPub[top[0]] / total : 0, hhi = 0;
+  top.forEach(function (p) { var s = byPub[p] / (total || 1); hhi += s * s; });
+  var states = { active: 0, probation: 0, quarantined: 0, retired: 0 };
+  (srcRows || []).forEach(function (s) { states[s.state] = (states[s.state] || 0) + 1; });
+  var covered = SIG_TOPIC_KEYS.filter(function (k) { return byTopic[k] > 0; });
+  var reasons = [];
+  if (maxShare > SIG_MAX_SHARE) reasons.push("one publisher holds " + Math.round(maxShare * 100) + "% of 24-hour signals (" + top[0] + "; limit " + Math.round(SIG_MAX_SHARE * 100) + "%)");
+  if (states.active < SIG_MIN_ACTIVE) reasons.push(states.active + " active sources (floor " + SIG_MIN_ACTIVE + ")");
+  if (covered.length < SIG_MIN_TOPICS) reasons.push(covered.length + " of " + SIG_TOPIC_KEYS.length + " topics covered (floor " + SIG_MIN_TOPICS + ")");
+  if (total < SIG_MIN_ITEMS_24H) reasons.push(total + " signals in 24 hours (floor " + SIG_MIN_ITEMS_24H + ")");
+  var topicShare = {};
+  SIG_TOPIC_KEYS.forEach(function (k) { topicShare[k] = total ? Math.round(((byTopic[k] || 0) / total) * 1000) / 1000 : 0; });
+  return {
+    verdict: reasons.length ? "degraded" : "ok", reasons: reasons, items_24h: total, publishers_24h: top.length,
+    max_publisher: top[0] || null, max_publisher_share: Math.round(maxShare * 1000) / 1000, hhi: Math.round(hhi * 1000) / 1000,
+    topics_covered: covered.length, topics_total: SIG_TOPIC_KEYS.length, topic_share: topicShare, uncovered_topics: SIG_TOPIC_KEYS.filter(function (k) { return !(byTopic[k] > 0); }),
+    by_kind: byKind, top_publishers: top.slice(0, 12).map(function (p) { return { publisher: p, n: byPub[p], share: Math.round((byPub[p] / (total || 1)) * 1000) / 1000 }; }),
+    sources: states
+  };
+}
+// Entity phrases worth searching for, from open forecast-question titles: capitalised words that are not sentence furniture, most frequent first.
+var SIG_DEMAND_STOP = new Set(["will", "the", "what", "who", "which", "when", "does", "before", "after", "by", "yes", "no", "january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december", "q1", "q2", "q3", "q4", "end", "how", "many", "much", "price", "above", "below", "between", "least", "more", "than", "less", "reach", "hit", "win", "next", "new"]);
+function sigDemandQueries(titles, max) {
+  var freq = {};
+  (titles || []).forEach(function (t) {
+    var seen = {};
+    String(t || "").replace(/[^A-Za-z0-9.&\- ]/g, " ").split(/\s+/).forEach(function (w) {
+      var l = w.toLowerCase().replace(/\.$/, "");
+      if (!/^[A-Z]/.test(w) || l.length < 3 || SIG_DEMAND_STOP.has(l) || /^\d/.test(l) || seen[l]) return;
+      seen[l] = 1; freq[l] = { n: ((freq[l] && freq[l].n) || 0) + 1, w: w.replace(/\.$/, "") };
+    });
+  });
+  return Object.keys(freq).sort(function (a, b) { return freq[b].n - freq[a].n || a.localeCompare(b); }).slice(0, max || 12).map(function (k) { return freq[k].w; });
+}
+
+var __sigSchemaOk = false;
+async function ensureSigSchema(env) {
+  if (__sigSchemaOk) return true;
+  var ddl = [
+    "CREATE TABLE IF NOT EXISTS signal_log (id TEXT PRIMARY KEY, source TEXT NOT NULL, source_id TEXT, title TEXT, url TEXT, points INTEGER DEFAULT 0, num_comments INTEGER DEFAULT 0, ratio REAL DEFAULT 0, volatility_score REAL DEFAULT 0, friction_point TEXT, signal_strength TEXT, status TEXT DEFAULT 'pending', created_at TEXT DEFAULT (datetime('now')), processed_at TEXT)",
+    "CREATE TABLE IF NOT EXISTS sig_sources (id TEXT PRIMARY KEY, kind TEXT NOT NULL, url TEXT, topic TEXT, state TEXT NOT NULL DEFAULT 'probation', quality REAL DEFAULT 0.5, ok_count INTEGER DEFAULT 0, fail_streak INTEGER DEFAULT 0, items_total INTEGER DEFAULT 0, added_total INTEGER DEFAULT 0, cited INTEGER DEFAULT 0, cap INTEGER, cap_until TEXT, discovered_from TEXT, last_fetch_at TEXT, last_ok_at TEXT, last_error TEXT, next_at TEXT, created_at TEXT DEFAULT (datetime('now')))",
+    "CREATE INDEX IF NOT EXISTS sig_sources_state ON sig_sources(state, next_at)",
+    "CREATE TABLE IF NOT EXISTS sig_domains (domain TEXT PRIMARY KEY, seen INTEGER DEFAULT 0, topic TEXT, first_seen TEXT, last_seen TEXT, probed_at TEXT, feed_url TEXT, outcome TEXT)",
+    "CREATE TABLE IF NOT EXISTS sig_health (id INTEGER PRIMARY KEY AUTOINCREMENT, ran_at TEXT NOT NULL, verdict TEXT, items_24h INTEGER, max_publisher TEXT, max_share REAL, topics_covered INTEGER, active INTEGER, fetched INTEGER, added INTEGER, discovered INTEGER, actions TEXT, detail TEXT)",
+    "CREATE TABLE IF NOT EXISTS sig_state (key TEXT PRIMARY KEY, value TEXT, updated_at TEXT)"
+  ];
+  for (var i = 0; i < ddl.length; i++) await env.DB.prepare(ddl[i]).run();
+  var cols = ["publisher TEXT", "topic TEXT", "title_key TEXT", "summary TEXT", "sig_source TEXT", "published_at TEXT"];
+  for (var c = 0; c < cols.length; c++) { try { await env.DB.prepare("ALTER TABLE signal_log ADD COLUMN " + cols[c]).run(); } catch (e) { /* the column exists */ } }
+  try { await env.DB.prepare("CREATE INDEX IF NOT EXISTS signal_log_created ON signal_log(created_at)").run(); } catch (e) { console.error("q08 sig index: " + String(e && e.message || e).slice(0, 120)); }
+  __sigSchemaOk = true;
+  return true;
+}
+async function sigSeed(env) {
+  var n = 0;
+  for (var i = 0; i < SIG_SEEDS.length; i++) {
+    var s = SIG_SEEDS[i];
+    var r = await env.DB.prepare("INSERT OR IGNORE INTO sig_sources (id, kind, url, topic, state, quality, discovered_from, created_at) VALUES (?1, ?2, ?3, ?4, 'probation', 0.5, 'seed', ?5)").bind(s[0], s[1], s[2], s[3], sigNow()).run();
+    if (r && r.meta && r.meta.changes) n++;
+  }
+  return n;
+}
+async function sigFetchText(env, url, accept) {
+  var f = (env && env.__sigFetch) || fetch;
+  var r = await f(url, { headers: { "User-Agent": SIG_UA, "Accept": accept || "application/rss+xml, application/atom+xml, application/xml, text/xml, application/json, text/html;q=0.8" }, redirect: "follow", signal: AbortSignal.timeout(SIG_FETCH_TIMEOUT_MS) });
+  var text = await r.text();
+  return { ok: r.ok, status: r.status, text: text.length > SIG_MAX_FEED_BYTES ? text.slice(0, SIG_MAX_FEED_BYTES) : text };
+}
+// One source -> normalized items [{ sid, title, url, published, summary, publisher, topic }]. Legacy kinds reuse the scrapers above.
+async function sigFetchSource(env, src, domains) {
+  var kind = src.kind, items = [];
+  function legacy(list, pub) { return (list || []).map(function (st) { return { sid: String(st.id), title: st.title, url: st.url || "", published: null, summary: String(st.abstract || st.description || "").slice(0, 600), publisher: pub || sigHost(st.url), legacy: st }; }); }
+  if (kind === "hn") return legacy(await scrapeHN(), "news.ycombinator.com");
+  if (kind === "github") return legacy(await scrapeGitHub(), "github.com");
+  if (kind === "arxiv") return legacy(await scrapeArxiv(env), "arxiv.org");
+  if (kind === "arxiv-domain") return legacy(await scrapeArxivDomain(env, domains), "arxiv.org");
+  if (kind === "federalregister") return legacy(await scrapeFederalRegister(env, domains), "federalregister.gov");
+  var url = src.url, parsed;
+  if (kind === "gnews" || kind === "demand") url = "https://news.google.com/rss/search?hl=en-US&gl=US&ceid=US:en&q=" + encodeURIComponent((src.query || (SIG_TOPICS[src.topic] || {}).q || src.topic) + " when:2d");
+  if (kind === "gdelt") url = "https://api.gdeltproject.org/api/v2/doc/doc?mode=artlist&format=json&maxrecords=40&sort=datedesc&timespan=24h&query=" + encodeURIComponent((src.query || (SIG_TOPICS[src.topic] || {}).q || src.topic) + " sourcelang:english");
+  if (!url) throw new Error("no url");
+  var r = await sigFetchText(env, url);
+  if (!r.ok) throw new Error("http " + r.status);
+  if (kind === "gdelt") { parsed = sigParseGdelt(r.text); if (parsed == null) throw new Error("gdelt: " + r.text.slice(0, 80)); }
+  else { parsed = sigParseFeed(r.text); if (!parsed.length && !/<(rss|feed|rdf:RDF)[\s>]/i.test(r.text)) throw new Error("not a feed"); }
+  return parsed.map(function (it) {
+    var pub = sigHost(it.publisher_url) || sigHost(it.url);
+    if (kind === "gnews" || kind === "demand") { it.title = it.title.replace(/\s+-\s+[^-]{2,60}$/, ""); if (!it.publisher_url) pub = ""; }
+    return { sid: it.url, title: it.title, url: it.url, published: it.published, summary: it.summary, publisher: pub || sigHost(url) };
+  });
+}
+async function sigShaHex(s) {
+  var d = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(String(s)));
+  return Array.from(new Uint8Array(d)).map(function (b) { return b.toString(16).padStart(2, "0"); }).join("").slice(0, 24);
+}
+async function sigState(env, key) { try { var r = await env.DB.prepare("SELECT value FROM sig_state WHERE key = ?1").bind(key).first(); return r ? r.value : null; } catch (e) { return null; } }
+async function sigSetState(env, key, value) { await env.DB.prepare("INSERT OR REPLACE INTO sig_state (key, value, updated_at) VALUES (?1, ?2, ?3)").bind(key, String(value), sigNow()).run(); }
+async function sigHealthRows(env) {
+  var rows = await env.DB.prepare("SELECT publisher, source, topic, COUNT(*) n FROM signal_log WHERE created_at > datetime('now','-1 day') GROUP BY publisher, source, topic").all();
+  var src = await env.DB.prepare("SELECT id, kind, state FROM sig_sources").all();
+  return sigHealthOf(rows.results || [], src.results || []);
+}
+// Hosts the forecast engine cites now, as shares (closes the loop: a source whose items move forecasts gains quality).
+async function sigCitedHosts(env) {
+  if (!env.PM || typeof env.PM.fetch !== "function") return {};
+  try {
+    var r = await env.PM.fetch("https://pm.internal/api/forecasts");
+    if (!r.ok) return {};
+    var j = await r.json(), n = 0, by = {};
+    (j && j.forecasts || []).forEach(function (f) {
+      var ev = []; try { ev = JSON.parse(f.evidence_json || "[]"); } catch (e) { ev = []; }
+      ev.forEach(function (e) { var h = sigHost(e.url); if (h) { by[h] = (by[h] || 0) + 1; n++; } });
+    });
+    Object.keys(by).forEach(function (h) { by[h] = by[h] / (n || 1); });
+    return by;
+  } catch (e) { return {}; }
+}
+async function sigDemandTitles(env) {
+  if (!env.PM || typeof env.PM.fetch !== "function") return [];
+  try {
+    var r = await env.PM.fetch("https://pm.internal/api/markets");
+    if (!r.ok) return [];
+    var j = await r.json(), list = Array.isArray(j) ? j : (j && (j.markets || j.rows)) || [];
+    return list.map(function (m) { return m && (m.title || m.question) || ""; }).filter(Boolean).slice(0, 300);
+  } catch (e) { return []; }
+}
+// Probe one domain for a feed; returns the feed url and its item count, or null.
+async function sigDiscoverDomain(env, domain) {
+  var base = "https://" + domain + "/", tries = [];
+  try { var page = await sigFetchText(env, base, "text/html"); if (page.ok) tries = sigFeedLinks(page.text, base); } catch (e) { tries = []; }
+  tries = tries.concat(["feed", "rss", "rss.xml", "feed.xml"].map(function (p) { return base + p; }));
+  for (var i = 0; i < Math.min(tries.length, 4); i++) {
     try {
-      var res = await env.DB.prepare("INSERT OR IGNORE INTO signal_log (id, source, source_id, title, url, points, num_comments, ratio, volatility_score, friction_point, signal_strength, status, processed_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)")
-        .bind("seen-" + src + ":" + String(st.id), src, src + ":" + String(st.id), st.title, st.url, st.points == null ? null : st.points, st.num_comments == null ? null : st.num_comments, st.ratio == null ? null : st.ratio, st.volatility_score == null ? null : st.volatility_score, "", null, "seen", nowIso()).run();
-      if (res && res.meta && res.meta.changes) added++;
-    } catch (e) { console.error(JSON.stringify({ evt: "q08-signal-engine:signals-only:insert", error: String((e && e.message) || e).slice(0, 200) })); }
+      var r = await sigFetchText(env, tries[i]);
+      var items = r.ok ? sigParseFeed(r.text) : [];
+      if (items.length >= 3) return { url: tries[i], items: items.length };
+    } catch (e) { /* the next candidate */ }
   }
-  await insertRun(env, { scraped: stories.length, scored: 0, published: 0, top: "", model: "", ms: Date.now() - t0, status: "skipped", error: "signals-only mode (ops_config q08_mode): " + added + " new of " + stories.length + " signals recorded, no model call", sourceChars: 0, sourceKind: "signals" });
-  return { ok: true, mode: "signals", scraped: stories.length, added: added };
+  return null;
+}
+async function sigRunBatch(env, stmts) {
+  if (!stmts.length) return [];
+  if (typeof env.DB.batch === "function") { try { return await env.DB.batch(stmts); } catch (e) { console.error("q08 sig batch: " + String(e && e.message || e).slice(0, 160)); } }
+  var out = [];
+  for (var i = 0; i < stmts.length; i++) { try { out.push(await stmts[i].run()); } catch (e) { out.push(null); } }
+  return out;
+}
+// The tick: seed if empty, health first (it steers the schedule), fetch, insert balanced and deduped, score, discover, remediate, record.
+async function sigTick(env) {
+  var t0 = Date.now(), nowMs = t0, actions = [];
+  await ensureSigSchema(env);
+  var cnt = await env.DB.prepare("SELECT COUNT(*) n FROM sig_sources").first();
+  if (!cnt || !cnt.n) actions.push("seeded " + (await sigSeed(env)));
+  var before = await sigHealthRows(env);
+  var domains = await q08Domains(env);
+  var srcRows = ((await env.DB.prepare("SELECT * FROM sig_sources").all()).results || []);
+  var boost = {}; before.uncovered_topics.forEach(function (t) { boost[t] = 1; });
+  var picked = sigSchedule(srcRows, before.topic_share, nowMs, { boostTopics: boost });
+  // demand searches from the open forecast questions: each query at most once in 6 hours
+  var demand = [];
+  try {
+    var qs = sigDemandQueries(await sigDemandTitles(env), 20);
+    for (var di = 0; di < qs.length && demand.length < SIG_DEMAND_PER_TICK; di++) {
+      var last = await sigState(env, "demand:" + qs[di].toLowerCase());
+      if (last && nowMs - Date.parse(last) < 6 * 3600000) continue;
+      demand.push({ id: "demand:" + qs[di].toLowerCase(), kind: "demand", topic: "", query: qs[di], state: "active", ephemeral: true });
+    }
+  } catch (e) { console.error("q08 sig demand: " + String(e && e.message || e).slice(0, 120)); }
+  var cited = await sigCitedHosts(env);
+  var recentKeys = new Set(((await env.DB.prepare("SELECT title_key FROM signal_log WHERE created_at > datetime('now','-3 days') AND title_key IS NOT NULL").all()).results || []).map(function (r) { return r.title_key; }));
+  var pubCount = {}, fetched = 0, added = 0, domainSeen = {}, gdeltDone = 0;
+  var all = picked.concat(demand);
+  // feeds in parallel batches of 6; GDELT sequential (one request per 5 seconds is its rule)
+  async function one(src) {
+    var res = { src: src, ok: false, items: [], error: "" };
+    try {
+      if (src.kind === "gdelt") { if (gdeltDone++) await new Promise(function (r) { setTimeout(r, 5500); }); }
+      res.items = await sigFetchSource(env, src, domains); res.ok = true;
+    } catch (e) { res.error = String(e && e.message || e).slice(0, 200); }
+    return res;
+  }
+  var results = [], feeds = all.filter(function (s) { return s.kind !== "gdelt"; }), gd = all.filter(function (s) { return s.kind === "gdelt"; });
+  for (var b = 0; b < feeds.length; b += 6) results = results.concat(await Promise.all(feeds.slice(b, b + 6).map(one)));
+  for (var gi = 0; gi < gd.length; gi++) results.push(await one(gd[gi]));
+  for (var ri = 0; ri < results.length; ri++) {
+    var res = results[ri], src = res.src, stmts = [], newHere = 0, fresh = 0, novel = 0;
+    fetched++;
+    var cap = src.cap && src.cap_until && Date.parse(src.cap_until) > nowMs ? src.cap : SIG_ITEMS_PER_SOURCE;
+    var kindLabel = (src.kind === "rss" || src.kind === "gnews" || src.kind === "gdelt" || src.kind === "demand") ? src.kind : src.kind === "arxiv-domain" ? "arxiv" : src.kind;
+    for (var ii = 0; ii < res.items.length && newHere < cap; ii++) {
+      var it = res.items[ii], key = sigTitleKey(it.title);
+      if (!key || key.length < 12) continue;
+      if (it.published && nowMs - it.published < 48 * 3600000) fresh++;
+      if (it.published && nowMs - it.published > 7 * 864e5) continue; // a stale item is not a signal
+      if (recentKeys.has(key)) continue;
+      novel++;
+      var pub = it.publisher || "unknown";
+      if ((pubCount[pub] || 0) >= SIG_ITEMS_PER_PUBLISHER) continue;
+      if (pub && !SIG_AGGREGATOR_HOSTS.test(pub) && kindLabel !== "hn" && kindLabel !== "github" && kindLabel !== "arxiv" && kindLabel !== "federalregister") domainSeen[pub] = (domainSeen[pub] || 0) + 1;
+      recentKeys.add(key); pubCount[pub] = (pubCount[pub] || 0) + 1; newHere++;
+      var lg = it.legacy || {};
+      var sid = it.legacy ? String(it.sid) : await sigShaHex(it.url);
+      var topic = sigTopicOf(it.title + " " + (it.summary || "").slice(0, 300), src.topic || "");
+      stmts.push(env.DB.prepare("INSERT OR IGNORE INTO signal_log (id, source, source_id, title, url, points, num_comments, ratio, volatility_score, friction_point, signal_strength, status, processed_at, publisher, topic, title_key, summary, sig_source, published_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
+        .bind("seen-" + kindLabel + ":" + sid, kindLabel, kindLabel + ":" + sid, it.title, it.url, lg.points == null ? null : lg.points, lg.num_comments == null ? null : lg.num_comments, lg.ratio == null ? null : lg.ratio, lg.volatility_score == null ? null : lg.volatility_score, "", null, "seen", sigNow(), pub, topic, key, it.summary || "", src.id, it.published ? new Date(it.published).toISOString() : null));
+    }
+    var ins = await sigRunBatch(env, stmts), got = 0;
+    ins.forEach(function (x) { if (x && x.meta && x.meta.changes) got++; });
+    added += got;
+    if (src.ephemeral) { await sigSetState(env, src.id, sigNow()); continue; }
+    var sh = sigHost(src.url), cHost = 0;
+    if (sh) Object.keys(cited).forEach(function (h) { if (h === sh || h.endsWith("." + sh) || sh.endsWith("." + h)) cHost += cited[h]; });
+    var ns = sigNextState(src, res.ok, got, nowMs);
+    var q = sigQuality(src.quality, { ok: res.ok, added: got, fresh: res.items.length ? fresh / res.items.length : null, novelty: res.items.length ? novel / res.items.length : null, cited: cHost });
+    await env.DB.prepare("UPDATE sig_sources SET state = ?2, quality = ?3, ok_count = ?4, fail_streak = ?5, items_total = items_total + ?6, added_total = added_total + ?7, cited = ?8, last_fetch_at = ?9, last_ok_at = CASE WHEN ?10 THEN ?9 ELSE last_ok_at END, last_error = ?11, next_at = ?12 WHERE id = ?1")
+      .bind(src.id, ns.state, q, ns.ok_count, ns.fail_streak, res.items.length, got, Math.round(cHost * 1000), sigNow(), res.ok ? 1 : 0, res.ok ? null : res.error, ns.next_at).run();
+  }
+  // discovery: tally publisher domains, probe the most-seen unprobed ones for a feed
+  var discovered = 0;
+  try {
+    var dstm = Object.keys(domainSeen).map(function (d) { return env.DB.prepare("INSERT INTO sig_domains (domain, seen, first_seen, last_seen) VALUES (?1, ?2, ?3, ?3) ON CONFLICT(domain) DO UPDATE SET seen = seen + ?2, last_seen = ?3").bind(d, domainSeen[d], sigNow()); });
+    await sigRunBatch(env, dstm);
+    var budget = before.verdict === "ok" ? SIG_DISCOVER_PER_TICK : SIG_DISCOVER_PER_TICK + 3;
+    var cand = ((await env.DB.prepare("SELECT domain FROM sig_domains WHERE seen >= ?1 AND (probed_at IS NULL OR probed_at < ?2) ORDER BY seen DESC LIMIT ?3").bind(SIG_DISCOVER_MIN_SEEN, new Date(nowMs - 7 * 864e5).toISOString(), budget).all()).results || []);
+    var known = new Set(srcRows.map(function (s) { return sigHost(s.url); }).filter(Boolean));
+    for (var ci = 0; ci < cand.length; ci++) {
+      var dom = cand[ci].domain, found = known.has(dom) ? { url: "", items: 0, known: true } : await sigDiscoverDomain(env, dom);
+      var outcome = found ? (found.known ? "known" : "feed") : "no-feed";
+      if (found && !found.known) {
+        var ir = await env.DB.prepare("INSERT OR IGNORE INTO sig_sources (id, kind, url, topic, state, quality, discovered_from, created_at) VALUES (?1, 'rss', ?2, ?3, 'probation', 0.5, ?4, ?5)").bind("rss:" + dom, found.url, "", "domain:" + dom, sigNow()).run();
+        if (ir && ir.meta && ir.meta.changes) discovered++;
+      }
+      await env.DB.prepare("UPDATE sig_domains SET probed_at = ?2, feed_url = ?3, outcome = ?4 WHERE domain = ?1").bind(dom, sigNow(), found && found.url || null, outcome).run();
+    }
+  } catch (e) { console.error("q08 sig discover: " + String(e && e.message || e).slice(0, 160)); }
+  // remediation, from the health read before this tick
+  try {
+    if (before.max_publisher_share > SIG_MAX_SHARE && before.max_publisher) {
+      var dom2 = before.max_publisher, until = new Date(nowMs + 864e5).toISOString();
+      var cr = await env.DB.prepare("UPDATE sig_sources SET cap = MAX(2, COALESCE(cap, ?2) / 2), cap_until = ?3 WHERE (CASE kind WHEN 'hn' THEN 'news.ycombinator.com' WHEN 'github' THEN 'github.com' WHEN 'arxiv' THEN 'arxiv.org' WHEN 'arxiv-domain' THEN 'arxiv.org' WHEN 'federalregister' THEN 'federalregister.gov' ELSE '' END = ?1 OR url LIKE ?4) AND (cap_until IS NULL OR cap_until < ?5)").bind(dom2, SIG_ITEMS_PER_SOURCE, until, "%" + dom2 + "%", new Date(nowMs).toISOString()).run();
+      if (cr && cr.meta && cr.meta.changes) actions.push("halved the cap of " + dom2);
+    }
+    if (before.sources.active < SIG_MIN_ACTIVE) {
+      var rr = await env.DB.prepare("UPDATE sig_sources SET next_at = NULL WHERE id IN (SELECT id FROM sig_sources WHERE state = 'quarantined' ORDER BY last_fetch_at LIMIT 3)").run();
+      if (rr && rr.meta && rr.meta.changes) actions.push("released " + rr.meta.changes + " quarantined sources early");
+    }
+    if (!added && fetched) actions.push("reseeded " + (await sigSeed(env)));
+  } catch (e) { console.error("q08 sig remediate: " + String(e && e.message || e).slice(0, 160)); }
+  var after = await sigHealthRows(env);
+  await env.DB.prepare("INSERT INTO sig_health (ran_at, verdict, items_24h, max_publisher, max_share, topics_covered, active, fetched, added, discovered, actions, detail) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)")
+    .bind(sigNow(), after.verdict, after.items_24h, after.max_publisher, after.max_publisher_share, after.topics_covered, after.sources.active, fetched, added, discovered, actions.join("; "), JSON.stringify({ reasons: after.reasons, by_kind: after.by_kind, ms: Date.now() - t0 })).run();
+  await sigWriteMetrics(env, after);
+  return { fetched: fetched, added: added, discovered: discovered, actions: actions, health: after, ms: Date.now() - t0 };
+}
+var SIG_METRICS = [["signal_max_publisher_share_24h", "max_publisher_share"], ["signal_sources_active", "active"], ["signal_topics_covered_24h", "topics_covered"]];
+async function sigWriteMetrics(env, h) {
+  if (!env.AUDIT || typeof env.AUDIT.prepare !== "function") return 0;
+  var vals = { max_publisher_share: h.max_publisher_share, active: h.sources.active, topics_covered: h.topics_covered }, n = 0;
+  for (var i = 0; i < SIG_METRICS.length; i++) {
+    try {
+      var r = await env.AUDIT.prepare("UPDATE metric_registry SET last_value = ?2, last_refreshed = ?3, state = 'MEASURED' WHERE metric = ?1").bind(SIG_METRICS[i][0], String(vals[SIG_METRICS[i][1]]), sigNow()).run();
+      if (r && r.meta && r.meta.changes) n++;
+    } catch (e) { console.error("q08 sig metric: " + String(e && e.message || e).slice(0, 120)); }
+  }
+  return n;
+}
+async function sigHealthReport(env) {
+  await ensureSigSchema(env);
+  var h = await sigHealthRows(env);
+  var last = await env.DB.prepare("SELECT ran_at, verdict, fetched, added, discovered, actions FROM sig_health ORDER BY id DESC LIMIT 1").first().catch(function () { return null; });
+  var srcs = ((await env.DB.prepare("SELECT id, kind, topic, state, quality, added_total, fail_streak, last_ok_at, last_error, discovered_from FROM sig_sources ORDER BY state, quality DESC").all()).results || []);
+  return Object.assign({ ok: true, worker: WORKER, version: VERSION, engine: "SIGNALS-ENGINE-2", generated_at: sigNow(), last_tick: last }, h, { registry: srcs });
+}
+async function sigList(env, q) {
+  await ensureSigSchema(env);
+  var lim = Math.min(500, Math.max(1, Number(q.get("limit")) || 100)), topic = String(q.get("topic") || "").toLowerCase();
+  var hours = Math.min(24 * 21, Math.max(1, Number(q.get("hours")) || 24));
+  var sql = "SELECT source, publisher, topic, title, url, summary, published_at, created_at FROM signal_log WHERE created_at > datetime('now', ?1)" + (topic ? " AND topic = ?3" : "") + " ORDER BY created_at DESC LIMIT ?2";
+  var st = env.DB.prepare(sql);
+  st = topic ? st.bind("-" + hours + " hours", lim, topic) : st.bind("-" + hours + " hours", lim);
+  return { ok: true, engine: "SIGNALS-ENGINE-2", topics: SIG_TOPIC_KEYS, items: ((await st.all()).results || []) };
+}
+
+// SIGNALS-ENGINE-2: signals-only mode runs the registry engine (sigTick below), no model call. It replaced five fixed scrapers inserted
+// in a fixed order; those scrapers are now registry kinds scored like every other source.
+async function signalsOnly(env) {
+  var t0 = Date.now(), out;
+  try { out = await sigTick(env); }
+  catch (e) {
+    // status skipped: engine_runs grades the essay chain; the signal stream's own ledger is sig_health (an absent row there is the alarm).
+    await insertRun(env, { scraped: 0, scored: 0, published: 0, top: "", model: "", ms: Date.now() - t0, status: "skipped", error: "SIGNALS-ENGINE-2 tick failed: " + String(e && e.message || e).slice(0, 300), sourceChars: 0, sourceKind: "signals" });
+    return { ok: false, mode: "signals", error: String(e && e.message || e).slice(0, 200) };
+  }
+  await insertRun(env, { scraped: out.fetched, scored: 0, published: 0, top: "", model: "", ms: Date.now() - t0, status: "skipped", error: "signals-only mode (ops_config q08_mode): SIGNALS-ENGINE-2 fetched " + out.fetched + " sources, " + out.added + " new signals, " + out.discovered + " feeds discovered; health " + out.health.verdict + (out.health.reasons.length ? " (" + out.health.reasons.join("; ") + ")" : "") + (out.actions.length ? "; actions: " + out.actions.join("; ") : ""), sourceChars: 0, sourceKind: "signals" });
+  return { ok: true, mode: "signals", scraped: out.fetched, added: out.added, discovered: out.discovered, health: out.health.verdict };
 }
 async function governedGenerate(env) {
   if ((await q08Mode(env)) === "signals") return await signalsOnly(env);
@@ -5500,6 +5976,7 @@ export const __factledger = { groundPreCheck: groundPreCheck, sourceLedger: sour
 export const __fledger = { researchLedger: researchLedger, ledgerNames: ledgerNames, ledgerSentences: ledgerSentences, forecastLedgerOn: forecastLedgerOn, forecastLedgerFor: forecastLedgerFor, ensureForecastGroundColumn: ensureForecastGroundColumn, storedForecastLedger: storedForecastLedger, groundForPublished: groundForPublished, buildForecastPrompt: buildForecastPrompt, stripLedgerTags: stripLedgerTags, groundPreCheck: groundPreCheck, resetGroundColumn: function () { __groundColumnDone = false; }, LEDGER_MAX_LINES: RLEDGER_MAX_LINES, LEDGER_MAX_DOCS: LEDGER_MAX_DOCS, LEDGER_DOC_CHARS: LEDGER_DOC_CHARS };
 export const __cuts = { readerCutIndices: readerCutIndices, applyReaderCuts: applyReaderCuts };
 export const __order = { orderCandidates: orderCandidates };
+export const __sig = { sigParseFeed: sigParseFeed, sigParseGdelt: sigParseGdelt, sigFeedLinks: sigFeedLinks, sigTopicOf: sigTopicOf, sigQuality: sigQuality, sigNextState: sigNextState, sigSchedule: sigSchedule, sigHealthOf: sigHealthOf, sigDemandQueries: sigDemandQueries, sigTitleKey: sigTitleKey, sigTick: sigTick, SIG_SEEDS: SIG_SEEDS, SIG_TOPIC_KEYS: SIG_TOPIC_KEYS, resetSchema: function () { __sigSchemaOk = false; } };
 export const __ground = { labelledGround: labelledGround };
 export const __analysis = { paraphraseItemsDropped: paraphraseItemsDropped, finalRead: finalRead, publishBody: publishBody, PUBLISH_MIN_CHARS: PUBLISH_MIN_CHARS, FINAL_PASS_MEAN: FINAL_PASS_MEAN, concreteClaim: concreteClaim, concreteAnalysisItems: concreteAnalysisItems, analysisDepthProblems: analysisDepthProblems, danglingOpening: danglingOpening, ANALYSIS_MIN_CHARS: ANALYSIS_MIN_CHARS, autoAnalysisMark: autoAnalysisMark, splitAnalysis: splitAnalysis, stripAnalysisMark: stripAnalysisMark, ANALYSIS_CHECK_PROMPT: ANALYSIS_CHECK_PROMPT, ANALYSIS_MARK: ANALYSIS_MARK };
 export const __context = { backgroundEntities: backgroundEntities, backgroundPack: backgroundPack, backgroundQuery: backgroundQuery };
@@ -5713,6 +6190,9 @@ async function q08Fetch(req, env, ctx) {
     if (path === "/api/metrics") {
       return json({ ok: true, worker: WORKER, version: VERSION, generated_at: nowIso(), windows: { "7d": await metrics7d(env) } });
     }
+    // SIGNALS-ENGINE-2: the stream's health verdict and registry, and the stream itself (?topic=&hours=&limit=) for any consumer.
+    if (path === "/api/signals/health") return json(await sigHealthReport(env));
+    if (path === "/api/signals") return json(await sigList(env, url.searchParams));
     if (path === "/health") {
       var m7 = await metrics7d(env).catch(function () { return null; });
       var cnt = await env.DB.prepare("SELECT COUNT(*) n FROM published_pieces").first().catch(() => ({n:0}));
@@ -6154,7 +6634,8 @@ async function q08Scheduled(controller, env, ctx) {
     // Q08-REPAIR-1: the :30 cron audits, repairs and restores pieces. Q08-STALL-RETRY-1: while q08 is stalled it also makes a second
     // generation attempt in the hour (stallRetryDue), after the audit, through the same generate() and the same caps.
     if (controller.cron === "30 * * * *") {
-      if ((await q08Mode(env)) === "signals") { ctx.waitUntil(q08Heartbeat(env, true)); return; }
+      // SIGNALS-ENGINE-2: the :30 tick fetches the next due sources too, so each source is read about hourly at twice the breadth.
+      if ((await q08Mode(env)) === "signals") { ctx.waitUntil(signalsOnly(env).then(function () { return true; }, function () { return false; }).then(function (ok) { return q08Heartbeat(env, ok); })); return; }
       ctx.waitUntil(auditPublished(env, 3).catch(function (e) { console.error("q08 auditPublished failed: " + String(e && e.message || e).slice(0, 200)); })
         .then(function () { return stallRetryDue(env); })
         .then(function (due) { if (due) return governedGenerate(env).then(function () { return stallDetector(env); }).then(function () { return writeOwnMetrics(env); }); })
