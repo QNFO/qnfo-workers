@@ -2,6 +2,7 @@
 // hold the app to: no typing (one-tap buttons, Dictate for words), no key, no e-mail channel beyond the sign-in code.
 // Local journeys run the real page and API against apps/companion-harness.mjs. Live journeys are signed out and read-only: they
 // never tap "E-mail me a code" (that would mail the owner a real code).
+import { PLAIN_BAD } from "../../../personal-api/companion.js";
 export const name = "companion";
 export const liveBase = "https://me.q08.org";
 export async function startLocal() { const { startCompanion } = await import("./companion-harness.mjs"); return startCompanion(); }
@@ -19,6 +20,22 @@ export const journeys = [
       await u.tap("Skip", { within: "#calm" }); await u.see("Find 5 things you can see.");
       await u.tap("Skip", { within: "#calm" }); await u.see("How is it now?");
       await u.tap("Better", { within: "#calm" }); await u.see("Rest for a bit");
+    } },
+  { id: "evening-recap", title: "Evening: see what the day held and let the rest go",
+    async run(u, env) {
+      await fetch(env.base + "/__harness/clock?local=20"); await fetch(env.base + "/__harness/done-one?title=Call%20the%20dentist");
+      try {
+        await u.open("/__harness/session"); await u.open("/companion"); await u.see("Today so far"); await u.see("Done: Call the dentist"); await u.screen("recap");
+        await u.tap("Let today go"); await u.notSee("Today so far", { wait: 1500 });
+      } finally { await fetch(env.base + "/__harness/clock?local=now"); }
+    } },
+  { id: "today-plain-language", title: "Today reads as plain words: no ids, tags or machine text",
+    async run(u) {
+      for (const path of [CLASSIC, "/companion"]) {
+        await u.open("/__harness/session"); await u.open(path); await u.see("Call the dentist", { wait: 4000 }).catch(() => {});
+        const text = await u.page.locator("body").innerText();
+        await u.expect(async () => !PLAIN_BAD.test(text), "Today on " + path + " shows machine text: " + (PLAIN_BAD.exec(text) || [""])[0]);
+      }
     } },
   { id: "sign-in", title: "Sign in on a new phone with the e-mailed code",
     async run(u, env) {

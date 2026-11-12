@@ -44,6 +44,14 @@
   "live-guide": {
    "taps": 0,
    "typing": 0
+  },
+  "evening-recap": {
+   "taps": 1,
+   "typing": 0
+  },
+  "today-plain-language": {
+   "taps": 0,
+   "typing": 0
   }
  },
  "public": {
