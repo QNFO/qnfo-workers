@@ -31,7 +31,7 @@ ok(areas.length === 6, "six scout areas (jobs, companion, research, signals, Ult
 const gm = new Set(all("SELECT metric FROM product_growth_metrics").map((r) => r.metric));
 ok(areas.every((a) => gm.has(a.metric)), "every area serves an existing growth metric", areas.filter((a) => !gm.has(a.metric)));
 ok(areas.every((a) => /^[a-z0-9-]+$/.test(a.worker) && a.players.length > 10), "areas name a worker and leading players");
-for (const m of ["scout_heartbeat_age_min", "scout_reply_accuracy_7d", "scout_areas_overdue"]) {
+for (const m of ["scout_heartbeat_age_min", "scout_reply_accuracy_7d", "scout_areas_overdue", "scout_competitors_unchecked"]) {
   ok(one("SELECT COUNT(*) n FROM analytics_metric_triggers WHERE metric_key = ?", m).n === 1 && one("SELECT COUNT(*) n FROM metric_breach_cause WHERE metric_key = ?", m).n === 1, "metric with trigger and cause: " + m);
 }
 ok(!/\|\| ?'?\$\{/.test(MIG) && /APPLY-BY: ci/.test(MIG) && /-- Rollback: /.test(MIG) && !/\bDROP TABLE|DELETE FROM/i.test(MIG), "migration header ok, no table drops or deletes");
@@ -43,16 +43,34 @@ db.exec("DELETE FROM growth_experiments; DELETE FROM cf_agent_requests;"); // te
 
 // --- tick 1: one request per tick, oldest-first, capped per day
 runSteps(steps, "scout1");
-let reqs = all("SELECT requester, instance, prompt FROM cf_agent_requests WHERE instance LIKE 'scout-%'");
+let reqs = all("SELECT requester, instance, prompt FROM cf_agent_requests WHERE instance LIKE 'scout-%' AND instance NOT LIKE 'scout-comp-%' AND instance NOT LIKE 'scout-rnd-%'");
+const kinds = Object.fromEntries(all("SELECT kind, COUNT(*) n FROM market_scout_findings GROUP BY kind").map((r) => [r.kind, r.n]));
+ok(kinds.practice === 1 && kinds.competitor === 1 && kinds.rnd === 1, "one practice, one competitor and one R&D request in the first tick", kinds);
+const comp = all("SELECT instance, prompt FROM cf_agent_requests WHERE instance LIKE 'scout-comp-%'")[0], rnd = all("SELECT instance, prompt FROM cf_agent_requests WHERE instance LIKE 'scout-rnd-%'")[0];
+ok(/competitive analyst/.test(comp.prompt) && /changelog, pricing/.test(comp.prompt) && /https:\/\//.test(comp.prompt) && /research and development lead/.test(rnd.prompt) && /arXiv, GitHub/.test(rnd.prompt), "competitor and R&D prompts name their method and demand a source");
+ok(one("SELECT COUNT(*) n FROM market_scout_competitors").n === 18 && all("SELECT area FROM market_scout_competitors GROUP BY area HAVING COUNT(*) = 3").length === 6, "18 competitors, three per area");
 ok(reqs.length === 1 && /web_search and web_fetch/.test(reqs[0].prompt) && /SOURCE:/.test(reqs[0].prompt) && /Only report what a page you fetched actually says/.test(reqs[0].prompt), "one scout request that demands a fetched source", reqs.map((r) => r.instance));
-ok(one("SELECT COUNT(*) n FROM market_scout_findings WHERE status = 'requested'").n === 1, "request logged as a finding");
+ok(one("SELECT COUNT(*) n FROM market_scout_findings WHERE status = 'requested' AND kind = 'practice'").n === 1, "request logged as a finding");
 const first = reqs[0];
 runSteps(steps, "scout1b");
-ok(all("SELECT 1 FROM cf_agent_requests WHERE requester = ?", first.requester).length === 1 && all("SELECT 1 FROM cf_agent_requests WHERE instance LIKE 'scout-%'").length <= 2, "no second request for the same area while one is pending");
+ok(all("SELECT 1 FROM cf_agent_requests WHERE requester = ? AND instance NOT LIKE 'scout-comp-%' AND instance NOT LIKE 'scout-rnd-%'", first.requester).length === 1 && all("SELECT 1 FROM cf_agent_requests WHERE requester = ? AND instance NOT LIKE 'scout-comp-%' AND instance NOT LIKE 'scout-rnd-%'", first.requester).length === 1, "no second request for the same area while one is pending");
 db.exec("UPDATE market_scout_findings SET created_at = strftime('%Y-%m-%dT%H:%M:%SZ','now','-2 hours')");
 for (let i = 0; i < 4; i++) { db.exec("UPDATE market_scout_findings SET created_at = strftime('%Y-%m-%dT%H:%M:%SZ','now','-2 hours') WHERE status <> 'requested'"); runSteps(steps, "cap" + i); }
-ok(all("SELECT DISTINCT instance FROM cf_agent_requests WHERE instance LIKE 'scout-%'").length <= 3, "daily request cap (3) holds", all("SELECT instance FROM cf_agent_requests WHERE instance LIKE 'scout-%'"));
+ok(all("SELECT DISTINCT instance FROM cf_agent_requests WHERE instance LIKE 'scout-%'").length <= 6, "daily request cap (6) holds", all("SELECT instance FROM cf_agent_requests WHERE instance LIKE 'scout-%'"));
 
+// --- competitor and R&D replies become ranked experiments too
+const cf = (inst) => one("SELECT * FROM market_scout_findings WHERE request_instance = ?", inst);
+db.prepare("UPDATE cf_agent_requests SET status = 'done', result = ? WHERE instance = ?").run("PRACTICE: Teal ships a resume score\nPLAYERS: Teal\nSOURCE: https://www.tealhq.com/tools/resume-builder\nEVIDENCE: The builder page scores a resume against a posting and lists missing keywords.\nNEED: know the gap before applying; ours shows none\nTITLE: Show missing posting keywords on each match\nLIFT: 15\nEFFORT: 2\ncode-task: repo=qnfo-workers path=qnfo-jobsearch/worker.js\ncode-anchor: const MISSING_KEYWORDS = 0\nEDIT: list them", comp.instance);
+db.prepare("UPDATE cf_agent_requests SET status = 'done', result = ? WHERE instance = ?").run("PRACTICE: Reranking with a cross-encoder lifts job-to-resume matching\nPLAYERS: Reimers, Gurevych\nSOURCE: https://arxiv.org/abs/1908.10084\nEVIDENCE: The paper shows sentence embeddings with a pairwise reranker improve semantic matching quality.\nNEED: better matches\nTITLE: Rerank the top matches with a second pass\nLIFT: 10\nEFFORT: 3\ncode-task: repo=qnfo-workers path=qnfo-jobsearch/worker.js\ncode-anchor: const RERANK_TOP = 0\nEDIT: second pass", rnd.instance);
+db.exec("UPDATE market_scout_findings SET created_at = strftime('%Y-%m-%dT%H:%M:%SZ','now','-3 hours') WHERE kind <> 'practice'");
+runSteps(steps, "kinds");
+ok(cf(comp.instance).kind === "competitor" && ["ranked", "experiment"].includes(cf(comp.instance).status) && cf(comp.instance).players === "Teal", "competitor finding parsed and ranked", cf(comp.instance));
+ok(["ranked", "experiment"].includes(cf(rnd.instance).status) && cf(rnd.instance).kind === "rnd", "R&D finding parsed and ranked", cf(rnd.instance));
+ok(one("SELECT checks, last_checked FROM market_scout_competitors WHERE id = 'simplify'").checks >= 1, "the analysed competitor is marked checked");
+ok(one("SELECT COUNT(*) n FROM signals WHERE content LIKE 'Competitor Teal%'").n === 1 && one("SELECT COUNT(*) n FROM signals WHERE content LIKE 'R&D: Reimers%'").n === 1, "competitor and R&D findings enter the signals table");
+ok(one("SELECT COUNT(*) n FROM growth_experiments WHERE hypothesis LIKE 'MARKET-SCOUT-1 competitor finding%' OR hypothesis LIKE 'MARKET-SCOUT-1 rnd finding%'").n >= 1, "a competitor or R&D finding is promoted to a growth experiment");
+// one experiment per product at a time: free the jobs slot so the practice finding below is promoted
+db.exec("UPDATE growth_experiments SET status = 'abandoned'; UPDATE market_scout_findings SET status = 'dropped' WHERE status = 'experiment'");
 // --- replies: one good, one without a source, one touching the control plane
 const area = one("SELECT * FROM market_scout_areas WHERE area = ?", first.requester.slice(6));
 const reply = (inst, body) => db.prepare("UPDATE cf_agent_requests SET status = 'done', result = ? WHERE instance = ?").run(body, inst);
