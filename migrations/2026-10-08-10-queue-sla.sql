@@ -161,7 +161,6 @@ UPDATE metric_registry SET
   formula = 'Sum of v_stuck_summary columns except issues_unprobed_60m and research_queued_180m (its own nominal backlog, issue #2971): queue items past their queue_sla.sla_min plus open issues with no doer after 180 minutes (QUEUE-SLA-1).',
   target = '0 for true stuck types; research_queued_180m is nominal backlog, healthy when <= research_ready_cap with RESEARCH-BACKPRESSURE-1 reporting no elevator failure'
   WHERE metric = 'stuck_items_over_sla';
-END;
 
 CREATE TRIGGER IF NOT EXISTS queue_sla_tick_10m AFTER INSERT ON fleet_tick
 BEGIN
