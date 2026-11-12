@@ -63,6 +63,7 @@ const ADOPTERS = [
   { dir: "personal-companion", path: "/", host: "reading.q08.org", env: () => ({ PERSONAL: d1Stub(), AUDIT: d1Stub() }) },
   { dir: "personal-companion", path: "/travel", host: "travel.q08.org", env: () => ({ PERSONAL: d1Stub(), AUDIT: d1Stub(), COMPANION_KEY: "k" }) },
   { dir: "q08-prediction-markets", path: "/whitepaper", env: () => ({}) },
+  { dir: "q08-prediction-markets", path: "/forecasts", env: () => ({}) },
   { dir: "qnfo-fleet-dashboard", path: "/", env: () => ({}) },
   { dir: "qnfo-fleet-dashboard", path: "/focus", env: () => ({ AUDIT: d1Stub() }) },
   { dir: "qnfo-fleet-dashboard", path: "/touch", env: () => ({ AUDIT: d1Stub() }) }

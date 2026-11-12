@@ -27,5 +27,12 @@ export const journeys = [
       await u.see("What this paper does not claim");
       await u.see("References");
       await u.screen("whitepaper");
+    } },
+  { id: "forecasts", title: "Read the consequential forecasts on a phone", modes: ["live"],
+    async run(u) {
+      await u.open("/forecasts");
+      await u.see("Forecasts that move money");
+      await u.see("Value added vs crowd");
+      await u.screen("forecasts");
     } }
 ];
