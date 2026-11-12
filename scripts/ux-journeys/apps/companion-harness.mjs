@@ -78,6 +78,7 @@ export async function startCompanion({ port = 0 } = {}) {
       if (url.pathname === "/__harness/clock") {
         const q = url.searchParams.get("local");
         if (q === "now") clockOffset = 0;
+        else if (q === null || !/^\d{1,2}$/.test(q) || Number(q) > 23) { res.writeHead(400, { "Content-Type": "text/plain" }); res.end("local must be now or an hour 0-23"); return; }
         else { const real = RealDate.now(), day = C.localParts(new RealDate(real).toISOString(), C.TZ).day; clockOffset = new RealDate(C.dayStartIso(day, C.TZ)).getTime() + Number(q) * 3600e3 - real; }
         res.writeHead(200, { "Content-Type": "text/plain" }); res.end("ok"); return;
       }

@@ -10,7 +10,7 @@ assert.equal(C.lowMoodForecast([{ m: 2 }, { m: 2.5 }], 7), null, "enough sleep: 
 assert.equal(C.lowMoodForecast([{ m: 2 }, { m: 4 }], 4), null, "one good day: no forecast");
 assert.equal(C.lowMoodForecast([{ m: 2 }], 4), null, "one day of data is not a pattern");
 assert.equal(C.lowMoodForecast([{ m: 2 }, { m: 2 }], null), null, "unknown sleep is not short sleep");
-assert.ok(!C.PLAIN_BAD.test(C.lowMoodForecast([{ m: 1 }, { m: 1 }], 3).text));
+{ const f = C.lowMoodForecast([{ m: 1 }, { m: 1 }], 3); assert.ok(f && !C.PLAIN_BAD.test(f.text)); }
 console.log("ok   low-mood forecast: two low days plus a short night, nothing else");
 
 // --- COMPANION-TRANSITION-1: heads-up shortly before an event, once a day, in plain words
