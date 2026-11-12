@@ -100,6 +100,10 @@ export async function startCompanion({ port = 0 } = {}) {
       const r = await call(path + url.search, { method: req.method, headers, body });
       const out = Buffer.from(await r.arrayBuffer());
       const h = {}; r.headers.forEach((v, k) => { h[k] = v; });
+      // Issue 11287: a reply may carry two Set-Cookie headers (the q08.org cookie and the clearing of the old host-only one); keep each.
+      const sc = typeof r.headers.getSetCookie === "function" ? r.headers.getSetCookie() : []; if (sc.length) h["set-cookie"] = sc.map((c) => c.replace(/;\s*Domain=q08\.org/i, ""));
+      // The handler answers as me.q08.org, so its sign-in cookie says Domain=q08.org (ME-HUB-1); the browser here is on 127.0.0.1 and would drop
+      // that cookie, which broke the sign-in journey after PR 11284 (issue 11287). The relay drops only the Domain attribute.
       res.writeHead(r.status, h); res.end(out);
     } catch (e) { res.writeHead(500, { "Content-Type": "text/plain" }); res.end("harness: " + (e && e.stack || e)); }
   });

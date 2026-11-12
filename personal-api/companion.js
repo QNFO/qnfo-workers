@@ -3528,9 +3528,10 @@ export async function handleCompanion(request, env, ctx, deps) {
       const resp = J(await today(env, deps));
       // ME-HUB-1: a device signed in before 12 Nov holds a host-only cookie; once per page load, re-issue it for all of q08.org so the
       // travel and jobs dashboards see the same sign-in. Same token, same lifetime, no new session row.
-      // Issue 11287: the live token is re-issued (never a stale one sent first), and on q08.org the old host-only copy is cleared.
+      // Issue 11287: the live token is re-issued (never a stale one sent first). The host-only copy is left alone here (it carries the same
+      // token and is revoked with it); sign-out clears both scopes.
       const tk = session && session.token ? [null, session.token] : null, th = new URL(request.url).hostname;
-      if (tk) { const h = new Headers(resp.headers); h.append("Set-Cookie", SESSION_COOKIE + "=" + tk[1] + "; Path=/; Max-Age=" + Math.round(SESSION_MS / 1000) + "; " + cookieDomain(th) + "HttpOnly; Secure; SameSite=Lax"); if (cookieDomain(th)) h.append("Set-Cookie", clearSessionCookies(th)[1]); return new Response(resp.body, { status: resp.status, headers: h }); }
+      if (tk) { const h = new Headers(resp.headers); h.append("Set-Cookie", SESSION_COOKIE + "=" + tk[1] + "; Path=/; Max-Age=" + Math.round(SESSION_MS / 1000) + "; " + cookieDomain(th) + "HttpOnly; Secure; SameSite=Lax"); return new Response(resp.body, { status: resp.status, headers: h }); }
       return resp;
     }
     if (r === "dashboard" && m === "GET") return J(await dashboard(env));
