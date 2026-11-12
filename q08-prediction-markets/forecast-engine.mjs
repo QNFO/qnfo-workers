@@ -530,7 +530,7 @@ export async function latestRows(env) {
 // never written by hand: every forecast that disagrees with the crowd opens one simulated position at the crowd's price at that moment
 // (the side the forecast favours, a fixed stake), held to resolution with no hindsight exit and marked to the live market until then.
 // A forecast that agrees with the crowd holds no position: there is no edge to trade. Paper only: no order, wallet or account exists.
-export const STAKE = 100, MIN_EDGE = 0.02;
+export const STAKE = 100, MIN_EDGE = 0.02, QUOTE_TOL = 0.2;
 const r2 = (x) => Math.round(x * 100) / 100;
 export function simulateBook(rows, yesBySlug = {}, { stake = STAKE, minEdge = MIN_EDGE } = {}) {
   const first = new Map(), last = new Map();
@@ -540,11 +540,15 @@ export function simulateBook(rows, yesBySlug = {}, { stake = STAKE, minEdge = MI
     const l = last.get(slug), side = e.p > e.prior ? "YES" : "NO";
     const entry = side === "YES" ? e.prior : 1 - e.prior, belief = side === "YES" ? e.p : 1 - e.p;
     const outcome = l.outcome === 0 || l.outcome === 1 ? Number(l.outcome) : null;
-    const live = Number.isFinite(+yesBySlug[slug]) ? +yesBySlug[slug] : null;
-    const yesNow = outcome != null ? outcome : live != null ? live : e.prior;
+    // The entry is the crowd's coherent price (the term structure repaired across the question's dates). The live quote marks the position only while it agrees
+    // with that structure: an illiquid leg can print 15 cents one hour and 99.95 the next (Jensen Huang, 2026-11-12), so a quote more than QUOTE_TOL from the
+    // ledger's latest coherent price is set aside and the ledger price marks the position instead (mark_source says which).
+    const rawLive = Number.isFinite(+yesBySlug[slug]) ? +yesBySlug[slug] : null;
+    const live = rawLive != null && Math.abs(rawLive - l.prior) <= QUOTE_TOL ? rawLive : null;
+    const yesNow = outcome != null ? outcome : live != null ? live : l.prior;
     const mark = side === "YES" ? yesNow : 1 - yesNow, shares = stake / entry, value = shares * mark;
     positions.push({ slug, title: e.title, category: e.category, side, opened_at: e.created_at, deadline: e.deadline, crowd_at_entry: +e.prior.toFixed(4), forecast_at_entry: +e.p.toFixed(4),
-      forecast_now: +l.p.toFixed(4), entry: +entry.toFixed(4), mark: +mark.toFixed(4), marked_live: outcome == null && live != null, settled: outcome != null, outcome, stake, shares: +shares.toFixed(2),
+      forecast_now: +l.p.toFixed(4), entry: +entry.toFixed(4), mark: +mark.toFixed(4), marked_live: outcome == null && live != null, mark_source: outcome != null ? "outcome" : live != null ? "live quote" : rawLive != null ? "ledger (live quote " + Math.round(100 * rawLive) + "¢ incoherent)" : "ledger", settled: outcome != null, outcome, stake, shares: +shares.toFixed(2),
       value: r2(value), pnl: r2(value - stake), expected_pnl: r2(stake * (belief / entry - 1)) });
   }
   positions.sort((a, b) => Number(a.settled) - Number(b.settled) || Math.abs(b.pnl) - Math.abs(a.pnl));
@@ -706,7 +710,7 @@ export function flowHtml(d, base = "") {
 }
 function posLine(pos) {
   if (!pos) return `<div class="vp-pos">No position: the forecast agrees with the market, so there is no edge to trade.</div>`;
-  return `<div class="vp-pos"><b>Simulated position:</b> buy ${e(pos.side)} at ${e(Math.round(pos.entry * 100))}¢ with ${e(usd(pos.stake))} on ${e(String(pos.opened_at).slice(0, 10))}. ${pos.settled ? "Settled" : "Marked to the market now"} at ${e(Math.round(pos.mark * 100))}¢: <b class="${tone(pos.pnl)}">${e(signed(pos.pnl))}</b>. If the forecast is right on average, expected ${e(signed(pos.expected_pnl))}.</div>`;
+  return `<div class="vp-pos"><b>Simulated position:</b> buy ${e(pos.side)} at ${e(Math.round(pos.entry * 100))}¢ with ${e(usd(pos.stake))} on ${e(String(pos.opened_at).slice(0, 10))}. ${pos.settled ? "Settled" : pos.marked_live ? "Marked to the market now" : "Marked at the crowd's coherent price (the live quote is out of line with the question's other dates)"} at ${e(Math.round(pos.mark * 100))}¢: <b class="${tone(pos.pnl)}">${e(signed(pos.pnl))}</b>. If the forecast is right on average, expected ${e(signed(pos.expected_pnl))}.</div>`;
 }
 function proxyLine(px) {
   if (!px) return "";
