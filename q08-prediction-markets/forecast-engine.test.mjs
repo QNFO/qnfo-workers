@@ -2,6 +2,8 @@
 import { readFileSync } from "node:fs";
 import { classify, deadlineOf, familyKey, isotonic, termStructure, properEntities, matchEvidence, needsUpdate, buildPrompt, parseShift, combine, valueAdded, plan, renderPage, spinoffStatus, bootstrapCI, lastPerSlug, forecastOne, sha256Hex } from "./forecast-engine.mjs";
 import { block, apply } from "./inline-forecast-engine.mjs";
+import { newsQuery, parseGdelt, parseNewsRss, fetchNews, newsLane, tick, latestRows } from "./forecast-engine.mjs";
+import { DatabaseSync } from "node:sqlite";
 let pass = 0, fail = 0;
 const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL", m, x === undefined ? "" : JSON.stringify(x)); } };
 const near = (a, b, e = 1e-3) => Math.abs(a - b) < e;
@@ -103,6 +105,54 @@ const page = renderPage(rows, { value: { n: 0 }, tokens_per: 748 }, head);
 ok(page.includes("Forecasts that move money") && page.includes("64.4%") && page.includes("+10 pts vs crowd"), "page renders the forecasts");
 ok(page.includes("inconsistent with the other dates"), "page explains the repaired stale quote");
 ok(renderPage([], {}, head).includes("No forecasts yet"), "empty state says what happens next");
+// 3b news lane (NEWS-LANE-1, issue 11057): a starved family is fetched for by its own entities
+ok(newsQuery("Will the U.S. invade Iran before 2027?", "energy-geopolitics") === "iran oil", "a short entity takes its category hint", newsQuery("Will the U.S. invade Iran before 2027?", "energy-geopolitics"));
+ok(newsQuery("Pete Hegseth out as Secretary of Defense by November 21?", "officials-rules") === "pete hegseth secretary defense", "names make the query", newsQuery("Pete Hegseth out as Secretary of Defense by November 21?", "officials-rules"));
+ok(newsQuery("Will there be no change in Fed interest rates after the December 2026 meeting?", "monetary") === "fed interest rates", "Fed question searches the Fed and rates");
+ok(parseGdelt("Please limit requests to one every 5 seconds") === null, "GDELT's plain-text refusal is an error, not zero articles");
+const gd = parseGdelt(JSON.stringify({ articles: [{ title: "Iran says strait stays open", url: "https://ex.com/a", seendate: "20261111T093000Z" }, { title: "", url: "https://ex.com/b" }] }));
+ok(gd.length === 1 && gd[0].created_at === "2026-11-11 09:30:00", "GDELT rows parse with their seen time", gd);
+const rss = parseNewsRss('<rss><channel><item><title><![CDATA[Fed holds interest rates steady &amp; signals patience - Reuters]]></title><link>https://news.example/x</link><pubDate>Wed, 11 Nov 2026 14:00:00 GMT</pubDate></item></channel></rss>');
+ok(rss.length === 1 && rss[0].title === "Fed holds interest rates steady & signals patience" && rss[0].created_at === "2026-11-11 14:00:00", "Google News RSS parses and drops the publisher suffix", rss);
+const fakeFetch = (gdeltOk) => async (url) => {
+  if (url.includes("gdeltproject")) return gdeltOk ? { ok: true, status: 200, text: JSON.stringify({ articles: [{ title: "Iran warns over oil tanker seizures", url: "https://ex.com/iran1", seendate: "20261111T080000Z" }, { title: "Iran oil exports fall", url: "https://ex.com/iran2", seendate: "20261110T080000Z" }] }) } : { ok: true, status: 200, text: "Please limit requests" };
+  return { ok: true, status: 200, text: '<item><title>Fed officials split on December rate cut - AP</title><link>https://news.example/fed</link><pubDate>Wed, 11 Nov 2026 14:00:00 GMT</pubDate></item>' };
+};
+ok((await fetchNews("iran oil", fakeFetch(true))).source === "gdelt", "GDELT answers first");
+const fb = await fetchNews("fed interest rates", fakeFetch(false));
+ok(fb.source === "gnews" && fb.items.length === 1 && fb.tried[0] === "gdelt:error 200", "a GDELT refusal falls through to Google News", fb);
+function d1(db) {
+  const st = (sql) => { let args = []; const o = { bind: (...a) => { args = a; return o; },
+    all: async () => ({ results: db.prepare(sql).all(...args) }), first: async () => db.prepare(sql).get(...args) || null,
+    run: async () => { const r = db.prepare(sql).run(...args); return { meta: { changes: r.changes } }; } }; return o; };
+  return { prepare: st };
+}
+const sq = new DatabaseSync(":memory:");
+sq.exec("CREATE TABLE pt_market (slug TEXT, title TEXT, yes REAL, vol24 REAL, updated_at TEXT, ends_at TEXT, closed INTEGER DEFAULT 0)");
+const sigdb = new DatabaseSync(":memory:");
+sigdb.exec("CREATE TABLE signal_log (source TEXT, title TEXT, url TEXT, created_at TEXT)");
+sigdb.prepare("INSERT INTO signal_log VALUES ('hn','Show HN: a faster SQLite','https://hn/1', datetime('now'))").run();
+const nowT = Date.now(), upd = new Date(nowT - 3600e3).toISOString(), dl = new Date(nowT + 40 * 86400e3);
+const mon = dl.toLocaleString("en-US", { month: "long", timeZone: "UTC" }), dd = dl.getUTCDate();
+sq.prepare("INSERT INTO pt_market (slug,title,yes,vol24,updated_at,ends_at) VALUES (?,?,?,?,?,?)").run("iran-q", `Will the U.S. invade Iran by ${mon} ${dd}, ${dl.getUTCFullYear()}?`, 0.08, 1000, upd, dl.toISOString());
+sq.prepare("INSERT INTO pt_market (slug,title,yes,vol24,updated_at,ends_at) VALUES (?,?,?,?,?,?)").run("bucs", "Buccaneers vs. Bears", 0.5, 1000, upd, dl.toISOString());
+const asks = [];
+const env = { TRADES_DB: d1(sq), SIGNAL_DB: d1(sigdb), __fetchText: fakeFetch(true),
+  AI: { run: async (m, b) => { asks.push(m); return { response: '{"shift": 0.2, "cites": ["E1"], "mechanism": "Tanker seizures raise the odds of escalation.", "watch": "Strait traffic"}', usage: { prompt_tokens: 300, completion_tokens: 40 } }; } } };
+const tk = await tick(env, nowT);
+ok(tk.news.length === 1 && tk.news[0].source === "gdelt" && tk.news[0].added === 2, "the starved Iran family is fetched once and stores two rows", tk.news);
+ok(tk.updated === 1 && asks.length === 2, "the Iran question now has evidence and is forecast by both models", tk);
+ok(tk.coverage["energy-geopolitics"].with_evidence === 1, "coverage counts the question as covered after the fetch", tk.coverage);
+const tk2 = await tick(env, nowT + 60e3);
+ok(tk2.news.length === 0, "a covered family is not fetched again", tk2.news);
+sq.prepare("DELETE FROM fe_signal").run();
+const tk3 = await tick(env, nowT + 120e3);
+ok(tk3.news.length === 0, "a family fetched within newsRefetchMin is not fetched again even when it has no rows", tk3.news);
+ok((await tick({ ...env, FE_NEWS: "off" }, nowT + 4 * 3600e3)).news.length === 0, "FE_NEWS=off stops the lane");
+const lr = await latestRows(env);
+ok(lr.stats.coverage && lr.stats.news_signals && lr.rows.length === 1, "latestRows carries coverage and the news-signal counts", lr.stats);
+const covPage = renderPage([], { coverage: { "energy-geopolitics": { legs: 3, with_evidence: 1 } } }, (t, d, c) => "");
+ok(covPage.includes("Coverage: 1 of 3 questions have fresh evidence") && covPage.includes("Energy and geopolitics: 1 of 3"), "the page shows coverage by category");
 // the deployed copy inside worker.js and its mirror is the current module
 for (const f of ["worker.js", "deployed-current.worker.js"]) {
   const t = readFileSync(new URL("./" + f, import.meta.url), "utf8");
