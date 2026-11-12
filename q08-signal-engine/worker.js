@@ -37,7 +37,7 @@
 // Q08-ASCII-SOURCE-1 (2026-10-01): this file is ASCII-only; every typographic character is a \uXXXX escape. The deploy path
 // double-encoded raw UTF-8, so live pages read "... \u00e2 q08" and posts "\u00e2\u0080\u0094". Keep new literals escaped.
 // VERSION-NOTES-MOVED-1: release notes live in the block below
-var VERSION = "0.52.2";
+var VERSION = "0.53.0";
 /* 0.43.0 Q08-TICK-ALLOWANCE-1 (2026-11-04, pillar cost; minor: the engine now decides on its own whether a tick starts an attempt; BUDGET-SOFT-ROUTE-1, attempts slow down and never stop): ai_call_counters showed 119,552, 129,547 and 110,450 neurons on 2026-11-01..03 against the 50,000 target (ops_config q08_daily_neurons) because q08Budget() only steered the first writer model and nothing bounded the attempts a tick starts (40 a day, the attempt cap, at about 2,760 neurons each). Now the :00 cron and the :30 stall retry go through governedGenerate: tick k of 48 starts an attempt only while the day is under the pace line budget x (k + 1) / 48, an essay after a forecast attempt that spent model calls starts only while the day is still under it, and 150 minutes without an attempt starts one whatever the line says (8 a day at least). No row is written for a tick that waits. The writer gate, reader panels, fact-check, final read and accuracy audit are unchanged, and an attempt already started runs all its rounds. ops_config q08_tick_governor = off restores the old behaviour. tick-allowance.test.mjs replays a UTC day. */
 /* 0.42.0 RM-FORECAST-UPDATE-SCORING-1 (#5578; research): score the last valid update before the horizon with the resolved outcome. */
 /* 0.41.6 FORECAST-CALIBRATION-BUCKET-COVERAGE-1 (#5576, charter pillar research; patch): calibration buckets include probabilities across the full [0,1] range, including the tails, rather than silently omitting forecasts below 5% or above 96%. */
@@ -586,6 +586,19 @@ var SIG_ITEMS_PER_SOURCE = 10, SIG_ITEMS_PER_PUBLISHER = 12, SIG_MAX_SHARE = 0.3
 var SIG_INTERVAL_MIN = 50, SIG_FETCH_TIMEOUT_MS = 12000, SIG_MAX_FEED_BYTES = 1500000;
 var SIG_AGGREGATOR_HOSTS = /(^|\.)(news\.google\.com|google\.com|youtube\.com|youtu\.be|x\.com|twitter\.com|facebook\.com|instagram\.com|reddit\.com|msn\.com|linkedin\.com|t\.co|bit\.ly|wikipedia\.org|archive\.org|medium\.com|substack\.com|github\.com|apple\.news)$/i;
 var SIG_UA = "q08-signal-engine/2 (+https://q08.org/api/signals/health)";
+// SIGNALS-ENGINE-2 self-tuning: the loop reads its own health history and moves its fetch budget. Three degraded ticks in a row, for a reason a larger
+// budget can fix (volume or topics, not "0 active sources", which only time on probation clears), raise it by 4 (cap 40); six ok ticks in a row lower
+// it by 4 (floor 12) to spend less. A change waits SIG_TUNE_GAP ticks, so its effect shows in the next rows before the next change; every change is
+// written to the tick's actions (sig_health.actions) with the old and new value, and ops_config can not be needed to undo it: sig_state fetch_per_tick is the only state.
+var SIG_TUNE_MIN = 12, SIG_TUNE_MAX = 40, SIG_TUNE_STEP = 4, SIG_TUNE_GAP = 3;
+// hist: sig_health rows newest first [{ verdict, reasons: [string] }]; cur: current budget; sinceChange: ticks since the last change.
+function sigTune(cur, hist, sinceChange) {
+  var h = hist || [], fixable = function (r) { return r.verdict === "degraded" && (r.reasons || []).some(function (x) { return !/active sources/.test(x); }); };
+  if (sinceChange < SIG_TUNE_GAP) return { n: cur, why: "" };
+  if (h.length >= 3 && h.slice(0, 3).every(fixable) && cur < SIG_TUNE_MAX) { var up = Math.min(SIG_TUNE_MAX, cur + SIG_TUNE_STEP); return { n: up, why: "fetch budget " + cur + " -> " + up + " (3 degraded ticks)" }; }
+  if (h.length >= 6 && h.every(function (r) { return r.verdict === "ok"; }) && cur > SIG_TUNE_MIN) { var dn = Math.max(SIG_TUNE_MIN, cur - SIG_TUNE_STEP); return { n: dn, why: "fetch budget " + cur + " -> " + dn + " (6 ok ticks)" }; }
+  return { n: cur, why: "" };
+}
 
 function sigNow() { return new Date().toISOString(); }
 function sigSql(ms) { return new Date(ms).toISOString().slice(0, 19).replace("T", " "); }
@@ -868,7 +881,15 @@ async function sigTick(env) {
   var domains = await q08Domains(env);
   var srcRows = ((await env.DB.prepare("SELECT * FROM sig_sources").all()).results || []);
   var boost = {}; before.uncovered_topics.forEach(function (t) { boost[t] = 1; });
-  var picked = sigSchedule(srcRows, before.topic_share, nowMs, { boostTopics: boost });
+  var budget = Number(await sigState(env, "fetch_per_tick")) || SIG_FETCH_PER_TICK;
+  try {
+    var hrows = ((await env.DB.prepare("SELECT id, verdict, detail FROM sig_health ORDER BY id DESC LIMIT 6").all()).results || []);
+    var hist = hrows.map(function (r) { var d = {}; try { d = JSON.parse(r.detail || "{}"); } catch (e) { d = {}; } return { verdict: r.verdict, reasons: d.reasons || [] }; });
+    var lastId = hrows.length ? hrows[0].id : 0, tunedAt = Number(await sigState(env, "tuned_after_id")) || 0;
+    var tune = sigTune(budget, hist, lastId - tunedAt);
+    if (tune.n !== budget) { budget = tune.n; await sigSetState(env, "fetch_per_tick", budget); await sigSetState(env, "tuned_after_id", lastId); actions.push("self-tuned: " + tune.why); }
+  } catch (e) { console.error("q08 sig tune: " + String(e && e.message || e).slice(0, 120)); }
+  var picked = sigSchedule(srcRows, before.topic_share, nowMs, { boostTopics: boost, perTick: budget });
   // demand searches from the open forecast questions: each query at most once in 6 hours
   var demand = [];
   try {
@@ -5989,7 +6010,7 @@ export const __factledger = { groundPreCheck: groundPreCheck, sourceLedger: sour
 export const __fledger = { researchLedger: researchLedger, ledgerNames: ledgerNames, ledgerSentences: ledgerSentences, forecastLedgerOn: forecastLedgerOn, forecastLedgerFor: forecastLedgerFor, ensureForecastGroundColumn: ensureForecastGroundColumn, storedForecastLedger: storedForecastLedger, groundForPublished: groundForPublished, buildForecastPrompt: buildForecastPrompt, stripLedgerTags: stripLedgerTags, groundPreCheck: groundPreCheck, resetGroundColumn: function () { __groundColumnDone = false; }, LEDGER_MAX_LINES: RLEDGER_MAX_LINES, LEDGER_MAX_DOCS: LEDGER_MAX_DOCS, LEDGER_DOC_CHARS: LEDGER_DOC_CHARS };
 export const __cuts = { readerCutIndices: readerCutIndices, applyReaderCuts: applyReaderCuts };
 export const __order = { orderCandidates: orderCandidates };
-export const __sig = { sigParseFeed: sigParseFeed, sigParseGdelt: sigParseGdelt, sigFeedLinks: sigFeedLinks, sigTopicOf: sigTopicOf, sigQuality: sigQuality, sigNextState: sigNextState, sigSchedule: sigSchedule, sigHealthOf: sigHealthOf, sigDemandQueries: sigDemandQueries, sigTitleKey: sigTitleKey, sigTick: sigTick, SIG_SEEDS: SIG_SEEDS, SIG_TOPIC_KEYS: SIG_TOPIC_KEYS, resetSchema: function () { __sigSchemaOk = false; } };
+export const __sig = { sigParseFeed: sigParseFeed, sigParseGdelt: sigParseGdelt, sigFeedLinks: sigFeedLinks, sigTopicOf: sigTopicOf, sigQuality: sigQuality, sigNextState: sigNextState, sigTune: sigTune, sigSchedule: sigSchedule, sigHealthOf: sigHealthOf, sigDemandQueries: sigDemandQueries, sigTitleKey: sigTitleKey, sigTick: sigTick, SIG_SEEDS: SIG_SEEDS, SIG_TOPIC_KEYS: SIG_TOPIC_KEYS, resetSchema: function () { __sigSchemaOk = false; } };
 export const __ground = { labelledGround: labelledGround };
 export const __analysis = { paraphraseItemsDropped: paraphraseItemsDropped, finalRead: finalRead, publishBody: publishBody, PUBLISH_MIN_CHARS: PUBLISH_MIN_CHARS, FINAL_PASS_MEAN: FINAL_PASS_MEAN, concreteClaim: concreteClaim, concreteAnalysisItems: concreteAnalysisItems, analysisDepthProblems: analysisDepthProblems, danglingOpening: danglingOpening, ANALYSIS_MIN_CHARS: ANALYSIS_MIN_CHARS, autoAnalysisMark: autoAnalysisMark, splitAnalysis: splitAnalysis, stripAnalysisMark: stripAnalysisMark, ANALYSIS_CHECK_PROMPT: ANALYSIS_CHECK_PROMPT, ANALYSIS_MARK: ANALYSIS_MARK };
 export const __context = { backgroundEntities: backgroundEntities, backgroundPack: backgroundPack, backgroundQuery: backgroundQuery };
