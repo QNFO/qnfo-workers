@@ -1,6 +1,6 @@
 // q08-prediction-markets: the paper-trading proving ground for q08's information edge (PM-CHARTER-1).
 // Paper money only. No wallet, no exchange key, no order ever leaves this worker: the only executor in this file writes D1 rows.
-var VERSION = "1.11.0-codeagent";
+var VERSION = "1.11.1-codeagent";
 
 // ---------- charter (the machine-readable form; GET /api/charter serves it with the live evidence) ----------
 export const CHARTER = {
@@ -1147,7 +1147,7 @@ const FE = (() => {
 //              geopolitics, officials and rules); drop sports, price brackets, entertainment. Deterministic, 0 tokens.
 //   2 prior    start from the crowd: the market price, repaired for coherence across the dates of one question (a "by Dec 31"
 //              leg can never be below a "by Nov 13" leg). Incoherent or stale legs are themselves a signal. 0 tokens.
-//   3 match    link the signal stream (q08-signal.signal_log: Hacker News, arXiv, Federal Register) to each question by
+//   3 match    link the signal stream (q08-signal.signal_log: news feeds, searches, HN, arXiv, Federal Register) to each question by
 //              entity overlap. 0 tokens. A family with no matched evidence is fetched for by name (NEWS-LANE-1, issue 11057):
 //              GDELT doc search on the question's own entities, Google News RSS as the second path, rows kept in fe_signal.
 //   4 trigger  re-forecast only when new matched evidence arrived or the prior moved 5 points. Most hours cost nothing.
@@ -1536,7 +1536,9 @@ async function ensureSchema(db) { for (const s of SCHEMA) await db.prepare(s).ru
 async function readInputs(env, nowMs) {
   if (!env.SIGNAL_DB) throw new Error("SIGNAL_DB (q08-signal) is not bound");
   const m = await env.TRADES_DB.prepare("SELECT slug, title, yes, vol24, updated_at, ends_at FROM pt_market WHERE closed = 0 AND yes > 0.01 AND yes < 0.99 AND updated_at > ?").bind(new Date(nowMs - 7 * 86400000).toISOString()).all();
-  const s = await env.SIGNAL_DB.prepare("SELECT source, title, url, created_at FROM signal_log WHERE created_at > datetime('now','-21 days') AND source IN ('hn','federalregister','arxiv') ORDER BY created_at DESC LIMIT 1500").all();
+  // SIGNALS-ENGINE-2 (q08-signal-engine 0.52.0): the stream now carries news feeds, GDELT and Google News searches and discovered publishers
+  // beside Hacker News, arXiv and the Federal Register, so every source but repository listings is read (a repo name never matches a question).
+  const s = await env.SIGNAL_DB.prepare("SELECT source, title, url, created_at FROM signal_log WHERE created_at > datetime('now','-21 days') AND source <> 'github' ORDER BY created_at DESC LIMIT 3000").all();
   const n = await env.TRADES_DB.prepare("SELECT source, title, url, created_at FROM fe_signal WHERE created_at > ? ORDER BY created_at DESC LIMIT 1500").bind(sqlTime(nowMs - 21 * 86400000)).all();
   const last = await env.TRADES_DB.prepare("SELECT f.* FROM fe_forecast f JOIN (SELECT slug, max(id) id FROM fe_forecast GROUP BY slug) l ON l.id = f.id").all();
   const lastBy = {};

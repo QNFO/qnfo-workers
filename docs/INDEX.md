@@ -318,6 +318,12 @@ and [the machine-readable catalog](agent-catalog.json).
 - [Handoff: \[#1002229\] Ask: ChatGPT-style command line with full tool power (calendar read/write, live web search, Amsterdam listings, email, notes, memory, tasks)](handoff/issue-8249.md) - `docs/handoff/issue-8249.md`
 - [Handoff: \[#1002234\] CMDLINE-SANDBOX-1: run the CodeSession edit and test loop inside a Sandbox container](handoff/issue-8254.md) - `docs/handoff/issue-8254.md`
 - [Handoff: \[#1002237\] DASH-FOLD-3-1: fold the fleet dashboard into three screens (Now, Work, Portfolio) driven by the command line](handoff/issue-8257.md) - `docs/handoff/issue-8257.md`
+- [Handoff: COMPANION-TRAVEL-OFFLINE-1: Companion: travel and patchy-signal use (place names filled in after reconnect, travel time zone for moments, local emergency numbers in the care panel)](handoff/issue-8266.md) - `docs/handoff/issue-8266.md`
+- [Handoff: COMPANION-PRIVACY-1: Companion: privacy for the life-log (export and delete include cmp_moments; replace third-party place and geocode lookups)](handoff/issue-8268.md) - `docs/handoff/issue-8268.md`
+- [Handoff: YT-REACH-HANDOFF-1: Shorts scene variety, LinkedIn native video, per-channel copy, reach levers (continue from draft PR 8202)](handoff/issue-8271.md) - `docs/handoff/issue-8271.md`
+- [Handoff: STANDING-INSTRUCTIONS-1: put the owner's standing rules into every repo's CLAUDE.md and every agent prompt](handoff/issue-8273.md) - `docs/handoff/issue-8273.md`
+- [Handoff: DOC-IS-CODE-1: 30 docs in docs/ have no code behind them](handoff/issue-8274.md) - `docs/handoff/issue-8274.md`
+- [Handoff: AI-CALL-YIELD-1: measure output per AI call, cut research-exec waste, meter unmetered purposes](handoff/issue-8275.md) - `docs/handoff/issue-8275.md`
 - [COST-DECISION-OWNER-LOCAL-TEXT-1: owner-local sentence contradicts the $0 spend and the credit runway divides by unbilled third-party list cost](handoff/issues/COST-DECISION-OWNER-LOCAL-TEXT-1.md) - `docs/handoff/issues/COST-DECISION-OWNER-LOCAL-TEXT-1.md`
 - [COST-FEED-7D-WINDOW-1: /api/cost by_model_7d and by_worker_7d sum 8 UTC day buckets (today partial) under a 7d label, with est_usd unlabelled as list price](handoff/issues/by-window-8-buckets.md) - `docs/handoff/issues/by-window-8-buckets.md`
 - [RUM-ZERO-DAY-1: a stored false zero for 2026-10-13 understates the 7- and 28-day pageviews, and the dashboard top pages read the unfiltered source](handoff/issues/rum-zero-13.md) - `docs/handoff/issues/rum-zero-13.md`

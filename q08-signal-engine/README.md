@@ -4,6 +4,15 @@
 
 Autonomous signal engine serving https://q08.org — systems-level critiques of technical-industry friction, generated from HN/GitHub/arXiv signals and published as timeless long-form essays.
 
+## Signals (SIGNALS-ENGINE-2, v0.52.0)
+The signal stream (`q08-signal.signal_log`, read by q08-prediction-markets FORECAST-ENGINE-1 and `/api/signals`) comes from a source registry
+in D1 (`sig_sources`), not from scrapers wired into the code: news and institutional feeds, GDELT and Google News searches per topic and per
+entity of the open forecast questions, and publisher feeds the engine discovers itself (`sig_domains`, feed autodiscovery). Each source is
+scored (success, yield, freshness, novelty, forecast citations), moved through probation, active, quarantined and retired, and scheduled by
+quality times topic deficit. `sigTick` grades the stream every 30 minutes (`sig_health`, `/api/signals/health`; metrics
+`signal_max_publisher_share_24h`, `signal_sources_active`, `signal_topics_covered_24h`) and remediates: a publisher over 35% has its cap halved,
+quarantined sources are released early, discovery widens, an empty tick reseeds. Tests: `signals-engine.test.mjs`.
+
 ## Distribution (Q08-PERSONAL-CHANNEL-HOLD-1, 2026-10-01)
 - q08 is a separate publication (docs/STRATEGY.md section 2.1). It is **not** distributed through the owner's personal
   accounts; it reaches readers through its own RSS feed and subscriber digest only.

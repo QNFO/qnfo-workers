@@ -1613,6 +1613,36 @@
       "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-8257.md"
     },
     {
+      "path": "docs/handoff/issue-8266.md",
+      "title": "Handoff: COMPANION-TRAVEL-OFFLINE-1: Companion: travel and patchy-signal use (place names filled in after reconnect, travel time zone for moments, local emergency numbers in the care panel)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-8266.md"
+    },
+    {
+      "path": "docs/handoff/issue-8268.md",
+      "title": "Handoff: COMPANION-PRIVACY-1: Companion: privacy for the life-log (export and delete include cmp_moments; replace third-party place and geocode lookups)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-8268.md"
+    },
+    {
+      "path": "docs/handoff/issue-8271.md",
+      "title": "Handoff: YT-REACH-HANDOFF-1: Shorts scene variety, LinkedIn native video, per-channel copy, reach levers (continue from draft PR 8202)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-8271.md"
+    },
+    {
+      "path": "docs/handoff/issue-8273.md",
+      "title": "Handoff: STANDING-INSTRUCTIONS-1: put the owner's standing rules into every repo's CLAUDE.md and every agent prompt",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-8273.md"
+    },
+    {
+      "path": "docs/handoff/issue-8274.md",
+      "title": "Handoff: DOC-IS-CODE-1: 30 docs in docs/ have no code behind them",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-8274.md"
+    },
+    {
+      "path": "docs/handoff/issue-8275.md",
+      "title": "Handoff: AI-CALL-YIELD-1: measure output per AI call, cut research-exec waste, meter unmetered purposes",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-8275.md"
+    },
+    {
       "path": "docs/handoff/issues/COST-DECISION-OWNER-LOCAL-TEXT-1.md",
       "title": "COST-DECISION-OWNER-LOCAL-TEXT-1: owner-local sentence contradicts the $0 spend and the credit runway divides by unbilled third-party list cost",
       "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issues/COST-DECISION-OWNER-LOCAL-TEXT-1.md"
