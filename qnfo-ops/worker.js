@@ -552,7 +552,7 @@ __name222(gateAudit1CfWorkerDeploy, "gateAudit1CfWorkerDeploy");
 __name2222(gateAudit1CfWorkerDeploy, "gateAudit1CfWorkerDeploy");
 __name22222(gateAudit1CfWorkerDeploy, "gateAudit1CfWorkerDeploy");
 __name222222(gateAudit1CfWorkerDeploy, "gateAudit1CfWorkerDeploy");
-var VERSION = "2.72.0-codeagent";
+var VERSION = "2.72.1-codeagent";
 /* 2.62.20 OPS-ARG-ALIAS-1 (issues 5775, 5780, 6173, 6193, 6671, 6792, 6767, 6826, 6015, 6860, pillar autonomy; patch). Caller-input mistakes are no longer fleet failures: workspace_grep accepts query/regex/search for pattern, cf_worker_read/deploy/bindings accept name/script for worker, fleet_graph infers a missing op from its other arguments and accepts filter/q/name for query; a still-missing argument answers arg_error with a hint, and an arg_error or an exception thrown by the caller own run_code or run_code_net JavaScript (user_code_error) is logged as status rejected, so it files no TOOL-FAILURE or LOOP-BREAKER issue. errorDetailCapture writes worker_logs in batches of 25 and records a D1 overload as a deferral, not an error. qnfo-ops/tool-arg-alias.test.mjs. */
 /* 2.62.11 WORKER-LOAD-GATE-1 (issue #6518, pillar autonomy; patch): inline the OAuth broker in the deployable single-module worker. */
 /* 2.62.1 CONTAINER-WORKSPACE-TIMEOUT-1 (#3922, issue 1000117, pillar autonomy; patch): container_workspace_exec allows 120 seconds for cold-start initialization while preserving its 300-second ceiling. */
@@ -5505,6 +5505,17 @@ async function resolveSecretsStoreBindings(env, worker, declared) {
   res.note = "secrets_store_secrets: " + declared.length + " declared, " + sel.bound.length + " bound" + (skipped.length ? ", skipped " + skipped.join("; ") : "");
   return res;
 }
+// WORKFLOW-NAME-BIND-2 (2.72.1): set a live Workflow binding's workflow_name and script_name to what wrangler.toml declares.
+// Pure; returns true when it changed the live binding. Only declared keys are written, so nothing the file omits is cleared.
+function applyDeclaredWorkflow(liveBindings, decl) {
+  const live = (liveBindings || []).find(function(x) { return x && x.type === "workflow" && x.name === decl.name; });
+  if (!live) return false;
+  let changed = false;
+  for (const key of ["workflow_name", "script_name"]) {
+    if (decl[key] && live[key] !== decl[key]) { live[key] = decl[key]; changed = true; }
+  }
+  return changed;
+}
 async function installDeclaredBindings(env, worker) {
   const out = { installed: 0, note: null, bindings: [] };
   try {
@@ -5808,6 +5819,7 @@ async function cfWorkerDeploy(env, args) {
   });
   let bindingsInstalled = 0;
   let bindingPropsApplied = 0;
+  let workflowNameApplied = 0;
   let bindingInstallNote = null;
   let bindingInstallSkipped = false;
   let _declFlags = [];
@@ -5866,6 +5878,9 @@ async function cfWorkerDeploy(env, args) {
               sendEmailRestrictApplied++;
             }
           }
+          // WORKFLOW-NAME-BIND-2: the same exception for a Workflow binding's workflow_name and script_name. Bindings installed
+          // before 2.72.0 kept workflow_name "" (live wins), so create() kept answering "Workflow does not exist" after the fix.
+          if (_b.type === "workflow" && applyDeclaredWorkflow(bindingsOut, _b)) workflowNameApplied++;
           continue;
         }
         bindingsOut.push(_b);
@@ -6100,7 +6115,7 @@ async function cfWorkerDeploy(env, args) {
     }
     const _compatNote = _compat.restore ? " compat-restore from=" + (_compat.from || "n/a") + " " + String(args && args.compat_restore_note || "").slice(0, 120) : _compat.applied ? " compat_date=" + _compat.from + "->" + _compat.to + " reviewed=" + _compat.reviewed + (_compat.pending_verify ? " pending_verify" : "") : " compat_date=" + _compatDate + (_compat.declared_date && _compat.live_date && _compat.declared_date > _compat.live_date ? " compat_not_advanced=" + String(_compat.reason || "").replace(/\s+/g, "_").slice(0, 160) : "");
     const _ledOk = await recordDeployLedger(env, { resource_name: worker, action: _compat.restore ? "compat-restore" : "deploy", version_id: versionNote || null, status: "success", notes: "cf_worker_deploy ok http=" + resp.status + " worker=" + worker + _compatNote + " bindings_preserved=" + bindingsOut.length + " observability=" + _obsNote.slice(0, 60) + (_declLimits ? " limits=" + _limitsNote.slice(0, 60) : "") + (_declPlacement ? " placement=" + _placementNote.slice(0, 60) : "") + (sendEmailRestrictApplied ? " send_email_restrict=applied:" + sendEmailRestrictApplied : _sendEmailNote ? " send_email_restrict=" + _sendEmailNote.slice(0, 60) : "") + (_droppedBindings.length ? " dropped_dangling_bindings=" + _droppedBindings.map(function (d) { return d.name + "->" + d.service; }).join(",") : "") + " etag=" + ((j && j.result && j.result.etag) ? j.result.etag : "n/a") + " content_bytes=" + content.length + " expected_version=" + String(args && args.expected_version || "n/a") + (bindingInstallNote && bindingInstallNote.indexOf("secrets_store_secrets") !== -1 ? " | " + bindingInstallNote.slice(bindingInstallNote.indexOf("secrets_store_secrets"), bindingInstallNote.indexOf("secrets_store_secrets") + 140) : "") });
-    return { ledger: _ledOk, ok: true, worker, deployed: true, http: resp.status, dropped_dangling_bindings: _droppedBindings, version: versionNote || "deployed", bindings_preserved: bindingsOut.length, bindings_installed: bindingsInstalled, binding_props_applied: bindingPropsApplied, observability_apply: _obsNote, observability: _obsOut, limits_apply: _limitsNote, limits: _limitsOut, placement_apply: _placementNote, placement: _placementOut, send_email_restrict_applied: sendEmailRestrictApplied, send_email_restrict_note: _sendEmailNote, compatibility_date: _compatDate, compat: _compat, binding_install_note: bindingInstallNote, binding_install: bindingInstallSkipped ? "skipped" : "ok", warning: bindingsOut.length === 0 ? "BINDING-INSTALL-WHEN-EMPTY-1: deployed with ZERO bindings and none installable from wrangler.toml - this worker may be a silent no-op" : null, result: j && j.result ? { id: j.result.id, etag: j.result.etag } : null };
+    return { ledger: _ledOk, ok: true, worker, deployed: true, http: resp.status, dropped_dangling_bindings: _droppedBindings, version: versionNote || "deployed", bindings_preserved: bindingsOut.length, bindings_installed: bindingsInstalled, binding_props_applied: bindingPropsApplied, workflow_name_applied: workflowNameApplied, observability_apply: _obsNote, observability: _obsOut, limits_apply: _limitsNote, limits: _limitsOut, placement_apply: _placementNote, placement: _placementOut, send_email_restrict_applied: sendEmailRestrictApplied, send_email_restrict_note: _sendEmailNote, compatibility_date: _compatDate, compat: _compat, binding_install_note: bindingInstallNote, binding_install: bindingInstallSkipped ? "skipped" : "ok", warning: bindingsOut.length === 0 ? "BINDING-INSTALL-WHEN-EMPTY-1: deployed with ZERO bindings and none installable from wrangler.toml - this worker may be a silent no-op" : null, result: j && j.result ? { id: j.result.id, etag: j.result.etag } : null };
   } catch (e) {
     return { ok: false, error: "cf_worker_deploy failed: " + (e && e.message || String(e)).slice(0, 300) };
   }
