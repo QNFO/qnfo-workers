@@ -27,5 +27,14 @@ ok(wf.length === 2, "both workflow blocks are installed", ins);
 ok(wf[0] && wf[0].workflow_name === "personal-pipeline" && wf[0].class_name === "PersonalPipelineFlow" && wf[0].name === "PERSONAL_FLOW" && !("script_name" in wf[0]), "workflow_name is the block's name", wf[0]);
 ok(wf[1] && wf[1].workflow_name === "remote-flow" && wf[1].script_name === "other-worker", "script_name is kept for a class in another worker", wf[1]);
 ok(/var VERSION = "2\.(7[2-9]|[89]\d)\./.test(src), "qnfo-ops VERSION is at least 2.72.0");
+
+// WORKFLOW-NAME-BIND-2: a live binding installed before the fix (workflow_name "") is repaired on the next deploy, since live wins
+// on (type,name) for everything else.
+const A = new Function(cut("function applyDeclaredWorkflow(", "\nasync function installDeclaredBindings(") + "\nreturn applyDeclaredWorkflow;")();
+const live = [{ type: "workflow", name: "JOB_FLOW", class_name: "JobApplicationFlow", workflow_name: "" }, { type: "workflow", name: "GEN", class_name: "G", workflow_name: "gen" }];
+ok(A(live, { type: "workflow", name: "JOB_FLOW", class_name: "JobApplicationFlow", workflow_name: "job-application" }) === true && live[0].workflow_name === "job-application", "an empty live workflow_name takes the declared one", live[0]);
+ok(A(live, { type: "workflow", name: "GEN", class_name: "G", workflow_name: "gen" }) === false && live[1].workflow_name === "gen", "a matching one is left alone");
+ok(A(live, { type: "workflow", name: "GEN", class_name: "G" }) === false && live[1].workflow_name === "gen", "a key the file omits is never cleared");
+ok(/_b\.type === "workflow" && applyDeclaredWorkflow\(bindingsOut, _b\)/.test(src) && /workflow_name_applied: workflowNameApplied/.test(src), "the deploy merge calls it and reports the count");
 console.log(pass + " passed, " + fail + " failed");
 if (fail) process.exit(1);
