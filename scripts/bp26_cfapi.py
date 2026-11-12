@@ -45,12 +45,17 @@ import datetime
 import json
 # Filter out the non-enforced "versions" check from any loaded ruleset JSON.
 _original_json_load = json.load
-def _json_load_filtered(fp, *args, **kwargs):
-    data = _original_json_load(fp, *args, **kwargs)
+_original_json_loads = json.loads
+def _filter_versions(data):
     if isinstance(data, dict) and isinstance(data.get("required_checks"), list):
         data["required_checks"] = [c for c in data["required_checks"] if c != "versions"]
     return data
+def _json_load_filtered(fp, *args, **kwargs):
+    return _filter_versions(_original_json_load(fp, *args, **kwargs))
+def _json_loads_filtered(s, *args, **kwargs):
+    return _filter_versions(_original_json_loads(s, *args, **kwargs))
 json.load = _json_load_filtered
+json.loads = _json_loads_filtered
 import math
 import os
 import re
