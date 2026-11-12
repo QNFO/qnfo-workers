@@ -37,7 +37,7 @@
 // Q08-ASCII-SOURCE-1 (2026-10-01): this file is ASCII-only; every typographic character is a \uXXXX escape. The deploy path
 // double-encoded raw UTF-8, so live pages read "... \u00e2 q08" and posts "\u00e2\u0080\u0094". Keep new literals escaped.
 // VERSION-NOTES-MOVED-1: release notes live in the block below
-var VERSION = "0.52.0";
+var VERSION = "0.52.1";
 /* 0.43.0 Q08-TICK-ALLOWANCE-1 (2026-11-04, pillar cost; minor: the engine now decides on its own whether a tick starts an attempt; BUDGET-SOFT-ROUTE-1, attempts slow down and never stop): ai_call_counters showed 119,552, 129,547 and 110,450 neurons on 2026-11-01..03 against the 50,000 target (ops_config q08_daily_neurons) because q08Budget() only steered the first writer model and nothing bounded the attempts a tick starts (40 a day, the attempt cap, at about 2,760 neurons each). Now the :00 cron and the :30 stall retry go through governedGenerate: tick k of 48 starts an attempt only while the day is under the pace line budget x (k + 1) / 48, an essay after a forecast attempt that spent model calls starts only while the day is still under it, and 150 minutes without an attempt starts one whatever the line says (8 a day at least). No row is written for a tick that waits. The writer gate, reader panels, fact-check, final read and accuracy audit are unchanged, and an attempt already started runs all its rounds. ops_config q08_tick_governor = off restores the old behaviour. tick-allowance.test.mjs replays a UTC day. */
 /* 0.42.0 RM-FORECAST-UPDATE-SCORING-1 (#5578; research): score the last valid update before the horizon with the resolved outcome. */
 /* 0.41.6 FORECAST-CALIBRATION-BUCKET-COVERAGE-1 (#5576, charter pillar research; patch): calibration buckets include probabilities across the full [0,1] range, including the tails, rather than silently omitting forecasts below 5% or above 96%. */
@@ -699,7 +699,7 @@ function sigHealthOf(rows, srcRows) {
   (rows || []).forEach(function (r) {
     var n = Number(r.n) || 0, pub = r.publisher || (r.source === "hn" ? "news.ycombinator.com" : r.source || "unknown");
     total += n; byPub[pub] = (byPub[pub] || 0) + n; byKind[r.source || "unknown"] = (byKind[r.source || "unknown"] || 0) + n;
-    if (r.topic) byTopic[r.topic] = (byTopic[r.topic] || 0) + n;
+    byTopic[r.topic || "unclassified"] = (byTopic[r.topic || "unclassified"] || 0) + n; // pre-0.52.0 rows carry no topic; they age out of the 24-hour window
   });
   var top = Object.keys(byPub).sort(function (a, b) { return byPub[b] - byPub[a]; });
   var maxShare = total ? byPub[top[0]] / total : 0, hhi = 0;
@@ -789,7 +789,12 @@ async function sigFetchSource(env, src, domains) {
   else { parsed = sigParseFeed(r.text); if (!parsed.length && !/<(rss|feed|rdf:RDF)[\s>]/i.test(r.text)) throw new Error("not a feed"); }
   return parsed.map(function (it) {
     var pub = sigHost(it.publisher_url) || sigHost(it.url);
-    if (kind === "gnews" || kind === "demand") { it.title = it.title.replace(/\s+-\s+[^-]{2,60}$/, ""); if (!it.publisher_url) pub = ""; }
+    if (kind === "gnews" || kind === "demand") {
+      // Google News links are news.google.com redirects: the publisher is the <source url>, else the "Headline - Publisher" tail, never news.google.com.
+      var tail = /\s+-\s+([^-]{2,60})$/.exec(it.title);
+      it.title = it.title.replace(/\s+-\s+[^-]{2,60}$/, "");
+      if (!it.publisher_url) pub = tail ? "gnews:" + tail[1].trim().toLowerCase().replace(/[^a-z0-9]+/g, "-") : "gnews:unknown";
+    }
     return { sid: it.url, title: it.title, url: it.url, published: it.published, summary: it.summary, publisher: pub || sigHost(url) };
   });
 }
@@ -830,6 +835,8 @@ async function sigDemandTitles(env) {
 }
 // Probe one domain for a feed; returns the feed url and its item count, or null.
 async function sigDiscoverDomain(env, domain) {
+  // a public DNS name only (no IP literal, no port, no single-label host): discovery never reaches an address a feed item merely names
+  if (!/^(?=.{4,253}$)([a-z0-9-]{1,63}\.)+[a-z]{2,63}$/.test(String(domain || "")) ) return null;
   var base = "https://" + domain + "/", tries = [];
   try { var page = await sigFetchText(env, base, "text/html"); if (page.ok) tries = sigFeedLinks(page.text, base); } catch (e) { tries = []; }
   tries = tries.concat(["feed", "rss", "rss.xml", "feed.xml"].map(function (p) { return base + p; }));
@@ -900,7 +907,7 @@ async function sigTick(env) {
       novel++;
       var pub = it.publisher || "unknown";
       if ((pubCount[pub] || 0) >= SIG_ITEMS_PER_PUBLISHER) continue;
-      if (pub && !SIG_AGGREGATOR_HOSTS.test(pub) && kindLabel !== "hn" && kindLabel !== "github" && kindLabel !== "arxiv" && kindLabel !== "federalregister") domainSeen[pub] = (domainSeen[pub] || 0) + 1;
+      if (pub && pub.indexOf(":") < 0 && !SIG_AGGREGATOR_HOSTS.test(pub) && kindLabel !== "hn" && kindLabel !== "github" && kindLabel !== "arxiv" && kindLabel !== "federalregister") domainSeen[pub] = (domainSeen[pub] || 0) + 1;
       recentKeys.add(key); pubCount[pub] = (pubCount[pub] || 0) + 1; newHere++;
       var lg = it.legacy || {};
       var sid = it.legacy ? String(it.sid) : await sigShaHex(it.url);

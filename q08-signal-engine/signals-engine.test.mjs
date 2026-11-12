@@ -72,6 +72,7 @@ const srcs = Array.from({ length: 25 }, (_, i) => ({ id: "s" + i, state: "active
 const hOk = S.sigHealthOf(balanced, srcs);
 check("balanced stream with 25 active sources is ok", hOk.verdict === "ok", hOk.reasons);
 
+check("health: rows without a topic do not count as a covered topic", S.sigHealthOf([{ source: "hn", topic: null, n: 5 }], []).topics_covered === 0);
 // ---------- a full tick on SQLite ----------
 function d1(db) {
   const wrap = (sql, args) => ({
@@ -125,6 +126,7 @@ check("a feed that keeps failing is quarantined", cn.state === "quarantined" && 
 const disc = db.prepare("SELECT * FROM sig_sources WHERE discovered_from = 'domain:repeat.example.com'").get();
 check("a recurring publisher's feed is discovered and is scored from probation", disc && disc.url === "https://repeat.example.com/rss" && (disc.state === "probation" || disc.state === "active"), disc);
 const dup = db.prepare("SELECT title_key, COUNT(*) n FROM signal_log GROUP BY title_key HAVING n > 1").all();
+check("no signal is attributed to news.google.com", db.prepare("SELECT COUNT(*) n FROM signal_log WHERE publisher = 'news.google.com'").get().n === 0);
 check("no title is stored twice", dup.length === 0, dup.slice(0, 3));
 const hh = S.sigHealthOf(db.prepare("SELECT publisher, source, topic, COUNT(*) n FROM signal_log GROUP BY publisher, source, topic").all(), []);
 check("Hacker News share of the stream is under the limit", (hh.top_publishers.find((p) => p.publisher === "news.ycombinator.com") || { share: 0 }).share <= 0.35, hh.top_publishers.slice(0, 3));
