@@ -497,7 +497,7 @@ console.log("\n[http]");
   // CLOCK-PIN-1: a fixed Wednesday 14:00Z (16:00 Amsterdam) - outside the 07:45-12:00 local check-in window and not Sunday evening, so exactly one ask mail is expected; the wall clock made this suite fail every morning.
   const nowIso2 = "2026-10-14T14:00:00.000Z";
 
-  const a = mkEnv();
+  const a = mkEnv(); await ensureWellbeing(a.env.PERSONAL);   // the legacy ask path is opt-in (wellbeing_prompts)
   const delivered = [];
   const realSend = async (e, to, subject, body) => { delivered.push({ to, subject, body }); return { ok: true, via: "test" }; };
   const t2json = await wellbeingTick(a.env, { send: realSend, nowIso: nowIso2, force: true });
@@ -507,12 +507,12 @@ console.log("\n[http]");
   ok("delivered row is marked sent with a timestamp", row2.state === "sent" && !!row2.sent_at, row2);
   ok("the mail carries both answers", /\/wb\/done\?id=/.test(delivered[0].body) && /\/wb\/no\?id=/.test(delivered[0].body));
 
-  const b = mkEnv();
+  const b = mkEnv(); await ensureWellbeing(b.env.PERSONAL);   // the legacy ask path is opt-in (wellbeing_prompts)
   await wellbeingTick(b.env, { send: async () => ({ ok: false, disabled: true }), nowIso: nowIso2, force: true });
   const row3 = b.db.prepare("SELECT state, outcome FROM companion_nudges ORDER BY id DESC LIMIT 1").get();
   ok("an owner off-switch closes the row, not retries it", row3.state === "expired" && row3.outcome.includes("owner_notices_disabled"), row3);
 
-  const c2 = mkEnv();
+  const c2 = mkEnv(); await ensureWellbeing(c2.env.PERSONAL);   // the legacy ask path is opt-in (wellbeing_prompts)
   await wellbeingTick(c2.env, { send: async () => ({ ok: false, suppressed: true }), nowIso: nowIso2, force: true });
   const row4 = c2.db.prepare("SELECT state, outcome FROM companion_nudges ORDER BY id DESC LIMIT 1").get();
   ok("a suppressed send stays queued with a reason", row4.state === "queued" && row4.outcome.includes("suppressed"), row4);
