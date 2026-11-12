@@ -16,7 +16,7 @@ ok(src.includes('if (p === "/api/platform-claims") return handlePlatform(env, tr
 const esc = (t) => (t ? String(t).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;") : "");
 const qdsPage = (o, body) => "<title>" + o.title + "</title>" + (o.jsonld || "") + body;
 const health = () => new Response(JSON.stringify({ worker: "qnfo-gateway" }), { headers: { "Content-Type": "application/json" } });
-const mod = new Function("esc", "qdsPage", "health", src.slice(a, b) + "\nreturn { handlePlatform, ultrastableRoute, reset: function(){ PLATFORM_CACHE = { at: 0, data: null }; } };")(esc, qdsPage, health);
+const mod = new Function("esc", "qdsPage", "health", "subscribeBlock", src.slice(a, b) + "\nreturn { handlePlatform, ultrastableRoute, reset: function(){ PLATFORM_CACHE = { at: 0, data: null }; } };")(esc, qdsPage, health, (source) => '<form id="ld-sub-form" data-source="' + source + '"></form>');
 
 function envWith(rows, answers) {
   return { AUDIT: { prepare(sql) {
@@ -96,5 +96,7 @@ mod.reset();
 const uh = await (await mod.handlePlatform(envProfile([{ key: "home_url", value: "https://ultrastable.io" }]), false)).text();
 ok(uh.includes('"url":"https://ultrastable.io"'), "the schema url follows product_profile.home_url");
 
+ok(html.includes('data-exp="platform_cta_v1"') && html.includes('data-source="platform-cta"'), "html /platform carries the subscribe CTA tagged platform-cta / platform_cta_v1");
+ok(!JSON.stringify(j).includes("platform_cta_v1"), "the JSON claims payload is unchanged by the CTA");
 console.log(pass + " passed, " + fail + " failed");
 if (fail) process.exit(1);
