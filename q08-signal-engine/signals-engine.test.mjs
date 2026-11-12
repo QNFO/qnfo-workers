@@ -66,6 +66,13 @@ const many = [].concat(...[1, 2, 3, 4, 5].map((i) => [{ id: "gnews:" + i, kind: 
 check("at most two Google News searches a tick", S.sigSchedule(many, {}, now, { perTick: 10 }).length === 2);
 check("retired and not-due sources are not fetched", !ids.includes("rss:dead") && !ids.includes("rss:later"), ids);
 
+// ---------- self-tuning ----------
+const deg = { verdict: "degraded", reasons: ["40 signals in 24 hours (floor 60)"] }, okv = { verdict: "ok", reasons: [] };
+check("tune: three fixable degraded ticks raise the budget by 4", S.sigTune(24, [deg, deg, deg], 5).n === 28);
+check("tune: degraded only for 'active sources' does not raise it", S.sigTune(24, [{ verdict: "degraded", reasons: ["0 active sources (floor 20)"] }, { verdict: "degraded", reasons: ["0 active sources (floor 20)"] }, { verdict: "degraded", reasons: ["0 active sources (floor 20)"] }], 5).n === 24);
+check("tune: six ok ticks lower it by 4, never under 12", S.sigTune(24, Array(6).fill(okv), 5).n === 20 && S.sigTune(12, Array(6).fill(okv), 5).n === 12);
+check("tune: never over 40", S.sigTune(40, [deg, deg, deg], 5).n === 40);
+check("tune: a change waits three ticks", S.sigTune(24, [deg, deg, deg], 2).n === 24);
 // ---------- health: the measured 2026-11-12 stream is degraded ----------
 const hBefore = S.sigHealthOf([{ source: "hn", publisher: null, topic: null, n: 41 }, { source: "arxiv", publisher: null, topic: null, n: 24 }, { source: "github", publisher: null, topic: null, n: 15 }], []);
 check("HN-dominated stream: degraded, HN named", hBefore.verdict === "degraded" && hBefore.max_publisher === "news.ycombinator.com" && hBefore.reasons.some((r) => /holds/.test(r)), hBefore);
@@ -132,6 +139,7 @@ check("a recurring publisher's feed is discovered and is scored from probation",
 const dup = db.prepare("SELECT title_key, COUNT(*) n FROM signal_log GROUP BY title_key HAVING n > 1").all();
 check("no signal is attributed to news.google.com", db.prepare("SELECT COUNT(*) n FROM signal_log WHERE publisher = 'news.google.com'").get().n === 0);
 check("no title is stored twice", dup.length === 0, dup.slice(0, 3));
+for (let k = 0; k < 4; k++) { db.exec("UPDATE sig_sources SET next_at = NULL WHERE state <> 'quarantined'"); await S.sigTick(env); }
 const hh = S.sigHealthOf(db.prepare("SELECT publisher, source, topic, COUNT(*) n FROM signal_log GROUP BY publisher, source, topic").all(), []);
 check("Hacker News share of the stream is under the limit", (hh.top_publishers.find((p) => p.publisher === "news.ycombinator.com") || { share: 0 }).share <= 0.35, hh.top_publishers.slice(0, 3));
 check("more than 8 topics covered", hh.topics_covered >= 8, hh.topic_share);
