@@ -1342,13 +1342,21 @@ const sessionCookie = (v, maxAge) => "trv=" + v + "; Path=/travel; Max-Age=" + m
 export async function handleTravel(request, env, deps = {}) {
   const u = new URL(request.url);
   const p = u.pathname;
-  if (p !== "/travel" && !p.startsWith("/travel/") && p !== "/api/travel" && p !== "/api/travel/run" && p !== "/api/travel/today") return null;
+  if (p !== "/travel" && !p.startsWith("/travel/") && p !== "/api/travel" && p !== "/api/travel/run" && p !== "/api/travel/today" && p !== "/api/travel/mail") return null;
   const db = env.PERSONAL;
   if (!db) return jsonRes({ ok: false, error: "no PERSONAL binding" }, 503);
   await ensureTravelCheap(db);
   const nowMs = deps.now || Date.now();
   const nowIso = new Date(nowMs).toISOString();
 
+  if (p === "/api/travel/mail") {
+    // TRAVEL-MAIL-1: qnfo-email posts gated delay/cancel/deal mail here over a service binding (props.caller), or with the companion key.
+    if (request.method !== "POST") return jsonRes({ ok: false, error: "POST only" }, 405);
+    if (!(deps.caller === "qnfo-email" || bearerOk(request, env))) return jsonRes({ ok: false, error: "unauthorized" }, 401);
+    let b = {};
+    try { b = await request.json(); } catch (e) { return jsonRes({ ok: false, error: "bad JSON" }, 400); }
+    return jsonRes(await ingestMail(db, nowIso, localParts(nowMs, (await cfg(db)).tz).day, String(b.text || "").slice(0, 12000)));
+  }
   if (p === "/api/travel" || p === "/api/travel/run" || p === "/api/travel/today") {
     if (!bearerOk(request, env)) return jsonRes({ ok: false, error: "unauthorized" }, 401);
     // TRAVEL-TRIP-STATE-1: the compact trip card the companion's Today screen reads.
