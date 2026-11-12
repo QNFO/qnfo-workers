@@ -16,6 +16,7 @@ and [the machine-readable catalog](agent-catalog.json).
 - [qnfo-workers](../README.md) - `README.md`
 - [CRITICAL: Unmerged Work Found and Recovered](../RECOVERY-NEEDED.md) - `RECOVERY-NEEDED.md`
 - [QNFO Worker Token Bootstrap](../TOKEN-BOOTSTRAP.md) - `TOKEN-BOOTSTRAP.md`
+- [Quniverse and Ultrastable: unified agent bootstrap](../agent-bootstrap.md) - `agent-bootstrap.md`
 - [Branch Cleanup Summary](../branch-cleanup-summary.md) - `branch-cleanup-summary.md`
 - [Quniverse](../llms.txt) - `llms.txt`
 
