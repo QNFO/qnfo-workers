@@ -15,7 +15,7 @@
 //
 // Pure ESM, no imports: personal-companion inlines it (scripts/inline-pipeline-modules.mjs); tests load it directly.
 
-export const ENGINE_VERSION = "1.1.0";
+export const ENGINE_VERSION = "1.1.1";
 
 export const ENGINE_DDL = [
   `CREATE TABLE IF NOT EXISTS pipeline_runs (
@@ -145,10 +145,12 @@ const wrap = async (fn) => { const v = await fn(); return v === undefined ? null
 
 // Runs (or continues) one run to its end, a pause, or a failure. ctx is whatever the stages need (env, clock, deps).
 export async function runPipeline(db, def, id, step, ctx = {}) {
-  await ensureEngine(db);
   ctx = Object.assign({}, ctx, { runId: id });
   const clock = ctx.now || nowIso;
-  const row = await step.do("load", STEP_OPTS, () => wrap(() => db.prepare("SELECT * FROM pipeline_runs WHERE id = ?").bind(id).first()));
+  // WORKFLOW-FIRST-READ-RETRY-1 (1.1.1): every D1 call of a run sits inside a retried step. ensureEngine used to run before the first
+  // step, so a "D1 DB is overloaded" answer at instance start errored the Workflow with no retry (3 of 10 research-run instances,
+  // 2026-11-12 17:00 tick); the run then sat queued until adoption.
+  const row = await step.do("load", STEP_OPTS, () => wrap(async () => { await ensureEngine(db); return db.prepare("SELECT * FROM pipeline_runs WHERE id = ?").bind(id).first(); }));
   if (!row) return { ok: false, error: "no run " + id };
   if (row.status === "done" || row.status === "failed") return { ok: true, status: row.status, skipped: true };
   let state = j(row.state_json, j(row.input_json, {}));
