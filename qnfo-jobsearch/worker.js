@@ -364,7 +364,7 @@ async function ensure(env) {
   try { await env.JOBS_DB.prepare("ALTER TABLE jobsearch_feedback ADD COLUMN reason TEXT").run(); } catch (e) { if (!/duplicate column/i.test(String((e && e.message) || e))) throw e; }
   try { await env.JOBS_DB.prepare("ALTER TABLE jobsearch_matches ADD COLUMN gaps_json TEXT").run(); } catch (e) { if (!/duplicate column/i.test(String((e && e.message) || e))) throw e; }   // PROMPTED-RECALL-1: what the posting asks for that the CV cannot back   // why a posting was rejected: the search learns from it
   for (const [t, c] of [["jobsearch_matches", "desc_text TEXT"], ["jobsearch_matches", "resume_rev TEXT"], ["jobsearch_apps", "contact_email TEXT"]]) {   // RESUME-ONE-TEMPLATE-1, FOLLOWUP-ONLY-INTERVIEW-1
-    try { await env.JOBS_DB.prepare(`ALTER TABLE ${t} ADD COLUMN ${c}`).run(); } catch (e) { if (!/duplicate column/i.test(String((e && e.message) || e))) throw e; }
+    try { await env.JOBS_DB.prepare(`ALTER TABLE ${t} ADD COLUMN ${c}`).run(); } catch (e) { if (!/duplicate column/i.test(String((e && e.message) || e))) throw e; } // standards-ok: table and column names are fixed constants of the DDL list, never input
   }
   ensured = true; try { await generateWeeklyDossier(env); } catch (e) { logErr("dossier", e); }   // JOBSEARCH-DOSSIER-SOFT-1: a side job never takes a request down (the Monday query on a missing column returned 1101 on 2026-11-09)
 }
@@ -3349,7 +3349,7 @@ function canonicalSkeleton() { return resumeSkeleton(stripTags(buildResume({ tit
 async function resumeConsistency(env, fix) {
   await ensure(env); const ctx = await loadCtx(env);
   const canon = canonicalSkeleton(), ck = strHash(canon.join("\n")), rev = resumeRev();
-  const rows = (await env.JOBS_DB.prepare(`SELECT id, company, title, location, url, status, resume_md, desc_text, resume_rev FROM jobsearch_matches WHERE resume_md IS NOT NULL AND verified=1 AND status NOT IN (${FROZEN_STATUSES.map(() => "?").join(",")})`).bind(...FROZEN_STATUSES).all()).results || [];
+  const rows = (await env.JOBS_DB.prepare(`SELECT id, company, title, location, url, status, resume_md, desc_text, resume_rev FROM jobsearch_matches WHERE resume_md IS NOT NULL AND verified=1 AND status NOT IN (${FROZEN_STATUSES.map(() => "?").join(",")})`).bind(...FROZEN_STATUSES).all()).results || []; // standards-ok: only "?" placeholders are interpolated; values are bound
   const bad = rows.filter((r) => skeletonKey(r.resume_md) !== ck || r.resume_rev !== rev);
   let fixed = 0;
   if (fix) {
