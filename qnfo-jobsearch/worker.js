@@ -9,7 +9,7 @@
 // JOBSEARCH-CV-1 (1.5.0): the CV is part of this worker (page /cv): a yes/no interview that builds the claim bank, review of unconfirmed claims, roles, achievements and publications edited in D1, a resume per job (summary, roles, selected work, education, skills) and a cover note, history and backup. The search is tied to that bank (evidence the owner can back up weighs more; what the CV lacks is shown as a gap), decided postings (rejected, applied, approved) never come back under another id, rejections carry a reason the search learns from, and a wider net: stretch matches outside the stated preferences, more boards and aggregators.
 // Routes: GET / (web UI) | GET /api | GET /api/matches | GET /api/matches/:id | GET /api/runs | GET /api/ledger | POST /api/run | POST /api/matches/:id/status | GET /health
 // Port of the jobsearch/ Python modules (tests: jobsearch/test_jobsearch.py, qnfo-jobsearch/worker.test.mjs).
-var VERSION = "1.23.0-codeagent";
+var VERSION = "1.23.1-codeagent";
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -3130,7 +3130,7 @@ async function matchQuestions(env, qs) {
 async function pipeline(env) {
   await ensure(env);
   const ph = PIPE_OPEN.map(() => "?").join(",");
-  const jobs = (await env.JOBS_DB.prepare(`SELECT id, company, title, location, url, status, score, decided_at FROM jobsearch_matches WHERE status IN (${ph}) OR id IN (SELECT match_id FROM jobsearch_events WHERE event='applied') ORDER BY decided_at DESC`).bind(...PIPE_OPEN).all()).results;
+  const jobs = (await env.JOBS_DB.prepare(`SELECT id, company, title, location, url, status, score, decided_at FROM jobsearch_matches WHERE status IN (${ph}) OR id IN (SELECT match_id FROM jobsearch_events WHERE event='applied') ORDER BY decided_at DESC`).bind(...PIPE_OPEN).all()).results;   // standards-ok: only "?" placeholders are interpolated, values are bound
   const ev = (await env.JOBS_DB.prepare("SELECT match_id, event, ts, note FROM jobsearch_events WHERE event NOT IN ('hidden') ORDER BY ts").all()).results;
   const apps = (await env.JOBS_DB.prepare("SELECT match_id, source, qa_json, resume_version, notes, (resume_md IS NOT NULL) AS has_resume FROM jobsearch_apps").all()).results;
   const by = (a) => { const m = {}; for (const x of a) (m[x.match_id] = m[x.match_id] || []).push(x); return m; }, E = by(ev), A = Object.fromEntries(apps.map((x) => [x.match_id, x]));
@@ -3156,7 +3156,7 @@ async function applyJobMail(env, m) {
   if (!p.company) return { matched: false, reason: "could not tell which employer" };
   await ensure(env);
   const key = p.company.toLowerCase().replace(/[^a-z0-9]+/g, "");
-  const rows = (await env.JOBS_DB.prepare(`SELECT id, company, title, status FROM jobsearch_matches WHERE status IN (${PIPE_OPEN.map(() => "?").join(",")})`).bind(...PIPE_OPEN).all()).results.filter((r) => { const c = String(r.company || "").toLowerCase().replace(/[^a-z0-9]+/g, ""); return c && (c.includes(key) || key.includes(c)); });
+  const rows = (await env.JOBS_DB.prepare(`SELECT id, company, title, status FROM jobsearch_matches WHERE status IN (${PIPE_OPEN.map(() => "?").join(",")})`).bind(...PIPE_OPEN).all()).results.filter((r) => { const c = String(r.company || "").toLowerCase().replace(/[^a-z0-9]+/g, ""); return c && (c.includes(key) || key.includes(c)); });   // standards-ok: only "?" placeholders are interpolated, values are bound
   if (rows.length !== 1) return { matched: false, reason: rows.length ? "more than one open application at " + p.company : "no tracked application at " + p.company, company: p.company, event: p.event };
   await setPipeStatus(env, rows[0].id, p.event, "from e-mail: " + String(m.subject || "").slice(0, 120), m.date);
   return { matched: true, id: rows[0].id, company: rows[0].company, event: p.event };
