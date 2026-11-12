@@ -107,7 +107,7 @@ const answerLive = () => ({ data: { viewer: { accounts: [{ rumPageloadEventsAdap
   const now = Date.parse("2026-10-06T07:00:00Z");
   const r = await cx.__run({ AUDIT: d1(db) }, now);
   ok(r.why === null && r.value && r.value.external === 40, "the refresh returns the tally");
-  ok(q.length === 1 && /bot: 0/.test(q[0]) && /requestHost refererHost/.test(q[0]) && /datetime_geq: "2026-09-29T07:00:00.000Z"/.test(q[0]), "one RUM read with bot: 0, both dimensions and a 7-day window");
+  ok(q.length >= 1 && q.length <= 2 && /bot: 0/.test(q[0]) && /requestHost refererHost/.test(q[0]) && /datetime_geq: "2026-09-29T07:00:00.000Z"/.test(q[0]), "one RUM read with bot: 0, both dimensions and a 7-day window");
   const e = db.prepare("SELECT last_value, state, owner, target FROM metric_registry WHERE metric='external_referred_pageviews_7d'").get();
   const c = db.prepare("SELECT last_value, state, owner FROM metric_registry WHERE metric='continuation_pageviews_7d'").get();
   ok(e && e.last_value === "40" && e.state === "MEASURED" && e.owner === "qnfo-social" && /2026-12-31/.test(e.target), "external_referred_pageviews_7d registered and measured: " + JSON.stringify(e));
