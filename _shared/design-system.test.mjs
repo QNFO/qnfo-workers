@@ -65,6 +65,7 @@ const ADOPTERS = [
   { dir: "q08-prediction-markets", path: "/whitepaper", env: () => ({}) },
   { dir: "q08-prediction-markets", path: "/forecasts", env: () => ({}) },
   { dir: "q08-prediction-markets", path: "/paper", env: () => ({}) },
+  { dir: "q08-prediction-markets", path: "/track-record", env: () => ({}) },
   { dir: "qnfo-fleet-dashboard", path: "/", env: () => ({}) },
   { dir: "qnfo-fleet-dashboard", path: "/focus", env: () => ({ AUDIT: d1Stub() }) },
   { dir: "qnfo-fleet-dashboard", path: "/touch", env: () => ({ AUDIT: d1Stub() }) }
