@@ -1680,8 +1680,11 @@ function researchPipeline(E) {
     merged: { stage: "idea", state: "superseded" },
     wontfix: { stage: "idea", state: "dropped" }
   };
+  // PIPELINE-ENGINE-PORT-1 (2026-11-12): executed. Every idea from the moment qnfo-research-exec claims it is a run of
+  // researchRunPipeline below (Workflow `research-run`); ideas still waiting in the queue are read from research_queue.status.
   return E.definePipeline({
-    name: "research", label: "Research: idea to publication", plane: "research", version: "1.0.0", mode: "observed",
+    name: "research", label: "Research: idea to publication", plane: "research", version: "1.0.0", mode: "executed", runs: "research-run",
+    executor: "Cloudflare Workflow research-run, one run per claimed idea",
     source: { db: "qnfo-audit", table: "research_queue", status: "status", ts: "created_at" },
     stages: [
       { key: "idea", label: "Idea" }, { key: "research", label: "Research" }, { key: "draft", label: "Draft" },
@@ -1790,21 +1793,29 @@ async function jobsTick(E, env, opts = {}) {
   const q = (a) => a.map(() => "?").join(",");
   const rows = (await db.prepare("SELECT m.id FROM jobsearch_matches m WHERE (m.status IN (" + q(JOB_OPEN) + ") OR (m.status IN (" + q(JOB_TERMINAL) + ") AND EXISTS (SELECT 1 FROM jobsearch_events e WHERE e.match_id = m.id AND e.event = 'applied'))) AND NOT EXISTS (SELECT 1 FROM pipeline_runs r WHERE r.pipeline = 'job-application' AND r.subject_ref = m.id) ORDER BY m.id LIMIT ?")
     .bind(...JOB_OPEN, ...JOB_TERMINAL, opts.limit || 25).all()).results || [];
-  for (const r of rows) {
-    const o = await E.openRun(db, def, { match_id: String(r.id) }, { subjectRef: String(r.id), now });
+  return startRuns(E, db, def, env.JOB_FLOW, rows.map((r) => ({ ref: String(r.id), input: { match_id: String(r.id) } })), now, 3 * 864e5, { jobsDb: db, now: opts.now }, res);
+}
+
+// Shared by the executed peers: open a run per subject, start it on its Workflow (inline when the binding is absent or create()
+// throws, with evidence), adopt Workflow runs quiet for longer than staleMs (a poll writes updated_at each period), resume inline
+// runs that are due.
+async function startRuns(E, db, def, flow, subjects, now, staleMs, ctx, res) {
+  res = res || { opened: 0, workflow: 0, inline: 0, adopted: 0 };
+  for (const sj of subjects) {
+    const o = await E.openRun(db, def, sj.input, { subjectRef: sj.ref, now });
     if (!o.created) continue;
     res.opened++;
     let started = false;
-    if (env.JOB_FLOW && typeof env.JOB_FLOW.create === "function") {
-      try { await env.JOB_FLOW.create({ id: o.id, params: { runId: o.id } }); await E.setMode(db, o.id, "workflow", now); started = true; res.workflow++; }
+    if (flow && typeof flow.create === "function") {
+      try { await flow.create({ id: o.id, params: { runId: o.id } }); await E.setMode(db, o.id, "workflow", now); started = true; res.workflow++; }
       catch (e) { await E.evidence(db, o.id, def.name, "start", false, { workflow_create: String(e && e.message || e).slice(0, 200), fallback: "inline" }, now); }
     }
     if (!started) res.inline++;
   }
-  const stale = new Date(Date.parse(now) - 3 * 864e5).toISOString();
-  const ad = await db.prepare("UPDATE pipeline_runs SET mode = 'inline', next_check_at = ?, updated_at = ? WHERE pipeline = 'job-application' AND mode = 'workflow' AND status IN ('queued','running','waiting') AND updated_at < ?").bind(now, now, stale).run();
+  const stale = new Date(Date.parse(now) - staleMs).toISOString();
+  const ad = await db.prepare("UPDATE pipeline_runs SET mode = 'inline', next_check_at = ?, updated_at = ? WHERE pipeline = ? AND mode = 'workflow' AND status IN ('queued','running','waiting') AND updated_at < ?").bind(now, now, def.name, stale).run();
   res.adopted = ad && ad.meta ? Number(ad.meta.changes) || 0 : 0;
-  res.resume = await E.resumeDue(db, def, { jobsDb: db, now: opts.now }, 20);
+  res.resume = await E.resumeDue(db, def, ctx, 20);
   return res;
 }
 
@@ -1814,7 +1825,76 @@ async function runJobWorkflow(E, env, payload, step) {
   return E.runPipeline(env.AUDIT, jobApplicationPipeline(E), id, step, { jobsDb: env.AUDIT });
 }
 
-return Object.freeze({ researchPipeline, jobsPipeline, JOB_MILESTONES, JOB_CONVERSATION, JOB_TERMINAL, JOB_OPEN, JOB_FOLLOWUP_DAYS, JOB_CONVERSATION_DAYS, jobApplicationPipeline, jobsTick, runJobWorkflow });
+// ------------------------------------------------------------------ PIPELINE-ENGINE-PORT-1: the executed research pipeline
+// qnfo-research-exec keeps doing the work (grounding, drafting, review, revision, publication) and writes research_queue.status and
+// .stage; a research-run follows one claimed idea through those stages with Workflow sleeps, records evidence for each, and ends on
+// its outcome. It writes only pipeline_runs and pipeline_evidence; research_queue is never written here.
+const RESEARCH_TERMINAL = ["published", "wontfix", "merged", "deferred", "owner_paused"];
+const RESEARCH_RANK = { ground: 1, ensemble: 1, reconcile: 1, research: 1, draft: 1, review: 2, revise: 3, complete: 4, done: 4 };
+const RESEARCH_STAGE_DAYS = 7;
+
+async function researchState(ctx, id) {
+  const r = await ctx.auditDb.prepare("SELECT status, stage FROM research_queue WHERE id = ?").bind(id).first();
+  if (!r) return { status: "gone", rank: 9, terminal: true };
+  const status = String(r.status || ""), stage = String(r.stage || "");
+  return { status, stage, rank: status === "published" ? 5 : (RESEARCH_RANK[stage] || 1), terminal: RESEARCH_TERMINAL.includes(status) };
+}
+
+// A stage that passes once the idea is beyond `rank` (or finished), polling every 6 hours for up to a week.
+function progressStage(key, label, rank) {
+  const past = (c) => c.terminal || c.rank > rank;
+  return { key, label,
+    async run(s, ctx) { const c = await researchState(ctx, s.research_id); if (past(c)) return { out: { passed: c.status + "/" + c.stage }, state: { last: c } }; return { wait: true }; },
+    wait: { every: "6 hours", max: RESEARCH_STAGE_DAYS * 4,
+      poll: async (s, ctx) => { const c = await researchState(ctx, s.research_id); return past(c) ? c : null; },
+      resume: async (s, got, ctx, info) => ({ out: { passed: got ? got.status + "/" + got.stage : null, quiet: !!info.timedOut }, state: { last: got || s.last || null } }) } };
+}
+
+function researchRunPipeline(E) {
+  return E.definePipeline({
+    name: "research-run", label: "Research run: claimed idea to publication", plane: "research", version: "1.0.0",
+    input: { type: "object", required: ["research_id"], props: { research_id: { type: "string" } } },
+    stages: [
+      progressStage("research", "Research and draft", 1),
+      progressStage("review", "Review and correct", 2),
+      progressStage("revise", "Revise", 3),
+      { key: "publication", label: "Publication",
+        async run(s, ctx) { const c = await researchState(ctx, s.research_id); if (c.terminal) return { out: { status: c.status }, state: { last: c } }; return { wait: true }; },
+        wait: { every: "6 hours", max: RESEARCH_STAGE_DAYS * 4,
+          poll: async (s, ctx) => { const c = await researchState(ctx, s.research_id); return c.terminal ? c : null; },
+          resume: async (s, got, ctx, info) => ({ out: { status: got ? got.status : null, quiet: !!info.timedOut }, state: { last: got || s.last || null } }) } },
+      { key: "outcome", label: "Outcome", out: { type: "object", required: ["outcome"] },
+        async run(s) {
+          const st = s.last && s.last.status;
+          const outcome = st === "published" ? "published" : st === "merged" ? "merged" : st === "wontfix" ? "dropped" : (st === "deferred" || st === "owner_paused") ? "parked" : st === "gone" ? "gone" : "quiet";
+          return { out: { outcome }, state: { outcome } };
+        } }
+    ],
+    output: (s) => ({ outcome: s.outcome, research_id: s.research_id })
+  });
+}
+
+// One tick: a run for each idea qnfo-research-exec is working on or claimed or published in the last 3 days.
+async function researchTick(E, env, opts = {}) {
+  const db = env.AUDIT, def = researchRunPipeline(E), now = (opts.now || (() => new Date().toISOString()))();
+  if (!db) return { skipped: "no AUDIT binding" };
+  await E.ensureEngine(db);
+  const since = new Date(Date.parse(now) - 3 * 864e5).toISOString();
+  const rows = (await db.prepare("SELECT q.id FROM research_queue q WHERE (q.status = 'researching' OR q.claimed_at >= ? OR q.published_at >= ?) AND NOT EXISTS (SELECT 1 FROM pipeline_runs r WHERE r.pipeline = 'research-run' AND r.subject_ref = q.id) ORDER BY q.id LIMIT ?")
+    .bind(since, since, opts.limit || 25).all()).results || [];
+  return startRuns(E, db, def, env.RESEARCH_FLOW, rows.map((r) => ({ ref: String(r.id), input: { research_id: String(r.id) } })), now, 864e5, { auditDb: db, now: opts.now });
+}
+
+async function runResearchWorkflow(E, env, payload, step) {
+  return E.runPipeline(env.AUDIT, researchRunPipeline(E), payload && payload.runId, step, { auditDb: env.AUDIT });
+}
+
+// The run pipeline behind an executed funnel, by its def.runs name.
+function runsDef(E, name) {
+  return name === "job-application" ? jobApplicationPipeline(E) : name === "research-run" ? researchRunPipeline(E) : null;
+}
+
+return Object.freeze({ researchPipeline, jobsPipeline, JOB_MILESTONES, JOB_CONVERSATION, JOB_TERMINAL, JOB_OPEN, JOB_FOLLOWUP_DAYS, JOB_CONVERSATION_DAYS, jobApplicationPipeline, jobsTick, startRuns, runJobWorkflow, RESEARCH_TERMINAL, RESEARCH_STAGE_DAYS, researchRunPipeline, researchTick, runResearchWorkflow, runsDef });
 })(); // end inline _shared/pipeline-defs.js
 var PP = (() => {
 // personal-companion/personal-pipeline.js: PERSONAL-PIPELINE-1 (Rowan 2026-11-12).
@@ -2210,16 +2290,26 @@ async function statusAll(env, nowMs = Date.now()) {
       const rows = (await env.AUDIT.prepare("SELECT " + s.status + " AS status, COUNT(*) AS n, MIN(" + s.ts + ") AS oldest FROM " + s.table + " GROUP BY " + s.status).all()).results || [];
       const view = PE.projectStatus(def, rows, nowMs);
       // PIPELINE-ENGINE-PORT-1: an executed funnel carries its runs (counts only), read without DDL from the plane that owns them
-      if (def.runs === "job-application") {
-        try { const r = await PE.statusOf(env.AUDIT, PD.jobApplicationPipeline(PE), nowMs, { ensure: false }); view.runs = { pipeline: r.pipeline, total: r.total, by_state: r.by_state, stages: r.stages, done_24h: r.done_24h, failed_24h: r.failed_24h, stuck: r.stuck }; }
-        catch (e) { view.runs = { pipeline: "job-application", total: 0, by_state: {}, note: "no runs yet" }; }
+      const rdef = def.runs ? PD.runsDef(PE, def.runs) : null;
+      if (rdef) {
+        try { const r = await PE.statusOf(env.AUDIT, rdef, nowMs, { ensure: false }); view.runs = { pipeline: r.pipeline, total: r.total, by_state: r.by_state, stages: r.stages, done_24h: r.done_24h, failed_24h: r.failed_24h, stuck: r.stuck }; }
+        catch (e) { view.runs = { pipeline: rdef.name, total: 0, by_state: {}, note: "no runs yet" }; }
       }
       out.pipelines.push(view);
     } catch (e) { out.pipelines.push({ pipeline: def.name, error: String(e && e.message || e).slice(0, 200) }); }
   }
+  // CLOCKWORK-1: the clock of every scheduled loop, as qnfo-cloud-ops judges it every 10 minutes (clock_ticks in qnfo-audit).
+  if (!env.AUDIT) out.clock = { loops: [], skipped: "no AUDIT binding" };
+  else try {
+    const rows = (await env.AUDIT.prepare("SELECT loop, label, plane, cadence_min, state, why, latency_min, missed_24h, accuracy, action, checked_at FROM clock_ticks ORDER BY CASE state WHEN 'stopped' THEN 0 WHEN 'inaccurate' THEN 1 WHEN 'unreadable' THEN 2 WHEN 'late' THEN 3 ELSE 4 END, plane, loop").all()).results || [];
+    const checked = rows.reduce((m, r) => (r.checked_at > m ? r.checked_at : m), "");
+    out.clock = { loops: rows, checked_at: checked || null, watchdog_age_min: checked ? Math.round((nowMs - Date.parse(checked)) / 6e4) : null };
+  } catch (e) { const m = String(e && e.message || e).slice(0, 200); out.clock = /no such table/i.test(m) ? { loops: [], skipped: "no clock reading yet" } : { error: m, loops: [] }; }
   const p = out.pipelines[0] || {};
-  const jr = (out.pipelines.find((x) => x.runs) || {}).runs || {};
-  out.healthy = !p.error && (p.failed_24h || 0) === 0 && (p.stuck || 0) === 0 && (jr.failed_24h || 0) === 0 && (jr.stuck || 0) === 0;
+  const clockBad = (out.clock.loops || []).filter((r) => r.state === "stopped" || r.state === "inaccurate" || r.state === "unreadable").length;
+  out.clock.not_ok = clockBad;
+  const runsBad = out.pipelines.some((x) => x.error || (x.runs && ((x.runs.failed_24h || 0) > 0 || (x.runs.stuck || 0) > 0)));
+  out.healthy = !p.error && (p.failed_24h || 0) === 0 && (p.stuck || 0) === 0 && !runsBad && clockBad === 0 && !out.clock.error && !(Number(out.clock.watchdog_age_min) > 30);
   return out;
 }
 
@@ -2233,18 +2323,29 @@ function statusPage(st, head) {
     if (p.runs) {
       const rs = (p.runs.stages || []).filter((s) => s.active).map((s) => esc(s.label) + " " + s.active).join(" · ");
       const done = (p.runs.by_state && p.runs.by_state.done) || 0;
-      extra += '<p class="pp-mute">Application runs: ' + (p.runs.total || 0) + " in total, " + done + " finished" + (rs ? ", now " + rs : "") + ". "
+      extra += '<p class="pp-mute">' + (p.plane === "jobs" ? "Application" : "Idea") + ' runs: ' + (p.runs.total || 0) + " in total, " + done + " finished" + (rs ? ", now " + rs : "") + ". "
         + (p.runs.failed_24h || 0) + " failed and " + (p.runs.stuck || 0) + " stuck in 24 hours.</p>";
     }
     const how = p.mode === "observed" ? "Runs in its own worker; stages read from its status."
-      : p.runs ? "Each application runs on Cloudflare Workflows; earlier stages read from its status." : "Runs on Cloudflare Workflows, inline when needed.";
+      : p.runs ? (p.plane === "jobs" ? "Each application runs on Cloudflare Workflows; earlier stages read from its status." : "Each claimed idea runs on Cloudflare Workflows; the queue before it is read from its status.") : "Runs on Cloudflare Workflows, inline when needed.";
     return '<section class="ds-card"><h2>' + esc(p.label) + '</h2><p class="pp-mute">' + how + "</p>"
       + '<ol class="pp-stages">' + stages + "</ol><p class=\"pp-mute\">" + p.total + " in total: " + states + "</p>" + extra + "</section>";
   };
-  const css = ".pp-stages{list-style:none;padding:0;margin:var(--ds-s2,8px) 0;display:grid;gap:4px}.pp-stages li{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--ds-line,#ddd)}.pp-mute{color:var(--ds-mute,#666);font-size:14px}.pp-bad{color:var(--ds-bad,#b00020)}";
-  const status = st.healthy ? "Every pipeline is reading, with no failed or stuck run." : "A pipeline has a failed or stuck run, or could not be read.";
+  const css = ".pp-clock{align-items:center;gap:var(--ds-s2,8px)}" + ".pp-stages{list-style:none;padding:0;margin:var(--ds-s2,8px) 0;display:grid;gap:4px}.pp-stages li{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--ds-line,#ddd)}.pp-mute{color:var(--ds-mute,#666);font-size:14px}.pp-bad{color:var(--ds-bad,#b00020)}";
+  const ck = st.clock || { loops: [] }, bad = ck.not_ok || 0;
+  const status = st.healthy ? "Every clock is ticking on time with correct output, and the personal pipeline has no failed or stuck run."
+    : bad ? bad + (bad === 1 ? " clock has" : " clocks have") + " stopped or gave wrong output; the watchdog is repairing " + (bad === 1 ? "it" : "them") + " and files a fleet issue if a repair does not hold."
+    : "A pipeline has a failed or stuck run, or a clock could not be read; the watchdog checks again within ten minutes.";
+  const LBL = { ok: "On time", late: "Late", stopped: "Stopped", inaccurate: "Wrong output", unreadable: "Unreadable" };
+  const clockRow = (r) => '<li class="pp-clock"><span><b>' + esc(r.label) + '</b><br><span class="pp-mute">' + esc(r.why || "") + (r.action ? " · repair: " + esc(r.action) : "") + '</span></span><span class="ds-badge ds-badge-' + (r.state === "ok" ? "good" : r.state === "late" ? "warn" : "bad") + '">' + esc(LBL[r.state] || r.state) + "</span></li>";
+  const acc = (ck.loops || []).filter((r) => r.accuracy !== null && r.accuracy !== undefined);
+  const clockCard = '<section class="ds-card"><h2>Clocks</h2>' + (ck.error ? '<p class="pp-bad">Could not read the clocks: ' + esc(ck.error) + ". The watchdog writes them every ten minutes.</p>"
+    : !(ck.loops || []).length ? '<p class="pp-mute">No clock reading yet. The watchdog writes the first one within ten minutes of its deploy.</p>'
+    : '<ol class="pp-stages">' + ck.loops.map(clockRow).join("") + '</ol><p class="pp-mute">' + ck.loops.length + " loops. Missed ticks in 24 h: " + ck.loops.reduce((n, r) => n + (Number(r.missed_24h) || 0), 0)
+      + ". Longest delay: " + ck.loops.reduce((m, r) => Math.max(m, Number(r.latency_min) || 0), 0) + " min. Correct output: " + (acc.length ? Math.round(100 * acc.reduce((n, r) => n + Number(r.accuracy), 0) / acc.length) + "%" : "not counted yet")
+      + ". Checked " + (ck.watchdog_age_min === null ? "never" : ck.watchdog_age_min + " min ago") + ".</p>") + "</section>";
   return "<!doctype html><html lang=\"en\"><head>" + (head ? head("Pipelines", css) : "<meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>Pipelines</title><style>body{font:16px/1.5 system-ui;max-width:640px;margin:auto;padding:16px}" + css + "</style>")
-    + '</head><body class="ds"><main class="ds-main"><h1>Pipelines</h1><p>' + esc(status) + "</p>" + st.pipelines.map(card).join("")
+    + '</head><body class="ds"><main class="ds-main"><h1>Pipelines</h1><p>' + esc(status) + "</p>" + clockCard + st.pipelines.map(card).join("")
     + '<p class="pp-mute">Counts only. Personal events stay in the private personal store. ' + esc(st.engine) + ".</p></main></body></html>";
 }
 
@@ -4624,7 +4725,7 @@ var __name22 = __name2;
 // line below (VERSION-LINE-NOTES-1, 2026-10-19). Its older trailing notes stay until length-lede.test.mjs stops pinning "LENGTH-LEDE-1" on that line.
 // VERSION-NOTES-MOVED-1: release notes live in the block below
 // W-META-1 (agent_issues 1002316/1002317/1002318): aiRunAttr records in_tok/out_tok/neurons per purpose.
-var VERSION = "1.51.0-codeagent";
+var VERSION = "1.53.0-codeagent";
 // 1.46.0 KERNEL-EVERYWHERE-1 (2026-11-06, owner directive "IMPLEMENT EVERYWHERE ACROSS ALL AI APPS AND SERVICES AND SURFACES", pillar personal): the travel planner CHAT_SYSTEM carries the DOCTRINE-1 kernel 8.2.1 reply recognitions (KERNEL-REPLY-4, scoped to the planner's one designed question): end on the plan or proposal, never a conditional offer or questionnaire; refusals and limits are dispositions with their reason; reversible steps are taken and reported in the same reply. prior 1.45.8-codeagent
 /* 1.44.14 COMPANION-LENGTH-HEADROOM-1 (issue 1000633, pillar personal; patch): repeated length failures alongside exhausted retry budgets expose too little headroom for model output variation. Length-only repairs now target 500 words below the unchanged ceiling while remaining inside each form's normal writer band. */
 /* 1.43.6 BP26-AI-ACT-ART50-1 and BP26-STRUCTURED-DATA-1 (2026-10-26, agent_issues 1000341 and 1000336, pillar core; patch): the visible AI-generated label of every reading.q08.org piece now has its machine-readable half. A piece page carries an Article JSON-LD block (headline, datePublished, url, an Organization as author, never an AI or invented persona, and creditText saying it was written by AI and that no human reviews pieces before they appear) and the index page a Blog block. Measured before: the reading pages carried the visible label and no JSON-LD at all. */
@@ -9423,6 +9524,8 @@ var worker_default = {
         try { var _pp = await PP.tick(env); if (_pp && (_pp.opened || _pp.adopted || (_pp.resume && _pp.resume.failed))) console.log(JSON.stringify({ evt: "personal-pipeline-tick", result: _pp })); } catch (ePp) { console.error("personal-pipeline-tick:", String(ePp && ePp.message || ePp)); }
         // PIPELINE-ENGINE-PORT-1: one job-application run per application (qnfo-audit pipeline_runs), started on the job-application Workflow.
         try { var _jp = await PD.jobsTick(PE, env); if (_jp && (_jp.opened || _jp.adopted || (_jp.resume && _jp.resume.failed))) console.log(JSON.stringify({ evt: "job-pipeline-tick", result: _jp })); } catch (eJp) { console.error("job-pipeline-tick:", String(eJp && eJp.message || eJp)); }
+        // PIPELINE-ENGINE-PORT-1: one research-run per claimed idea (qnfo-audit pipeline_runs), started on the research-run Workflow.
+        try { var _rp = await PD.researchTick(PE, env); if (_rp && (_rp.opened || _rp.adopted || (_rp.resume && _rp.resume.failed))) console.log(JSON.stringify({ evt: "research-pipeline-tick", result: _rp })); } catch (eRp) { console.error("research-pipeline-tick:", String(eRp && eRp.message || eRp)); }
         // TRAVEL-PLANNER-1: next-stop proposals, weekly ideas and the day-before check-in note. Idempotent per hour.
         try { var _tr = await TRV.travelTick(env, travelDeps(env)); if (_tr && (_tr.proposed || _tr.notices || _tr.booked || _tr.error)) console.log(JSON.stringify({ evt: "travel-tick", result: _tr })); } catch (eTr) { console.error(JSON.stringify({ evt: "travel-tick:caught", error: String(eTr && eTr.message || eTr).slice(0, 300) })); }
         try { var _lf = await queueLedgerFollowUp(env); if (_lf.error) console.error("ledger-followup:", _lf.error); } catch (eLf) { console.error("ledger-followup:", String(eLf && eLf.message || eLf)); }
@@ -10264,6 +10367,13 @@ var JobApplicationFlow = class extends WorkflowEntrypoint {
     return await PD.runJobWorkflow(PE, this.env, event && event.payload || {}, step);
   }
 };
+// PIPELINE-ENGINE-PORT-1: the research pipeline's durable executor. One instance per claimed idea; it reads research_queue every
+// 6 hours while it waits and writes only pipeline_runs and pipeline_evidence in qnfo-audit.
+var ResearchRunFlow = class extends WorkflowEntrypoint {
+  async run(event, step) {
+    return await PD.runResearchWorkflow(PE, this.env, event && event.payload || {}, step);
+  }
+};
 // WORKERS-AI-SPEND-UNATTRIBUTED-RISING-1 (#1681): every env.AI.run in this worker goes through aiRunAttr, which adds a
 // per-worker/purpose call counter to D1 ai_call_counters (one UPSERT per call, fail-soft, never blocks or alters the AI call).
 // Copied from qnfo-fleet-control (workers cannot import across directories); same table/columns. No new paid service.
@@ -10328,6 +10438,7 @@ export {
   GenerationFlow,
   PersonalPipelineFlow,
   JobApplicationFlow,
+  ResearchRunFlow,
   deliverOwnerPrompts,
   broadcast,
   confirmedSubscribers,

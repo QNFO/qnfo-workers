@@ -121,9 +121,15 @@ const st = await PP.statusAll(env, t);
 const s = JSON.stringify(st);
 ok("three pipelines on one engine", st.pipelines.map((p) => p.pipeline).join(",") === "personal,research,jobs", st.pipelines.map((p) => p.pipeline || p.error));
 ok("no label, company or answer leaves the plane", !/Magic|Paradiso|canal|tired|connection/.test(s));
-ok("healthy when nothing failed or stuck", st.healthy === true, st.pipelines[0]);
+ok("healthy when nothing failed or stuck", st.healthy === true, { p: st.pipelines[0], clock: st.clock });
 const html = PP.statusPage(st);
 ok("status page names every pipeline and stage", /Personal: what happens/.test(html) && /Research: idea to publication/.test(html) && /Jobs: posting to offer/.test(html) && /How it felt/.test(html));
+// CLOCKWORK-1: the clocks the watchdog writes show on the same page, and a stopped clock makes the view unhealthy.
+A.exec("CREATE TABLE clock_ticks (loop TEXT PRIMARY KEY, label TEXT, plane TEXT, cadence_min INTEGER, state TEXT, why TEXT, last_run TEXT, last_good TEXT, age_run_min INTEGER, latency_min INTEGER, missed_24h INTEGER, accuracy REAL, action TEXT, action_status TEXT, bad_ticks INTEGER, issue_id INTEGER, checked_at TEXT)");
+A.exec("INSERT INTO clock_ticks (loop, label, plane, cadence_min, state, why, latency_min, missed_24h, accuracy, action, checked_at) VALUES ('job-apply','Auto-apply runner','jobs',120,'stopped','last run 300 min ago, due every 120',180,3,NULL,'dispatch','" + new Date(t - 5 * 60000).toISOString() + "'),('jobs-sweep','Job sweep','jobs',60,'ok','ran 4 min ago',0,0,0.95,'','" + new Date(t - 5 * 60000).toISOString() + "')");
+const st2 = await PP.statusAll(env, t), html2 = PP.statusPage(st2);
+ok("a stopped clock makes the view unhealthy", st2.healthy === false && st2.clock.not_ok === 1, st2.clock);
+ok("the clocks card lists every loop, stopped first, with its repair", /<h2>Clocks<\/h2>/.test(html2) && html2.indexOf("Auto-apply runner") < html2.indexOf("Job sweep") && /repair: dispatch/.test(html2) && /ds-badge-bad/.test(html2) && /Missed ticks in 24 h: 3/.test(html2));
 
 console.log("[PROMPTED-RECALL-1 and inlining]");
 let threw = false; try { PP.askOptions([{ key: "a", label: "A" }]); } catch (e) { threw = true; }

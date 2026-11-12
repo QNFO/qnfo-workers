@@ -33,6 +33,12 @@ head_sampling_rate = 0.05
 [triggers]
 crons = ["15 * * * *"]
 
+# CLOCKWORK-1 (2026-11-12): 10 of the 24 hourly sweeps on 2026-11-11/12 died with exceededResources at 30 s CPU (the default; healthy
+# sweeps use 22-24 s, Workers analytics cpuTimeP99), so jobsearch_runs showed "run did not finish: closed by the next run". The canonical
+# deploy applies [limits] (qnfo-ops LIMITS-DECLARED-APPLY-1). Watched by qnfo-cloud-ops CLOCKWORK-1 loop jobs-sweep (accuracy in clock_ticks).
+[limits]
+cpu_ms = 300000
+
 [[d1_databases]]
 binding = "JOBS_DB"
 database_name = "qnfo-audit"
