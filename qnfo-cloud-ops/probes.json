@@ -8,6 +8,12 @@
       "contains": [
         "\"worker\":\"qnfo-cloud-ops\""
       ]
+    },
+    {
+      "url": "https://qnfo-cloud-ops.q08.workers.dev/clock",
+      "contains": [
+        "\"loops\""
+      ]
     }
   ]
 }
