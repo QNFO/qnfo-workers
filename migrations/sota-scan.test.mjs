@@ -1,0 +1,28 @@
+import assert from "node:assert/strict";
+import { DatabaseSync } from "node:sqlite";
+import { readFileSync } from "node:fs";
+const sql = readFileSync(new URL("./2026-11-12-sota-scan.sql", import.meta.url), "utf8");
+const m = sql.match(/json\('(\{.*\})'\)\), version/s);
+const step = JSON.parse(m[1].replace(/''/g, "'"));
+assert.equal(step.name, "sota-scan");
+const db = new DatabaseSync(":memory:");
+db.exec(`
+CREATE TABLE cf_agent_requests (id INTEGER PRIMARY KEY AUTOINCREMENT, requester TEXT, kind TEXT, prompt TEXT, instance TEXT, priority TEXT, status TEXT DEFAULT 'queued', result TEXT);
+CREATE TABLE program_charters (program_code TEXT, status TEXT);
+CREATE TABLE ops_config (key TEXT PRIMARY KEY, value TEXT);
+CREATE TABLE roadmap_proposals (id INTEGER PRIMARY KEY, title TEXT, request_instance TEXT);
+INSERT INTO program_charters VALUES ('QNFO.OPS','active');
+INSERT INTO roadmap_proposals VALUES (1,'SOTA: earlier idea','roadmap-QNFO.OPS-sota-20260101');
+`);
+db.exec(step.sql); db.exec(step.sql);
+const rows = db.prepare("SELECT * FROM cf_agent_requests").all();
+assert.equal(rows.length, 1, "one request a day");
+assert.match(rows[0].instance, /^roadmap-QNFO\.OPS-sota-\d{8}$/);
+assert.equal(rows[0].requester, "program-manager:QNFO.OPS");
+assert.match(rows[0].prompt, /code-anchor:/);
+assert.match(rows[0].prompt, /SOTA: earlier idea/);
+db.exec("UPDATE cf_agent_requests SET status='done', result=''"); db.exec(step.sql);
+assert.equal(db.prepare("SELECT COUNT(*) c FROM cf_agent_requests").get().c, 2, "empty result retries");
+db.exec("INSERT INTO ops_config VALUES ('sota_scan','off')"); db.exec("DELETE FROM cf_agent_requests"); db.exec(step.sql);
+assert.equal(db.prepare("SELECT COUNT(*) c FROM cf_agent_requests").get().c, 0, "kill switch");
+console.log("ok");
