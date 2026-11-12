@@ -4130,7 +4130,7 @@ function renderTrip(t) {
     r.appendChild(b); dl.appendChild(r);
   }
 }
-async function loadTrip() { try { const t = await api("/travel/api/trip"); if (t.ok) renderTrip(t); $("#fwd").textContent = t.forward_to ? "Or forward the confirmation email to " + t.forward_to + " and it lands here on its own." : ""; } catch (e) { $("#days").textContent = "Could not load the trip: " + e.message; } }
+async function loadTrip() { try { const t = await api("/travel/api/trip"); if (t.ok) renderTrip(t); $("#fwd").textContent = t.forward_to ? "Or forward the confirmation email to " + t.forward_to + " and it lands here on its own." : ""; if (!$("#ics")) { const a = document.createElement("a"); a.id = "ics"; a.href = "/travel/trip.ics"; a.textContent = "Add the plan to your calendar (.ics)"; a.style.display = "block"; $("#fwd").after(a); } } catch (e) { $("#days").textContent = "Could not load the trip: " + e.message; } }
 let addOpen = null;
 $("#addstop").onclick = () => { if (addOpen) addOpen.remove(); addOpen = editor(STOP_FIELDS, {}, (x) => api("/travel/api/stop", x)); $("#stops").appendChild(addOpen); };
 $("#addvisa").onclick = () => { if (addOpen) addOpen.remove(); addOpen = editor(VISA_FIELDS, {}, (x) => api("/travel/api/permit", x)); $("#visa").appendChild(addOpen); };
@@ -4319,6 +4319,11 @@ async function handleTravel(request, env, deps = {}) {
       }
     }
     return htmlRes(chatPage(nonce), 200, { ...extra, "Content-Security-Policy": "default-src 'none'; script-src 'nonce-" + nonce + "'; style-src 'nonce-" + nonce + "'; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'" });
+  }
+  if (p === "/travel/trip.ics" && request.method === "GET") {
+    if (!who) return jsonRes({ ok: false, error: "unauthorized" }, 401);
+    const body = icsFor(await planState(db, c, nowMs, deps), nowIso);
+    return new Response(body, { status: 200, headers: { "Content-Type": "text/calendar; charset=utf-8", "Content-Disposition": 'attachment; filename="trip.ics"', "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" } });
   }
   if (!p.startsWith("/travel/api/")) return page("Not found", "<p>Not found.</p>", 404);
   if (!who) return jsonRes({ ok: false, error: "unauthorized" }, 401);
@@ -5255,6 +5260,40 @@ async function shiftPlan(db, days, today, nowIso) {
 }
 
 // The compact card the companion's Today screen shows: where the traveller is (or the countdown), tonight's pick, the next move, the next actions.
+// TRAVEL-ICS-1: the trip plan as an iCalendar file (all-day events, one per stop and per move) so it opens in any calendar
+// app and works offline on the phone. Market read (Nov 2026): Wanderlog, Mindtrip and Google Canvas all export or sync; this
+// is the no-account, no-key version. Read-only: nothing is written back anywhere.
+const icsEsc = (v) => String(v == null ? "" : v).replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\r?\n/g, "\\n");
+const icsDay = (d) => String(d).replace(/-/g, "");
+function icsFold(line) {
+  const out = [];
+  let rest = line;
+  while (rest.length > 74) { out.push(rest.slice(0, 74)); rest = " " + rest.slice(74); }
+  out.push(rest);
+  return out.join("\r\n");
+}
+function icsFor(plan, nowIso) {
+  const stamp = String(nowIso || new Date().toISOString()).replace(/[-:]/g, "").replace(/\.\d+/, "").slice(0, 15) + "Z";
+  const L = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//q08//travel planner//EN", "CALSCALE:GREGORIAN", "X-WR-CALNAME:Trip plan"];
+  const ev = (uid, from, toExclusive, summary, desc) => {
+    L.push("BEGIN:VEVENT", "UID:" + uid + "@travel.q08.org", "DTSTAMP:" + stamp, "DTSTART;VALUE=DATE:" + icsDay(from), "DTEND;VALUE=DATE:" + icsDay(toExclusive), icsFold("SUMMARY:" + icsEsc(summary)));
+    if (desc) L.push(icsFold("DESCRIPTION:" + icsEsc(desc)));
+    L.push("TRANSP:TRANSPARENT", "END:VEVENT");
+  };
+  for (const s of (plan && plan.places) || []) {
+    if (!s.start_date || !s.end_date) continue;
+    const where = [s.city, s.country_name].filter(Boolean).join(", ");
+    const st = s.state ? STATE_LABEL[s.state] || s.state : "";
+    ev("stop-" + slug(where) + "-" + s.start_date, s.start_date, s.end_date, where, st ? "Lodging: " + st : "");
+  }
+  for (const m of (plan && plan.moves) || []) {
+    if (!m.day) continue;
+    ev("move-" + slug((m.from || "") + "-" + (m.to || "")) + "-" + m.day, m.day, addDays(m.day, 1), (m.from || "?") + " to " + (m.to || "?"), m.booked ? "Booked" : "Not booked yet");
+  }
+  L.push("END:VCALENDAR");
+  return L.join("\r\n") + "\r\n";
+}
+
 function tripToday(plan) {
   const t = plan.today, places = plan.places || [];
   const cur = places.find((p) => p.start_date <= t && t < p.end_date) || null;
@@ -5272,7 +5311,7 @@ function tripToday(plan) {
   };
 }
 
-return Object.freeze({ DDL, CALENDAR_SEED, DEFAULTS, MODELS, PROFILE_CHARS, BASE, PLANNER_URL, ensureTravel, ensureTravelCheap, cfg, addDays, localParts, tripState, bookingLink, transitLink, parseOptions, rankAndMark, promptFor, modelText, sign, verify, signingKey, optionId, mailFor, reconcile, travelTick, applyReaction, SESSION_DAYS, CODE_TRIES, LOGIN_TTL_MIN, LOGIN_MAILS_PER_HOUR, CHAT_MODEL_MENU, authKey, makeToken, tokenOk, accessOk, chatAuthed, firstJson, parseChat, CHAT_SYSTEM, chatContext, historyText, OPEN_TURN, chatPrompt, chatModels, chatTurn, chatState, handleTravel, WX_FORECAST_DAYS, VISA_WARN_DAYS, FOG_BELT, daysBetween, countryName, shiftYear, fogSeason, presence, visaStatus, weatherRequests, parseWeather, dayPlan, checkinDraft, placeCards, moveCards, planState, IMPORT_SYSTEM, parseImport, importText, saveStop, savePermit, planText, PICKS_SYSTEM, picksPrompt, parsePicks, mapLink, picksDue, makePicks, pickNo, SIGNALS, NEGATIVE, SIGNAL_DELTA, TARGET_ADJ, REASONS, REASON_LABELS, TASTE_HALF_LIFE_DAYS, TASTE_CLAMP, TASTE_FORMED_N, EXPLORE_SHARE, VIBE_LEXICON, pickTags, reasonDeltas, decayed, tasteMap, applyTap, addReason, TASTE_PAIRS, applyPair, tagLabel, rankPicks, tasteSummary, tasteHint, stopState, STATE_LABEL, tripBanner, WX_AVOID, WX_CAUTION, weatherVerdict, tripChecks, shiftPlan, tripToday });
+return Object.freeze({ DDL, CALENDAR_SEED, DEFAULTS, MODELS, PROFILE_CHARS, BASE, PLANNER_URL, ensureTravel, ensureTravelCheap, cfg, addDays, localParts, tripState, bookingLink, transitLink, parseOptions, rankAndMark, promptFor, modelText, sign, verify, signingKey, optionId, mailFor, reconcile, travelTick, applyReaction, SESSION_DAYS, CODE_TRIES, LOGIN_TTL_MIN, LOGIN_MAILS_PER_HOUR, CHAT_MODEL_MENU, authKey, makeToken, tokenOk, accessOk, chatAuthed, firstJson, parseChat, CHAT_SYSTEM, chatContext, historyText, OPEN_TURN, chatPrompt, chatModels, chatTurn, chatState, handleTravel, WX_FORECAST_DAYS, VISA_WARN_DAYS, FOG_BELT, daysBetween, countryName, shiftYear, fogSeason, presence, visaStatus, weatherRequests, parseWeather, dayPlan, checkinDraft, placeCards, moveCards, planState, IMPORT_SYSTEM, parseImport, importText, saveStop, savePermit, planText, PICKS_SYSTEM, picksPrompt, parsePicks, mapLink, picksDue, makePicks, pickNo, SIGNALS, NEGATIVE, SIGNAL_DELTA, TARGET_ADJ, REASONS, REASON_LABELS, TASTE_HALF_LIFE_DAYS, TASTE_CLAMP, TASTE_FORMED_N, EXPLORE_SHARE, VIBE_LEXICON, pickTags, reasonDeltas, decayed, tasteMap, applyTap, addReason, TASTE_PAIRS, applyPair, tagLabel, rankPicks, tasteSummary, tasteHint, stopState, STATE_LABEL, tripBanner, WX_AVOID, WX_CAUTION, weatherVerdict, tripChecks, shiftPlan, icsFor, tripToday });
 })(); // TRAVEL-INLINE-END
 
 var __defProp2 = Object.defineProperty;
@@ -5283,7 +5322,7 @@ var __name22 = __name2;
 // line below (VERSION-LINE-NOTES-1, 2026-10-19). Its older trailing notes stay until length-lede.test.mjs stops pinning "LENGTH-LEDE-1" on that line.
 // VERSION-NOTES-MOVED-1: release notes live in the block below
 // W-META-1 (agent_issues 1002316/1002317/1002318): aiRunAttr records in_tok/out_tok/neurons per purpose.
-var VERSION = "1.56.1-codeagent";
+var VERSION = "1.57.0-codeagent";
 // 1.46.0 KERNEL-EVERYWHERE-1 (2026-11-06, owner directive "IMPLEMENT EVERYWHERE ACROSS ALL AI APPS AND SERVICES AND SURFACES", pillar personal): the travel planner CHAT_SYSTEM carries the DOCTRINE-1 kernel 8.2.1 reply recognitions (KERNEL-REPLY-4, scoped to the planner's one designed question): end on the plan or proposal, never a conditional offer or questionnaire; refusals and limits are dispositions with their reason; reversible steps are taken and reported in the same reply. prior 1.45.8-codeagent
 /* 1.44.14 COMPANION-LENGTH-HEADROOM-1 (issue 1000633, pillar personal; patch): repeated length failures alongside exhausted retry budgets expose too little headroom for model output variation. Length-only repairs now target 500 words below the unchanged ceiling while remaining inside each form's normal writer band. */
 /* 1.43.6 BP26-AI-ACT-ART50-1 and BP26-STRUCTURED-DATA-1 (2026-10-26, agent_issues 1000341 and 1000336, pillar core; patch): the visible AI-generated label of every reading.q08.org piece now has its machine-readable half. A piece page carries an Article JSON-LD block (headline, datePublished, url, an Organization as author, never an AI or invented persona, and creditText saying it was written by AI and that no human reviews pieces before they appear) and the index page a Blog block. Measured before: the reading pages carried the visible label and no JSON-LD at all. */

@@ -11,7 +11,7 @@ import {
   parseChat, chatPrompt, chatModels, chatTurn, makeToken, tokenOk, authKey, accessOk, CHAT_SYSTEM,
   visaStatus, weatherRequests, parseWeather, fogSeason, dayPlan, checkinDraft, parseImport, importText, saveStop, savePermit,
   shiftYear, planText, chatContext, placeCards, moveCards,
-  parsePicks, picksPrompt, mapLink, makePicks, picksDue, pickNo
+  parsePicks, picksPrompt, mapLink, makePicks, picksDue, pickNo, icsFor
 } from "./travel.js";
 
 let pass = 0, fail = 0;
@@ -624,6 +624,18 @@ console.log("\n[ensure batch + cheap request path, TRAVEL-ENSURE-BATCH-1]");
   const spy2 = { prepare(sql) { log2.push(sql); return fresh2.env.PERSONAL.prepare(sql); } };
   await ensureTravelCheap(spy2);
   ok("with no tables ensureTravelCheap falls back to the full ensure", log2.length === 1 + DDL.length + Object.keys(DEFAULTS).length + CALENDAR_SEED.length && Number(fresh2.raw.prepare("SELECT COUNT(*) n FROM sqlite_master WHERE name = 'travel_config'").get().n) === 1, log2.length);
+}
+
+// TRAVEL-ICS-1
+{
+  const plan = { places: [{ city: "Lecce", country_name: "Italy", start_date: "2027-02-01", end_date: "2027-02-03", state: "booked" }, { city: "A,B;C", country_name: "", start_date: "2027-02-03", end_date: "2027-02-05", state: "draft" }], moves: [{ day: "2027-02-03", from: "Lecce", to: "Taranto", booked: false }] };
+  const ics = icsFor(plan, "2026-11-12T20:00:00.000Z");
+  ok("ics is a CRLF VCALENDAR with 3 events", ics.startsWith("BEGIN:VCALENDAR\r\n") && ics.endsWith("END:VCALENDAR\r\n") && (ics.match(/BEGIN:VEVENT/g) || []).length === 3);
+  ok("ics stop is an all-day event with exclusive end", ics.includes("DTSTART;VALUE=DATE:20270201\r\nDTEND;VALUE=DATE:20270203"));
+  ok("ics escapes commas and semicolons", ics.includes("SUMMARY:A\\,B\\;C"));
+  ok("ics move runs one day", ics.includes("DTSTART;VALUE=DATE:20270203\r\nDTEND;VALUE=DATE:20270204") && ics.includes("Lecce to Taranto"));
+  ok("ics of an empty plan is still valid", icsFor({}, "2026-11-12T20:00:00Z").includes("END:VCALENDAR"));
+  ok("ics lines fold at 75", icsFor({ places: [{ city: "x".repeat(200), start_date: "2027-01-01", end_date: "2027-01-02" }] }).split("\r\n").every((l) => l.length <= 75));
 }
 
 console.log("\n" + pass + " passed, " + fail + " failed");
