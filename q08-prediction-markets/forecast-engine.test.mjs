@@ -184,6 +184,8 @@ ok(hj.features.includes("forecasts"), "health lists the forecasts feature");
   ok(near(a.expected_pnl, 25), "expected P&L at entry is stake x (belief / price - 1)", a);
   ok(b.side === "NO" && b.settled && near(b.pnl, -100), "a settled losing NO position loses its whole stake and is shown", b);
   ok(bk.totals.losses === 1 && bk.totals.wins === 0 && near(bk.totals.pnl, -50) && near(bk.totals.realized, -100) && near(bk.totals.unrealized, 50), "totals carry realized losses and unrealized gains", bk.totals);
+  const junk = simulateBook([{ slug: "j", title: "J?", created_at: "x", prior: 0.47, p: 0.57, outcome: null }], { j: 0.9995 });
+  ok(junk.positions[0].mark === 0.47 && !junk.positions[0].marked_live && /incoherent/.test(junk.positions[0].mark_source), "a live quote far from the coherent price never marks the position", junk.positions[0]);
   ok(simulateBook([]).totals.positions === 0 && simulateBook([]).totals.return_pct === null, "an empty ledger is an empty book");
   const csv = "observation_date,DCOILBRENTEU\n2026-11-01,70.5\n2026-11-02,.\n2026-11-03,72.0\n2026-11-04,71.25\n";
   const pts = parseFredCsv(csv);
