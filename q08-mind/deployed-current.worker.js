@@ -29,7 +29,7 @@ import B from "./data/entries-b.json";
 import BOOKS from "./data/books.json";
 import VIDEOS from "./data/videos.json";
 
-var VERSION = "2.3.2";
+var VERSION = "2.4.1";
 const BUILT = "2026-10-26";
 const ENTRIES = [...A, ...B];
 const BY_SLUG = new Map(ENTRIES.map((e) => [e.s, e]));
@@ -372,6 +372,8 @@ var __wm_default = {
     const url = new URL(request.url);
     const p = url.pathname.replace(/\/+$/, "") || "/";
 
+    // MIND-IN-COMPANION-1: one address. Everything except the machine endpoints below goes to the merged section on me.q08.org.
+    if (url.hostname === "mind.q08.org" && !["/health", "/api/entries.json", "/feed.xml", "/sitemap.xml", "/robots.txt"].includes(p) && !p.startsWith("/.webmcp") && p !== "/mcp") return Response.redirect("https://me.q08.org/companion#mind", 302);
     if (p === "/health") return text(JSON.stringify({ ok: true, worker: "q08-mind", version: VERSION, capabilities: CAPABILITIES, limitations: LIMITATIONS, entries: ENTRIES.length, books: BOOKS.length, videos: VIDEOS.length, shelves: SHELVES.length, built: BUILT }), "application/json; charset=utf-8");
     if (p === "/api/entries.json") return text(apiJson(), "application/json; charset=utf-8");
     if (p === "/feed.xml") return text(feed(), "application/rss+xml; charset=utf-8");
