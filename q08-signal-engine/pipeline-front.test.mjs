@@ -23,7 +23,7 @@ ok(seen.some((u) => u.endsWith("/api/story")), "the front door reads the pipelin
 ok(html.includes("Signals in. Forecasts out. Value measured.") && !html.includes("What happened, and the system that made it happen."), "the front door leads with the pipeline, not the essays");
 ok(html.indexOf("1 · Signals in") < html.indexOf('id="reports"'), "the four stages come before the reports");
 ok(html.includes("1,234") && html.includes("−$4.50") && html.includes("Target 2 points or more") && html.includes("missed") === false, "live numbers, the loss and the targets render");
-ok(html.includes('href="https://markets.q08.org/#iran-q"') && html.includes("Brent crude oil") && html.includes("https://q08.org/p/x"), "a live forecast links to its market card, its financial proxy and its report");
+ok(html.includes('href="https://markets.q08.org/f/iran-q"') && html.includes("Brent crude oil") && html.includes("https://q08.org/p/x"), "a live forecast links to its forecast page, its financial proxy and its report");
 ok(html.includes('href="https://markets.q08.org/track-record"') && html.includes('href="/#reports"') && html.includes(">Pipeline</a>"), "one navigation across q08.org and markets.q08.org");
 ok(html.includes("/p/2026-11-11-a"), "the reports still list below the pipeline");
 const down = await (await w.fetch(new Request("https://q08.org/"), { DB: D1, PM: { fetch: async () => { throw new Error("down"); } } }, ctx)).text();
@@ -32,3 +32,14 @@ const none = await (await w.fetch(new Request("https://q08.org/"), { DB: D1 }, c
 ok(none.includes("4 · Value captured"), "no binding: the frame still renders");
 console.log("pipeline-front: " + pass + " passed, " + fail + " failed");
 if (fail) process.exit(1);
+// Q08-GROWTH-1: a signal report links forward to the forecasts it feeds; a report no forecast cites gets no box.
+{
+  const W = await import("./worker.js");
+  const src = (await import("node:fs")).readFileSync(new URL("./worker.js", import.meta.url), "utf8");
+  const fn = new Function("escHtml", "q08Pct", src.slice(src.indexOf("function q08FeedsBox("), src.indexOf("function renderIndex(")) + "; return q08FeedsBox;")((s) => String(s), (p) => Math.round(1000 * p) / 10 + "%");
+  const story = { forecasts: { list: [{ slug: "jh", title: "Jensen Huang out by December 31?", forecast: 0.58, crowd: 0.47, deadline: "2026-12-31", related: [{ url: "https://q08.org/p/nv" }] }] } };
+  const box = fn(story, "nv");
+  console.log(box.includes('href="https://markets.q08.org/f/jh"') && box.includes("Forecasts this report feeds") && box.includes("/ledger") && fn(story, "other") === "" && fn(null, "nv") === "" ? "feeds box ok" : "FAIL feeds box");
+  if (!box.includes("Forecasts this report feeds")) process.exit(1);
+  void W;
+}
