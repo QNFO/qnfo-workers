@@ -1,6 +1,6 @@
 // q08-prediction-markets: the paper-trading proving ground for q08's information edge (PM-CHARTER-1).
 // Paper money only. No wallet, no exchange key, no order ever leaves this worker: the only executor in this file writes D1 rows.
-var VERSION = "1.9.8-codeagent";
+var VERSION = "1.9.9-codeagent";
 
 // ---------- charter (the machine-readable form; GET /api/charter serves it with the live evidence) ----------
 export const CHARTER = {
@@ -1133,11 +1133,11 @@ export default {
     const u = new URL(req.url), p = u.pathname;
     try {
       if (p === "/health") return json({ ok: true, worker: "q08-prediction-markets", version: VERSION, paper_trading: true, mode: CHARTER.mode, charter: CHARTER.id, features: ["paper-trading", "order-form", "signal-ensemble", "no-sports", "charter", "graduation-gate", "track-record", "whitepaper", "recalibration", "kelly-sizing"] });
-      if (p === "/api/state") return json(await state(env));
-      if (p === "/api/markets") return json((await state(env)).markets);
-      if (p === "/api/charter") return json(await charterStatus(env));
+      if (p === "/api/state") return json(await d1Retry(() => state(env)));
+      if (p === "/api/markets") return json((await d1Retry(() => state(env))).markets);
+      if (p === "/api/charter") return json(await d1Retry(() => charterStatus(env)));
       if (p === "/whitepaper") return new Response(whitepaperDs(), { headers: { "content-type": "text/html; charset=utf-8" } });
-      if (p === "/api/track-record") return json(await trackRecord(env, Number(u.searchParams.get("limit")) || 100));
+      if (p === "/api/track-record") return json(await d1Retry(() => trackRecord(env, Number(u.searchParams.get("limit")) || 100)));
       if (p === "/api/tick" && req.method === "POST") { const r = await tickWithRetry(env); return json(r, r.busy ? 409 : 200); }
       if (p === "/api/order" && req.method === "POST") { const r = await manualOrder(env, await req.json()); return json(r, r.error ? 400 : 200); }
       if (p === "/" || p === "/dashboard") return new Response(PAGE, { headers: { "content-type": "text/html; charset=utf-8" } });
@@ -1153,15 +1153,19 @@ export default {
 // Requests queued for too long", i.e. a saturated platform, not a bad branch in this worker. Retrying the
 // tick with exponential backoff (instead of failing the run on the first overloaded response) lets it land
 // once the queue drains, which is what stops the error count tripling after each deploy.
-async function tickWithRetry(env, tries) {
+async function d1Retry(fn, tries) {
   const n = tries || 4;
   for (let i = 0; i < n; i++) {
     try {
-      return await tick(env);
+      return await fn();
     } catch (err) {
       const m = String(err && err.message || err);
       if (!/D1.*(overload|queued)/i.test(m) || i === n - 1) throw err;
       await new Promise(r => setTimeout(r, 1500 * Math.pow(2, i)));
     }
   }
+}
+
+async function tickWithRetry(env) {
+  return d1Retry(() => tick(env));
 }
