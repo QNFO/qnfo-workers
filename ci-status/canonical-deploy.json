@@ -1,1 +1,1 @@
-{"workflow":"canonical-deploy","issue":"1406 1442 1443 1390","head":"c0a9bcc8cea8fbcd8b13a49c233cd7035fa736ca","ts":"2026-11-12T15:12:18Z","job_status":"success","deploy":"success","targets":3}
+{"workflow":"canonical-deploy","issue":"1406 1442 1443 1390","head":"fdcaf9e8a5bbfa7a21f60f0bfa34218192e4a2ce","ts":"2026-11-12T15:49:16Z","job_status":"success","deploy":"success","targets":4}
