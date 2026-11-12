@@ -1612,6 +1612,46 @@ def _apply_migration(path, text):
     return apply_migrations.apply_file(path, text, ACCOUNT, TOKEN, commit, emit=log)
 
 
+# PRODUCT-ANSWER-1 (ULTRASTABLE #P0, agent_issues 1002909): an answered product-* owner ask must change the record. A trigger on
+# owner_asks that inserts into agent_issues nests past D1's trigger depth, so this hourly step reads v_product_answers_unfiled
+# (answered product-* asks with no PRODUCT-ANSWER-1 issue for that kind) and files one issue per row. The title format is the
+# one the view's NOT EXISTS matches, so a filed row leaves the view and the step is idempotent.
+PRODUCT_ANSWER_PREFIX = "PRODUCT-ANSWER-1: "
+
+
+def product_answer_issue(row):
+    """One unfiled v_product_answers_unfiled row -> (title, description)."""
+    kind = str(row.get("kind") or "")
+    answer = str(row.get("answer") or "")
+    title = "%s%s answered: %s" % (PRODUCT_ANSWER_PREFIX, kind, answer[:80])
+    desc = "\n".join([
+        "Charter pillar: autonomy. The owner answered product ask %s (owner_asks id %s): %s" % (kind, row.get("id"), answer),
+        "Question: %s" % str(row.get("question") or "")[:300],
+        "Carry the answer into the record (docs/PRODUCT-ULTRASTABLE.md, product/boundary.json).",
+        "code-task: repo=qnfo-workers path=docs/PRODUCT-ULTRASTABLE.md"])
+    return title, desc
+
+
+def product_answers_sweep(out, query=None):
+    """Hourly: file one PRODUCT-ANSWER-1 issue per row of v_product_answers_unfiled. Never raises into the run."""
+    query = query or d1
+    res = {"unfiled": 0, "filed": 0}
+    try:
+        rows = query("SELECT id, kind, question, answer, answered_at FROM v_product_answers_unfiled LIMIT 20")
+        res["unfiled"] = len(rows)
+        now_ms = int(time.time() * 1000)
+        for row in rows:
+            title, desc = product_answer_issue(row)
+            query("INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at) "
+                  "SELECT ?1, ?2, 'product-answer-sweep', 'roadmap', 'high', 'open', ?3, ?3 WHERE NOT EXISTS "
+                  "(SELECT 1 FROM agent_issues WHERE title LIKE ?4)", [title, desc, now_ms, PRODUCT_ANSWER_PREFIX + str(row.get("kind")) + " answered%"])
+            res["filed"] += 1
+    except Exception as e:  # noqa: BLE001
+        res["error"] = str(e)[:200]
+    out["product_answers"] = res
+    return res
+
+
 def main():
     t0 = time.time()
     out = {"ok": True, "marker": "REMEDIATION-CONSUMER-1", "verifier": VERIFIER,
@@ -1691,6 +1731,9 @@ def main():
 
     # MIGRATION-UNAPPLIED-1: merged migrations the push-triggered runner never ran are applied here, within the hour.
     migrations_sweep(out)
+
+    # PRODUCT-ANSWER-1: answered product asks become issues (see product_answers_sweep).
+    product_answers_sweep(out)
 
     spent = int((time.time() - t0) * 1000)
     try:
