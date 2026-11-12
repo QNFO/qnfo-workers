@@ -38,28 +38,6 @@
       ]
     },
     {
-      "_note": "CONSOLIDATE-1: the retired living-paper path lands on the one white paper (the runner follows the 301).",
-      "url": "https://markets.q08.org/living-paper",
-      "contains": [
-        "Where Do LLM Forecasters Have an Edge Over Prediction Markets?"
-      ]
-    },
-    {
-      "_note": "Issue 11057 closing probe: the engine route answers on the public host.",
-      "url": "https://markets.q08.org/api/forecasts",
-      "contains": [
-        "\"engine\":\"FORECAST-ENGINE-1\""
-      ]
-    },
-    {
-      "_note": "VALUE-PIPELINE-1: the track record recomputes every simulated position.",
-      "url": "https://markets.q08.org/track-record",
-      "contains": [
-        "The pipeline's targets",
-        "Forecast book"
-      ]
-    },
-    {
       "_note": "Q08-GROWTH-1: the pre-registration ledger with its public hash check.",
       "url": "https://markets.q08.org/ledger",
       "contains": [
