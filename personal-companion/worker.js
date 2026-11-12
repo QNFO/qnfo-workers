@@ -2371,7 +2371,7 @@ var FR = (() => {
 //
 // Pure ESM, no imports: personal-companion inlines it (scripts/inline-pipeline-modules.mjs); tests load it directly.
 
-const FLOW_VERSION = "1.1.0";
+const FLOW_VERSION = "1.2.0";
 const DIRECTIVE_ID = "FLOW-DIRECTIVE-1";
 const DIRECTIVE = "Every workflow, in every product (Ultrastable, the Qniverse, jobs, outreach, resume, personal, research), declares its inflows, " +
   "outflows and bindings, and feeds its outcomes back through the signals engine so results change the next outputs. Each flow is a loop and is accounted for in code.";
@@ -2600,7 +2600,106 @@ const FLOWS = [
     inflows: [{ signal: "ext.job_postings", via: b("external-api", "job market sources") }, { signal: "ext.news_sources", via: b("external-api", "event sources") }],
     outflows: [{ signal: "signal.item", via: b("d1", "idea_proposals, outreach_queue, handoffs") }],
     feedback: "radar items enter the research and outreach queues, which are measured by reader engagement",
-    gap: { what: "job-market-watch writes handoffs that no flow reads, and its Workflow resource is absent from the account", loop_issue: "FLOW-GAP-job-market-watch", probe: "SELECT COUNT(*) FROM handoffs WHERE project_id LIKE 'job-market-watch-workflow-%' AND created_at > datetime('now','-7 days')" } }
+    gap: { what: "job-market-watch writes handoffs that no flow reads, and its Workflow resource is absent from the account", loop_issue: "FLOW-GAP-job-market-watch", probe: "SELECT COUNT(*) FROM handoffs WHERE project_id LIKE 'job-market-watch-workflow-%' AND created_at > datetime('now','-7 days')" } },
+  // ------------------------------------------------------------------ fleet workers on a cron (FLOW-DECLARE-ALL-1: the former UNDECLARED_CRON_WORKERS list)
+  { id: "idea-hub", label: "Idea hub: signals and re-entering papers to proposals", scope: "qniverse", plane: "research", worker: "idea-hub",
+    executor: b("cron", "idea-hub hourly ideationCycle"), clock: null, clock_reason: "hourly at :25; idea_proposals.created_at and the cron grid log are its beat",
+    inflows: [{ signal: "paper.published", via: b("d1", "artifact_reentry signals (published papers re-enter as ideas)") }, { signal: "ext.news_sources", via: b("d1", "signals status='new'") }],
+    outflows: [{ signal: "signal.item", via: b("d1", "idea_proposals (scored ACCEPT, diversity-capped)") }],
+    feedback: "accepted proposals become papers through the research pipeline, and published papers re-enter here as signals; the diversity cap reads the 30-day accepts it produced" },
+  { id: "fleet-agents", label: "Fleet code agent: queued requests and schedules to runs", scope: "qniverse", plane: "fleet", worker: "qnfo-agents",
+    executor: b("cron", "qnfo-agents every 5 min drainRequests, expireApprovals"), clock: null, clock_reason: "fleet_heartbeat qnfo-agents (CRON-HEARTBEAT-1) on every 5-minute drain",
+    inflows: [{ signal: "fleet.issue", via: b("d1", "agent requests from the console, ops intake and issues") }, { signal: "fleet.memory", via: b("service", "qnfo-memory-mcp fleet graph and memory") }],
+    outflows: [{ signal: "fleet.deploy", via: b("gh-actions", "pull requests the agent runs open -> canonical deploy") }],
+    feedback: "a run's pull request deploys, the probes and clocks re-measure, and a failure comes back as a new issue the agent drains" },
+  { id: "ai-calibration", label: "Model route prober and calibration", scope: "qniverse", plane: "fleet", worker: "qnfo-ai-calibration",
+    executor: b("cron", "qnfo-ai-calibration every 30 min runProbe, checkFreshness, checkHealthCoverage"), clock: null, clock_reason: "fleet_heartbeat qnfo-ai-calibration (CRON-ONLY-HEARTBEAT-1)",
+    inflows: [{ signal: "ai.spend", via: b("d1", "ai_call_counters, ai_spend_ledger (which models the fleet actually calls)") }, { signal: "fleet.deploy", via: b("gh-actions", "canonical deploy of qnfo-ai") }],
+    outflows: [{ signal: "ai.route_health", via: b("d1", "model_health, route probe rows") }, { signal: "fleet.issue", via: b("d1", "alerts and agent_issues on stale or unhealthy routes") }],
+    feedback: "route health steers the router's model choice; the calls the router then makes are what the next probe covers" },
+  { id: "ai-router", label: "AI router: cascade shadow and spend governor", scope: "qniverse", plane: "fleet", worker: "qnfo-ai",
+    executor: b("cron", "qnfo-ai hourly cascadeShadowTick"), clock: null, clock_reason: "hourly cascade-shadow run ids in its ledger; the router's request path is its live beat",
+    inflows: [{ signal: "ai.route_health", via: b("d1", "model_health") }],
+    outflows: [{ signal: "ai.spend", via: b("d1", "ai_spend_ledger, ai_call_counters, cascade shadow verdicts") }],
+    feedback: "shadow verdicts and spend per model feed calibration and the waste agent, whose findings change the routes the router picks next" },
+  { id: "ask-loop", label: "Ask surface: measure, judge and improve answers", scope: "qniverse", plane: "outreach", worker: "qnfo-ai-search",
+    executor: b("cron", "qnfo-ai-search hourly loopTick (judge, measure, golden-set eval)"), clock: null, clock_reason: "fleet_heartbeat qnfo-ai-search (CRON-ONLY-HEARTBEAT-1)",
+    inflows: [{ signal: "paper.index", via: b("d1", "AI Search instance over the paper corpus") }, { signal: "ext.reader_visits", via: b("d1", "ask_answers, /api/feedback helpful votes") }],
+    outflows: [{ signal: "ask.answer", to: "ext.reader", returns: "ext.reader_visits", via: b("external-api", "ask.qwav.tech grounded answers") },
+      { signal: "fleet.issue", via: b("d1", "ASK-FIX-1 code tasks that close themselves on recovery") }],
+    feedback: "reader votes and judge verdicts grade each answer; an A/B winner is kept, a regression is reverted, and a breach files an ASK-FIX code task" },
+  { id: "companion-guard", label: "me.q08.org guard: probe and roll back", scope: "personal", plane: "personal", worker: "qnfo-companion-guard",
+    executor: b("cron", "qnfo-companion-guard every 15 min"), clock: null, clock_reason: "every 15 minutes; its probe rows are its beat",
+    inflows: [{ signal: "fleet.deploy", via: b("gh-actions", "deploys of personal-api, the worker that serves me.q08.org") }],
+    outflows: [{ signal: "fleet.issue", via: b("external-api", "COMPANION-GUARD-ROLLBACK-1 rollback to the previous deployment, alert row") }],
+    feedback: "two failed probes roll personal-api back; the rollback is a deploy the next probe checks" },
+  { id: "deploy-guard", label: "Deploy guard: claims, leases and fleet census", scope: "qniverse", plane: "fleet", worker: "qnfo-deploy-guard",
+    executor: b("cron", "qnfo-deploy-guard every 20 min sweepExpiredClaims, fleet probe"), clock: null, clock_reason: "every 20 minutes; work_claims expiry and the shared fleet census are its beat",
+    inflows: [{ signal: "fleet.deploy", via: b("d1", "deploy ledger events, work_claims") }],
+    outflows: [{ signal: "fleet.issue", via: b("d1", "expired claims released, unhealthy census rows") }],
+    feedback: "released claims return work to the code loop, whose deploys the guard's census reads next" },
+  { id: "doc-gate", label: "Document gate: untraced documents to loops", scope: "qniverse", plane: "fleet", worker: "qnfo-doc-gate",
+    executor: b("cron", "qnfo-doc-gate every 15 min run()"), clock: null, clock_reason: "doc_gate_runs is its run ledger",
+    inflows: [{ signal: "fleet.deploy", via: b("r2", "audit and handoff documents written by sessions and loops") }],
+    outflows: [{ signal: "fleet.issue", via: b("d1", "doc_audit dispositions, DOC-* cluster issues") }],
+    feedback: "an untraced document becomes an issue the code loop turns into code or retires; the next run sees it traced" },
+  { id: "fleet-control", label: "Fleet control: metric triggers, remediation, merge lane", scope: "qniverse", plane: "fleet", worker: "qnfo-fleet-control",
+    executor: b("cron", "qnfo-fleet-control every 10 min and hourly"), clock: null, clock_reason: "tick_runs and fleet_tick are its ledgers (DOCTRINE tick)",
+    inflows: [{ signal: "fleet.metric", via: b("d1", "metric_registry, v_metric_trigger_state") }, { signal: "fleet.deploy", via: b("gh-actions", "merged PRs and deploy ledger") }],
+    outflows: [{ signal: "fleet.issue", via: b("d1", "agent_issues per breach, remediation contracts, lane merges") }],
+    feedback: "a breach files an issue, the code loop deploys a fix, the metric is re-measured and the issue closes on its probe; remedy_efficacy_30d replaces a lever that did not move it" },
+  { id: "paper-gateway", label: "Paper gateway: papers.qnfo.org pages, reports, provenance", scope: "qniverse", plane: "research", worker: "qnfo-gateway",
+    executor: b("cron", "qnfo-gateway hourly grid (rrSweep, provSweep, daily IndexNow and render health)"), clock: null, clock_reason: "cron_fire_log rows of its grid (cronGridLog)",
+    inflows: [{ signal: "paper.published", via: b("d1", "living-paper papers") }, { signal: "paper.render", via: b("r2", "PDFs rendered by qnfo-pdf") }],
+    outflows: [{ signal: "paper.page", to: "ext.reader", returns: "ext.reader_visits", via: b("pages", "papers.qnfo.org, IndexNow pings") }, { signal: "fleet.metric", via: b("d1", "papers.render_defects, reader reports") }],
+    feedback: "reader visits and reader reports return through reader measurement and the errata loop, which set the research budget and correct the next version" },
+  { id: "github-steward", label: "GitHub steward: issue mirror, draft PRs, cost ledger", scope: "qniverse", plane: "fleet", worker: "qnfo-github-steward",
+    executor: b("cron", "qnfo-github-steward every 10 min grid"), clock: null, clock_reason: "cron_fire_log rows of its grid",
+    inflows: [{ signal: "fleet.issue", via: b("d1", "agent_issues to mirror; roadmap_mirror_scope") }],
+    outflows: [{ signal: "fleet.deploy", via: b("gh-actions", "draft PR per issue (DRAFT-PR-PER-ISSUE-1), mirrored issues") }, { signal: "fleet.metric", via: b("d1", "cost_vendor_month github") }],
+    feedback: "each draft PR is built and merged by the code lanes; a merged fix closes the issue it mirrors" },
+  { id: "paper-indexer", label: "Paper indexer: impact, render health, vector index", scope: "qniverse", plane: "research", worker: "qnfo-infra",
+    executor: b("cron", "qnfo-infra hourly (indexer, purge, daily impact)"), clock: null, clock_reason: "hourly logs and the metrics it refreshes (paper_render_defect_pages) are its beat",
+    inflows: [{ signal: "paper.published", via: b("d1", "living-paper papers") }],
+    outflows: [{ signal: "paper.index", via: b("service", "Vectorize paper index, AI Search ingest") }, { signal: "fleet.metric", via: b("d1", "paper_render_defect_pages, paper_math_browser_fail_pages") }],
+    feedback: "render defects become metric breaches the fleet fixes; the index feeds the ask loop whose reader votes grade it" },
+  { id: "intent-intake", label: "Intent intake: notes and tasks to issues, daily digest", scope: "qniverse", plane: "fleet", worker: "qnfo-intent-orchestrator",
+    executor: b("cron", "qnfo-intent-orchestrator every 30 min grid, 06:00 digest"), clock: null, clock_reason: "cron_fire_log rows of its grid",
+    inflows: [{ signal: "ext.owner_tap", via: b("d1", "intents captured from the console, ChatBox and notes") }],
+    outflows: [{ signal: "fleet.issue", via: b("d1", "agent_issues (TASK-INTENT-INTAKE-1)") },
+      { signal: "intent.digest", to: "ext.owner", returns: "ext.owner_tap", via: b("email", "daily intent digest of pending intents") }],
+    feedback: "intents become issues the fleet closes; the digest lists what is still pending and the next taps answer it" },
+  { id: "lifecycle", label: "Lifecycle: fleet-feed auto actions and backups", scope: "qniverse", plane: "fleet", worker: "qnfo-lifecycle",
+    executor: b("cron", "qnfo-lifecycle hourly CRON_TABLE (CRON-SINGLE-TRIGGER-1)"), clock: null, clock_reason: "hourly; its CRON_TABLE run rows are its beat",
+    inflows: [{ signal: "fleet.metric", via: b("service", "qnfo-fleet-feed /feed/self findings with auto_action") }],
+    outflows: [{ signal: "fleet.issue", via: b("d1", "applied auto actions, backup rows, alerts") }],
+    feedback: "findings are acted on and re-read on the next feed; what an auto action cannot fix stays an issue for the code loop" },
+  { id: "memory-graph", label: "Memory and fleet graph tiers", scope: "qniverse", plane: "fleet", worker: "qnfo-memory-mcp",
+    executor: b("cron", "qnfo-memory-mcp hourly exuviaCron, memoryTierSnapshot"), clock: null, clock_reason: "hourly at :35; memory tier snapshots are its beat",
+    inflows: [{ signal: "fleet.deploy", via: b("d1", "fg_* graph rows rebuilt on each push (fleet-graph.yml)") }],
+    outflows: [{ signal: "fleet.memory", via: b("service", "fleet-graph and memory MCP tools") }],
+    feedback: "agents read the graph before a change; their deploys rebuild it" },
+  { id: "observability", label: "Observability: trace ingest, autonomy scores", scope: "qniverse", plane: "fleet", worker: "qnfo-observability",
+    executor: b("cron", "qnfo-observability hourly run()"), clock: null, clock_reason: "autonomy_scores.scored_at and the hourly digest are its beat",
+    inflows: [{ signal: "fleet.deploy", via: b("r2", "Logpush workers_trace_events of every deployed worker") }],
+    outflows: [{ signal: "fleet.metric", via: b("d1", "worker_logs, autonomy_scores, cloud_ops_events digest, alerts") }],
+    feedback: "error ratios and autonomy scores become metric breaches; the fixes they cause show in the next ingest" },
+  { id: "ops-registry", label: "Ops executor: registry refresh and deploys", scope: "qniverse", plane: "fleet", worker: "qnfo-ops",
+    executor: b("cron", "qnfo-ops every 30 min registryRefresh"), clock: null, clock_reason: "every 30 minutes; deployment_history and the registry refresh are its beat",
+    inflows: [{ signal: "fleet.issue", via: b("d1", "ops intake and deploy requests") }],
+    outflows: [{ signal: "fleet.deploy", via: b("service", "/ops/deploy canonical path, service_registry") }],
+    feedback: "deploys are verified by /health and probes; a failed one is reverted and filed" },
+  { id: "pdf-backlog", label: "PDF renderer: every paper as a PDF", scope: "qniverse", plane: "research", worker: "qnfo-pdf",
+    executor: b("cron", "qnfo-pdf every 10 min renderPdfBacklog"), clock: null, clock_reason: "fleet_heartbeat qnfo-pdf (writeCronHeartbeat)",
+    inflows: [{ signal: "paper.published", via: b("d1", "papers without a current-renderer PDF") }],
+    outflows: [{ signal: "paper.render", via: b("r2", "PDF per paper version") }],
+    feedback: "the gateway serves the PDFs; render defects it measures come back as fixes to the renderer" },
+  { id: "waste-agent", label: "Waste agent: AI spend per published output", scope: "qniverse", plane: "fleet", worker: "qnfo-waste-agent",
+    executor: b("cron", "qnfo-waste-agent hourly run()"), clock: null, clock_reason: "waste_runs is its run ledger",
+    inflows: [{ signal: "ai.spend", via: b("d1", "ai_call_counters -> waste_ledger") }],
+    outflows: [{ signal: "fleet.issue", via: b("d1", "waste_findings, up to 5 code-task issues a run, closed after 3 clean runs") }],
+    feedback: "a waste finding becomes a code task; the spend it removes is measured on the next runs and the finding closes after three clean runs" }
+
 ];
 
 // Ultrastable's loops are declared in ultrastable/ultrastable instances/ultrastable/loop-registry.json with the same fields
@@ -2609,11 +2708,7 @@ const ULTRASTABLE_REGISTRY = { repo: "ultrastable/ultrastable", path: "instances
 
 // Workers that run on a cron but have no flow above yet. Each is an open loop the flow audit counts (flow_undeclared_workers, target 0);
 // the CI test fails a cron or Workflow worker that is in neither list, and an entry that is declared or no longer runs.
-const UNDECLARED_CRON_WORKERS = [
-  "idea-hub", "qnfo-agents", "qnfo-ai-calibration", "qnfo-ai-search", "qnfo-ai", "qnfo-companion-guard", "qnfo-deploy-guard", "qnfo-doc-gate",
-  "qnfo-fleet-control", "qnfo-gateway", "qnfo-github-steward", "qnfo-infra", "qnfo-intent-orchestrator", "qnfo-lifecycle", "qnfo-memory-mcp",
-  "qnfo-observability", "qnfo-ops", "qnfo-pdf", "qnfo-waste-agent"
-];
+const UNDECLARED_CRON_WORKERS = [];
 
 // ------------------------------------------------------------------ validation
 // A flow with a clock beats into the watchdog and receives repairs as deploys (IMPLICIT_OUT, IMPLICIT_IN).
@@ -5189,7 +5284,7 @@ var __name22 = __name2;
 // line below (VERSION-LINE-NOTES-1, 2026-10-19). Its older trailing notes stay until length-lede.test.mjs stops pinning "LENGTH-LEDE-1" on that line.
 // VERSION-NOTES-MOVED-1: release notes live in the block below
 // W-META-1 (agent_issues 1002316/1002317/1002318): aiRunAttr records in_tok/out_tok/neurons per purpose.
-var VERSION = "1.54.2-codeagent";
+var VERSION = "1.56.0-codeagent";
 // 1.46.0 KERNEL-EVERYWHERE-1 (2026-11-06, owner directive "IMPLEMENT EVERYWHERE ACROSS ALL AI APPS AND SERVICES AND SURFACES", pillar personal): the travel planner CHAT_SYSTEM carries the DOCTRINE-1 kernel 8.2.1 reply recognitions (KERNEL-REPLY-4, scoped to the planner's one designed question): end on the plan or proposal, never a conditional offer or questionnaire; refusals and limits are dispositions with their reason; reversible steps are taken and reported in the same reply. prior 1.45.8-codeagent
 /* 1.44.14 COMPANION-LENGTH-HEADROOM-1 (issue 1000633, pillar personal; patch): repeated length failures alongside exhausted retry budgets expose too little headroom for model output variation. Length-only repairs now target 500 words below the unchanged ceiling while remaining inside each form's normal writer band. */
 /* 1.43.6 BP26-AI-ACT-ART50-1 and BP26-STRUCTURED-DATA-1 (2026-10-26, agent_issues 1000341 and 1000336, pillar core; patch): the visible AI-generated label of every reading.q08.org piece now has its machine-readable half. A piece page carries an Article JSON-LD block (headline, datePublished, url, an Organization as author, never an AI or invented persona, and creditText saying it was written by AI and that no human reviews pieces before they appear) and the index page a Blog block. Measured before: the reading pages carried the visible label and no JSON-LD at all. */
