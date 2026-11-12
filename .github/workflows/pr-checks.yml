@@ -534,6 +534,10 @@ jobs:
           gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" | jq -r '.body' > pr-body.txt
           gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/files" --paginate --jq '.[].filename' > pr-files.txt
           node scripts/self_audit_pr.mjs --body pr-body.txt --files pr-files.txt
+          # CLOSED-LOOP-1 (owner 2026-11-12): no added wait on a person; a human_actions card needs an IDENTITY-BOUND: line.
+          node scripts/closed_loop_guard.test.mjs
+          gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/files" --paginate --slurp > pr-files.json
+          python3 scripts/closed_loop_guard.py --files pr-files.json
 
 
   # identity lexicon always; worker prompt, model floor and workflow lint when their paths change
