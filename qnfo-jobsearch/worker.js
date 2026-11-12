@@ -9,7 +9,7 @@
 // JOBSEARCH-CV-1 (1.5.0): the CV is part of this worker (page /cv): a yes/no interview that builds the claim bank, review of unconfirmed claims, roles, achievements and publications edited in D1, a resume per job (summary, roles, selected work, education, skills) and a cover note, history and backup. The search is tied to that bank (evidence the owner can back up weighs more; what the CV lacks is shown as a gap), decided postings (rejected, applied, approved) never come back under another id, rejections carry a reason the search learns from, and a wider net: stretch matches outside the stated preferences, more boards and aggregators.
 // Routes: GET / (web UI) | GET /api | GET /api/matches | GET /api/matches/:id | GET /api/runs | GET /api/ledger | POST /api/run | POST /api/matches/:id/status | GET /health
 // Port of the jobsearch/ Python modules (tests: jobsearch/test_jobsearch.py, qnfo-jobsearch/worker.test.mjs).
-var VERSION = "1.24.0-codeagent";
+var VERSION = "1.24.1-codeagent";
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -2989,7 +2989,7 @@ async function opsReport(env) {
     { fm: "jobsearch-stale-pending", ok: Number(stalePending) === 0, detail: `${stalePending} pending match(es) not seen for 72 h` },
     { fm: "jobsearch-ledger-stale", ok: ledgerAge <= 90, detail: `ledger verified ${LEDGER_VERIFIED_ON}, ${ledgerAge} days old (limit 90)` },
     { fm: "jobsearch-intake-collapse", ok: !(recent.length >= 3 && recent.every((r) => Number(r.fetched) < 1000 || Number(r.passed) === 0)), detail: recent.map((r) => `${r.fetched}/${r.passed}`).join(" ") + " (fetched/passed, last 3 runs)" },
-    { fm: "jobsearch-resume-template", ok: Number(resumeCons.mismatched || 0) === 0, detail: `${resumeCons.mismatched || 0} open resume draft(s) off the one template (checked ${resumeCons.checked || 0} at ${resumeCons.at || "never"}; the hourly run rebuilds them)` },   // RESUME-ONE-TEMPLATE-1
+    { fm: "jobsearch-resume-template", ok: Number(resumeCons.mismatched || 0) === 0 && !!resumeCons.at, detail: `${resumeCons.mismatched || 0} open resume draft(s) off the one template (checked ${resumeCons.checked || 0} at ${resumeCons.at || "never"}; the hourly run rebuilds them)` },   // RESUME-ONE-TEMPLATE-1
     { fm: "jobsearch-auth-unavailable", ok: !!env.EMAIL || !!env.LOOP_TOKEN, detail: `email sign-in ${env.EMAIL ? "bound" : "missing"}, loop token ${env.LOOP_TOKEN ? "set" : "not set"}` },
   ];
   return { worker: WORKER, version: VERSION, sources: mission, candidates_live: candidatesLive, candidates_probed: Object.values(CANDIDATE_BOARDS).flat().length, status: checks.every((c) => c.ok) ? "ok" : "degraded", checked_at: iso(now), last_run: last ? { id: last.id, finished_at: last.finished_at, fetched: last.fetched, passed: last.passed, stored: last.stored, blocked: last.blocked } : null, rerank: { status: rerank.rerank_status || "never", via: rerank.rerank_via || null, at: rerank.rerank_at || null, binding: !!(env.AI || env.QNFO_AI) }, feeds, matches_by_status: Object.fromEntries(counts.map((c) => [c.status, c.n])), checks };
