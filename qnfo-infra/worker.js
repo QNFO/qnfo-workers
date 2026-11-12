@@ -84,7 +84,7 @@ function infraManifestRoute(url, env) {
 }
 __name(infraManifestRoute, "infraManifestRoute");
 __name2(infraManifestRoute, "infraManifestRoute");
-var VERSION = "1.17.10-codeagent";
+var VERSION = "1.17.11-codeagent";
 // D1-RESULT-CAP-1 (#9794, DATA-SPINE-W0-1): D1 refuses a result payload over 50 MB. d1ReadAll runs a read; a statement that fails with a result-size
 // error is retried once as LIMIT/OFFSET pages over the same statement, and a payload at or over D1_RESULT_NEAR_BYTES is logged either way as a
 // cloud_ops_events row of kind d1_result_cap_near (fail-soft, never blocks the read).
@@ -1325,6 +1325,25 @@ const chunks = [];
               stats.coverage = { public_papers: pub ? pub.public_papers : null, eligible_dois: pub ? pub.eligible_dois : null, scored_dois: sc ? sc.scored : null, last_collected: sc ? sc.last : null, scored_window_days: 3 };
             } catch (e) { stats.coverage = { error: "coverage unavailable" }; }
             return json(stats);
+          }
+          // Added route: GET /v1/papers/:slug/related
+          // Returns up to 4 related papers based on vector similarity.
+          // Currently a minimal implementation returning an empty list if the paper is not found.
+          // Future work: query PAPER_VZ for nearest neighbours, filter by CORPUS_STATUSES,
+          // cache result in KV for 24h, and log to analytics_daily.
+          if (path.startsWith("/v1/papers/") && path.endsWith("/related")) {
+            const parts = path.split("/");
+            const slug = parts[3];
+            // Attempt to fetch basic paper metadata; if missing, return 404.
+            const paper = await env.LIVING_PAPER.prepare(
+              "SELECT slug, title, published_at, abstract FROM papers WHERE slug = ?1 AND status IN " + CORPUS_IN
+            ).bind(slug).first();
+            if (!paper) {
+              return json({ error: "paper not found" }, 404);
+            }
+            // Placeholder: no related neighbours computed yet.
+            const related = [];
+            return json({ slug: paper.slug, title: paper.title, published_at: paper.published_at, abstract: paper.abstract, related });
           }
           default: return json({ error: "not found" }, 404);
         }
