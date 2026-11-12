@@ -3,16 +3,17 @@
 // tick writes and finds a tampered row; settlement fetches overdue questions by name; the broadcast lane queues calls and settlements (wins
 // and losses) once each into social_threads within the daily cap; the clock reads every stage and escalates a late one; the product manager
 // measures, turns bounded knobs, starts an experiment and files a growth or repair change once; the new pages and feeds render.
+import { readFileSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import { classify, consequenceScore, plan, tick, verifyLedger, callOf, verdictText, broadcastText, broadcastLane, settleLane, parseGammaClose, clockStatus, escalateClock,
   productManager, pmStatus, readConfig, growthScore, forecastData, renderForecast, ledgerData, renderLedger, feedXml, sitemapXml, proxySensitivity, relatedMarkets,
-  ensureSchema, storyData, renderStory, renderTrackRecord, sha256Hex } from "./forecast-engine.mjs";
+  ensureSchema, parseFeed, scoreCandidate, researchLane, researchStatus, shiftScaleFit, reliabilityBins, combine, RESEARCH_NEEDS, storyData, renderStory, renderTrackRecord, sha256Hex } from "./forecast-engine.mjs";
 let pass = 0, fail = 0;
 const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL", m, x === undefined ? "" : JSON.stringify(x).slice(0, 600)); } };
 function d1(db) {
   const st = (sql) => { let args = []; const o = { bind: (...a) => { args = a.map((v) => (v === undefined ? null : v)); return o; },
     all: async () => ({ results: db.prepare(sql).all(...args) }), first: async () => db.prepare(sql).get(...args) || null,
-    run: async () => { const r = db.prepare(sql).run(...args); return { meta: { changes: Number(r.changes) } }; } }; return o; };
+    run: async () => { const r = db.prepare(sql).run(...args); return { meta: { changes: Number(r.changes), last_row_id: Number(r.lastInsertRowid) } }; } }; return o; };
   return { prepare: st };
 }
 const head = (t, d, css) => `<meta name="viewport" content="width=device-width"><title>${t}</title><style>${css}</style>`;
@@ -129,6 +130,34 @@ ok(sd.forecasts.list[0].slug === "huang", "the front page leads with the most co
 ok(relatedMarkets("Jensen Huang announced resignation by December 31?", "huang", [{ slug: "nv", title: "Will Nvidia hit $6T before Huang leaves?", yes: 0.3, vol24: 5 }, { slug: "j2", title: "Jensen Huang announced resignation by November 30?", yes: 0.1 }]).map((m) => m.slug).join() === "nv", "related markets exclude the question's own dates");
 const ps = proxySensitivity(Array.from({ length: 30 }, (_, i) => ({ date: "2026-10-" + String(i + 1).padStart(2, "0"), value: 100 + (i % 2) })), "2026-10-28", "");
 ok(ps && ps.daily_sd > 0 && ps.days === 2 && typeof ps.z === "number", "financial sensitivity is the move in typical daily moves", ps);
+
+// 7 research lane (Q08-RESEARCH-1) and calibration (Q08-CALIB-1)
+const rss = (items) => "<rss><channel>" + items.map(([t, u, d]) => `<item><title>${t}</title><link>${u}</link><description>${d}</description></item>`).join("") + "</channel></rss>";
+const feedXml1 = rss([["We propose Platt scaling to fix LLM hedging", "https://x.test/a", "Calibration after ensemble aggregation improves Brier scores."], ["Best pizza in town", "https://x.test/b", "no"]]);
+ok(parseFeed(feedXml1).length === 2 && parseFeed("<feed><entry><title>T</title><link href=\"https://a.test/1\"/><summary>S &amp; more</summary></entry></feed>")[0].summary === "S & more", "RSS and Atom both parse");
+const sc = scoreCandidate(parseFeed(feedXml1)[0], { w: 1 }, {});
+ok(sc && sc.need === "calibration" && sc.score >= 55 && scoreCandidate(parseFeed(feedXml1)[1], { w: 1 }, {}) === null, "a practice that names a need scores, trivia does not", sc);
+const src = readFileSync(new URL("./forecast-engine.mjs", import.meta.url), "utf8");
+ok(RESEARCH_NEEDS.every((n) => [2, 3].includes(src.split(n.anchor).length)), "every need's code anchor is defined in the engine (the older levers also quote it)", RESEARCH_NEEDS.map((n) => [n.key, src.split(n.anchor).length - 1]));
+const rEnv = { ...env, __fetchText: async () => ({ ok: true, status: 200, text: feedXml1 }) };
+const r1 = await researchLane(rEnv, rEnv.__fetchText, Date.now(), { sources: [{ key: "t", w: 1, url: "u" }] });
+const r2 = await researchLane(rEnv, rEnv.__fetchText, Date.now() + 1000, { sources: [{ key: "t", w: 1, url: "u" }] });
+const ri = aq.prepare("SELECT id, title, description FROM agent_issues WHERE title LIKE 'Q08-RESEARCH-%'").all();
+ok(r1.new === 1 && r1.filed.length === 1 && r2.new === 0 && r2.filed.length === 0 && ri.length === 1 && ri[0].description.includes("code-task: repo=qnfo-workers") && ri[0].description.includes("code-anchor: "), "a practice is filed once with a code task and not again", [r1, r2, ri.length]);
+aq.prepare("UPDATE agent_issues SET status = 'closed' WHERE id = ?").run(ri[0].id);
+const r3 = await researchLane(rEnv, rEnv.__fetchText, Date.now() + 2000, { sources: [] });
+const rs = await researchStatus(env.TRADES_DB);
+ok(r3.adopted === 1 && rs.weights.calibration > 1 && rs.counts.adopted === 1 && tq.prepare("SELECT count(*) n FROM fe_signal WHERE source = 'research'").get().n === 1, "a closed issue is adopted: the need's weight rises and it becomes a signal", [r3, rs.weights]);
+const down = await researchLane({ ...rEnv, __fetchText: async () => { throw new Error("down"); } }, async () => { throw new Error("down"); }, Date.now(), { sources: [{ key: "t", w: 1, url: "u" }] });
+ok(down.errors.length === 1 && down.fetched === 0, "a failing source is recorded, never thrown", down);
+const mk = (n, sh) => Array.from({ length: n }, (_, i) => { const prior = 0.5, p = sigmoid2(sh), o = i % 4 === 0 ? 0 : 1; return { slug: "s" + i, prior, p, outcome: o }; });
+function sigmoid2(x) { return 1 / (1 + Math.exp(-x)); }
+const under = shiftScaleFit(mk(40, 0.2));
+ok(under.n === 40 && under.k > 1 && under.apply, "when evidence shifts under-state the outcome, the fit scales them up and cross-validation keeps it", under);
+ok(shiftScaleFit(mk(10, 0.2)).apply === false && shiftScaleFit(mk(10, 0.2)).k === 1, "too few settled calls: no scaling");
+ok(reliabilityBins(mk(40, 0.2)).some((b) => b.n === 40 && b.observed === 0.75), "reliability bins compare mean forecast with observed rate");
+const v = [{ ok: true, shift: 0.4 }, { ok: true, shift: 0.6 }];
+ok(combine(0.5, v, { scale: 2 }).p > combine(0.5, v).p && combine(0.5, v, { scale: 0 }).p === 0.5, "the fitted scale multiplies the evidence shift only");
 const W = (await import("./worker.js")).default;
 for (const path of ["/ledger", "/api/clock", "/api/pm", "/feed.xml", "/sitemap.xml", "/robots.txt"]) {
   const r = await W.fetch(new Request("https://t.invalid" + path), {});

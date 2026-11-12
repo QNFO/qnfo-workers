@@ -60,6 +60,13 @@
         "\"growth\"",
         "Q08-PM-RESOLVE-1"
       ]
+    },
+    {
+      "url": "https://q08-prediction-markets.q08.workers.dev/api/pm",
+      "contains": [
+        "\"research\":",
+        "\"sources\":"
+      ]
     }
   ]
 }
