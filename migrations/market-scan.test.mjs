@@ -1,0 +1,27 @@
+import assert from "node:assert/strict";
+import { DatabaseSync } from "node:sqlite";
+import { readFileSync } from "node:fs";
+const sql = readFileSync(new URL("./2026-11-12-market-scan.sql", import.meta.url), "utf8");
+const m = sql.match(/json\('(\{.*\})'\)\), version/s);
+const step = JSON.parse(m[1].replace(/''/g, "'"));
+assert.equal(step.name, "market-scan");
+const db = new DatabaseSync(":memory:");
+db.exec(`
+CREATE TABLE cf_agent_requests (id INTEGER PRIMARY KEY AUTOINCREMENT, requester TEXT, kind TEXT, prompt TEXT, instance TEXT, priority TEXT, status TEXT DEFAULT 'queued', result TEXT);
+CREATE TABLE program_charters (program_code TEXT, status TEXT);
+CREATE TABLE ops_config (key TEXT PRIMARY KEY, value TEXT);
+CREATE TABLE roadmap_proposals (id INTEGER PRIMARY KEY, title TEXT, request_instance TEXT);
+INSERT INTO program_charters VALUES ('QNFO.REACH','active'),('QNFO.RSCH','active'),('QNFO.INFRA','active'),('QNFO.OPS','active'),('QNFO.PERSONAL','active');
+`);
+db.exec(step.sql); db.exec(step.sql);
+const rows = db.prepare("SELECT * FROM cf_agent_requests").all();
+assert.equal(rows.length, 1, "one request a day");
+assert.match(rows[0].instance, /^roadmap-QNFO\.(REACH|RSCH|INFRA|OPS)-comp-\d{8}$/);
+assert.match(rows[0].prompt, /at least three/);
+assert.match(rows[0].prompt, /code-anchor:/);
+assert.match(rows[0].prompt, /Lens today:/);
+db.exec("UPDATE cf_agent_requests SET status='done', result=''"); db.exec(step.sql);
+assert.equal(db.prepare("SELECT COUNT(*) c FROM cf_agent_requests").get().c, 2, "empty result retries");
+db.exec("INSERT INTO ops_config VALUES ('market_scan','off')"); db.exec("DELETE FROM cf_agent_requests"); db.exec(step.sql);
+assert.equal(db.prepare("SELECT COUNT(*) c FROM cf_agent_requests").get().c, 0, "kill switch");
+console.log("ok");
