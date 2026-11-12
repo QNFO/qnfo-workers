@@ -677,11 +677,26 @@ export async function accessOk(request, c, deps, nowMs) {
   } catch (e) { return false; }
 }
 
+// ME-HUB-1 (2026-11-12): one sign-in for everything about the owner. The companion's cmp_s cookie (Domain=q08.org, set by me.q08.org)
+// is read here against the same personal-life D1 (cmp_sessions keeps SHA-256 hashes only), so a device signed in at me.q08.org is
+// signed in to the travel planner. Read-only: this never writes the session row. Never throws.
+export async function meSessionOk(request, db, nowMs) {
+  try {
+    const m = /(?:^|;\s*)cmp_s=([0-9a-f]{64})/.exec(String(request.headers.get("Cookie") || ""));
+    if (!m || !db) return false;
+    const d = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(m[1]));
+    const h = Array.from(new Uint8Array(d)).map((b) => b.toString(16).padStart(2, "0")).join("");
+    const row = await db.prepare("SELECT expires_ms FROM cmp_sessions WHERE token_hash = ? AND revoked = 0").bind(h).first();
+    return !!row && Number(row.expires_ms) > (nowMs || Date.now());
+  } catch (e) { return false; }
+}
+
 export async function chatAuthed(request, env, db, c, deps, nowMs) {
   if (bearerOk(request, env)) return "bearer";
   if (env.COMPANION_KEY && sameString(cookie(request, "pc_key"), env.COMPANION_KEY)) return "companion-key";
   const key = deps.key !== undefined ? deps.key : await authKey(env, db);
   if (key && await tokenOk(key, "sess", cookie(request, "trv"), nowMs)) return "session";
+  if (await meSessionOk(request, db, nowMs)) return "me-session";
   if (await accessOk(request, c, deps, nowMs)) return "access";
   return "";
 }
@@ -926,7 +941,7 @@ const CHAT_CSS = "/* TRAVEL-DESIGN-1 (DESIGN-SYSTEM-3, #9929): neutrals, accent,
   ".taps{display:flex;flex-wrap:wrap;gap:.3rem;align-items:center;margin:.3rem 0}.taps button{min-height:44px;min-width:3.4rem}.chk{border-left:4px solid var(--line)}.chk.bad{border-left-color:var(--warn)}.chk.warn{border-left-color:var(--warn)}" +
   ".st{font-size:.875rem;border:1px solid var(--line);border-radius:.4rem;padding:0 .35rem;margin-left:.4rem;font-weight:400}.st.booked{border-color:var(--accent);color:var(--accent)}.st.draft{border-color:var(--warn);color:var(--warn)}.wild{font-size:.8rem;color:var(--accent);font-weight:600}";
 
-const CHAT_BODY = "<header><h1>Travel planner</h1><span id=\"where\"></span><nav class=\"tabs\"><button type=\"button\" data-tab=\"chat\" aria-pressed=\"true\">Chat</button><button type=\"button\" data-tab=\"places\" aria-pressed=\"false\">Places</button><button type=\"button\" data-tab=\"moving\" aria-pressed=\"false\">Getting around</button><button type=\"button\" data-tab=\"imp\" aria-pressed=\"false\">Import</button></nav></header>" +
+const CHAT_BODY = "<header><a href=\"https://me.q08.org/\" style=\"display:inline-block;min-height:44px;line-height:44px\">← Back to me</a><h1>Travel planner</h1><span id=\"where\"></span><nav class=\"tabs\"><button type=\"button\" data-tab=\"chat\" aria-pressed=\"true\">Chat</button><button type=\"button\" data-tab=\"places\" aria-pressed=\"false\">Places</button><button type=\"button\" data-tab=\"moving\" aria-pressed=\"false\">Getting around</button><button type=\"button\" data-tab=\"imp\" aria-pressed=\"false\">Import</button></nav></header>" +
   "<main id=\"log\" aria-live=\"polite\"></main>" +
   "<section class=\"tab\" id=\"places\" hidden><p class=\"muted\">Where to go, where to sleep, what to eat and what to do, stop by stop. Tap a question and the chat answers it.</p><div id=\"banner\"></div><div id=\"checks\"></div><div id=\"pairs\"></div><div id=\"visa\"></div><div id=\"checkins\"></div><h2>Stops</h2><div id=\"stops\"></div><p><button type=\"button\" id=\"addstop\">Add a stop</button> <button type=\"button\" id=\"addvisa\">Add a visa</button></p></section>" +
   "<section class=\"tab\" id=\"moving\" hidden><p class=\"muted\">How to get from one stop to the next, then every day with its weather.</p><h2>Moves</h2><div id=\"moves\"></div><h2>Day by day</h2><p class=\"muted\">Weather: forecast for the next 16 days; after that, the same dates last year.</p><div id=\"days\"></div></section>" +

@@ -62,3 +62,9 @@ binding = "QNFO_AI"
 service = "qnfo-ai"
 environment = "production"
 props = { caller = "qnfo-jobsearch" }
+
+# ME-HUB-1 (2026-11-12): the companion's sign-in is the jobs sign-in; ownerSession asks personal-api whether the cmp_s cookie is live.
+[[services]]
+binding = "ME"
+service = "personal-api"
+props = { caller = "qnfo-jobsearch" }

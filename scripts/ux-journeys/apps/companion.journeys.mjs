@@ -52,6 +52,10 @@ export const journeys = [
       await u.screen("focus");
       await u.tap("Yes — start"); await u.see("Done");
     } },
+  { id: "hub-places", title: "Open Today and reach travel, jobs and mind from one place",
+    async run(u) {
+      await signedIn(u); await u.see("Your places"); await u.see("Travel"); await u.see("Jobs"); await u.see("Mind"); await u.screen("hub");
+    } },
   { id: "mark-done", title: "Tick off a next action",
     async run(u) {
       await signedIn(u);
