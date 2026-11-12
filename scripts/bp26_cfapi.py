@@ -167,7 +167,7 @@ def ai_gateway_bypass_routes(qs_rows):
         if not isinstance(r, dict):
             continue
         dims = r.get("dimensions") or {}
-        if dims.get("gatewayId") or dims.get("gateway_id"):
+        if dims.get("gatewayId") or dims.get("gateway_id") or dims.get("gatewayID"):
             continue
         route = str(dims.get("route") or dims.get("scriptName") or dims.get("scriptId") or "unknown")
         model = str(dims.get("model") or dims.get("modelId") or "unknown")
