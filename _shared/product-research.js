@@ -292,7 +292,17 @@ export async function researchApp(env, app, deps) {
   for (const g of gaps) {
     const title = issueTitle(app.app, g.key);
     const last = await one(env.AUDIT, "SELECT id, status FROM agent_issues WHERE title = ? ORDER BY id DESC LIMIT 1", title);
-    if (last && last.status === "closed") { g.state = g.type === "usage" ? "open" : "shipped"; g.issue = last.id; if (g.type !== "usage") continue; }
+    if (last && last.status === "closed") {
+      g.issue = last.id;
+      if (g.type !== "usage") { g.state = "shipped"; continue; }
+      // A usage gap that regresses reopens its own row (one row per title, never a duplicate).
+      try {
+        await env.AUDIT.prepare("UPDATE agent_issues SET status = 'open', updated_at = ? WHERE id = ?").bind(stamp, last.id).run();
+        await env.AUDIT.prepare("UPDATE issue_triage SET triage_state = 'open', close_evidence = NULL WHERE issue_id = ?").bind(last.id).run();
+        g.state = "open"; res.updated++;
+      } catch (e) { g.state = "queued"; }
+      continue;
+    }
     if (last && last.status !== "closed") {
       g.state = "open"; g.issue = last.id;
       try { await env.AUDIT.prepare("UPDATE agent_issues SET description = ?, updated_at = ? WHERE id = ? AND description <> ?").bind(issueBody(app, g, now), stamp, last.id, issueBody(app, g, now)).run(); res.updated++; } catch (e) { /* evidence refresh is best effort */ }
@@ -312,6 +322,7 @@ export async function researchApp(env, app, deps) {
     try {
       await env.AUDIT.prepare("UPDATE issue_triage SET triage_state = 'closed', close_evidence = ? WHERE issue_id = ?")
         .bind(DIRECTIVE_ID + " measured " + now + ": the ask is answered at least a tenth of the time over 14 days, or is no longer sent.", row.id).run();
+      await env.AUDIT.prepare("UPDATE agent_issues SET status = 'closed', updated_at = ? WHERE id = ? AND status <> 'closed'").bind(stamp, row.id).run();
       res.closed++;
     } catch (e) { /* the next run retries */ }
   }
