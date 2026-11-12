@@ -3400,7 +3400,24 @@ async function notifyOwner(env) {   // one short e-mail per run, only when there
 
 // --- the auto-apply queue
 const AUTO_ATS = ["greenhouse", "lever", "ashby", "workable", "recruitee"];
-const AUTO_MIN_SCORE = 60, AUTO_PER_DAY = 5, AUTO_COMPANY_DAYS = 60, AUTO_PROMOTE_AFTER = 2, AUTO_DEMOTE_AFTER = 2, AUTO_MAX_ERRORS = 2;
+// GROWTH-KNOBS-1 (growth-pm, 2026-11-12): AUTO_MIN_SCORE and AUTO_PER_DAY are growth knobs. The growth product manager (qnfo-audit fleet_tasks growth-pm,
+// migrations/2026-11-12-growth-pm.sql) moves one knob a step at a time through ops_config 'growth_knob:jobs:<name>', measures its metric seven days later
+// and keeps or restores the value. The code clamps every value to a safe range, so a bad row can never widen auto-apply past these bounds.
+const AUTO_KNOB_RANGE = { auto_min_score: [50, 80], auto_per_day: [1, 10] };
+let AUTO_MIN_SCORE = 60, AUTO_PER_DAY = 5;
+async function loadGrowthKnobs(env) {
+  try {
+    const rows = (await env.JOBS_DB.prepare("SELECT key, value FROM ops_config WHERE key LIKE 'growth_knob:jobs:%'").all()).results || [];
+    for (const r of rows) {
+      const k = String(r.key).slice(16), v = Number(r.value), rg = AUTO_KNOB_RANGE[k];
+      if (!rg || !Number.isFinite(v)) continue;
+      const c = Math.round(Math.min(rg[1], Math.max(rg[0], v)));
+      if (k === "auto_min_score") AUTO_MIN_SCORE = c; else if (k === "auto_per_day") AUTO_PER_DAY = c;
+    }
+  } catch (e) { logErr("growth-knobs", e); }
+  return { auto_min_score: AUTO_MIN_SCORE, auto_per_day: AUTO_PER_DAY };
+}
+const AUTO_COMPANY_DAYS = 60, AUTO_PROMOTE_AFTER = 2, AUTO_DEMOTE_AFTER = 2, AUTO_MAX_ERRORS = 2;
 const AUTO_TERMINAL = ["applied", "captcha", "needs_answer", "unsupported", "unconfirmed", "closed"];
 const AUTO_REPO = "rwnq8/personal-life", OIDC_ISS = "https://token.actions.githubusercontent.com", OIDC_AUD = "qnfo-jobsearch";
 let JWKS = null, JWKS_AT = 0;
@@ -3425,6 +3442,7 @@ async function autopilotModes(env) {
 }
 async function autopilotQueue(env, n = 4) {
   await ensure(env);
+  await loadGrowthKnobs(env);
   if (env.AUTO_APPLY === "off") return { mode: "off", items: [] };
   const modes = await autopilotModes(env), today = new Date().toISOString().slice(0, 10);
   const appliedToday = (await env.JOBS_DB.prepare("SELECT COUNT(*) AS n FROM jobsearch_auto WHERE outcome='applied' AND ts >= ?").bind(today).first()).n;
@@ -3451,7 +3469,7 @@ async function autopilotQueue(env, n = 4) {
       resume_sha: (await sha256hex(r.resume_md)).slice(0, 16), resume_file: `${fileSlug(P.name)}_Resume_${fileSlug(r.company)}.pdf`,
       fields: { first_name: parts[0], last_name: parts[parts.length - 1], full_name: P.name, email: P.email, location: P.location, linkedin: (P.links || {}).linkedin || "", website: (P.links || {}).site || "", orcid: (P.links || {}).orcid || "" } });
   }
-  return { modes, applied_today: Number(appliedToday), daily_cap: AUTO_PER_DAY, items };
+  return { modes, applied_today: Number(appliedToday), daily_cap: AUTO_PER_DAY, min_score: AUTO_MIN_SCORE, items };
 }
 // --- answers: verified facts only. Each rule returns {value|option|check|file} or {unresolved: reason}; the runner submits only when every required question resolved
 const AUTH_OK = () => ((LEDGER.owner_stated || {}).work_authorization || []).map((x) => String(x).toUpperCase());
@@ -3600,10 +3618,11 @@ async function autopilotResult(env, b) {
 }
 async function autopilotStatus(env) {
   await ensure(env);
+  const knobs = await loadGrowthKnobs(env);
   const by = (await env.JOBS_DB.prepare("SELECT ats, outcome, COUNT(*) AS n FROM jobsearch_auto WHERE ts >= ? GROUP BY ats, outcome").bind(iso(Date.now() - 30 * 86400000)).all()).results || [];
   const last = await env.JOBS_DB.prepare("SELECT ts FROM jobsearch_auto ORDER BY id DESC LIMIT 1").first();
   let cov = {}; try { cov = sourceCoverage(JSON.parse((await getMeta(env, "mission_probe")) || "{}")); } catch (e) { logErr("coverage", e); }
-  return { on: env.AUTO_APPLY !== "off", modes: await autopilotModes(env), runner: AUTO_REPO + " .github/workflows/job-apply.yml", last_attempt: last ? last.ts : null, outcomes_30d: by, rules: { min_score: AUTO_MIN_SCORE, per_day: AUTO_PER_DAY, one_per_company_days: AUTO_COMPANY_DAYS, promote_after_rehearsals: AUTO_PROMOTE_AFTER }, sources: cov };
+  return { on: env.AUTO_APPLY !== "off", modes: await autopilotModes(env), runner: AUTO_REPO + " .github/workflows/job-apply.yml", last_attempt: last ? last.ts : null, outcomes_30d: by, growth_knobs: knobs, rules: { min_score: AUTO_MIN_SCORE, per_day: AUTO_PER_DAY, one_per_company_days: AUTO_COMPANY_DAYS, promote_after_rehearsals: AUTO_PROMOTE_AFTER }, sources: cov };
 }
 const handler = {
   async scheduled(event, env, ctx) {

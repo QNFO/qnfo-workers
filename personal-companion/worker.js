@@ -1915,7 +1915,8 @@ var PP = (() => {
 //
 // Consumers (nothing here is a document): personal_outcomes -> the morning brief (briefLines) and the Today card questions;
 // pipeline_runs -> /pipelines status and the hourly tick. Every question has 2-4 options plus "Not sure" (PROMPTED-RECALL-1); nothing
-// asks for typing. Nothing in this file writes outside personal-life D1, and the status view shows counts only.
+// asks for typing. Nothing in this file writes event content outside personal-life D1, and the status view shows counts only. GROWTH-PM-1: growthCounters
+// writes three weekly counts (no label, text or answer) to qnfo-audit product_growth_counters, where the growth product manager reads them.
 
 
 
@@ -2222,7 +2223,29 @@ async function tick(env, opts = {}) {
   const ad = await db.prepare("UPDATE pipeline_runs SET mode = 'inline', next_check_at = ?, updated_at = ? WHERE pipeline = 'personal' AND mode = 'workflow' AND status IN ('queued','running','waiting') AND updated_at < ?").bind(now, now, stale).run();
   res.adopted = ad && ad.meta ? Number(ad.meta.changes) || 0 : 0;
   res.resume = await PE.resumeDue(db, def, ctxFor(env, opts), 20);
+  try { res.growth = await growthCounters(env, now); } catch (e) { res.growth = { error: String(e && e.message || e).slice(0, 160) }; }
   return res;
+}
+
+// GROWTH-PM-1 (2026-11-12): weekly counts for the growth product manager. Counts only: inputs captured, outcomes produced and taps answered,
+// this week and the week before. Written to qnfo-audit product_growth_counters (product companion-today); nothing else leaves the plane.
+const GROWTH_COUNTERS = [
+  ["personal_inputs_7d", "SELECT SUM(created_at >= ?1) AS v, SUM(created_at >= ?2 AND created_at < ?1) AS p FROM personal_events WHERE created_at >= ?2"],
+  ["personal_outcomes_7d", "SELECT SUM(ts >= ?1) AS v, SUM(ts >= ?2 AND ts < ?1) AS p FROM personal_outcomes WHERE ts >= ?2"],
+  ["personal_taps_answered_7d", "SELECT SUM(answered_at >= ?1) AS v, SUM(answered_at >= ?2 AND answered_at < ?1) AS p FROM cmp_asks WHERE kind LIKE 'pp-%' AND answered_at >= ?2"]
+];
+async function growthCounters(env, now = nowIso()) {
+  if (!env.PERSONAL || !env.AUDIT) return { skipped: "binding" };
+  const t = Date.parse(now), w1 = new Date(t - 7 * 864e5).toISOString(), w2 = new Date(t - 14 * 864e5).toISOString();
+  const out = {};
+  for (const [metric, sql] of GROWTH_COUNTERS) {
+    const r = await env.PERSONAL.prepare(sql).bind(w1, w2).first();
+    const v = Number(r && r.v) || 0, p = Number(r && r.p) || 0;
+    await env.AUDIT.prepare("INSERT INTO product_growth_counters (product, metric, value, prev, read_at, source) VALUES ('companion-today', ?1, ?2, ?3, ?4, 'personal-companion') ON CONFLICT(product, metric) DO UPDATE SET value = ?2, prev = ?3, read_at = ?4, source = 'personal-companion'")
+      .bind(metric, v, p, now).run();
+    out[metric] = v;
+  }
+  return out;
 }
 
 function ctxFor(env, opts = {}) {
@@ -2326,7 +2349,7 @@ function statusPage(st, head) {
     + '<p class="pp-mute">Counts only. Personal events stay in the private personal store. ' + esc(st.engine) + ".</p></main></body></html>";
 }
 
-return Object.freeze({ PP_VERSION, TZ, KINDS, DOMAIN, INPUT, PP_DDL, localDay, localHour, askOptions, putAsk, FEEL_OPTIONS, GAVE_OPTIONS, DAY_OPTIONS, FOLLOW_OPTIONS, personalPipeline, patterns, winText, writeOutcomes, ensurePersonalPipeline, harvest, dailyAsk, tick, ctxFor, runWorkflow, briefLines, statusAll, statusPage });
+return Object.freeze({ PP_VERSION, TZ, KINDS, DOMAIN, INPUT, PP_DDL, localDay, localHour, askOptions, putAsk, FEEL_OPTIONS, GAVE_OPTIONS, DAY_OPTIONS, FOLLOW_OPTIONS, personalPipeline, patterns, winText, writeOutcomes, ensurePersonalPipeline, harvest, dailyAsk, tick, GROWTH_COUNTERS, growthCounters, ctxFor, runWorkflow, briefLines, statusAll, statusPage });
 })(); // end inline personal-companion/personal-pipeline.js
 // ---- PIPELINE-ENGINE-INLINE:END ----
 
@@ -4702,7 +4725,7 @@ var __name22 = __name2;
 // line below (VERSION-LINE-NOTES-1, 2026-10-19). Its older trailing notes stay until length-lede.test.mjs stops pinning "LENGTH-LEDE-1" on that line.
 // VERSION-NOTES-MOVED-1: release notes live in the block below
 // W-META-1 (agent_issues 1002316/1002317/1002318): aiRunAttr records in_tok/out_tok/neurons per purpose.
-var VERSION = "1.52.0-codeagent";
+var VERSION = "1.53.0-codeagent";
 // 1.46.0 KERNEL-EVERYWHERE-1 (2026-11-06, owner directive "IMPLEMENT EVERYWHERE ACROSS ALL AI APPS AND SERVICES AND SURFACES", pillar personal): the travel planner CHAT_SYSTEM carries the DOCTRINE-1 kernel 8.2.1 reply recognitions (KERNEL-REPLY-4, scoped to the planner's one designed question): end on the plan or proposal, never a conditional offer or questionnaire; refusals and limits are dispositions with their reason; reversible steps are taken and reported in the same reply. prior 1.45.8-codeagent
 /* 1.44.14 COMPANION-LENGTH-HEADROOM-1 (issue 1000633, pillar personal; patch): repeated length failures alongside exhausted retry budgets expose too little headroom for model output variation. Length-only repairs now target 500 words below the unchanged ceiling while remaining inside each form's normal writer band. */
 /* 1.43.6 BP26-AI-ACT-ART50-1 and BP26-STRUCTURED-DATA-1 (2026-10-26, agent_issues 1000341 and 1000336, pillar core; patch): the visible AI-generated label of every reading.q08.org piece now has its machine-readable half. A piece page carries an Article JSON-LD block (headline, datePublished, url, an Organization as author, never an AI or invented persona, and creditText saying it was written by AI and that no human reviews pieces before they appear) and the index page a Blog block. Measured before: the reading pages carried the visible label and no JSON-LD at all. */

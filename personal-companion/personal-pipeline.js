@@ -16,7 +16,8 @@
 //
 // Consumers (nothing here is a document): personal_outcomes -> the morning brief (briefLines) and the Today card questions;
 // pipeline_runs -> /pipelines status and the hourly tick. Every question has 2-4 options plus "Not sure" (PROMPTED-RECALL-1); nothing
-// asks for typing. Nothing in this file writes outside personal-life D1, and the status view shows counts only.
+// asks for typing. Nothing in this file writes event content outside personal-life D1, and the status view shows counts only. GROWTH-PM-1: growthCounters
+// writes three weekly counts (no label, text or answer) to qnfo-audit product_growth_counters, where the growth product manager reads them.
 
 import * as PE from "../_shared/pipeline-engine.js";
 import * as PD from "../_shared/pipeline-defs.js";
@@ -324,7 +325,29 @@ export async function tick(env, opts = {}) {
   const ad = await db.prepare("UPDATE pipeline_runs SET mode = 'inline', next_check_at = ?, updated_at = ? WHERE pipeline = 'personal' AND mode = 'workflow' AND status IN ('queued','running','waiting') AND updated_at < ?").bind(now, now, stale).run();
   res.adopted = ad && ad.meta ? Number(ad.meta.changes) || 0 : 0;
   res.resume = await PE.resumeDue(db, def, ctxFor(env, opts), 20);
+  try { res.growth = await growthCounters(env, now); } catch (e) { res.growth = { error: String(e && e.message || e).slice(0, 160) }; }
   return res;
+}
+
+// GROWTH-PM-1 (2026-11-12): weekly counts for the growth product manager. Counts only: inputs captured, outcomes produced and taps answered,
+// this week and the week before. Written to qnfo-audit product_growth_counters (product companion-today); nothing else leaves the plane.
+export const GROWTH_COUNTERS = [
+  ["personal_inputs_7d", "SELECT SUM(created_at >= ?1) AS v, SUM(created_at >= ?2 AND created_at < ?1) AS p FROM personal_events WHERE created_at >= ?2"],
+  ["personal_outcomes_7d", "SELECT SUM(ts >= ?1) AS v, SUM(ts >= ?2 AND ts < ?1) AS p FROM personal_outcomes WHERE ts >= ?2"],
+  ["personal_taps_answered_7d", "SELECT SUM(answered_at >= ?1) AS v, SUM(answered_at >= ?2 AND answered_at < ?1) AS p FROM cmp_asks WHERE kind LIKE 'pp-%' AND answered_at >= ?2"]
+];
+export async function growthCounters(env, now = nowIso()) {
+  if (!env.PERSONAL || !env.AUDIT) return { skipped: "binding" };
+  const t = Date.parse(now), w1 = new Date(t - 7 * 864e5).toISOString(), w2 = new Date(t - 14 * 864e5).toISOString();
+  const out = {};
+  for (const [metric, sql] of GROWTH_COUNTERS) {
+    const r = await env.PERSONAL.prepare(sql).bind(w1, w2).first();
+    const v = Number(r && r.v) || 0, p = Number(r && r.p) || 0;
+    await env.AUDIT.prepare("INSERT INTO product_growth_counters (product, metric, value, prev, read_at, source) VALUES ('companion-today', ?1, ?2, ?3, ?4, 'personal-companion') ON CONFLICT(product, metric) DO UPDATE SET value = ?2, prev = ?3, read_at = ?4, source = 'personal-companion'")
+      .bind(metric, v, p, now).run();
+    out[metric] = v;
+  }
+  return out;
 }
 
 export function ctxFor(env, opts = {}) {
