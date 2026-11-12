@@ -1,0 +1,12 @@
+-- APPLY-BY: ci
+-- DB: qnfo-audit
+-- Rollback: DELETE FROM owner_asks WHERE kind='resume-claim' AND answered_at IS NULL;
+-- RESUME-CLAIMS-1 (owner 2026-11-12, "unverifiable claims become yes/no/not-sure prompts"): each resume claim the record cannot back is asked once on fleet.qnfo.org/focus.
+-- A "no" fails rwnq8/resume scripts/claims_check.py until the claim is removed from RESUME.md; GET /api/resume-claims (qnfo-jobsearch) serves the answers.
+INSERT OR IGNORE INTO owner_asks (plane, kind, ref, question, cue, options_json, priority) VALUES
+ ('jobs','resume-claim','claim_cor','Were you a certified Contracting Officer''s Representative who managed a federal research portfolio of $1.5 million or more at the Federal Highway Administration?','The resume says this under the 2011 to 2015 FHWA role.','[{"key":"yes","label":"Yes"},{"key":"no","label":"No"},{"key":"unsure","label":"Not sure"}]',2),
+ ('jobs','resume-claim','claim_livability_cites','Is the AARP Livability Index cited in at least 20 academic or policy studies?','Google Scholar cited-by count for the Index and its method.','[{"key":"yes","label":"Yes"},{"key":"no","label":"No"},{"key":"unsure","label":"Not sure"}]',2),
+ ('jobs','resume-claim','claim_trb2016','Did you co-author the 2016 Transportation Research Board paper on updating the National Household Travel Survey with American Community Survey data?','Listed under the Deloitte role, 2015 to 2016.','[{"key":"yes","label":"Yes"},{"key":"no","label":"No"},{"key":"unsure","label":"Not sure"}]',2),
+ ('jobs','resume-claim','claim_trb2011','Did you present national long-distance travel data needs at the 2011 TRB National Household Travel Survey workshop?','Listed under the FHWA role.','[{"key":"yes","label":"Yes"},{"key":"no","label":"No"},{"key":"unsure","label":"Not sure"}]',2),
+ ('jobs','resume-claim','claim_empowering_launch','At Empowering Change, did you take the nonprofit from incorporation to its public launch?','Listed under the 2023 to 2024 role.','[{"key":"yes","label":"Yes"},{"key":"no","label":"No"},{"key":"unsure","label":"Not sure"}]',2),
+ ('jobs','resume-claim','claim_legal_tool','Did you lead the LLM legal-navigation tool for self-represented litigants at Empowering Change?','Document drafting, procedural guidance and plain-language translation of legal terms.','[{"key":"yes","label":"Yes"},{"key":"no","label":"No"},{"key":"unsure","label":"Not sure"}]',2);

@@ -3,10 +3,11 @@
 export const name = "jobs";
 export const liveBase = "https://jobs.q08.org";
 export const journeys = [
-  { id: "apply-controls-visible", title: "Open jobs.q08.org on a phone and see the Ready to apply filter and the one-click apply setup", modes: ["live"],
+  { id: "apply-controls-visible", title: "Open jobs.q08.org on a phone and see Today's short list, the add-a-job box and the one-click apply setup", modes: ["live"],
     async run(u) {
       await u.open("/");
-      await u.see("Ready to apply");
+      await u.see("Today");
+      await u.see("Add a job from anywhere");
       await u.see("One-click apply: set up once");
       await u.screen("home");
     } },

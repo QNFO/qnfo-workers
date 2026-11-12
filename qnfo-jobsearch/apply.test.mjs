@@ -100,7 +100,7 @@ for (const path of ["/", "/cv"]) {
   ok(body.includes("function FILL()") || body.includes("async function FILL()"), path + " carries the fill bookmark");
 }
 const home = await (await req("/")).text();
-ok(home.includes("Ready to apply") && home.includes("One-click apply: set up once"), "home page shows the apply controls");
+ok(home.includes("Answers") && home.includes("Add a job from anywhere") && home.includes("One-click apply: set up once"), "home page shows the apply controls");
 // the bookmarklet itself parses and is a single line
 const bm = home.match(/async function FILL\(\)\{[\s\S]*?\n\}\nfunction bookmarkHref/);
 ok(bm, "FILL source found");

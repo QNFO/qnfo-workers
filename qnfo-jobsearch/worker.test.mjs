@@ -87,7 +87,7 @@ db.exec(readFileSync(join(here, "../migrations/2026-10-27-jobsearch.sql"), "utf8
 const stmt = (sql, args = []) => ({ bind: (...a) => stmt(sql, a),
   run: async () => { const r = db.prepare(sql).run(...args); return { meta: { last_row_id: Number(r.lastInsertRowid), changes: Number(r.changes) } }; },
   first: async () => db.prepare(sql).get(...args) ?? null, all: async () => ({ results: db.prepare(sql).all(...args) }) });
-const env = { JOBS_DB: { prepare: (s) => stmt(s), batch: async (a) => { for (const x of a) await x.run(); return []; } }, LOOP_TOKEN: "secret-test-token" };
+const env = { JOBS_DB: { prepare: (s) => stmt(s), batch: async (a) => { for (const x of a) await x.run(); return []; } }, LOOP_TOKEN: "secret-test-token", RELEVANCE_GATE: "off" };
 
 // ---- stub feeds: one good posting, one engineer; every other feed returns nothing
 const realFetch = globalThis.fetch;
