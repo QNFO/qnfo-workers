@@ -25,6 +25,7 @@ and [the machine-readable catalog](agent-catalog.json).
 - [2026-09-08 — exec probe (Sanna ops session)](2026-09-08-exec-probe.md) - `docs/2026-09-08-exec-probe.md`
 - [Owner emergency AI control](AI-EMERGENCY-CONTROL.md) - `docs/AI-EMERGENCY-CONTROL.md`
 - [AI Gateway Unified Billing — single Cloudflare endpoint for agentic/coding LLM traffic](AI-GATEWAY-UNIFIED-BILLING.md) - `docs/AI-GATEWAY-UNIFIED-BILLING.md`
+- [AI input-token ranking (AI-INPUT-CUT-1, agent_issues 1001691)](AI-INPUT-RANK-2026-11.md) - `docs/AI-INPUT-RANK-2026-11.md`
 - [AI Search instances and the 2026-11-01 usage billing (RM-AISEARCH-GA-MIGRATE-1)](AI-SEARCH-INSTANCES.md) - `docs/AI-SEARCH-INSTANCES.md`
 - [AI use policy, AI-literacy evidence and AI Act classification record — DRAFT for owner review](AI-USE-POLICY.md) - `docs/AI-USE-POLICY.md`
 - [Measured architecture constraints — 2026-10-19](ARCHITECTURE-CONSTRAINTS-2026-10-19.md) - `docs/ARCHITECTURE-CONSTRAINTS-2026-10-19.md`
@@ -486,6 +487,7 @@ and [the machine-readable catalog](agent-catalog.json).
 - [Outlook.com mail in the twin (Microsoft Graph, read-only)](../personal-api/msgraph/README.md) - `personal-api/msgraph/README.md`
 - [personal-companion](../personal-companion/README.md) - `personal-companion/README.md`
 - [Ultrastable: inventory of everything produced (2026-11-10)](../product/INVENTORY.md) - `product/INVENTORY.md`
+- [Ultrastable default policy (ULTRASTABLE-POLICY-1)](../product/policy/DEFAULT-POLICY.md) - `product/policy/DEFAULT-POLICY.md`
 - [q08-signal-engine](../q08-signal-engine/README.md) - `q08-signal-engine/README.md`
 - [qnfo-agent-ws](../qnfo-agent-ws/README.md) - `qnfo-agent-ws/README.md`
 - [qnfo-agents](../qnfo-agents/README.md) - `qnfo-agents/README.md`

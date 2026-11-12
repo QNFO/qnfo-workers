@@ -146,6 +146,11 @@
       "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/AI-GATEWAY-UNIFIED-BILLING.md"
     },
     {
+      "path": "docs/AI-INPUT-RANK-2026-11.md",
+      "title": "AI input-token ranking (AI-INPUT-CUT-1, agent_issues 1001691)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/AI-INPUT-RANK-2026-11.md"
+    },
+    {
       "path": "docs/AI-SEARCH-INSTANCES.md",
       "title": "AI Search instances and the 2026-11-01 usage billing (RM-AISEARCH-GA-MIGRATE-1)",
       "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/AI-SEARCH-INSTANCES.md"
@@ -2377,6 +2382,11 @@
       "path": "product/INVENTORY.md",
       "title": "Ultrastable: inventory of everything produced (2026-11-10)",
       "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/product/INVENTORY.md"
+    },
+    {
+      "path": "product/policy/DEFAULT-POLICY.md",
+      "title": "Ultrastable default policy (ULTRASTABLE-POLICY-1)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/product/policy/DEFAULT-POLICY.md"
     },
     {
       "path": "q08-signal-engine/README.md",

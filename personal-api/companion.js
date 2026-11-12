@@ -3626,7 +3626,7 @@ function calmOpen(){var o=el('div',{id:'calm',role:'dialog','aria-modal':'true',
   var line=el('p',{text:st.prompts?st.prompts[j]:st.body,style:'font-size:1.15rem'});box.appendChild(line);
   var kids=[];
   function next(){if(st.prompts&&j<st.prompts.length-1)show(i,j+1);else show(i+1,0)}
-  if(st.id==='pause'){api('/companion/api/pause',{json:{hours:4}}).catch(function(){});kids.push(cbtn('Next',true,next))}
+  if(st.id==='pause'){api('/companion/api/pause',{json:{hours:4}}).catch(function(e){console.error(JSON.stringify({where:'calm',error:String(e&&e.message||e)}))});kids.push(cbtn('Next',true,next))}
   else if(st.id==='breathe'){var c=el('div',{id:'calm-ring',style:'width:120px;height:120px;border-radius:50%;border:3px solid var(--ink);margin:16px auto'+(rm?'':';transition:transform 4s ease-in-out')});box.appendChild(c);var n=0;
    (function cycle(){if(n>=4){next();return}n++;line.textContent='Round '+n+' of 4: breathe in, 1 2 3 4';if(!rm)c.style.transform='scale(1.4)';
     timer=setTimeout(function(){line.textContent='Round '+n+' of 4: breathe out slowly, 1 2 3 4 5 6';if(!rm){c.style.transition='transform 6s ease-in-out';c.style.transform='scale(1)'}
@@ -3636,7 +3636,7 @@ function calmOpen(){var o=el('div',{id:'calm',role:'dialog','aria-modal':'true',
   else{[['Better','better'],['Same','same'],['Worse','worse']].forEach(function(x){kids.push(cbtn(x[0],x[1]==='better',function(){answer(x[1])}))})}
   box.appendChild(crow(kids));
   if(st.id!=='after')box.appendChild(crow([cbtn('Close',false,close)]))}
- function answer(a){api('/companion/api/activity',{json:{title:'Calm down (breathing and grounding)',category:'rest',pleasure:a==='better'?4:a==='same'?3:1,note:'after: '+a}}).catch(function(){});
+ function answer(a){api('/companion/api/activity',{json:{title:'Calm down (breathing and grounding)',category:'rest',pleasure:a==='better'?4:a==='same'?3:1,note:'after: '+a}}).catch(function(e){console.error(JSON.stringify({where:'calm',error:String(e&&e.message||e)}))});
   box.innerHTML='';if(a==='worse'){box.appendChild(el('h1',{text:'Thank you for telling me.'}));box.appendChild(el('p',{text:'If it feels unsafe, call 113 (0800-0113 is free), day or night. Your own safety plan is in settings.'}));box.appendChild(crow([el('a',{cls:'btn lamp',href:'tel:113',text:'Call 113'}),el('a',{cls:'btn ghost',href:'/companion/classic',text:'Open my safety plan'}),cbtn('Close',false,close)]))}
   else{box.appendChild(el('h1',{text:a==='better'?'Good. Rest for a bit.':'That is okay. Rest for a bit.'}));box.appendChild(el('p',{text:'Nothing is due. I will not reach out for 4 hours.'}));box.appendChild(crow([cbtn('Close',true,close)]))}}
  show(0,0)}
