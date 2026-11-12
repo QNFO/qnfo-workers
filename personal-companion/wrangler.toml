@@ -52,6 +52,15 @@ binding = "GEN_FLOW"
 class_name = "GenerationFlow"
 schedules = ["0 4,8,12,16,20 * * *"]
 
+# PERSONAL-PIPELINE-1 (2026-11-12): one instance per personal input (instance id = pipeline_runs.id), created by the hourly tick.
+# The canonical deploy installs the binding, never the Workflow resource; it is created once with
+# PUT /accounts/{id}/workflows/personal-pipeline {script_name: personal-companion, class_name: PersonalPipelineFlow}. Without it,
+# create() throws and the run continues inline on the hourly tick (PP.tick), so a missing resource delays nothing past an hour.
+[[workflows]]
+name = "personal-pipeline"
+binding = "PERSONAL_FLOW"
+class_name = "PersonalPipelineFlow"
+
 [triggers]
 # CRON-SINGLE-TRIGGER-1 (2026-10-02, #1785): ONE hourly trigger; worker.js CRON_TABLE holds the former list
 # (0 * * * *, 0 21 * * *) and runs each entry in the hour it fired.
