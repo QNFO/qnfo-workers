@@ -94,6 +94,11 @@ SELECT 'pn_open_over_120m', 'PROBE-NEEDED-1 issues stay open past 120 minutes', 
 WHERE NOT EXISTS (SELECT 1 FROM analytics_metric_triggers x WHERE x.metric_key = 'pn_open_over_120m');
 
 -- BREACH-ONE-MEANING-1: a metric in breach needs a root cause or fm-breach-unmapped reads it as unmapped
+INSERT OR IGNORE INTO control_alternate_probes (control, probe_sql, window_note, enabled) VALUES
+ ('pn-r2-filer-quiet-gate',
+  'SELECT ''0'' AS expected, CAST((SELECT COUNT(*) FROM agent_issues WHERE status = ''open'' AND title LIKE ''PROBE-NEEDED-1: issue-%'' AND id IN (SELECT issue_id FROM remediation_contracts WHERE class LIKE ''PORTFOLIO-UPGRADE-1-LIVE-PATH-1%'')) AS TEXT) AS observed',
+  'reads once per drill window; open PN issues still holding a PORTFOLIO-UPGRADE-1 live-path contract mean the gate is missing an alternate path', 1);
+
 INSERT OR IGNORE INTO metric_breach_cause (metric_key, cause_key, note) VALUES
  ('orphan_issues_no_live_path', 'issue-backlog', 'PROBE-PLAYBOOKS-1'),
  ('probe_author_accept_rate_7d', 'issue-backlog', 'PROBE-PLAYBOOKS-1'),
@@ -105,6 +110,18 @@ VALUES ('probe-playbooks-metrics', 'PROBE-PLAYBOOKS-1 metric observer', 'workflo
 
 INSERT OR IGNORE INTO fleet_crons (name, cron_expr, task_id, enabled, timezone, updated_at)
 VALUES ('probe-playbooks-metrics-10m', '*/10 * * * *', 'probe-playbooks-metrics', 1, 'UTC', datetime('now'));
+
+-- CONTROL-PROBE-AT-BIRTH-1: the pn-r2-filer-quiet-gate control set an alternate_path in the control registry, so it needs a control_alternate_probes row or the drill reads it as no-probe (fm-control-alternate-undrilled)
+INSERT OR IGNORE INTO control_alternate_probes (control, probe_sql, window_note, enabled) VALUES
+ ('pn-r2-filer-quiet-gate',
+  'SELECT ''0'' AS expected, CAST((SELECT COUNT(*) FROM remediation_contracts WHERE module = ''probe-template-v4-pn'' AND status = ''probe-review-refused'' AND next_due_at IS NOT NULL AND next_due_at < datetime(''now'')) AS TEXT) AS observed',
+  'reads once per drill window; a refused PN template contract past its due time means the gate is missing an alternate path', 1);
+
+-- PB-R1 (family PORTFOLIO-UPGRADE-1, the largest unmatched title family): gives the open issues a live closing path, so orphan_issues_no_live_path can reach 0 (action_kind sql, trigger returns issue_id, subject, facts_json)
+INSERT OR IGNORE INTO breach_playbooks (family, rule_id, action_kind, version, trigger_sql, action_sql) VALUES
+ ('PORTFOLIO-UPGRADE-1', 'PB-R1', 'sql', 1,
+  'SELECT a.id AS issue_id, a.title AS subject, json_object(''source'', a.source) AS facts_json FROM agent_issues a WHERE a.status = ''open'' AND a.title LIKE ''PORTFOLIO-UPGRADE-1%'' AND NOT EXISTS (SELECT 1 FROM remediation_contracts c WHERE c.issue_id = a.id AND c.status IN (''active'',''holding'',''monitoring'',''escalated'') AND c.class NOT LIKE ''%-BACKFILL-1'' AND instr(lower(c.verify_probe), ''close_evidence'') = 0)',
+  'INSERT INTO remediation_contracts (class, issue_id, verify_probe, verify_transport, max_attempts, expected_cadence_h, status, precondition, action, escalate_to, module, next_due_at) VALUES (''PORTFOLIO-UPGRADE-1-LIVE-PATH-1'', :issue_id, ''SELECT close_evidence AS observed'', ''d1-query'', 3, 1, ''active'', ''PROBE-PLAYBOOKS-1'', ''PORTFOLIO-UPGRADE-1 live path: the contract reads close_evidence so the issue has a live closing path'', ''qnfo-fleet-control'', ''probe-template-v4-pn'', datetime(''now''))');
 
 -- first readings now, so the metrics do not wait ten minutes for the cron (replay-safe: only while a metric has never been read)
 UPDATE metric_registry SET last_value = CAST((SELECT COUNT(*) FROM agent_issues a WHERE a.status = 'open' AND a.title NOT LIKE 'OWNER-TASK%' AND a.title NOT LIKE 'OWNER-NOTE%' AND a.created_at <= (CAST(strftime('%s','now') AS INTEGER) - 3600) * 1000 AND NOT EXISTS (SELECT 1 FROM remediation_contracts c WHERE c.issue_id = a.id AND c.status IN ('active','holding','monitoring','escalated') AND c.class NOT LIKE '%-BACKFILL-1' AND instr(lower(c.verify_probe), 'close_evidence') = 0)) AS TEXT), last_refreshed = datetime('now'), state = 'MEASURED' WHERE metric = 'orphan_issues_no_live_path' AND last_refreshed IS NULL;
