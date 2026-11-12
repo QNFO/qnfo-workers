@@ -55,11 +55,8 @@ INSERT OR IGNORE INTO market_scout_competitors (id, area, name, url) VALUES ('su
 INSERT OR IGNORE INTO market_scout_competitors (id, area, name, url) VALUES ('bluesky','personal-brand','Bluesky','https://bsky.social');
 INSERT OR IGNORE INTO market_scout_competitors (id, area, name, url) VALUES ('linkedin','personal-brand','LinkedIn','https://www.linkedin.com');
 
-DROP VIEW IF EXISTS v_scout_fields;
-DROP VIEW IF EXISTS v_scout_tail;
-DROP VIEW IF EXISTS v_scout_norm;
-CREATE VIEW v_scout_norm AS SELECT instance, char(10) || replace(replace(result, '**', ''), char(13), '') AS r FROM cf_agent_requests WHERE instance LIKE 'scout-%' AND status = 'done';
-CREATE VIEW v_scout_tail AS SELECT instance, r,
+CREATE VIEW IF NOT EXISTS v_scout_norm AS SELECT instance, char(10) || replace(replace(result, '**', ''), char(13), '') AS r FROM cf_agent_requests WHERE instance LIKE 'scout-%' AND status = 'done';
+CREATE VIEW IF NOT EXISTS v_scout_tail AS SELECT instance, r,
   CASE WHEN instr(r, char(10) || 'PRACTICE:') > 0 THEN substr(r, instr(r, char(10) || 'PRACTICE:') + 10) END AS a_practice,
   CASE WHEN instr(r, char(10) || 'PLAYERS:') > 0 THEN substr(r, instr(r, char(10) || 'PLAYERS:') + 9) END AS a_players,
   CASE WHEN instr(r, char(10) || 'SOURCE:') > 0 THEN substr(r, instr(r, char(10) || 'SOURCE:') + 8) END AS a_source,
@@ -72,19 +69,17 @@ CREATE VIEW v_scout_tail AS SELECT instance, r,
   CASE WHEN instr(r, char(10) || 'code-anchor:') > 0 THEN substr(r, instr(r, char(10) || 'code-anchor:') + 13) END AS a_anchor,
   CASE WHEN instr(r, char(10) || 'EDIT:') > 0 THEN substr(r, instr(r, char(10) || 'EDIT:') + 6) END AS a_edit
 FROM v_scout_norm;
-CREATE VIEW v_scout_fields AS SELECT instance, r, trim(substr(a_practice, 1, instr(a_practice || char(10), char(10)) - 1), ' `*') AS practice, trim(substr(a_players, 1, instr(a_players || char(10), char(10)) - 1), ' `*') AS players, trim(substr(a_source, 1, instr(a_source || char(10), char(10)) - 1), ' `*') AS source_url, trim(substr(a_evidence, 1, instr(a_evidence || char(10), char(10)) - 1), ' `*') AS evidence, trim(substr(a_need, 1, instr(a_need || char(10), char(10)) - 1), ' `*') AS need, trim(substr(a_title, 1, instr(a_title || char(10), char(10)) - 1), ' `*') AS title,
+CREATE VIEW IF NOT EXISTS v_scout_fields AS SELECT instance, r, trim(substr(a_practice, 1, instr(a_practice || char(10), char(10)) - 1), ' `*') AS practice, trim(substr(a_players, 1, instr(a_players || char(10), char(10)) - 1), ' `*') AS players, trim(substr(a_source, 1, instr(a_source || char(10), char(10)) - 1), ' `*') AS source_url, trim(substr(a_evidence, 1, instr(a_evidence || char(10), char(10)) - 1), ' `*') AS evidence, trim(substr(a_need, 1, instr(a_need || char(10), char(10)) - 1), ' `*') AS need, trim(substr(a_title, 1, instr(a_title || char(10), char(10)) - 1), ' `*') AS title,
   CAST(trim(substr(a_lift, 1, instr(a_lift || char(10), char(10)) - 1), ' `*') AS REAL) AS lift, CAST(trim(substr(a_effort, 1, instr(a_effort || char(10), char(10)) - 1), ' `*') AS INTEGER) AS effort, trim(substr(a_anchor, 1, instr(a_anchor || char(10), char(10)) - 1), ' `*') AS anchor, trim(substr(a_edit, 1, instr(a_edit || char(10), char(10)) - 1), ' `*') AS edit_text,
   CASE WHEN instr(trim(substr(a_ct, 1, instr(a_ct || char(10), char(10)) - 1), ' `*'), 'path=') > 0 THEN trim(substr(substr(trim(substr(a_ct, 1, instr(a_ct || char(10), char(10)) - 1), ' `*'), instr(trim(substr(a_ct, 1, instr(a_ct || char(10), char(10)) - 1), ' `*'), 'path=') + 5), 1, instr(substr(trim(substr(a_ct, 1, instr(a_ct || char(10), char(10)) - 1), ' `*'), instr(trim(substr(a_ct, 1, instr(a_ct || char(10), char(10)) - 1), ' `*'), 'path=') + 5) || ' ', ' ') - 1), ' `*') END AS path
 FROM v_scout_tail;
-DROP VIEW IF EXISTS v_scout_area_yield;
-CREATE VIEW v_scout_area_yield AS SELECT a.area, a.product, a.metric, a.worker, a.focus, a.players, a.cadence_days,
+CREATE VIEW IF NOT EXISTS v_scout_area_yield AS SELECT a.area, a.product, a.metric, a.worker, a.focus, a.players, a.cadence_days,
   (SELECT COUNT(*) FROM market_scout_findings f WHERE f.area = a.area AND f.status IN ('won','kept_flat','rolled_back')) AS decided,
   (SELECT COUNT(*) FROM market_scout_findings f WHERE f.area = a.area AND f.status = 'won') AS wins,
   (SELECT MAX(f.created_at) FROM market_scout_findings f WHERE f.area = a.area AND f.status <> 'rejected') AS last_good,
   (SELECT MAX(f.created_at) FROM market_scout_findings f WHERE f.area = a.area) AS last_try
 FROM market_scout_areas a WHERE a.active = 1;
-DROP VIEW IF EXISTS v_scout_overdue;
-CREATE VIEW v_scout_overdue AS SELECT area FROM v_scout_area_yield WHERE COALESCE(last_good, '') < strftime('%Y-%m-%dT%H:%M:%SZ','now','-' || (cadence_days * 3 + 2) || ' days');
+CREATE VIEW IF NOT EXISTS v_scout_overdue AS SELECT area FROM v_scout_area_yield WHERE COALESCE(last_good, '') < strftime('%Y-%m-%dT%H:%M:%SZ','now','-' || (cadence_days * 3 + 2) || ' days');
 INSERT OR IGNORE INTO ops_config (key, value, note) VALUES ('growth_scout', 'on', 'MARKET-SCOUT-1: off stops requests and promotions');
 INSERT OR IGNORE INTO ops_config (key, value, note) VALUES ('growth_scout_daily_requests', '6', 'MARKET-SCOUT-1: agent requests a day');
 -- CAUSE-MAPPED: scout_heartbeat_age_min maps to code-loop below.
