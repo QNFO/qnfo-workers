@@ -18,7 +18,7 @@
 //
 // Pure ESM, no imports: personal-companion inlines it as namespace PR (scripts/inline-pipeline-modules.mjs); tests load it directly.
 
-export const RESEARCH_VERSION = "1.0.0";
+export const RESEARCH_VERSION = "1.2.0";
 export const DIRECTIVE_ID = "PRODUCT-RESEARCH-1";
 export const RUN_EVERY_H = 20;          // one run a day per app, tolerant of the hourly tick drifting
 export const STALE_AFTER_H = 26;        // daily cadence plus at most 120 minutes (QUEUE-SLA-1)
@@ -102,11 +102,86 @@ export const APPS = [
     ],
     sources: [
       { name: "Reading Well", kind: "practice", url: "https://reading-well.org.uk/" },
-      { name: "The StoryGraph", kind: "competitor", url: "https://thestorygraph.com/" },
-      { name: "Blinkist", kind: "competitor", url: "https://www.blinkist.com/" },
+      // The StoryGraph and Blinkist answered 403 to the first run (2026-11-12 21:00 UTC); replaced by pages that let a plain fetch read them.
+      { name: "Open Library", kind: "competitor", url: "https://openlibrary.org/" },
+      { name: "Five Books", kind: "competitor", url: "https://fivebooks.com/" },
       { name: "Libby", kind: "competitor", url: "https://libbyapp.com/" }
     ],
-    discover: ["reading app", "book recommendations"] }
+    discover: ["reading app", "book recommendations"] },
+  // PRODUCT-RESEARCH-2 (2026-11-12): the travel planner and the job search, each read against its own domain's best practice.
+  { app: "travel", label: "the travel planner", host: "travel.q08.org", code: "personal-companion/travel.js", journeys: [], usage: "travel",
+    features: [
+      { key: "visa", label: "Visa days used against days allowed", marker: "export function visaStatus(" },
+      { key: "weather", label: "Weather for every day of a stop", marker: "async function weatherFor(" },
+      { key: "day-plan", label: "A day-by-day plan", marker: "export function dayPlan(" },
+      { key: "picks", label: "Three places to eat and three things to do per stop", marker: "TRAVEL-PICKS-1" },
+      { key: "taste", label: "One-tap love, skip or hate that tunes the next picks", marker: "TRAVEL-FEEDBACK-1" },
+      { key: "booking", label: "A ready booking link for the next stay", marker: "export function bookingLink(" },
+      { key: "transit", label: "How to get from one stop to the next", marker: "export function transitLink(" },
+      { key: "checks", label: "Trip checks: crowds, closures and book-by dates", marker: "TRAVEL-TRIP-STATE-1" },
+      { key: "ingest", label: "Bookings arrive from confirmation mails on their own", marker: "ITINERARY-INGEST-1" }
+    ],
+    practices: [
+      { key: "itinerary", label: "The whole trip in one place, day by day", terms: ["itinerary", "day by day", "day-by-day", "all your plans", "one place"], weight: 3, covered_by: "day-plan" },
+      { key: "auto-import", label: "Bookings added from confirmation mails without typing", terms: ["forward", "confirmation", "import", "automatically"], weight: 3, covered_by: "ingest" },
+      { key: "entry-rules", label: "Entry rules and visa limits checked before you go", terms: ["visa", "entry requirements", "passport", "schengen"], weight: 3, covered_by: "visa" },
+      { key: "weather", label: "Weather for the days you are there", terms: ["weather", "forecast"], weight: 2, covered_by: "weather" },
+      { key: "local-picks", label: "Things to do and places to eat, tuned by what you liked", terms: ["things to do", "restaurants", "recommendations", "where to eat"], weight: 2, covered_by: "taste" },
+      { key: "getting-there", label: "How to get between stops", terms: ["directions", "train", "transport", "route"], weight: 2, covered_by: "transit" },
+      { key: "packing", label: "A packing checklist from the weather and the trip, ticked off with a tap", terms: ["packing", "pack list", "packing list", "what to pack", "checklist"], weight: 3,
+        backlog: "TRAVEL-PACKING-1", marker: "TRAVEL-PACKING-1" },
+      { key: "offline", label: "The plan opens without a signal", terms: ["offline", "no signal", "without internet", "no wifi"], weight: 3,
+        backlog: "TRAVEL-OFFLINE-1", marker: "TRAVEL-OFFLINE-1" },
+      { key: "calendar", label: "The trip added to the phone calendar with one tap", terms: ["calendar", "sync", "google calendar", "outlook"], weight: 2,
+        backlog: "TRAVEL-CALENDAR-1", marker: "TRAVEL-CALENDAR-1" },
+      { key: "emergency", label: "The local emergency number and nearest embassy for each stop", terms: ["emergency", "embassy", "consulate", "local laws", "safety"], weight: 2,
+        backlog: "TRAVEL-EMERGENCY-1", marker: "TRAVEL-EMERGENCY-1" }
+    ],
+    sources: [
+      { name: "GOV.UK foreign travel advice", kind: "practice", url: "https://www.gov.uk/foreign-travel-advice" },
+      { name: "US traveler's checklist", kind: "practice", url: "https://travel.state.gov/content/travel/en/international-travel/before-you-go/travelers-checklist.html" },
+      { name: "TripIt", kind: "competitor", url: "https://www.tripit.com/web" },
+      { name: "Wanderlog", kind: "competitor", url: "https://wanderlog.com/" },
+      { name: "Polarsteps", kind: "competitor", url: "https://www.polarsteps.com/" },
+      { name: "Rome2Rio", kind: "competitor", url: "https://www.rome2rio.com/" }
+    ],
+    discover: ["travel planner", "trip itinerary"] },
+  { app: "jobs", label: "the job search", host: "jobs.q08.org", code: "qnfo-jobsearch/worker.js", journeys: ["jobs"], usage: null,
+    features: [
+      { key: "content-match", label: "Matches read the posting, not the title", marker: "function semanticLens(" },
+      { key: "tailored", label: "A CV tailored to each posting", marker: "function tailoredResume(" },
+      { key: "answers", label: "Saved answers for the usual application questions", marker: "const ANSWER_BANK" },
+      { key: "prep", label: "An interview brief for each role", marker: "async function prepBrief(" },
+      { key: "practice", label: "Spoken interview practice with a score", marker: "const QUIZ_SYSTEM" },
+      { key: "recall", label: "Yes or no questions that fill in the record", marker: "RECALL_FRAMES" },
+      { key: "track", label: "Applications tracked with follow-ups only when they make sense", marker: "async function followups(" },
+      { key: "add-anywhere", label: "Add a job from anywhere", marker: "Add a job from anywhere" },
+      { key: "one-click", label: "One-click apply", marker: "One-click apply" }
+    ],
+    practices: [
+      { key: "fit", label: "Shows why a job fits, from the posting's own text", terms: ["match", "fit", "skills", "recommended jobs"], weight: 3, covered_by: "content-match" },
+      { key: "tailor", label: "A CV tailored to each job", terms: ["tailor", "resume builder", "keywords", "ats"], weight: 3, covered_by: "tailored" },
+      { key: "tracker", label: "Every application tracked in one place", terms: ["track", "tracker", "applications", "organize", "organise"], weight: 3, covered_by: "track" },
+      { key: "interview", label: "Interview preparation and practice", terms: ["interview", "practice", "prepare"], weight: 2, covered_by: "practice" },
+      { key: "autofill", label: "Applications filled in without retyping", terms: ["autofill", "one click", "one-click", "apply faster"], weight: 3, covered_by: "one-click" },
+      { key: "deadlines", label: "Closing dates shown, nearest first, with a heads-up before one passes", terms: ["deadline", "closing date", "apply by", "expires"], weight: 3,
+        backlog: "JOBS-DEADLINE-1", marker: "JOBS-DEADLINE-1" },
+      { key: "pay", label: "The pay range on each match when the posting gives one", terms: ["salary", "pay range", "compensation", "pay transparency"], weight: 2,
+        backlog: "JOBS-PAY-1", marker: "JOBS-PAY-1" },
+      { key: "company", label: "A short company card before applying: what they do, size, recent news", terms: ["company", "culture", "employer", "about the company", "insights"], weight: 2,
+        backlog: "JOBS-COMPANY-1", marker: "JOBS-COMPANY-1" },
+      { key: "kind-progress", label: "A weekly look at progress with no shame for quiet weeks", terms: ["progress", "goals", "weekly", "motivation", "momentum"], weight: 2,
+        backlog: "JOBS-PROGRESS-1", marker: "JOBS-PROGRESS-1" }
+    ],
+    sources: [
+      { name: "CareerOneStop job search guide", kind: "practice", url: "https://www.careeronestop.org/JobSearch/job-search.aspx" },
+      { name: "EURES", kind: "practice", url: "https://eures.europa.eu/index_en" },
+      { name: "Huntr", kind: "competitor", url: "https://huntr.co/" },
+      { name: "Teal", kind: "competitor", url: "https://www.tealhq.com/" },
+      { name: "Simplify", kind: "competitor", url: "https://simplify.jobs/" },
+      { name: "Careerflow", kind: "competitor", url: "https://www.careerflow.ai/" }
+    ],
+    discover: ["job search", "job tracker"] }
 ];
 
 // ------------------------------------------------------------------ pure helpers (tested offline)
@@ -188,8 +263,29 @@ export function rankGaps(app, pages, usage) {
 
 export function issueTitle(app, key) { return DIRECTIVE_ID + ":" + app + ":" + key; }
 
+// A source that failed this run and the two before it is a gap of its own: the registry points at a page the fleet cannot read.
+export const SOURCE_FAIL_RUNS = 3;
+export function sourceGaps(pages, prevRuns) {
+  const out = [];
+  for (const pg of pages) {
+    if (pg.ok) continue;
+    const prior = (prevRuns || []).slice(0, SOURCE_FAIL_RUNS - 1);
+    if (prior.length < SOURCE_FAIL_RUNS - 1) continue;
+    if (!prior.every((r) => (r || []).some((x) => x.name === pg.name && !x.ok))) continue;
+    out.push({ type: "source", key: "source-" + String(pg.name).toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 40), label: "Replace the source \"" + pg.name + "\": it could not be read " + SOURCE_FAIL_RUNS + " days running",
+      name: pg.name, url: pg.url, status: pg.status, support: [], score: 5, priority: "medium" });
+  }
+  return out;
+}
+
 export function issueBody(app, gap, nowIso) {
   const day = nowIso.slice(0, 10);
+  if (gap.type === "source") {
+    return "Found by the daily product research of " + app.label + " (" + DIRECTIVE_ID + ", " + day + "): the source \"" + gap.name + "\" (" + gap.url + ") answered "
+      + (gap.status || "no reply") + " for " + SOURCE_FAIL_RUNS + " runs in a row, so the research reads one page fewer. Replace it in APPS in _shared/product-research.js with a page about the same "
+      + "kind of product that a plain fetch can read, or remove it. The research loop closes this issue on its own once no source of that name fails. Pillar personal.\n"
+      + "code-task: repo=qnfo-workers path=_shared/product-research.js";
+  }
   if (gap.type === "usage") {
     return "Found by the daily product research of " + app.label + " (" + DIRECTIVE_ID + ", " + day + "): the \"" + gap.kind + "\" ask was sent " + gap.sent
       + " times in 14 days and answered " + gap.answered + " times. Rowan does not use it as it is. Change it to one tap with a clearer reason to answer, send it at a better time, or stop sending it; "
@@ -270,6 +366,16 @@ export async function companionUsage(db, nowMs) {
   return { window_days: 14, asks, top_cards, activities: Number(act && act.n) || 0, captures: Number(caps && caps.n) || 0 };
 }
 
+// Real use of the travel planner: which kinds of card get which taps (TRAVEL-FEEDBACK-1 ledger), counts only.
+const TRAVEL_CARD = { pick: "place", option: "stay", stop: "stop", pair: "this-or-that" };
+const TRAVEL_SIGNAL = { love: "loved", like: "liked", skip: "skipped", hate: "disliked", instead: "swapped", save: "saved", book: "booked", open: "opened", pass: "passed" };
+export async function travelUsage(db, nowMs) {
+  const since = new Date(nowMs - 14 * 86400e3).toISOString();
+  const top_cards = (await all(db, "SELECT target_type, signal, COUNT(*) AS taps FROM travel_feedback WHERE ts >= ? GROUP BY target_type, signal ORDER BY taps DESC LIMIT 8", since))
+    .map((r) => ({ card: (TRAVEL_CARD[r.target_type] || "card") + " " + (TRAVEL_SIGNAL[r.signal] || "tapped"), taps: Number(r.taps) || 0 }));
+  return { window_days: 14, asks: [], top_cards };
+}
+
 export const AUDIT_DDL = [
   "CREATE TABLE IF NOT EXISTS product_research_runs (id INTEGER PRIMARY KEY AUTOINCREMENT, app TEXT NOT NULL, run_at TEXT NOT NULL, version TEXT, sources_ok INTEGER NOT NULL DEFAULT 0, sources_failed INTEGER NOT NULL DEFAULT 0, sources_json TEXT, gaps_json TEXT, ideas_json TEXT, players_json TEXT, usage_json TEXT, digest TEXT, filed INTEGER NOT NULL DEFAULT 0, updated INTEGER NOT NULL DEFAULT 0, closed INTEGER NOT NULL DEFAULT 0, error TEXT)",
   "CREATE INDEX IF NOT EXISTS product_research_runs_app ON product_research_runs(app, run_at)",
@@ -285,8 +391,10 @@ export async function researchApp(env, app, deps) {
   const prev = await one(env.AUDIT, "SELECT players_json FROM product_research_runs WHERE app = ? ORDER BY id DESC LIMIT 1", app.app);
   let prevNames = new Set(); try { prevNames = new Set(JSON.parse((prev && prev.players_json) || "[]").map((p) => String(p.name).toLowerCase())); } catch (e) { prevNames = new Set(); }
   const players = players0.filter((p) => !prevNames.has(p.name.toLowerCase()));
-  const usage = app.usage === "companion" && env.PERSONAL ? await companionUsage(env.PERSONAL, nowMs) : null;
-  const gaps = rankGaps(app, pages, usage);
+  const usage = !env.PERSONAL ? null : app.usage === "companion" ? await companionUsage(env.PERSONAL, nowMs) : app.usage === "travel" ? await travelUsage(env.PERSONAL, nowMs) : null;
+  const prevSrc = (await all(env.AUDIT, "SELECT sources_json FROM product_research_runs WHERE app = ? AND error IS NULL ORDER BY id DESC LIMIT ?", app.app, SOURCE_FAIL_RUNS - 1))
+    .map((r) => { try { return JSON.parse(r.sources_json || "[]"); } catch (e) { return []; } });
+  const gaps = rankGaps(app, pages, usage).concat(sourceGaps(pages, prevSrc)).sort((a, b) => b.score - a.score || a.key.localeCompare(b.key));
   const res = { filed: 0, updated: 0, closed: 0 };
   let newLeft = NEW_ISSUES_PER_RUN;
   for (const g of gaps) {
@@ -294,7 +402,7 @@ export async function researchApp(env, app, deps) {
     const last = await one(env.AUDIT, "SELECT id, status FROM agent_issues WHERE title = ? ORDER BY id DESC LIMIT 1", title);
     if (last && last.status === "closed") {
       g.issue = last.id;
-      if (g.type !== "usage") { g.state = "shipped"; continue; }
+      if (g.type !== "usage" && g.type !== "source") { g.state = "shipped"; continue; }
       // A usage gap that regresses reopens its own row (one row per title, never a duplicate).
       try {
         await env.AUDIT.prepare("UPDATE agent_issues SET status = 'open', updated_at = ? WHERE id = ?").bind(stamp, last.id).run();
@@ -315,13 +423,15 @@ export async function researchApp(env, app, deps) {
       g.state = "open"; g.issue = r && r.meta ? r.meta.last_row_id : null; res.filed++; newLeft--;
     } catch (e) { g.state = "queued"; console.error(JSON.stringify({ evt: "product-research:file", app: app.app, key: g.key, error: String(e && e.message || e).slice(0, 200) })); }
   }
-  // Usage gaps close on their own when the ask is answered again or no longer sent.
-  const openUsage = await all(env.AUDIT, "SELECT id, title FROM agent_issues WHERE title LIKE ? AND status <> 'closed'", issueTitle(app.app, "ignored-ask-") + "%");
+  // Usage and source gaps close on their own when the ask is answered again (or no longer sent) or the source reads again (or is gone).
+  const openUsage = (await all(env.AUDIT, "SELECT id, title FROM agent_issues WHERE title LIKE ? AND status <> 'closed'", issueTitle(app.app, "ignored-ask-") + "%"))
+    .concat(await all(env.AUDIT, "SELECT id, title FROM agent_issues WHERE title LIKE ? AND status <> 'closed'", issueTitle(app.app, "source-") + "%"));
   for (const row of openUsage) {
     if (gaps.some((g) => issueTitle(app.app, g.key) === row.title)) continue;
+    const why = row.title.indexOf(":source-") > 0 ? "the source reads again or is no longer in the registry." : "the ask is answered at least a tenth of the time over 14 days, or is no longer sent.";
     try {
       await env.AUDIT.prepare("UPDATE issue_triage SET triage_state = 'closed', close_evidence = ? WHERE issue_id = ?")
-        .bind(DIRECTIVE_ID + " measured " + now + ": the ask is answered at least a tenth of the time over 14 days, or is no longer sent.", row.id).run();
+        .bind(DIRECTIVE_ID + " measured " + now + ": " + why, row.id).run();
       await env.AUDIT.prepare("UPDATE agent_issues SET status = 'closed', updated_at = ? WHERE id = ? AND status <> 'closed'").bind(stamp, row.id).run();
       res.closed++;
     } catch (e) { /* the next run retries */ }

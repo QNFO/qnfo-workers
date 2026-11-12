@@ -155,3 +155,11 @@ product_research_runs ORDER BY id DESC`.
 - [ ] **Kind progress** (`COMPANION-KIND-PROGRESS-1`): a weekly look at what got done, no streaks and no shame for missed days.
 - [ ] **Body doubling** (`COMPANION-BODY-DOUBLE-1`): a "work alongside me" timer that says what it is doing, no model.
 - [ ] **Audio for each book** (`MIND-AUDIO-1`), **free library link** (`MIND-LIBRARY-1`), **content notes** (`MIND-CONTENT-NOTES-1`), **read it or not for me** (`MIND-PROGRESS-1`) in `q08-mind/data/books.json` and its page.
+- [ ] **Packing checklist** (`TRAVEL-PACKING-1`): per trip, built from the stops' weather and length, each item ticked with one tap; no model.
+- [ ] **Works without a signal** (`TRAVEL-OFFLINE-1`): the trip page and its day plan cached on the phone, synced when back online.
+- [ ] **Add to calendar** (`TRAVEL-CALENDAR-1`): one tap gives an .ics of every stop and move for the phone calendar.
+- [ ] **Emergency card** (`TRAVEL-EMERGENCY-1`): the local emergency number and the nearest embassy for each stop, from a fixed table.
+- [ ] **Closing dates** (`JOBS-DEADLINE-1`): a match shows its closing date when the posting gives one, nearest first, with a heads-up two days before.
+- [ ] **Pay range** (`JOBS-PAY-1`): the pay range read from the posting text, shown on the match; never a filter.
+- [ ] **Company card** (`JOBS-COMPANY-1`): what the employer does, its size and recent news, from public pages, cached, before applying.
+- [ ] **Kind weekly progress** (`JOBS-PROGRESS-1`): applications sent, replies and interviews this week, with no shame for a quiet week.

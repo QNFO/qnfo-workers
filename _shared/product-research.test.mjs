@@ -49,7 +49,7 @@ await ok("pages parse into text and headings", () => {
 await ok("a run files the top gaps once, with code-task and code-probe, and never refiles", async () => {
   const f = fixture(), t = Date.parse("2026-11-12T20:00:00Z");
   const r1 = await PR.researchTick(f.env, { fetch: fetcher, nowMs: t });
-  assert(r1.ran.length === 2 && !r1.ran[0].error, JSON.stringify(r1));
+  assert(r1.ran.length === PR.APPS.length && r1.ran.every((x) => !x.error), JSON.stringify(r1));
   const rows = f.a.prepare("SELECT * FROM agent_issues WHERE title LIKE 'PRODUCT-RESEARCH-1:companion:%'").all();
   assert.equal(rows.length, PR.NEW_ISSUES_PER_RUN);
   assert(rows.every((x) => x.description.includes("code-task: repo=qnfo-workers path=personal-api/companion.js") && x.description.includes("code-probe:")));
@@ -80,6 +80,31 @@ await ok("real use: an ignored ask becomes a usage gap, and closes itself when a
   f.a.exec("INSERT INTO issue_triage (issue_id, triage_state) SELECT id, 'open' FROM agent_issues WHERE title LIKE '%ignored-ask%'");
   await PR.researchTick(f.env, { fetch: fetcher, nowMs: t + 25 * 3600e3 });
   assert.equal(f.a.prepare("SELECT triage_state s FROM issue_triage").get().s, "closed");
+});
+await ok("travel and jobs are researched with their own sources, code paths and real travel taps", async () => {
+  const f = fixture(), t = Date.parse("2026-11-12T21:00:00Z");
+  f.p.exec("CREATE TABLE travel_feedback (id INTEGER PRIMARY KEY, target_type TEXT, target_id TEXT, signal TEXT, reason TEXT, tags TEXT, ts TEXT)");
+  for (let i = 0; i < 3; i++) f.p.prepare("INSERT INTO travel_feedback (target_type, target_id, signal, ts) VALUES ('pick', 'x', 'love', ?)").run("2026-11-11T10:00:00Z");
+  await PR.researchTick(f.env, { fetch: fetcher, nowMs: t });
+  for (const [app, path] of [["travel", "personal-companion/travel.js"], ["jobs", "qnfo-jobsearch/worker.js"]]) {
+    const rows = f.a.prepare("SELECT description FROM agent_issues WHERE title LIKE ?").all(PR.issueTitle(app, "") + "%");
+    assert(rows.length >= 1 && rows.length <= PR.NEW_ISSUES_PER_RUN, app + " files its top gaps");
+    assert(rows.every((x) => x.description.includes("code-task: repo=qnfo-workers path=" + path)), app + " code path");
+    const srcs = PR.appByKey(app).sources.map((s) => s.url);
+    assert(!srcs.some((u) => PR.appByKey("companion").sources.some((c) => c.url === u)), app + " has its own sources");
+  }
+  assert(f.a.prepare("SELECT usage_json FROM product_research_runs WHERE app='travel'").get().usage_json.includes("place loved"));
+});
+await ok("a source unreadable three runs running becomes its own issue and closes when it reads again", async () => {
+  const f = fixture(), t = Date.parse("2026-11-12T21:00:00Z"), bad = PR.appByKey("mind").sources[1].url;
+  let down = true; const fx = async (u, o) => (u === bad && down ? { ok: false, status: 403 } : fetcher(u, o));
+  for (let d = 0; d < 3; d++) await PR.researchTick(f.env, { fetch: fx, nowMs: t + d * 25 * 3600e3 });
+  const title = PR.issueTitle("mind", "source-" + PR.appByKey("mind").sources[1].name.toLowerCase().replace(/[^a-z0-9]+/g, "-"));
+  const row = f.a.prepare("SELECT id, description FROM agent_issues WHERE title = ?").get(title);
+  assert(row && row.description.includes("code-task: repo=qnfo-workers path=_shared/product-research.js"), "source issue filed");
+  f.a.prepare("INSERT INTO issue_triage (issue_id, triage_state) VALUES (?, 'open')").run(row.id);
+  down = false; await PR.researchTick(f.env, { fetch: fx, nowMs: t + 3 * 25 * 3600e3 });
+  assert.equal(f.a.prepare("SELECT status FROM agent_issues WHERE id = ?").get(row.id).status, "closed");
 });
 await ok("source failures do not stop the run; the kill switch does", async () => {
   const f = fixture();
