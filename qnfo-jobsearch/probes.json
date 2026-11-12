@@ -54,8 +54,9 @@
     },
     {
       "url": "https://qnfo-jobsearch.q08.workers.dev/api/pipeline",
+      "status": 401,
       "contains": [
-        "\"counts\""
+        "sign in first"
       ]
     }
   ]
