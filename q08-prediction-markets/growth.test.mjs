@@ -7,7 +7,7 @@ import { readFileSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import { classify, consequenceScore, plan, tick, verifyLedger, callOf, verdictText, broadcastText, broadcastLane, settleLane, parseGammaClose, clockStatus, escalateClock,
   productManager, pmStatus, readConfig, growthScore, forecastData, renderForecast, ledgerData, renderLedger, feedXml, sitemapXml, proxySensitivity, relatedMarkets,
-  ensureSchema, parseFeed, scoreCandidate, researchLane, researchStatus, shiftScaleFit, reliabilityBins, combine, RESEARCH_NEEDS, storyData, renderStory, renderTrackRecord, sha256Hex } from "./forecast-engine.mjs";
+  ensureSchema, parseFeed, competitorLane, scoreCandidate, researchLane, researchStatus, shiftScaleFit, reliabilityBins, combine, RESEARCH_NEEDS, storyData, renderStory, renderTrackRecord, sha256Hex } from "./forecast-engine.mjs";
 let pass = 0, fail = 0;
 const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL", m, x === undefined ? "" : JSON.stringify(x).slice(0, 600)); } };
 function d1(db) {
@@ -160,6 +160,10 @@ ok(shiftScaleFit(mk(10, 0.2)).apply === false && shiftScaleFit(mk(10, 0.2)).k ==
 ok(reliabilityBins(mk(40, 0.2)).some((b) => b.n === 40 && b.observed === 0.75), "reliability bins compare mean forecast with observed rate");
 const v = [{ ok: true, shift: 0.4 }, { ok: true, shift: 0.6 }];
 ok(combine(0.5, v, { scale: 2 }).p > combine(0.5, v).p && combine(0.5, v, { scale: 0 }).p === 0.5, "the fitted scale multiplies the evidence shift only");
+const compEnv = { ...env, __fetchText: async (u) => ({ ok: true, status: 200, text: u.includes("kalshi") || u.includes("polymarket") ? "Set alerts and notifications. Leaderboard. API for developers" : "Welcome" }) };
+const cg = await competitorLane(compEnv, compEnv.__fetchText, Date.now(), { competitors: [{ key: "kalshi", urls: ["https://kalshi.com/"] }, { key: "polymarket", urls: ["https://polymarket.com/"] }, { key: "manifold", urls: ["https://manifold.markets/"] }] });
+const gapRow = tq.prepare("SELECT need, status FROM fe_research WHERE id = 'gap-alerts'").get();
+ok(cg.gaps.some((g) => g.feature === "alerts" && g.offered_by === 2) && gapRow && gapRow.need === "distribution" && !cg.gaps.some((g) => g.feature === "api"), "a feature two competitors offer and q08 lacks becomes a research candidate; one q08 has is no gap", cg);
 const W = (await import("./worker.js")).default;
 for (const path of ["/ledger", "/api/clock", "/api/pm", "/feed.xml", "/sitemap.xml", "/robots.txt"]) {
   const r = await W.fetch(new Request("https://t.invalid" + path), {});

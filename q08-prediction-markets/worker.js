@@ -1,6 +1,6 @@
 // q08-prediction-markets: the paper-trading proving ground for q08's information edge (PM-CHARTER-1).
 // Paper money only. No wallet, no exchange key, no order ever leaves this worker: the only executor in this file writes D1 rows.
-var VERSION = "1.14.1-codeagent";
+var VERSION = "1.14.2-codeagent";
 
 // ---------- charter (the machine-readable form; GET /api/charter serves it with the live evidence) ----------
 export const CHARTER = {
@@ -2413,6 +2413,47 @@ function shiftScaleFit(rows, { minN = 30, folds = 5 } = {}) {
   const k = best(r), gain = (base - cv) / r.length;
   return { n: r.length, k, cv_gain: +gain.toFixed(4), apply: gain > 0.001 && k !== 1, why: gain > 0.001 ? "cross-validated Brier improves by " + gain.toFixed(4) : "no cross-validated gain" };
 }
+// ---------- competitive analysis (Q08-COMPETE-1): benchmark q08 against the platforms readers compare it with; every gap becomes a filed change ----------
+// Each competitor's public pages are fetched and read for features. A feature offered by at least two competitors that q08 lacks is a gap: it enters
+// the research queue as a candidate (so the same filing, adoption and weight loop applies) and the table fe_competitor keeps the evidence.
+const COMPETITORS = [
+  { key: "metaculus", urls: ["https://www.metaculus.com/", "https://www.metaculus.com/questions/track-record/"] },
+  { key: "polymarket", urls: ["https://polymarket.com/", "https://docs.polymarket.com/"] },
+  { key: "kalshi", urls: ["https://kalshi.com/", "https://kalshi.com/research"] },
+  { key: "manifold", urls: ["https://manifold.markets/"] },
+  { key: "good-judgment-open", urls: ["https://www.gjopen.com/"] },
+  { key: "forecastbench", urls: ["https://www.forecastbench.org/"] },
+];
+// have: what q08 ships today (kept here so a gap closes when the feature lands and this flag flips with the PR that builds it).
+const FEATURES = [
+  { key: "track-record", terms: ["track record", "calibration", "brier"], have: true, need: "track-record", what: "a public track record with calibration" },
+  { key: "leaderboard", terms: ["leaderboard", "ranking", "top forecasters"], have: false, need: "track-record", what: "a leaderboard that ranks forecasters or models against each other and the crowd" },
+  { key: "api", terms: ["api", "developers", "data export", "download data"], have: true, need: "distribution", what: "an open API" },
+  { key: "alerts", terms: ["alerts", "notifications", "notify me", "subscribe"], have: false, need: "distribution", what: "alerts when a forecast moves or settles" },
+  { key: "embed", terms: ["embed", "widget"], have: false, need: "distribution", what: "an embeddable forecast widget" },
+  { key: "newsletter", terms: ["newsletter", "weekly digest"], have: false, need: "distribution", what: "a weekly digest of calls and settlements" },
+  { key: "comments", terms: ["comments", "discussion", "rationale"], have: false, need: "search", what: "published reasoning beside each forecast" },
+  { key: "mobile", terms: ["ios", "android", "app store"], have: false, need: "distribution", what: "a mobile app or installable page" },
+];
+async function competitorLane(env, fetchText, nowMs, { competitors = COMPETITORS, minCompetitors = 2 } = {}) {
+  const db = env.TRADES_DB, now = new Date(nowMs).toISOString(), res = { read: 0, errors: [], gaps: [] };
+  await db.prepare("CREATE TABLE IF NOT EXISTS fe_competitor (competitor TEXT NOT NULL, feature TEXT NOT NULL, offered INTEGER, checked_at TEXT, PRIMARY KEY (competitor, feature))").run();
+  for (const c of competitors) {
+    let text = "";
+    for (const u of c.urls) { try { const r = await fetchText(u); if (r.ok) { text += " " + String(r.text).toLowerCase(); res.read++; } else res.errors.push(c.key + ": status " + r.status); } catch (err) { res.errors.push(c.key + ": " + String(err && err.message || err).slice(0, 50)); } }
+    if (!text.trim()) continue;
+    for (const f of FEATURES) await db.prepare("INSERT OR REPLACE INTO fe_competitor (competitor, feature, offered, checked_at) VALUES (?,?,?,?)").bind(c.key, f.key, f.terms.some((t) => text.includes(t)) ? 1 : 0, now).run();
+  }
+  for (const f of FEATURES.filter((x) => !x.have)) {
+    const o = await all(db, "SELECT competitor FROM fe_competitor WHERE feature = ? AND offered = 1 AND checked_at > ?", f.key, new Date(nowMs - 3 * 86400000).toISOString());
+    if (o.length < minCompetitors) continue;
+    const url = (competitors.find((c) => c.key === o[0].competitor) || competitors[0]).urls[0];
+    const r = await db.prepare("INSERT OR IGNORE INTO fe_research (id, source, title, url, summary, seen_at, need, score, status) VALUES (?,?,?,?,?,?,?,?, 'new')")
+      .bind("gap-" + f.key, "competitors", o.length + " of " + competitors.length + " competitors offer " + f.what + "; q08 does not", url, "Offered by: " + o.map((x) => x.competitor).join(", "), now, f.need, 80).run();
+    res.gaps.push({ feature: f.key, offered_by: o.length, new: !!(r.meta && r.meta.changes) });
+  }
+  return res;
+}
 async function productManager(env, nowMs, { force = false, everyH = 23 } = {}) {
   const db = env.TRADES_DB;
   await ensureSchema(db);
@@ -2451,14 +2492,16 @@ async function productManager(env, nowMs, { force = false, everyH = 23 } = {}) {
   const ss = m.shift_scale;
   if (ss && ss.apply && cfg.shift_scale !== ss.k) { await db.prepare("INSERT OR REPLACE INTO fe_config (key, value, updated_at, reason) VALUES ('shift_scale',?,?,?)").bind(String(ss.k), now, "cv gain " + ss.cv_gain + " on " + ss.n + " settled calls").run(); decisions.push({ key: "shift_scale", from: cfg.shift_scale, to: ss.k, reason: ss.why, revert: "DELETE FROM fe_config WHERE key = 'shift_scale'" }); cfg.shift_scale = ss.k; }
   else if (ss && !ss.apply && cfg.shift_scale !== 1) { await db.prepare("DELETE FROM fe_config WHERE key = 'shift_scale'").run(); decisions.push({ key: "shift_scale", from: cfg.shift_scale, to: 1, reason: ss.why }); cfg.shift_scale = 1; }
+  let compete = null;
+  try { compete = await competitorLane(env, env.__fetchText || defaultFetchText, nowMs); } catch (err) { compete = { error: String(err && err.message || err).slice(0, 120) }; }
   let research = null;
   try { research = await researchLane(env, env.__fetchText || defaultFetchText, nowMs); } catch (err) { research = { error: String(err && err.message || err).slice(0, 120) }; }
   let experiments = null;
   try { experiments = await experimentStep(env, m, nowMs); } catch (err) { experiments = [{ error: String(err && err.message || err).slice(0, 120) }]; }
   // Did last run's knob changes move what they were meant to move? Recorded beside this run, so a lever that does nothing is visible.
   const check = before ? { coverage: [before.coverage, m.coverage], broadcasts_7d: [before.broadcasts_7d, m.broadcasts_7d], pageviews_7d: [before.traffic && before.traffic.pageviews_7d, m.traffic && m.traffic.pageviews_7d], settled: [before.settled, m.settled] } : null;
-  await db.prepare("INSERT INTO fe_pm (ran_at, metrics_json, decisions_json, filed_json) VALUES (?,?,?,?)").bind(now, JSON.stringify({ ...m, growth: growthScore(m), since_last: check, research }), JSON.stringify(decisions.concat((experiments || []).map((x) => ({ experiment: x })))), JSON.stringify(filed)).run();
-  return { ran: true, metrics: m, growth: growthScore(m), decisions, experiments, filed, research, config: cfg };
+  await db.prepare("INSERT INTO fe_pm (ran_at, metrics_json, decisions_json, filed_json) VALUES (?,?,?,?)").bind(now, JSON.stringify({ ...m, growth: growthScore(m), since_last: check, research, compete }), JSON.stringify(decisions.concat((experiments || []).map((x) => ({ experiment: x })))), JSON.stringify(filed)).run();
+  return { ran: true, metrics: m, growth: growthScore(m), decisions, experiments, filed, research, compete, config: cfg };
 }
 async function pmStatus(env, nowMs = Date.now()) {
   const db = env && env.TRADES_DB;
@@ -2468,7 +2511,7 @@ async function pmStatus(env, nowMs = Date.now()) {
   const parse = (s) => { try { return JSON.parse(s || "null"); } catch (err) { return null; } };
   const latest = runs[0] ? parse(runs[0].metrics_json) : await pmMetrics(env, nowMs).catch(() => null);
   const exps = await all(db, "SELECT key, arm, started_at, ended_at, score FROM fe_experiment ORDER BY id DESC LIMIT 20");
-  return { product: "q08 markets", loop: "daily: measure growth and health, adjust knobs (fe_config), run one experiment at a time (fe_experiment), file the next growth or repair change (agent_issues), check the last change", config: await readConfig(db), levers: PM_LEVERS.map((l) => l.key), research: await researchStatus(db),
+  return { product: "q08 markets", loop: "daily: measure growth and health, adjust knobs (fe_config), run one experiment at a time (fe_experiment), file the next growth or repair change (agent_issues), check the last change", config: await readConfig(db), levers: PM_LEVERS.map((l) => l.key), research: await researchStatus(db), competitors: { features: FEATURES.map((f) => ({ key: f.key, have: f.have })), matrix: await all(db, "SELECT competitor, feature, offered FROM fe_competitor") },
     ...(latest || {}), growth: latest ? growthScore(latest) : [], experiments: exps, runs: runs.map((r) => ({ ran_at: r.ran_at, decisions: parse(r.decisions_json) || [], filed: parse(r.filed_json) || [] })) };
 }
 
