@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-11-12 13:59:09",
+  "audited_at": "2026-11-12 14:02:15",
   "d1_write_failures": [],
   "d1_writes_ok": 7,
   "guard": {
@@ -33,7 +33,7 @@
     "unmanaged_truncated": false,
     "unmanaged_workers": [
       {
-        "http": 503,
+        "http": 200,
         "version": null,
         "worker": "demo-child-ultrastable"
       },
@@ -63,20 +63,20 @@
         "worker": "ultrastable-tick"
       },
       {
-        "http": 503,
+        "http": 200,
         "version": null,
         "worker": "ultrastable-ultrastable"
       }
     ]
   },
-  "purge_error": "purge skipped: run classified 7 workers, table held 48; a partial report must not shrink the audit surface",
+  "purge_error": "purge skipped: run classified 7 workers, table held 50; a partial report must not shrink the audit surface",
   "rows": {
     "demo-child-ultrastable": {
       "before": null,
-      "http": 503,
+      "http": 200,
       "live": null,
       "match": 0,
-      "note": "UNMANAGED_ERR",
+      "note": "UNMANAGED_OK",
       "worker": "demo-child-ultrastable"
     },
     "q08-living-paper": {
@@ -121,10 +121,10 @@
     },
     "ultrastable-ultrastable": {
       "before": null,
-      "http": 503,
+      "http": 200,
       "live": null,
       "match": 0,
-      "note": "UNMANAGED_ERR",
+      "note": "UNMANAGED_OK",
       "worker": "ultrastable-ultrastable"
     }
   },
