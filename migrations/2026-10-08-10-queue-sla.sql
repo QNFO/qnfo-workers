@@ -146,6 +146,23 @@ BEGIN
   INSERT INTO fleet_tick (source) VALUES ('heartbeat:' || COALESCE(NEW.worker, '?'));
 END;
 
+-- METRIC-TRIGGER-3059-STUCK-ITEMS-OVER-SLA follow-up (issue #2971 retry 2, lever-3059-202611082016).
+-- The stuck types with auto_fix = "none automatic" never get a fixer run, so queue_sla_autofix = 'on' clears nothing
+-- and queue_sla_actions has no row for them (20-minute check inapplicable). Give them automatic fixes.
+UPDATE queue_sla SET auto_fix =
+  'probe: attach an active machine-probe remediation contract to the issue (status active, verify_probe machine, expected_cadence_h 1); if the issue is superseded, set status closed with a superseded rationale'
+  WHERE stuck_type = 'issue-unremediated';
+UPDATE queue_sla SET auto_fix =
+  'supersede: mark superseded code tasks terminal (status closed with the superseding task id recorded) per STUCK-SUMMARY-SUPERSEDED-TERMINAL-1; otherwise the code loop owns retries'
+  WHERE stuck_type = 'code-task-stalled';
+
+-- Correct the metric definition: the deliberate research backlog under RESEARCH-BACKPRESSURE-1 is nominal, not stuck.
+UPDATE metric_registry SET
+  formula = 'Sum of v_stuck_summary columns except issues_unprobed_60m and research_queued_180m (its own nominal backlog, issue #2971): queue items past their queue_sla.sla_min plus open issues with no doer after 180 minutes (QUEUE-SLA-1).',
+  target = '0 for true stuck types; research_queued_180m is nominal backlog, healthy when <= research_ready_cap with RESEARCH-BACKPRESSURE-1 reporting no elevator failure'
+  WHERE metric = 'stuck_items_over_sla';
+END;
+
 CREATE TRIGGER IF NOT EXISTS queue_sla_tick_10m AFTER INSERT ON fleet_tick
 BEGIN
   -- research-review-error: park the failing head row so the queue behind it runs.
