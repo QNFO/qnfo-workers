@@ -84,7 +84,7 @@ function infraManifestRoute(url, env) {
 }
 __name(infraManifestRoute, "infraManifestRoute");
 __name2(infraManifestRoute, "infraManifestRoute");
-var VERSION = "1.17.10-codeagent";
+var VERSION = "1.17.11-codeagent";
 // D1-RESULT-CAP-1 (#9794, DATA-SPINE-W0-1): D1 refuses a result payload over 50 MB. d1ReadAll runs a read; a statement that fails with a result-size
 // error is retried once as LIMIT/OFFSET pages over the same statement, and a payload at or over D1_RESULT_NEAR_BYTES is logged either way as a
 // cloud_ops_events row of kind d1_result_cap_near (fail-soft, never blocks the read).
@@ -1213,7 +1213,7 @@ const chunks = [];
           let snippet = "";
           if (p.body_md) {
             const idx = parseInt(h.chunk, 10);
-            const chunks = chunkText(p.body_md);
+            const chunks = chunkText(cleanBody(p.body_md));
             if (chunks[idx] != null) snippet = chunks[idx].slice(0, 1200);
           }
           results.push({
