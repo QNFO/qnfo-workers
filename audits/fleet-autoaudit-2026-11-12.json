@@ -1,7 +1,7 @@
 {
-  "audited_at": "2026-11-12 14:02:15",
+  "audited_at": "2026-11-12 14:35:31",
   "d1_write_failures": [],
-  "d1_writes_ok": 7,
+  "d1_writes_ok": 8,
   "guard": {
     "_guard_rc": 0,
     "ahead": [],
@@ -48,6 +48,11 @@
         "worker": "qnfo-workers"
       },
       {
+        "http": 200,
+        "version": "1.0.0",
+        "worker": "ultrastable-agents"
+      },
+      {
         "http": 404,
         "version": null,
         "worker": "ultrastable-dashboard"
@@ -69,7 +74,7 @@
       }
     ]
   },
-  "purge_error": "purge skipped: run classified 7 workers, table held 50; a partial report must not shrink the audit surface",
+  "purge_error": "purge skipped: run classified 8 workers, table held 50; a partial report must not shrink the audit surface",
   "rows": {
     "demo-child-ultrastable": {
       "before": null,
@@ -94,6 +99,14 @@
       "match": 0,
       "note": "UNMANAGED_OK",
       "worker": "qnfo-workers"
+    },
+    "ultrastable-agents": {
+      "before": null,
+      "http": 200,
+      "live": "1.0.0",
+      "match": 0,
+      "note": "UNMANAGED_OK",
+      "worker": "ultrastable-agents"
     },
     "ultrastable-dashboard": {
       "before": null,
