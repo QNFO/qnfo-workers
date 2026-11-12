@@ -108,7 +108,7 @@ export const FLOWS = [
 
   // ------------------------------------------------------------------ outreach, touchpoints, social
   { id: "outreach-mail", label: "Outreach mail with the segment learner", scope: "qniverse", plane: "outreach", worker: "qnfo-cloud-ops",
-    executor: b("cron", "outreach send and learner (outreach_learner_arms)"), clock: "outreach-mail",
+    executor: b("cron", "qnfo-outreach send, qnfo-cloud-ops reply learner (outreach_learner_arms)"), clock: "outreach-mail",
     inflows: [{ signal: "outreach.reply", via: b("d1", "outreach_learner_arms alpha/beta") }, { signal: "paper.published", via: b("d1", "papers to announce") }],
     outflows: [{ signal: "outreach.mail", to: "ext.outreach_replies", returns: "ext.outreach_replies", via: b("email", "qnfo-email send") }],
     feedback: "replies and opt-outs update each segment's Beta(alpha, beta); a segment under 1% after 50 sends stops" },
