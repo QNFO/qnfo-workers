@@ -1248,6 +1248,11 @@
       "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-3365.md"
     },
     {
+      "path": "docs/handoff/issue-3379.md",
+      "title": "Handoff: METRIC-TRIGGER-6116-PAPERS-QUEUED-OVER-120M: Dissemination SLA: a published paper waited more than 120 minutes",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-3379.md"
+    },
+    {
       "path": "docs/handoff/issue-3397.md",
       "title": "Handoff: OWNER-TASK-op-mvh2iuolcaa1: Audit fleet cost attribution: identify the untagged owner-local desktop clients generating ~$167 list cost over the last 30 days, tag them into unified",
       "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-3397.md"
@@ -1381,6 +1386,226 @@
       "path": "docs/handoff/issue-8024.md",
       "title": "Handoff: [#1001990] ROADMAP-1: QNFO.INFRA FLEET-BUDGET-W3W4-1: drop the two stale Vectorize indexes (qnfo-tasks, qnfo-notes) and fold or document qnfo-pdf and qnfo-containers-pilot (vectorize_indexes 10 -> 8)",
       "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-8024.md"
+    },
+    {
+      "path": "docs/handoff/issue-8048.md",
+      "title": "Handoff: [#1002030] security issue (details kept in qnfo-audit)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-8048.md"
+    },
+    {
+      "path": "docs/handoff/issue-8056.md",
+      "title": "Handoff: [#1002037] security issue (details kept in qnfo-audit)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-8056.md"
+    },
+    {
+      "path": "docs/handoff/issue-8057.md",
+      "title": "Handoff: [#1002038] UX-SCREENS-1: fleet-lee (local)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-8057.md"
+    },
+    {
+      "path": "docs/handoff/issue-8064.md",
+      "title": "Handoff: [#1002048] ROADMAP-1: QNFO.OPS W2-J-HYPER-2: evolve runner applies a manager_evolve_proposals row through a migration PR and keeps or reverts it against the sealed holdout",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-8064.md"
+    },
+    {
+      "path": "docs/handoff/issue-8066.md",
+      "title": "Handoff: [#1002049] ROADMAP-1: QNFO.RSCH REGISTER-2: the defensive-publication register verifies its publisher only by the private link and mints no DOI",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-8066.md"
+    },
+    {
+      "path": "docs/handoff/issue-8074.md",
+      "title": "Handoff: [#1002058] BP26-KILLSWITCH-READERS-2: qnfo-cloud-ops reads fleet_kill_switch once per scheduled run and stops new side effects while it is on",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-8074.md"
+    },
+    {
+      "path": "docs/handoff/issue-8075.md",
+      "title": "Handoff: [#1002059] ADR-TEXT-PROBE-1: owner-steps-watch resolves the ADR text card when both R2 objects hold a real document",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-8075.md"
+    },
+    {
+      "path": "docs/handoff/issue-8077.md",
+      "title": "Handoff: [#1002061] ADR014-ENFORCE-PROMOTE-1: promote the ADR-014 publish check from observe to enforce when seven days are clean",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-8077.md"
+    },
+    {
+      "path": "docs/handoff/issue-8078.md",
+      "title": "Handoff: [#1002062] ADR014-LEGACY-BYLINE-1: a legacy organisation-byline paper takes the owner byline when it is next revised",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-8078.md"
+    },
+    {
+      "path": "docs/handoff/issue-8086.md",
+      "title": "Handoff: [#1002077] ROADMAP-1: QNFO.INFRA ARCHIVE-MARKER-READ-3: scripts/cf_ops_actions.py reads the RETIRED and FOLDED marker under archive/<name>/ as well (delete-worker, delete-vectorize-index, unbind-service)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-8086.md"
+    },
+    {
+      "path": "docs/handoff/issue-8088.md",
+      "title": "Handoff: [#1002080] ROADMAP-1: QNFO.INFRA UNBIND-VERIFY-RETRY-1: cf-ops-actions unbind-service and unbind-d1 verify the result with one read that lags the write",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-8088.md"
+    },
+    {
+      "path": "docs/handoff/issue-8090.md",
+      "title": "Handoff: [#1002082] ROADMAP-1: QNFO.INFRA WORKER-COUNT-1.9: fold qnfo-github-steward into qnfo-fleet-control with scripts/fold_worker.py (dry run clean)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-8090.md"
+    },
+    {
+      "path": "docs/handoff/issue-8158.md",
+      "title": "Handoff: [#1002173] ROADMAP-1: QNFO.REACH #2737: Leading indicators that say where to look, not just what to watch",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-8158.md"
+    },
+    {
+      "path": "docs/handoff/issue-8159.md",
+      "title": "Handoff: [#1002174] ROADMAP-1: QNFO.RSCH #2738: Empty /v1/search replies name the index that answered and the next step",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-8159.md"
+    },
+    {
+      "path": "docs/handoff/issue-8181.md",
+      "title": "Handoff: [#1002203] OWNER-VOICE-GUARD-1: owner-voice gate violation (bluesky)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-8181.md"
+    },
+    {
+      "path": "docs/handoff/issue-8186.md",
+      "title": "Handoff: [#1002178] CF-CAPABILITY-DECIDE-1: account-notifications",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-8186.md"
+    },
+    {
+      "path": "docs/handoff/issue-8192.md",
+      "title": "Handoff: [#1002210] CRON-FAULT-1: worker-silent:qnfo-infra",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-8192.md"
+    },
+    {
+      "path": "docs/handoff/issue-8199.md",
+      "title": "Handoff: JOBSEARCH-FOLLOWUP-2: phone UI, judge-driven ranking, referral step, companion link (after PR 8198)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-8199.md"
+    },
+    {
+      "path": "docs/handoff/issue-8212.md",
+      "title": "Handoff: [#1001677] DATA-LAKE-1: move append-only history (verifications, probe log, events) to R2 with a query layer",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-8212.md"
+    },
+    {
+      "path": "docs/handoff/issue-8214.md",
+      "title": "Handoff: [#1001805] PORTFOLIO-WRITE-FAILED-1: QNFO/.github/PORTFOLIO.md",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-8214.md"
+    },
+    {
+      "path": "docs/handoff/issue-8215.md",
+      "title": "Handoff: [#1001806] PORTFOLIO-WRITE-FAILED-1: QNFO/.github/profile/README.md",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-8215.md"
+    },
+    {
+      "path": "docs/handoff/issue-8216.md",
+      "title": "Handoff: [#1001825] UX-SCREENS-1: papers (live)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-8216.md"
+    },
+    {
+      "path": "docs/handoff/issue-8217.md",
+      "title": "Handoff: [#1001862] ROADMAP-1: QNFO.RSCH #rag-rerank-parity: keep the cheaper rerank arm when quality holds, decided from 3 recorded pairs",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-8217.md"
+    },
+    {
+      "path": "docs/handoff/issue-8219.md",
+      "title": "Handoff: [#1002190] METRIC-TRIGGER-21684-SPEND-LEDGER-FALLBACK-PRICED-ROWS: Cost gap: the AI spend ledger priced calls from a catch-all rate (an unknown mod",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-8219.md"
+    },
+    {
+      "path": "docs/handoff/issue-8221.md",
+      "title": "Handoff: [#1002192] ROADMAP-1: QNFO.PERSONAL #2902: Give the weekly companion summary a one-line 1-5 quality probe",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-8221.md"
+    },
+    {
+      "path": "docs/handoff/issue-8222.md",
+      "title": "Handoff: [#1002193] ROADMAP-1: QNFO.PERSONAL #2903: Worth a look: say how many items your votes hid (reversible)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-8222.md"
+    },
+    {
+      "path": "docs/handoff/issue-8226.md",
+      "title": "Handoff: [#1002207] VERIFICATION-DEFERRED-7D-1: issue-100384-BACKFILL-1",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-8226.md"
+    },
+    {
+      "path": "docs/handoff/issue-8227.md",
+      "title": "Handoff: [#1002208] personal issue (details kept in qnfo-audit)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-8227.md"
+    },
+    {
+      "path": "docs/handoff/issue-8228.md",
+      "title": "Handoff: [#1002209] BLINDSPOT-1: belief fleet-closure-subcritical is contradicted by its live probe",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-8228.md"
+    },
+    {
+      "path": "docs/handoff/issue-8229.md",
+      "title": "Handoff: [#1002211] METRIC-TRIGGER-5996-OUTREACH-EMAILS-SENT-7D: Email outreach: fewer than 10 mails sent in 7 days",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-8229.md"
+    },
+    {
+      "path": "docs/handoff/issue-8233.md",
+      "title": "Handoff: [RM-3670] DOC-GOV-1: DOC-GOV-1: Executable governance: turn qnfo/governance (UNIFIED-DATA-GOVERNANCE-P",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-8233.md"
+    },
+    {
+      "path": "docs/handoff/issue-8234.md",
+      "title": "Handoff: [RM-3671] DOC-BACKLOG-1: DOC-BACKLOG-1: Ingest master-build-out-backlog (v1, ADDENDUM, SWEEP2, v3) and bloat-a",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-8234.md"
+    },
+    {
+      "path": "docs/handoff/issue-8235.md",
+      "title": "Handoff: [RM-3672] DOC-AUDIT-1: DOC-AUDIT-1: Convert red-team and systemwide audits (RED-TEAM-INFRA-AUDIT, PHASE3,",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-8235.md"
+    },
+    {
+      "path": "docs/handoff/issue-8236.md",
+      "title": "Handoff: [RM-3673] DOC-HANDOFF-1: DOC-HANDOFF-1: Triage ~95 handoff, closeout, fleet-consolidation and audit/conversati",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-8236.md"
+    },
+    {
+      "path": "docs/handoff/issue-8237.md",
+      "title": "Handoff: [RM-3674] DOC-RESEARCH-1: DOC-RESEARCH-1: Research docs with no implementation: CFPE phase-4 proposals (sqrtSWAP",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-8237.md"
+    },
+    {
+      "path": "docs/handoff/issue-8240.md",
+      "title": "Handoff: [#1002217] CF-AGENT-SETUP-1: load Cloudflare Skills and the Cloudflare API MCP (Code Mode) into the fleet command-line agent",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-8240.md"
+    },
+    {
+      "path": "docs/handoff/issue-8242.md",
+      "title": "Handoff: [#1002220] CODE-AGENT-UX-1.3: GitHub App registration and GITHUB_WEBHOOK_SECRET for /github/webhook",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-8242.md"
+    },
+    {
+      "path": "docs/handoff/issue-8243.md",
+      "title": "Handoff: [#1002221] CODE-AGENT-UX-1.4: verify before the PR (suites plus module compile in Sandbox)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-8243.md"
+    },
+    {
+      "path": "docs/handoff/issue-8244.md",
+      "title": "Handoff: [#1002222] CODE-AGENT-UX-1.5: /cmd UI: timeline, diff cards, PR card with checks, task list, undo",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-8244.md"
+    },
+    {
+      "path": "docs/handoff/issue-8247.md",
+      "title": "Handoff: [#1002227] Capture: photo of a text page becomes calendar events, with a visible log of where each capture went",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-8247.md"
+    },
+    {
+      "path": "docs/handoff/issue-8248.md",
+      "title": "Handoff: [#1002228] Today: proactive home (now/next, where, weather, briefing, ask-me suggestions, one next step)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-8248.md"
+    },
+    {
+      "path": "docs/handoff/issue-8249.md",
+      "title": "Handoff: [#1002229] Ask: ChatGPT-style command line with full tool power (calendar read/write, live web search, Amsterdam listings, email, notes, memory, tasks)",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-8249.md"
+    },
+    {
+      "path": "docs/handoff/issue-8254.md",
+      "title": "Handoff: [#1002234] CMDLINE-SANDBOX-1: run the CodeSession edit and test loop inside a Sandbox container",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-8254.md"
+    },
+    {
+      "path": "docs/handoff/issue-8257.md",
+      "title": "Handoff: [#1002237] DASH-FOLD-3-1: fold the fleet dashboard into three screens (Now, Work, Portfolio) driven by the command line",
+      "url": "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/handoff/issue-8257.md"
     },
     {
       "path": "docs/handoff/issues/COST-DECISION-OWNER-LOCAL-TEXT-1.md",
