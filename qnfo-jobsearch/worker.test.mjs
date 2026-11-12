@@ -235,7 +235,7 @@ ok((await call("/api/run", { method: "POST" }))[0] === 429, "run cooldown");
   for (const feed of ["greenhouse:cwi", "greenhouse:deepmind", "greenhouse:tno"])
     db.prepare("INSERT INTO jobsearch_feeds (feed, last_error, consecutive_fail) VALUES (?, 'HTTP 404', 126)").run(feed);
   const ops = (await call("/api/ops?fresh=1", {}, env2));
-  ok(ops[1].checks.length === 8 && ops[1].checks.find((c) => c.fm === "jobsearch-auth-unavailable").ok, "ops report lists 8 checks, auth ok", ops[1].checks.filter((c) => !c.ok));
+  ok(ops[1].checks.length === 9 && ops[1].checks.find((c) => c.fm === "jobsearch-auth-unavailable").ok && ops[1].checks.some((c) => c.fm === "jobsearch-resume-template"), "ops report lists 9 checks (resume template among them), auth ok", ops[1].checks.filter((c) => !c.ok));
   ok(ops[1].checks.find((c) => c.fm === "jobsearch-feed-down").ok && ops[1].feeds.filter((f) => !f.active && f.consecutive_fail === 126).length === 3, "retired failing feeds remain visible but do not degrade active feed health");
   ok(ops[1].checks.find((c) => c.fm === "jobsearch-cron-stalled").ok, "ops: cron fresh");
   db.prepare("UPDATE jobsearch_feeds SET consecutive_fail=3 WHERE feed='greenhouse:anthropic'").run();
@@ -279,9 +279,9 @@ ok((await call("/api/run", { method: "POST" }))[0] === 429, "run cooldown");
   await w.scheduled({}, envO, ctxStub); await new Promise((r) => setTimeout(r, 4000));
   const mv = (k) => db.prepare("SELECT last_value, state FROM metric_registry WHERE metric=?").get(k);
   ok(mv("jobsearch_reply_rate_90d").last_value === "0.4" && mv("jobsearch_reply_rate_90d").state === "MEASURED" && mv("jobsearch_applied_30d").last_value === "1", "run writes the outcome metrics", [mv("jobsearch_reply_rate_90d"), mv("jobsearch_applied_30d")]);
-  // no reply in 21 days closes the application automatically (o4..o9 never replied and were applied 35 days ago)
-  ok(db.prepare("SELECT status FROM jobsearch_matches WHERE id='o5'").get().status === "no_reply" && db.prepare("SELECT status FROM jobsearch_matches WHERE id='o1'").get().status === "applied", "no reply in 21 days becomes no_reply; replied stays", db.prepare("SELECT id, status FROM jobsearch_matches").all());
-  ok(db.prepare("SELECT COUNT(*) AS n FROM jobsearch_events WHERE event='no_reply'").get().n >= 5, "no_reply events are logged");
+  // FOLLOWUP-ONLY-INTERVIEW-1 (owner 2026-11-12): silence is not a status; an application with no reply stays "applied" (passive tracking only)
+  ok(db.prepare("SELECT status FROM jobsearch_matches WHERE id='o5'").get().status === "applied", "no reply after 35 days stays applied", db.prepare("SELECT id, status FROM jobsearch_matches").all());
+  ok(db.prepare("SELECT COUNT(*) AS n FROM jobsearch_events WHERE event='no_reply' AND note LIKE 'auto:%'").get().n === 0, "nothing is flipped to no_reply automatically");
   // owner status changes are logged as events; outcome statuses are accepted
   const st = await call("/api/matches/young/status", { method: "POST", headers: tokHdr, body: JSON.stringify({ status: "replied" }) }, envO);
   ok(st[0] === 200 && db.prepare("SELECT event FROM jobsearch_events WHERE match_id='young' ORDER BY id DESC LIMIT 1").get().event === "replied", "outcome status is an event", st);

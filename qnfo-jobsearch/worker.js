@@ -9,7 +9,7 @@
 // JOBSEARCH-CV-1 (1.5.0): the CV is part of this worker (page /cv): a yes/no interview that builds the claim bank, review of unconfirmed claims, roles, achievements and publications edited in D1, a resume per job (summary, roles, selected work, education, skills) and a cover note, history and backup. The search is tied to that bank (evidence the owner can back up weighs more; what the CV lacks is shown as a gap), decided postings (rejected, applied, approved) never come back under another id, rejections carry a reason the search learns from, and a wider net: stretch matches outside the stated preferences, more boards and aggregators.
 // Routes: GET / (web UI) | GET /api | GET /api/matches | GET /api/matches/:id | GET /api/runs | GET /api/ledger | POST /api/run | POST /api/matches/:id/status | GET /health
 // Port of the jobsearch/ Python modules (tests: jobsearch/test_jobsearch.py, qnfo-jobsearch/worker.test.mjs).
-var VERSION = "1.23.4-codeagent";
+var VERSION = "1.24.0-codeagent";
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -353,6 +353,8 @@ const DDL = [
   "CREATE TABLE IF NOT EXISTS jobsearch_bank_history (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL, rev INTEGER NOT NULL, v TEXT NOT NULL)",
   "CREATE TABLE IF NOT EXISTS jobsearch_history (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL, title TEXT, company TEXT, url TEXT, fit INTEGER, verdict TEXT, resume_md TEXT, note_md TEXT)",
   "CREATE TABLE IF NOT EXISTS jobsearch_apps (match_id TEXT PRIMARY KEY, source TEXT, resume_md TEXT, qa_json TEXT, resume_version TEXT, notes TEXT, updated_at TEXT)",
+  "CREATE TABLE IF NOT EXISTS jobsearch_auto (id INTEGER PRIMARY KEY AUTOINCREMENT, match_id TEXT NOT NULL, ts TEXT NOT NULL, mode TEXT, outcome TEXT NOT NULL, ats TEXT, detail_json TEXT)",   // JOBSEARCH-AUTOPILOT-1
+  "CREATE INDEX IF NOT EXISTS idx_jobsearch_auto_match ON jobsearch_auto (match_id, ts)",
   "CREATE TABLE IF NOT EXISTS jobsearch_calib (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL, title TEXT, company TEXT, rubric_fit INTEGER, judge_fit INTEGER, owner TEXT NOT NULL)",
 ];
 let ensured = false;
@@ -361,6 +363,9 @@ async function ensure(env) {
   for (const q of DDL) await env.JOBS_DB.prepare(q).run();
   try { await env.JOBS_DB.prepare("ALTER TABLE jobsearch_feedback ADD COLUMN reason TEXT").run(); } catch (e) { if (!/duplicate column/i.test(String((e && e.message) || e))) throw e; }
   try { await env.JOBS_DB.prepare("ALTER TABLE jobsearch_matches ADD COLUMN gaps_json TEXT").run(); } catch (e) { if (!/duplicate column/i.test(String((e && e.message) || e))) throw e; }   // PROMPTED-RECALL-1: what the posting asks for that the CV cannot back   // why a posting was rejected: the search learns from it
+  for (const [t, c] of [["jobsearch_matches", "desc_text TEXT"], ["jobsearch_matches", "resume_rev TEXT"], ["jobsearch_apps", "contact_email TEXT"]]) {   // RESUME-ONE-TEMPLATE-1, FOLLOWUP-ONLY-INTERVIEW-1
+    try { await env.JOBS_DB.prepare(`ALTER TABLE ${t} ADD COLUMN ${c}`).run(); } catch (e) { if (!/duplicate column/i.test(String((e && e.message) || e))) throw e; }
+  }
   ensured = true; try { await generateWeeklyDossier(env); } catch (e) { logErr("dossier", e); }   // JOBSEARCH-DOSSIER-SOFT-1: a side job never takes a request down (the Monday query on a missing column returned 1101 on 2026-11-09)
 }
 // REACH-FOCUS-1.7: weekly dossier of five named people/organizations
@@ -397,7 +402,7 @@ async function setMeta(env, k, v) {
 // feed key -> id prefix of the postings it produced (a feed that failed this run never expires anything)
 function feedPrefix(feed) {
   const [kind, arg] = feed.split(":");
-  return { greenhouse: `gh:${arg}:`, lever: `lv:${arg}:`, ashby: `ab:${arg}:`, recruitee: `rc:${arg}:`, smartrecruiters: `sr:${arg}:`, remotive: "rm:", muse: "mu:", jobicy: "jb:", arbeitnow: "an:", remoteok: "rok:", himalayas: "him:", hn: "hn:", publicsector: `ps:${arg}:`, workable: `wk:${arg}:` }[kind];
+  return { greenhouse: `gh:${arg}:`, lever: `lv:${arg}:`, ashby: `ab:${arg}:`, recruitee: `rc:${arg}:`, smartrecruiters: `sr:${arg}:`, remotive: "rm:", muse: "mu:", jobicy: "jb:", arbeitnow: "an:", remoteok: "rok:", himalayas: "him:", hn: "hn:", publicsector: `ps:${arg}:`, workable: `wk:${arg}:`, rss: `rss:${arg}:`, yc: "yc:" }[kind];
 }
 const dedupeKey = (j) => `${j.company}|${j.title}|${j.location}`.toLowerCase().replace(/\s+/g, " ").trim();
 
@@ -1089,6 +1094,10 @@ function scoreJob(job, ctx = DEFAULT_CTX, mode = "rank") {
   if (lang.length) flags.push("LANGUAGE: posting asks for " + [...new Set(lang)].sort().join(", ") + "; you list English only");
   const yrs = [...low.matchAll(/(\d{1,2})\+?\s*(?:or more )?years/g)].map((m) => +m[1]);
   if (yrs.length && Math.max(...yrs) > 22) flags.push(`YEARS: asks ${Math.max(...yrs)}+ years`);
+  // MISSION-FIRST-1 (owner 2026-11-12: "profit-driven operations are not necessarily my thing"): nonprofits, foundations, B Corps, public research
+  // and very early start-ups rank above large profit-driven companies; the relevance gate is unchanged, so this only reorders roles already in a lane
+  const ok2 = orgKind(job);
+  if (ok2.bonus) { score += ok2.bonus; why.push(ok2.label); }
   // JOBSEARCH-CONTENT-FIRST-1: the old cap that kept a title outside the role families at 49 is gone; the posting text decides
   const fit = score;
   score -= pen;
@@ -1306,14 +1315,17 @@ function buildResume(job, m) {   // m: { clusters, judge? }
   const score = (f, i) => { const low = f.text.toLowerCase(); return (jm.has(f.id) ? 100 : 0) + hot.reduce((a, t) => a + (t.re.test(low) ? t.w * 4 : 0), 0) + f.cluster.filter((c) => cl.has(c)).length * 3 - i * 0.01; };
   const ordered = LEDGER.facts.map((f, i) => [score(f, i), f]).sort((x, y) => y[0] - x[0]).map((x) => x[1]);
   const strong = {}; for (const f of ordered) if (jm.has(f.id) || hot.some((t) => t.re.test(f.text.toLowerCase()))) strong[f.role || "-"] = (strong[f.role || "-"] || 0) + 1;
-  for (const f of ordered) { const k = f.role || "-"; per[k] = (per[k] || 0) + 1; if (per[k] > ((strong[k] || 0) >= 4 ? 4 : 3)) continue; chosen.push(f); if (chosen.length >= 12) break; }
+  // RESUME-ONE-TEMPLATE-1 (owner 2026-11-12: PDFs for jobs he found differed from PDFs for listed jobs): the role structure never depends on the posting.
+  // A pre-2011 role is always a one-line "Earlier roles" entry, so a fact of one is never chosen and every resume has the same sections and role headings.
+  const oldIds = new Set(roles.filter((r) => endYr(r) < 2011).map((r) => r.id));
+  for (const f of ordered) { if (f.role && oldIds.has(f.role)) continue; const k = f.role || "-"; per[k] = (per[k] || 0) + 1; if (per[k] > ((strong[k] || 0) >= 4 ? 4 : 3)) continue; chosen.push(f); if (chosen.length >= 12) break; }
   const byRole = {};
   for (const f of chosen) (byRole[f.role] = byRole[f.role] || []).push(f);
   const summaries = (b.summaries || []).map((s) => [(s.tags || []).filter((t) => jobTags.has(t)).length, s]).sort((x, y) => y[0] - x[0]);
   const L = [tag("# " + P.name, "P"), tag(`${P.location} | ${P.email} | ${P.links.site} | ${P.links.linkedin}`, "P"), tag(`Earlier work is published under ${P.also_published_as}.`, "P"), ""];
   if (summaries.length) L.push(tag(summaries[0][1].text, "SUM:" + summaries[0][1].id), "");
   L.push(tag("## Experience", "S"));
-  const recent = roles.filter((r) => endYr(r) >= 2011 || byRole[r.id]), older = roles.filter((r) => !recent.includes(r));
+  const recent = roles.filter((r) => !oldIds.has(r.id)), older = roles.filter((r) => oldIds.has(r.id));
   for (const r of recent) { L.push("", tag(roleHead(r), "R:" + r.id)); for (const f of byRole[r.id] || []) L.push(tag("- " + f.text, "F:" + f.id)); }
   if (byRole[""] && byRole[""].length) { L.push("", tag("**Other experience**", "S")); for (const f of byRole[""]) L.push(tag("- " + f.text, "F:" + f.id)); }
   if (older.length) { L.push("", tag("## Earlier roles", "S")); for (const r of older) L.push(tag("- " + roleLite(r), "RL:" + r.id)); }
@@ -1431,7 +1443,7 @@ async function pool(tasks, n) {
   await Promise.all(Array.from({ length: n }, async () => { while (i < tasks.length) { const k = i++; res[k] = await tasks[k](); } }));
   return res;
 }
-async function collectAndRank(ctx, onlyGroups) {
+async function collectAndRank(ctx, onlyGroups, mission) {
   const tasks = [], feedsList = [];
   for (const [kind, args] of Object.entries(BOARDS)) {
     if (onlyGroups && !onlyGroups.includes(kind)) continue;
@@ -1455,6 +1467,13 @@ async function collectAndRank(ctx, onlyGroups) {
       tasks.push(async () => { try { const jobs = await FETCHERS[kind](a); return jobs.length ? { feed, jobs, candidate: true } : { feed, candidate: true, quiet: true }; } catch (e) { return { feed, candidate: true, quiet: true }; } });
     }
   }
+  // JOBSEARCH-AUTOPILOT-1: mission sources (nonprofit, foundation, early start-up boards); live ones every run, a rotating slice probed, every answer recorded for the probe cache
+  const missionResults = [];
+  for (const feed of mission ? mission.live.concat(mission.probe) : []) {
+    const i = feed.indexOf(":"), kind = feed.slice(0, i), a = feed.slice(i + 1);
+    if (!FETCHERS[kind]) continue;
+    tasks.push(async () => { try { const jobs = await FETCHERS[kind](a); missionResults.push({ feed, ok: true, count: jobs.length }); return jobs.length ? { feed, jobs, candidate: true } : { feed, candidate: true, quiet: true }; } catch (e) { missionResults.push({ feed, ok: false, count: 0 }); return { feed, candidate: true, quiet: true }; } });
+  }
   const kept = [], errors = [], excl = {}, feedResults = [], nearAll = [];
   let fetched = 0;
   // each feed is ranked as soon as it is parsed so only passing jobs stay in memory
@@ -1472,7 +1491,7 @@ async function collectAndRank(ctx, onlyGroups) {
     kept.push(...ok);
   }), 6);
   kept.sort((a, b) => b.match.score - a.match.score);
-  return { kept, errors, excl, fetched, feeds: feedsList.length, feedResults, near: nearAll.slice(0, 150), candidatesLive };
+  return { kept, errors, excl, fetched, feeds: feedsList.length, feedResults, near: nearAll.slice(0, 150), candidatesLive, missionResults };
 }
 // JOBSEARCH-LLM-RERANK-1: reorder-only re-rank of the top passing postings.
 // The model may only reorder and add one sentence of reason per posting; it never writes resume or note text
@@ -1663,11 +1682,7 @@ async function judgeTop(env, kept, n = 8) {
   }
   return lifted ? out.sort((a, b) => b.match.score - a.match.score) : out;   // the AI reorder stands unless a posting was lifted
 }
-function artifactsFor(j) {
-  const res = buildResume(j, j.match), note = buildNote(j, j.match);
-  const v = verify(res, j).concat(verify(note, j));
-  return v.length ? { verified: 0, blocked: v.join("; "), resume: null, note: null } : { verified: 1, blocked: null, resume: stripTags(res), note: stripTags(note) };
-}
+function artifactsFor(j) { return tailoredResume(j, j.match); }   // RESUME-ONE-TEMPLATE-1: the one generator
 // ------------------------------------------------------------------ preferences, feedback, "check a job" (JOBSEARCH-PROFILE-1)
 async function loadCtx(env) {
   await ensure(env);
@@ -2166,6 +2181,7 @@ function fileResponse(kind, row) {
   if (kind === "resume.pdf") return new Response(pdfOf(row.resume_md, `${P.name}: resume for ${row.company}`), { headers: { ...cors, "content-type": "application/pdf", "content-disposition": `attachment; filename="${base}.pdf"` } });
   if (kind === "resume.html") return new Response(resumeHtml(row.resume_md, `${P.name}: resume for ${row.company}`), { headers: { ...cors, "content-type": "text/html; charset=utf-8" } });
   if (kind === "resume.md") return new Response(row.resume_md, { headers: { ...cors, "content-type": "text/markdown; charset=utf-8" } });
+  if (kind === "note.pdf") return new Response(pdfOf("# " + P.name + "\n\n" + plainOf(row.note_md || ""), `${P.name}: note for ${row.company}`), { headers: { ...cors, "content-type": "application/pdf", "content-disposition": `attachment; filename="${fileSlug(P.name)}_Cover_${fileSlug(row.company)}.pdf"` } });
   if (kind === "note.txt") return new Response(plainOf(row.note_md), { headers: { ...cors, "content-type": "text/plain; charset=utf-8" } });
   return new Response(plainOf(row.resume_md), { headers: { ...cors, "content-type": "text/plain; charset=utf-8" } });
 }
@@ -2196,17 +2212,13 @@ async function referralList(env, ctx) {
   const rows = (await env.JOBS_DB.prepare("SELECT id, title, company, tier, score, status FROM jobsearch_matches WHERE verified=1 AND status IN ('pending_owner_approval','approved','applied') AND tier IN ('A','B') ORDER BY CASE tier WHEN 'A' THEN 0 ELSE 1 END, score DESC LIMIT 10").all()).results;
   return { count: rows.length, items: rows.map((r) => ({ id: r.id, title: r.title, company: r.company, tier: r.tier, status: r.status, referral: "/api/matches/" + encodeURIComponent(r.id) + "/referral" })) };
 }
-async function followups(env) {
+async function followups(env) {   // FOLLOWUP-ONLY-INTERVIEW-1: a follow-up note exists only after an interview or offer, and only to a person whose address is known
   await ensure(env);
-  const cut = new Date(Date.now() - 7 * 86400000).toISOString();
-  const rows = (await env.JOBS_DB.prepare("SELECT m.id, m.title, m.company, m.url, MIN(e.ts) AS applied_at FROM jobsearch_matches m JOIN jobsearch_events e ON e.match_id=m.id AND e.event='applied' WHERE m.status='applied' GROUP BY m.id HAVING MIN(e.ts) <= ? ORDER BY MIN(e.ts) LIMIT 50").bind(cut).all()).results;
+  const rows = (await env.JOBS_DB.prepare("SELECT m.id, m.title, m.company, m.url, m.status, a.contact_email FROM jobsearch_matches m JOIN jobsearch_apps a ON a.match_id=m.id WHERE m.status IN ('interview','offer') AND a.contact_email IS NOT NULL AND a.contact_email <> ''").all()).results || [];
   await loadBank(env);
-  const items = rows.map((r) => {
-    const day = String(r.applied_at).slice(0, 10), days = Math.floor((Date.now() - Date.parse(r.applied_at)) / 86400000);
-    return { id: r.id, title: r.title, company: r.company, url: r.url, applied_on: day, days_waiting: days,
-      note: ["Hello,", "", `I applied for the ${r.title} role at ${r.company} on ${day} and wanted to confirm that my application reached you. I remain interested and can share anything further that would help.`, "", "Best regards,", P.name].join("\n") };
-  });
-  return { count: items.length, items };
+  const items = rows.map((r) => ({ id: r.id, title: r.title, company: r.company, url: r.url, status: r.status, to: r.contact_email,
+    note: ["Hello,", "", r.status === "offer" ? `Thank you for the offer for the ${r.title} role. I am reading it carefully and will come back to you shortly.` : `Thank you for the conversation about the ${r.title} role at ${r.company}. I enjoyed it and remain very interested; I am glad to share anything further that would help.`, "", "Best regards,", P.name].join("\n") }));
+  return { count: items.length, items, rule: "follow-ups only after an interview or offer, to a known contact" };
 }
 async function run(env) {
   await ensure(env);
@@ -2225,7 +2237,9 @@ async function run(env) {
     const ctx = await loadCtx(env);
     const prefsHash = await sha256hex(JSON.stringify([RANK_RULES, ctx.a, [...ctx.learned.boost].sort(), [...ctx.learned.block].sort(), [...OWNED].sort(), [...ctx.learned.coPen].sort(), [...ctx.learned.coDrop].sort()]));
     const prefsChanged = (await getMeta(env, "prefs_hash")) !== prefsHash;
-    let { kept, errors, excl, fetched, feeds, feedResults, near, candidatesLive } = await collectAndRank(ctx);
+    let mission = null; try { mission = await missionSources(env); } catch (e) { logErr("mission-sources", e); }
+    let { kept, errors, excl, fetched, feeds, feedResults, near, candidatesLive, missionResults } = await collectAndRank(ctx, null, mission);
+    if (mission) await saveMissionProbes(env, mission.cache, missionResults || []).catch((e) => logErr("mission-probe-save", e));
     await setMeta(env, "candidates_live", JSON.stringify((candidatesLive || []).sort())).catch((e) => logErr("candidates-live", e));
     // what the owner already decided (rejected, applied, approved, got a reply) never comes back, under any id, board or location; and a role already pending under another id is not listed twice
     const decided = await decidedKeys(env);
@@ -2256,13 +2270,16 @@ async function run(env) {
     const now = new Date().toISOString();
     const stmts = [];
     for (const j of toStore) {
-      const a = artifactsFor(j);
+      const a = artifactsFor(j), rv = resumeRev();
       if (!a.verified) blocked++;
       stmts.push(env.JOBS_DB.prepare(
-        `INSERT INTO jobsearch_matches (id, first_seen, last_seen, run_id, company, title, location, url, tier, score, why_json, flags_json, verified, blocked_reason, resume_md, note_md, status, gaps_json)
-         VALUES (?1,?2,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,'pending_owner_approval',?16)
-         ON CONFLICT(id) DO UPDATE SET last_seen=?2, run_id=?3, tier=?8, score=?9, why_json=?10, flags_json=?11, verified=?12, blocked_reason=?13, resume_md=?14, note_md=?15, title=?5, location=?6, url=?7, gaps_json=?16`
-      ).bind(j.id, now, rid, j.company, j.title, j.location, j.url, j.match.tier, j.match.score, JSON.stringify(j.match.why || []), JSON.stringify(j.match.flags || []), a.verified, a.blocked, a.resume, a.note, JSON.stringify(recallGaps(j))));
+        `INSERT INTO jobsearch_matches (id, first_seen, last_seen, run_id, company, title, location, url, tier, score, why_json, flags_json, verified, blocked_reason, resume_md, note_md, status, gaps_json, desc_text, resume_rev)
+         VALUES (?1,?2,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,'pending_owner_approval',?16,?17,?18)
+         ON CONFLICT(id) DO UPDATE SET last_seen=?2, run_id=?3, tier=?8, score=?9, why_json=?10, flags_json=?11, verified=?12, blocked_reason=?13, title=?5, location=?6, url=?7, gaps_json=?16, desc_text=?17,
+           resume_md=CASE WHEN jobsearch_matches.status IN ('pending_owner_approval','approved','saved','expired') THEN ?14 ELSE jobsearch_matches.resume_md END,
+           note_md=CASE WHEN jobsearch_matches.status IN ('pending_owner_approval','approved','saved','expired') THEN ?15 ELSE jobsearch_matches.note_md END,
+           resume_rev=CASE WHEN jobsearch_matches.status IN ('pending_owner_approval','approved','saved','expired') THEN ?18 ELSE jobsearch_matches.resume_rev END`
+      ).bind(j.id, now, rid, j.company, j.title, j.location, j.url, j.match.tier, j.match.score, JSON.stringify(j.match.why || []), JSON.stringify(j.match.flags || []), a.verified, a.blocked, a.resume, a.note, JSON.stringify(recallGaps(j)), String(j.desc || "").slice(0, 8000), rv));
     }
     // feed health: success resets the streak, failure extends it (detector fm-jobsearch-feed-down reads 3 in a row)
     for (const f of feedResults) {
@@ -2289,11 +2306,11 @@ async function run(env) {
     for (let i = 0; i < stmts.length; i += 50) await env.JOBS_DB.batch(stmts.slice(i, i + 50));
     await env.JOBS_DB.prepare("UPDATE jobsearch_runs SET finished_at=?, feeds=?, fetched=?, passed=?, stored=?, blocked=?, excluded_json=?, errors_json=? WHERE id=?")
       .bind(new Date().toISOString(), feeds, fetched, kept.length, toStore.length, blocked, JSON.stringify(excl), JSON.stringify(errors), rid).run();
-    const nrCut = iso(t0 - NO_REPLY_DAYS * 86400000), nrWhere = "status='applied' AND id IN (SELECT match_id FROM jobsearch_events GROUP BY match_id HAVING MIN(CASE WHEN event='applied' THEN ts END) < ?1) AND id NOT IN (SELECT match_id FROM jobsearch_events WHERE event IN ('replied','interview','offer'))";
-    await env.JOBS_DB.batch([
-      env.JOBS_DB.prepare("INSERT INTO jobsearch_events (match_id, event, ts, note) SELECT id, 'no_reply', ?2, 'auto: no reply in 21 days' FROM jobsearch_matches WHERE " + nrWhere).bind(nrCut, new Date().toISOString()),
-      env.JOBS_DB.prepare("UPDATE jobsearch_matches SET status='no_reply', decided_at=?2 WHERE " + nrWhere).bind(nrCut, new Date().toISOString()),
-    ]);
+    // FOLLOWUP-ONLY-INTERVIEW-1 (owner 2026-11-12: "no reply after 7 days ... just means that they haven't responded yet"): an application stays "applied" until a
+    // mail or a tap moves it; nothing is flipped to no_reply and no follow-up is drafted for a web form that went into an applicant tracking system
+    await resumeConsistency(env, true).catch((e) => logErr("resume-consistency", e));   // RESUME-ONE-TEMPLATE-1: every open draft is rebuilt on the one template and the current bank
+    const staleFeeds = ((await env.JOBS_DB.prepare("SELECT feed FROM jobsearch_feeds WHERE consecutive_fail >= 3").all()).results || []).filter((f) => !ACTIVE_FEEDS.has(f.feed)).map((f) => f.feed);
+    if (staleFeeds.length) await env.JOBS_DB.batch(staleFeeds.map((f) => env.JOBS_DB.prepare("DELETE FROM jobsearch_feeds WHERE feed=?").bind(f)));   // a retired board is not an outage
     try { await writeOutcomeMetrics(env, await outcomes(env)); } catch (e) { logErr("outcome-metrics", e); }
     await setMeta(env, "prefs_hash", prefsHash);
     await setMeta(env, "ledger_verified_on", LEDGER_VERIFIED_ON);
@@ -2962,6 +2979,7 @@ async function opsReport(env) {
   const rerank = Object.fromEntries(((await db.prepare("SELECT k, v FROM jobsearch_meta WHERE k IN ('rerank_status','rerank_at','rerank_via')").all()).results || []).map((r) => [r.k, r.v]));
   let candidatesLive = []; try { candidatesLive = JSON.parse((await db.prepare("SELECT v FROM jobsearch_meta WHERE k='candidates_live'").first() || {}).v || "[]"); } catch (e) { logErr("candidates-live-read", e); }   // JOBSEARCH-LLM-RERANK-1: what the last run's AI re-rank did
   const ageMin = last ? Math.round((now - Date.parse(last.finished_at)) / 60000) : null;
+  let resumeCons = {}, mission = {}; try { resumeCons = JSON.parse((await getMeta(env, "resume_consistency")) || "{}"); mission = sourceCoverage(JSON.parse((await getMeta(env, "mission_probe")) || "{}")); } catch (e) { logErr("ops-meta", e); }
   const ledgerAge = Math.floor((now - Date.parse(LEDGER_VERIFIED_ON)) / 86400000);
   const checks = [
     { fm: "jobsearch-cron-stalled", ok: ageMin !== null && ageMin <= 120, detail: ageMin === null ? "no finished run yet" : `last run finished ${ageMin} min ago (limit 120)` },
@@ -2971,9 +2989,10 @@ async function opsReport(env) {
     { fm: "jobsearch-stale-pending", ok: Number(stalePending) === 0, detail: `${stalePending} pending match(es) not seen for 72 h` },
     { fm: "jobsearch-ledger-stale", ok: ledgerAge <= 90, detail: `ledger verified ${LEDGER_VERIFIED_ON}, ${ledgerAge} days old (limit 90)` },
     { fm: "jobsearch-intake-collapse", ok: !(recent.length >= 3 && recent.every((r) => Number(r.fetched) < 1000 || Number(r.passed) === 0)), detail: recent.map((r) => `${r.fetched}/${r.passed}`).join(" ") + " (fetched/passed, last 3 runs)" },
+    { fm: "jobsearch-resume-template", ok: Number(resumeCons.mismatched || 0) === 0, detail: `${resumeCons.mismatched || 0} open resume draft(s) off the one template (checked ${resumeCons.checked || 0} at ${resumeCons.at || "never"}; the hourly run rebuilds them)` },   // RESUME-ONE-TEMPLATE-1
     { fm: "jobsearch-auth-unavailable", ok: !!env.EMAIL || !!env.LOOP_TOKEN, detail: `email sign-in ${env.EMAIL ? "bound" : "missing"}, loop token ${env.LOOP_TOKEN ? "set" : "not set"}` },
   ];
-  return { worker: WORKER, version: VERSION, candidates_live: candidatesLive, candidates_probed: Object.values(CANDIDATE_BOARDS).flat().length, status: checks.every((c) => c.ok) ? "ok" : "degraded", checked_at: iso(now), last_run: last ? { id: last.id, finished_at: last.finished_at, fetched: last.fetched, passed: last.passed, stored: last.stored, blocked: last.blocked } : null, rerank: { status: rerank.rerank_status || "never", via: rerank.rerank_via || null, at: rerank.rerank_at || null, binding: !!(env.AI || env.QNFO_AI) }, feeds, matches_by_status: Object.fromEntries(counts.map((c) => [c.status, c.n])), checks };
+  return { worker: WORKER, version: VERSION, sources: mission, candidates_live: candidatesLive, candidates_probed: Object.values(CANDIDATE_BOARDS).flat().length, status: checks.every((c) => c.ok) ? "ok" : "degraded", checked_at: iso(now), last_run: last ? { id: last.id, finished_at: last.finished_at, fetched: last.fetched, passed: last.passed, stored: last.stored, blocked: last.blocked } : null, rerank: { status: rerank.rerank_status || "never", via: rerank.rerank_via || null, at: rerank.rerank_at || null, binding: !!(env.AI || env.QNFO_AI) }, feeds, matches_by_status: Object.fromEntries(counts.map((c) => [c.status, c.n])), checks };
 }
 const INDEX = {
   worker: WORKER, version: VERSION,
@@ -3068,14 +3087,14 @@ async function intakeJob(env, b) {
   const job = { id: "manual:" + (await sha256hex(key)).slice(0, 12), source: b.source || sourceOf(p.url), company: p.company || "the employer", title: p.title, location: p.location, url: p.url, desc: p.desc };
   const sc = scoreJob(job, ctx, "analyze");
   let judge = null; try { judge = await judgeJob(env, job); } catch (e) { logErr("intake-judge", e); }
-  const m = { clusters: sc.clusters, judge }, res = buildResume(job, m), note = buildNote(job, m), bad = verify(res, job).concat(verify(note, job));
+  const m = { clusters: sc.clusters, judge }, art = tailoredResume(job, m), bad = art.verified ? [] : [art.blocked];   // RESUME-ONE-TEMPLATE-1: the same generator as the hourly run
   const why = (sc.why || []).concat(judge && Number.isFinite(+judge.fit) ? ["AI read: fit " + judge.fit + " (" + ((judge.matched_fact_ids || []).length) + " of your facts match)"] : []);
   const now = new Date().toISOString();
   await env.JOBS_DB.batch([
-    env.JOBS_DB.prepare("INSERT INTO jobsearch_matches (id, first_seen, last_seen, company, title, location, url, tier, score, why_json, flags_json, verified, blocked_reason, resume_md, note_md, status, decided_at) VALUES (?1,?2,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?2)")
-      .bind(job.id, now, job.company, job.title, job.location, job.url, sc.tier, sc.fit, JSON.stringify(why), JSON.stringify(sc.flags || []), bad.length ? 0 : 1, bad.length ? bad.join("; ").slice(0, 300) : null, bad.length ? null : stripTags(res), bad.length ? null : stripTags(note), status),
+    env.JOBS_DB.prepare("INSERT INTO jobsearch_matches (id, first_seen, last_seen, company, title, location, url, tier, score, why_json, flags_json, verified, blocked_reason, resume_md, note_md, status, decided_at, desc_text, resume_rev) VALUES (?1,?2,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?2,?16,?17)")
+      .bind(job.id, now, job.company, job.title, job.location, job.url, sc.tier, sc.fit, JSON.stringify(why), JSON.stringify(sc.flags || []), bad.length ? 0 : 1, bad.length ? bad.join("; ").slice(0, 300) : null, art.resume, art.note, status, String(job.desc || "").slice(0, 8000), resumeRev()),
     env.JOBS_DB.prepare("INSERT INTO jobsearch_events (match_id, event, ts, note) VALUES (?1,?2,?3,?4)").bind(job.id, status, now, "intake from " + job.source),
-    env.JOBS_DB.prepare("INSERT INTO jobsearch_apps (match_id, source, resume_md, notes, updated_at) VALUES (?1,?2,?3,'',?4)").bind(job.id, job.source, bad.length ? null : stripTags(res), now),
+    env.JOBS_DB.prepare("INSERT INTO jobsearch_apps (match_id, source, resume_md, notes, updated_at) VALUES (?1,?2,?3,'',?4)").bind(job.id, job.source, art.resume, now),
   ]);
   return { id: job.id, duplicate: false, status, title: job.title, company: job.company, fit: sc.fit, verdict: fitWord(sc.fit), source: job.source };
 }
@@ -3166,12 +3185,427 @@ async function applyJobMail(env, m) {
   const rows = (await env.JOBS_DB.prepare(`SELECT id, company, title, status FROM jobsearch_matches WHERE status IN (${PIPE_OPEN.map(() => "?").join(",")})`).bind(...PIPE_OPEN).all()).results.filter((r) => { const c = String(r.company || "").toLowerCase().replace(/[^a-z0-9]+/g, ""); return c && (c.includes(key) || key.includes(c)); });   // standards-ok: only "?" placeholders are interpolated, values are bound
   if (rows.length !== 1) return { matched: false, reason: rows.length ? "more than one open application at " + p.company : "no tracked application at " + p.company, company: p.company, event: p.event };
   await setPipeStatus(env, rows[0].id, p.event, "from e-mail: " + String(m.subject || "").slice(0, 120), m.date);
+  if (p.event === "interview" || p.event === "offer") {   // the person who wrote is the contact a follow-up may go to; the owner hears about it at once
+    const addr = (/[\w.+-]+@[\w-]+(?:\.[\w-]+)+/.exec(String(m.from || "")) || [])[0] || "";
+    if (addr && !/no-?reply|notifications?@|@(?:greenhouse|ashbyhq|lever|workablemail|workable|smartrecruiters|myworkday|linkedin)\./i.test(addr)) await env.JOBS_DB.prepare("INSERT INTO jobsearch_apps (match_id, source, contact_email, notes, updated_at) VALUES (?1,'',?2,'',?3) ON CONFLICT(match_id) DO UPDATE SET contact_email=?2, updated_at=?3").bind(rows[0].id, addr, new Date().toISOString()).run().catch((e) => logErr("contact", e));
+    await sendOwnerMail(env, (p.event === "offer" ? "Offer: " : "Interview request: ") + rows[0].title + ", " + rows[0].company, "Subject of the mail: " + String(m.subject || "") + "\n\nThe application is now marked " + p.event + ". Details: " + JOBS_HOST);
+  }
   return { matched: true, id: rows[0].id, company: rows[0].company, event: p.event };
+}
+// ------------------------------------------------------------------ JOBSEARCH-AUTOPILOT-1 (owner, 2026-11-12)
+// Owner: "employers are using automated systems, and so should I ... I should have next to zero burden." This block closes the loop from a match to a
+// submitted application: mission-first ranking (orgKind), self-maintaining sources (MISSION_CANDIDATES probed by the worker), one resume template for
+// every PDF (resumeSkeleton, resumeConsistency), passive status tracking only (no follow-up nags), e-mail only when something happened (notifyOwner),
+// and the auto-apply queue that the Playwright runner in the private repo rwnq8/personal-life (applier/apply.mjs) works through. The runner signs in
+// with GitHub's own OIDC token (no key anywhere); every answer it types comes from autopilotResolve, which uses verified facts only and skips the job
+// and queues a yes/no/not-sure ask when a required question would need a claim the record does not back.
+
+// --- mission-first ranking
+const MISSION_ORGS = {   // coKey(company) -> kind; only organisations whose status is public record
+  givewell: "nonprofit", givedirectly: "nonprofit", codeforamerica: "nonprofit", wikimediafoundation: "foundation", wikimedia: "foundation", khanacademy: "nonprofit",
+  nesta: "foundation", rti: "nonprofit", rtiinternational: "nonprofit", brookings: "nonprofit", msf: "nonprofit", oecd: "public", randeurope: "nonprofit", metr: "nonprofit",
+  redwoodresearch: "nonprofit", mozilla: "foundation", mozillafoundation: "foundation", allenai: "nonprofit", ai2: "nonprofit", eff: "nonprofit", datakind: "nonprofit",
+  usdigitalresponse: "nonprofit", benetech: "nonprofit", ourworldindata: "nonprofit", rmi: "nonprofit", wri: "nonprofit", worldresourcesinstitute: "nonprofit",
+  carbonplan: "nonprofit", ember: "nonprofit", epochai: "nonprofit", rethinkpriorities: "nonprofit", openphilanthropy: "foundation", farai: "nonprofit", cais: "nonprofit",
+  partnershiponai: "nonprofit", futureoflife: "nonprofit", ifp: "nonprofit", convergentresearch: "nonprofit", astera: "nonprofit", wellcome: "foundation",
+  gatesfoundation: "foundation", chanzuckerberginitiative: "foundation", omidyarnetwork: "foundation", schmidtsciences: "foundation", renaissancephilanthropy: "foundation",
+  climateworks: "foundation", transitcenter: "foundation", itdp: "nonprofit", propublica: "nonprofit", apolloresearch: "nonprofit", governanceai: "nonprofit", cset: "public",
+  thealanturinginstitute: "public", tno: "public", cwi: "public", europeancommission: "public", nwo: "public", universityofamsterdam: "public", ecosia: "bcorp",
+};
+const ORG_LABEL = { nonprofit: "mission: nonprofit", foundation: "mission: foundation", bcorp: "mission: B Corp", public: "mission: public research or government", early: "mission: early-stage start-up", corp: "large profit-driven company" };
+const ORG_BONUS = { nonprofit: 10, foundation: 10, bcorp: 10, early: 8, public: 5, corp: -5 };
+function orgKind(job) {
+  const ck = coKey(job.company), d = String(job.desc || "");
+  let kind = MISSION_ORGS[ck] || "";
+  if (!kind) {
+    if (/\b501\s?\(c\)\s?\(3\)|\bnon-?profit organi[sz]ation|\bnot-for-profit\b|\bregistered charity\b|\bcharitable organi[sz]ation\b|\bwe are a (?:small )?non-?profit\b|\bstichting\b/i.test(d)) kind = "nonprofit";
+    else if (/\b(?:private|charitable|family|philanthropic) foundation\b|\bphilanthrop(?:y|ic) (?:organi[sz]ation|funder)\b/i.test(d)) kind = "foundation";
+    else if (/\bcertified b[- ]?corp(?:oration)?\b|\bwe are a b[- ]?corp\b|\bb corp(?:oration)? certified\b/i.test(d)) kind = "bcorp";
+    else if (/\bpre-seed\b|\bseed[- ](?:stage|round|funded)\b|\bseries a\b|\bfounding (?:team|member|hire|researcher|engineer|employee)\b|\bfirst \d{1,2} (?:employees|hires)\b|\by ?combinator\b|\b(?:yc|y-combinator) [swfx]\d{2}\b|\b(?:team|company) of (?:\d|1\d) (?:people|employees)\b/i.test(d)) kind = "early";
+    else if (/\bresearch institute\b|\bintergovernmental\b|\bgovernment agency\b|\bpublic research (?:organi[sz]ation|institute)\b|\buniversity\b/i.test(d) && !/\buniversity degree\b/i.test(d)) kind = "public";
+    else if (/\bfortune (?:100|500)\b|\bpublicly traded\b|\blisted on the (?:nasdaq|nyse)\b|\b\d{2,3},000\+? (?:employees|people)\b/i.test(d)) kind = "corp";
+  }
+  return kind ? { kind, bonus: ORG_BONUS[kind] || 0, label: ORG_LABEL[kind] } : { kind: "", bonus: 0, label: "" };
+}
+
+// --- sources the worker probes and keeps on its own (MISSION_CANDIDATES): a slug that answers is fetched every run; one that does not is re-probed after 14 days.
+// Each name is tried on Greenhouse, Lever, Ashby and Workable, MISSION_PROBES_PER_RUN at a time, so a new name costs nothing until it answers.
+const MISSION_CANDIDATE_NAMES = [
+  // AI governance, evaluation and safety research (nonprofit and public)
+  "governance-ai", "govai", "cset", "epochai", "epoch", "rethinkpriorities", "openphilanthropy", "longview", "cais", "safe-ai", "palisaderesearch", "far-ai", "farai", "futureoflife",
+  "partnershiponai", "ifp", "institute-for-progress", "aipolicyinstitute", "cltr", "convergentresearch", "astera", "arcadiascience", "renaissancephilanthropy", "schmidtsciences",
+  "fastforward", "usdigitalresponse", "datakind", "benetech", "ourworldindata", "80000hours", "effectiveventures", "centreforeffectivealtruism", "allenai", "ai2", "eff",
+  "mozillafoundation", "chanzuckerberginitiative", "omidyarnetwork", "wellcome", "climateworks", "rmi", "wri", "carbonplan", "ember", "transitcenter", "itdp", "propublica",
+  "aisafetyinstitute", "apart", "apartresearch", "transluce", "elicit", "ought", "conjecture", "safetyresearch", "openmined", "aiimpacts", "simons", "sloan",
+  // early-stage start-ups in the owner's lanes (AI evaluation, assurance, governance, agent oversight) and mission-driven mobility and climate
+  "patronus", "patronusai", "giskard", "credoai", "credo-ai", "trustible", "saidot", "holisticai", "fairly", "arthur", "arthurai", "lakera", "haizelabs", "guardrailsai",
+  "humanloop", "braintrust", "braintrustdata", "vals", "valsai", "scaleai-public", "metaculus", "goodjudgment", "manifold", "replica", "replicahq", "populus", "remix",
+  "swiftly", "transitapp", "citymapper", "optibus", "watershed", "climatiq", "patch", "pachama", "ecosia", "kickstarter", "openai-residency",
+];
+const MISSION_KINDS = ["greenhouse", "lever", "ashby", "workable"];
+const MISSION_PROBES_PER_RUN = 32, MISSION_DEAD_DAYS = 14;
+// RSS and page sources (nonprofit, foundation and start-up boards); a source that does not answer stays quiet and is re-probed later
+const RSS_SOURCES = {
+  wwr_management: "https://weworkremotely.com/categories/remote-management-and-finance-jobs.rss",
+  wwr_all: "https://weworkremotely.com/remote-jobs.rss",
+  pnd: "https://philanthropynewsdigest.org/jobs/rss",
+  idealist: "https://www.idealist.org/en/jobs.rss",
+  techjobsforgood: "https://www.techjobsforgood.com/jobs/rss/",
+  workforgood: "https://www.workforgood.org/rss/jobs/",
+  escapethecity: "https://www.escapethecity.org/jobs/rss",
+  climatebase: "https://climatebase.org/jobs/rss",
+  "80000hours": "https://jobs.80000hours.org/rss",
+  ngojobs: "https://ngojobsinafrica.com/feed/",
+  devex: "https://www.devex.com/jobs/rss",
+  reliefweb: "https://reliefweb.int/jobs/rss.xml",
+};
+const YC_ROLES = ["operations", "product", "science", "management", "recruiting-hr"];
+const strHash = (s) => { let h = 2166136261; for (const c of String(s)) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619) >>> 0; } return h.toString(36); };
+function parseRss(xml, key) {
+  const out = [], items = String(xml).split(/<item[\s>]|<entry[\s>]/i).slice(1);
+  for (const it of items.slice(0, 200)) {
+    const pick = (tag) => { const m = it.match(new RegExp("<" + tag + "[^>]*>([\\s\\S]*?)</" + tag + ">", "i")); return m ? decodeEntities(m[1].replace(/<!\[CDATA\[|\]\]>/g, "")).trim() : ""; };
+    let link = pick("link"); if (!link) { const m = it.match(/<link[^>]*href="([^"]+)"/i); link = m ? m[1] : ""; }
+    let title = stripHtml(pick("title")), company = stripHtml(pick("company") || pick("author") || pick("dc:creator"));
+    const m = title.match(/^([^:|]{2,60})[:|]\s+(.{3,})$/); if (!company && m) { company = m[1].trim(); title = m[2].trim(); }
+    const loc = stripHtml(pick("region") || pick("location") || pick("job_listing:location") || "");
+    if (!title || !/^https?:\/\//.test(link)) continue;
+    out.push({ id: `rss:${key}:${strHash(link)}`, source: "rss:" + key, company: company || key, title: title.slice(0, 160), location: loc || "Remote", url: link, desc: stripHtml(pick("description") || pick("content") || pick("summary")).slice(0, 12000) });
+  }
+  return out;
+}
+FETCHERS.rss = async (key) => { const u = RSS_SOURCES[key]; if (!u) return []; return parseRss(await getText(u), key); };
+// Y Combinator's public job pages carry their listings as JSON in a data-page attribute (an Inertia page); anything else returns nothing
+FETCHERS.yc = async (role) => {
+  const html = await getHtml(`https://www.ycombinator.com/jobs/role/${encodeURIComponent(role)}`);
+  const m = html.match(/data-page="([^"]+)"/); if (!m) return [];
+  let data; try { data = JSON.parse(decodeEntities(m[1])); } catch (e) { return []; }
+  const out = [], seen = new Set();
+  const walk = (o, depth) => {
+    if (!o || typeof o !== "object" || depth > 7) return;
+    if (Array.isArray(o)) { for (const x of o) walk(x, depth + 1); return; }
+    const title = o.title || o.jobTitle, co = o.companyName || (o.company && o.company.name);
+    const url = o.url || o.jobUrl || (o.id && o.companySlug ? `https://www.ycombinator.com/companies/${o.companySlug}/jobs/${o.id}` : "");
+    if (title && co && url && !seen.has(url)) { seen.add(url); out.push({ id: `yc:${strHash(url)}`, source: "yc", company: String(co), title: String(title).slice(0, 160), location: String(o.location || o.locations || "") + (o.remote ? " (Remote)" : ""), url: /^https?:/.test(url) ? url : "https://www.ycombinator.com" + url, desc: stripHtml(String(o.description || o.companyOneLiner || o.companyDescription || "")) + " Y Combinator start-up." }); }
+    for (const v of Object.values(o)) walk(v, depth + 1);
+  };
+  walk(data, 0);
+  return out;
+};
+async function missionSources(env) {   // which candidate feeds to fetch this run, from the probe cache in jobsearch_meta
+  let cache = {}; try { cache = JSON.parse((await getMeta(env, "mission_probe")) || "{}"); } catch (e) { logErr("mission-probe-read", e); }
+  const now = Date.now(), all = [];
+  for (const n of MISSION_CANDIDATE_NAMES) for (const k of MISSION_KINDS) all.push(`${k}:${n}`);
+  for (const k of Object.keys(RSS_SOURCES)) all.push(`rss:${k}`);
+  for (const r of YC_ROLES) all.push(`yc:${r}`);
+  const live = all.filter((f) => cache[f] && cache[f].s === "live" && !ACTIVE_FEEDS.has(f));
+  const due = all.filter((f) => !ACTIVE_FEEDS.has(f) && (!cache[f] || (cache[f].s !== "live" && now - Date.parse(cache[f].at || 0) > MISSION_DEAD_DAYS * 86400000)));
+  const off = (+(await getMeta(env, "mission_probe_cursor")) || 0) % Math.max(1, due.length);
+  const probe = due.slice(off, off + MISSION_PROBES_PER_RUN).concat(due.slice(0, Math.max(0, off + MISSION_PROBES_PER_RUN - due.length)));
+  await setMeta(env, "mission_probe_cursor", String(off + MISSION_PROBES_PER_RUN));
+  return { cache, live, probe: [...new Set(probe)].filter((f) => !live.includes(f)) };
+}
+async function saveMissionProbes(env, cache, results) {
+  const now = new Date().toISOString();
+  for (const r of results) {
+    const prev = cache[r.feed] || {};
+    if (r.ok && r.count > 0) cache[r.feed] = { s: "live", n: r.count, at: now, fails: 0 };
+    else if (prev.s === "live" && (prev.fails || 0) < 2) cache[r.feed] = { ...prev, fails: (prev.fails || 0) + 1, at: now };   // a live source gets three runs before it is dropped
+    else cache[r.feed] = { s: "dead", at: now };
+  }
+  await setMeta(env, "mission_probe", JSON.stringify(cache));
+  return cache;
+}
+function sourceCoverage(cache) {
+  const live = Object.entries(cache || {}).filter(([, v]) => v.s === "live").map(([f]) => f);
+  const byKind = {};
+  for (const f of live) { const [k, n] = f.split(":"); const kind = k === "rss" || k === "yc" ? (k === "yc" ? "early" : "board") : (MISSION_ORGS[coKey(n)] || "early"); byKind[kind] = (byKind[kind] || 0) + 1; }
+  return { core_feeds: ACTIVE_FEEDS.size, mission_live: live.length, mission_live_by_kind: byKind, mission_probed: Object.keys(cache || {}).length, mission_candidates: MISSION_CANDIDATE_NAMES.length * MISSION_KINDS.length + Object.keys(RSS_SOURCES).length + YC_ROLES.length };
+}
+
+// --- one resume template for every PDF (RESUME-ONE-TEMPLATE-1)
+const RESUME_TEMPLATE = "one-template-1";
+const FROZEN_STATUSES = ["applied", "screening", "replied", "interview", "offer", "rejected", "no_reply", "withdrawn"];   // the resume as it was sent is kept as sent
+const resumeRev = () => RESUME_TEMPLATE + ":" + BANK_REV;
+function resumeSkeleton(md) {   // everything a resume holds that must never depend on the posting: header, sections, role headings, earlier roles, education, certifications
+  const out = []; let sec = "", n = 0;
+  for (const raw of String(md || "").split("\n")) {
+    const l = raw.replace(/ <!--.*?-->$/, "").trimEnd();
+    if (!l.trim()) continue;
+    n++;
+    if (n <= 3 && !l.startsWith("## ")) { out.push("H " + l); continue; }
+    if (l.startsWith("## ")) { sec = l.slice(3); out.push("S " + sec); continue; }
+    if (/^\*\*.+\*\*/.test(l) && sec === "Experience") { out.push("R " + l); continue; }
+    if (["Earlier roles", "Education", "Certifications"].includes(sec)) out.push("L " + l);
+  }
+  return out;
+}
+const skeletonKey = (md) => strHash(resumeSkeleton(md).join("\n"));
+function tailoredResume(job, m) {   // the single generator: the hourly run, a job Rowan adds, Check a job and the apply kit all call this
+  const res = buildResume(job, m), note = buildNote(job, m), bad = verify(res, job).concat(verify(note, job));
+  return bad.length ? { verified: 0, blocked: bad.join("; "), resume: null, note: null } : { verified: 1, blocked: null, resume: stripTags(res), note: stripTags(note) };
+}
+function canonicalSkeleton() { return resumeSkeleton(stripTags(buildResume({ title: "", company: "", location: "", desc: "" }, { clusters: [] }))); }
+async function resumeConsistency(env, fix) {
+  await ensure(env); const ctx = await loadCtx(env);
+  const canon = canonicalSkeleton(), ck = strHash(canon.join("\n")), rev = resumeRev();
+  const rows = (await env.JOBS_DB.prepare(`SELECT id, company, title, location, url, status, resume_md, desc_text, resume_rev FROM jobsearch_matches WHERE resume_md IS NOT NULL AND verified=1 AND status NOT IN (${FROZEN_STATUSES.map(() => "?").join(",")})`).bind(...FROZEN_STATUSES).all()).results || [];
+  const bad = rows.filter((r) => skeletonKey(r.resume_md) !== ck || r.resume_rev !== rev);
+  let fixed = 0;
+  if (fix) {
+    const stmts = [];
+    for (const r of bad.slice(0, 150)) {
+      const job = { id: r.id, company: r.company, title: r.title, location: r.location || "", url: r.url, desc: r.desc_text || "" };
+      const a = tailoredResume(job, { clusters: scoreJob(job, ctx, "analyze").clusters });
+      if (a.verified) { stmts.push(env.JOBS_DB.prepare("UPDATE jobsearch_matches SET resume_md=?2, note_md=?3, resume_rev=?4 WHERE id=?1").bind(r.id, a.resume, a.note, rev)); fixed++; }
+    }
+    for (let i = 0; i < stmts.length; i += 50) await env.JOBS_DB.batch(stmts.slice(i, i + 50));
+  }
+  const res = { template: RESUME_TEMPLATE, bank_rev: BANK_REV, canonical_sections: canon.filter((x) => x.startsWith("S ")).map((x) => x.slice(2)), checked: rows.length, mismatched: bad.length - fixed, rebuilt: fixed, mismatched_ids: bad.slice(fixed ? 150 : 0, (fixed ? 150 : 0) + 10).map((r) => r.id) };
+  await setMeta(env, "resume_consistency", JSON.stringify({ at: new Date().toISOString(), checked: res.checked, mismatched: res.mismatched })).catch((e) => logErr("consistency-meta", e));
+  return res;
+}
+
+// --- passive tracking and e-mail only when something happened
+async function sendOwnerMail(env, subject, body) {
+  if (!env.EMAIL) return false;
+  try { const r = await env.EMAIL.fetch("https://qnfo-email/send", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ to: OWNER_EMAIL, subject, body, notify: true }) }); return r.ok; }
+  catch (e) { logErr("owner-mail", e); return false; }
+}
+const JOBS_HOST = "https://jobs.q08.org";
+function autoLine(o) {
+  if (!o) return "Application: the auto-apply runner picks it up on its next pass.";
+  if (o.outcome === "applied") return "Application: submitted automatically on " + String(o.ts).slice(0, 10) + ".";
+  if (o.outcome === "dry_ready") return "Application: the form was filled in a rehearsal; it is submitted once this form type has passed its rehearsals.";
+  if (o.outcome === "captcha") return "Application: the form has a human check (CAPTCHA). One tap: open " + JOBS_HOST + "/#m=" + encodeURIComponent(o.match_id) + " and use Fill application.";
+  if (o.outcome === "needs_answer") return "Application: paused for a yes/no question about your record (on fleet.qnfo.org/focus).";
+  return "Application: " + o.outcome.replace(/_/g, " ") + ".";
+}
+async function notifyOwner(env) {   // one short e-mail per run, only when there is a new match, an automatic application or a step that needs one tap
+  await ensure(env);
+  let since = await getMeta(env, "notify_since"); if (!since) { since = new Date().toISOString(); await setMeta(env, "notify_since", since); }   // matches older than the first e-mail run are never sent as new
+  const rows = (await env.JOBS_DB.prepare("SELECT id, title, company, location, url, tier, score, why_json, status FROM jobsearch_matches WHERE status IN ('pending_owner_approval','approved','applied') AND verified=1 AND (first_seen >= ?1 OR id IN (SELECT match_id FROM jobsearch_auto)) AND id NOT IN (SELECT match_id FROM jobsearch_events WHERE event='notified') ORDER BY score DESC LIMIT 60").bind(since).all()).results || [];
+  const auto = new Map(((await env.JOBS_DB.prepare("SELECT match_id, outcome, ts FROM jobsearch_auto ORDER BY id").all()).results || []).map((r) => [r.match_id, r]));
+  const pick = rows.filter((r) => (r.status !== "pending_owner_approval" || laneGate(r).pass) && (r.status !== "applied" || (auto.get(r.id) || {}).outcome === "applied")).slice(0, 8);
+  if (!pick.length) return { sent: false, items: 0 };
+  const lines = pick.map((r, i) => `${i + 1}. ${r.title}, ${r.company}${r.location ? " (" + r.location + ")" : ""}\n   Why it fits: ${fitLine({ why_json: r.why_json })}\n   ${autoLine(auto.get(r.id))}\n   Posting: ${r.url}`);
+  const n = pick.length, subject = n === 1 ? `Job match: ${pick[0].title}, ${pick[0].company}` : `${n} job matches`;
+  const ok = await sendOwnerMail(env, subject, lines.join("\n\n") + `\n\nAll matches and applications: ${JOBS_HOST}`);
+  if (ok) { const now = new Date().toISOString(); await env.JOBS_DB.batch(pick.map((r) => env.JOBS_DB.prepare("INSERT INTO jobsearch_events (match_id, event, ts, note) VALUES (?1,'notified',?2,'match e-mail')").bind(r.id, now))); }
+  return { sent: ok, items: n };
+}
+
+// --- the auto-apply queue
+const AUTO_ATS = ["greenhouse", "lever", "ashby", "workable", "recruitee"];
+const AUTO_MIN_SCORE = 60, AUTO_PER_DAY = 5, AUTO_COMPANY_DAYS = 60, AUTO_PROMOTE_AFTER = 2, AUTO_DEMOTE_AFTER = 2, AUTO_MAX_ERRORS = 2;
+const AUTO_TERMINAL = ["applied", "captcha", "needs_answer", "unsupported", "unconfirmed", "closed"];
+const AUTO_REPO = "rwnq8/personal-life", OIDC_ISS = "https://token.actions.githubusercontent.com", OIDC_AUD = "qnfo-jobsearch";
+let JWKS = null, JWKS_AT = 0;
+const b64uBytes = (s) => { const b = atob(String(s).replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(String(s).length / 4) * 4, "=")); const u = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return u; };
+async function githubOidcOk(request) {   // keyless: GitHub signs a short-lived token for one workflow run of the private runner repository
+  const auth = request.headers.get("authorization") || "", tok = auth.replace(/^Bearer\s+/i, "");
+  const parts = tok.split("."); if (parts.length !== 3) return false;
+  try {
+    const head = JSON.parse(new TextDecoder().decode(b64uBytes(parts[0]))), claims = JSON.parse(new TextDecoder().decode(b64uBytes(parts[1])));
+    if (head.alg !== "RS256" || claims.iss !== OIDC_ISS || claims.aud !== OIDC_AUD || claims.repository !== AUTO_REPO || !(claims.exp * 1000 > Date.now())) return false;
+    if (!JWKS || Date.now() - JWKS_AT > 3600000) { JWKS = (await getJson(OIDC_ISS + "/.well-known/jwks")).keys || []; JWKS_AT = Date.now(); }
+    const jwk = JWKS.find((k) => k.kid === head.kid); if (!jwk) return false;
+    const key = await crypto.subtle.importKey("jwk", { kty: jwk.kty, n: jwk.n, e: jwk.e, alg: "RS256", ext: true }, { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["verify"]);
+    return await crypto.subtle.verify("RSASSA-PKCS1-v1_5", key, b64uBytes(parts[2]), new TextEncoder().encode(parts[0] + "." + parts[1]));
+  } catch (e) { logErr("oidc", e); return false; }
+}
+async function autopilotAuthed(request, env) { return (await githubOidcOk(request)) || (await tokenOk(request, env)) || !!(await ownerSession(request, env)); }
+async function autopilotModes(env) {
+  const out = {};
+  for (const a of AUTO_ATS) out[a] = (await getMeta(env, "autopilot_mode_" + a)) || "dry";
+  return out;
+}
+async function autopilotQueue(env, n = 4) {
+  await ensure(env);
+  if (env.AUTO_APPLY === "off") return { mode: "off", items: [] };
+  const modes = await autopilotModes(env), today = new Date().toISOString().slice(0, 10);
+  const appliedToday = (await env.JOBS_DB.prepare("SELECT COUNT(*) AS n FROM jobsearch_auto WHERE outcome='applied' AND ts >= ?").bind(today).first()).n;
+  const room = Math.max(0, AUTO_PER_DAY - Number(appliedToday));
+  const hist = (await env.JOBS_DB.prepare("SELECT match_id, outcome, COUNT(*) AS n FROM jobsearch_auto GROUP BY match_id, outcome").all()).results || [];
+  const done = new Set(hist.filter((h) => AUTO_TERMINAL.includes(h.outcome) || (h.outcome === "error" && h.n >= AUTO_MAX_ERRORS)).map((h) => h.match_id));
+  const rehearsed = new Set(hist.filter((h) => h.outcome === "dry_ready").map((h) => h.match_id));
+  const recentCo = new Set(((await env.JOBS_DB.prepare("SELECT company FROM jobsearch_matches WHERE status IN ('applied','screening','replied','interview','offer') AND decided_at >= ?").bind(iso(Date.now() - AUTO_COMPANY_DAYS * 86400000)).all()).results || []).map((r) => coKey(r.company)));
+  const rows = (await env.JOBS_DB.prepare("SELECT id, title, company, location, url, tier, score, why_json, status, resume_md, note_md FROM jobsearch_matches WHERE status IN ('approved','pending_owner_approval') AND verified=1 AND resume_md IS NOT NULL ORDER BY CASE status WHEN 'approved' THEN 0 ELSE 1 END, score DESC LIMIT 300").all()).results || [];
+  const items = [], cos = new Set();
+  for (const r of rows) {
+    if (items.length >= n) break;
+    if (done.has(r.id)) continue;
+    if (!laneGate(r).pass || (r.status !== "approved" && Number(r.score) < AUTO_MIN_SCORE)) continue;   // an approval made before the lane rules (a quantum role) is not applied to
+    const a = atsOf(r.url); if (!AUTO_ATS.includes(a.ats)) continue;
+    const mode = modes[a.ats];
+    if (mode === "dry" && rehearsed.has(r.id)) continue;
+    if (mode === "submit" && room - items.filter((x) => x.mode === "submit").length <= 0) continue;
+    const ck = coKey(r.company); if (recentCo.has(ck) || cos.has(ck)) continue;
+    cos.add(ck);
+    const parts = String(P.name).trim().split(/\s+/);
+    items.push({ id: r.id, title: r.title, company: r.company, location: r.location, url: r.url, apply_url: a.apply_url, ats: a.ats, mode,
+      resume_pdf: `${JOBS_HOST}/api/matches/${encodeURIComponent(r.id)}/resume.pdf`, cover_pdf: `${JOBS_HOST}/api/matches/${encodeURIComponent(r.id)}/note.pdf`,
+      resume_sha: (await sha256hex(r.resume_md)).slice(0, 16), resume_file: `${fileSlug(P.name)}_Resume_${fileSlug(r.company)}.pdf`,
+      fields: { first_name: parts[0], last_name: parts[parts.length - 1], full_name: P.name, email: P.email, location: P.location, linkedin: (P.links || {}).linkedin || "", website: (P.links || {}).site || "", orcid: (P.links || {}).orcid || "" } });
+  }
+  return { modes, applied_today: Number(appliedToday), daily_cap: AUTO_PER_DAY, items };
+}
+// --- answers: verified facts only. Each rule returns {value|option|check|file} or {unresolved: reason}; the runner submits only when every required question resolved
+const AUTH_OK = () => ((LEDGER.owner_stated || {}).work_authorization || []).map((x) => String(x).toUpperCase());
+const COUNTRY_RE = [["NL", /\b(netherlands|nederland|holland|dutch|amsterdam|rotterdam|utrecht|the hague|den haag|eindhoven)\b/i], ["US", /\b(united states|u\.s\.a?\.?|usa|america|us-based|\bus\b)\b/i],
+  ["UK", /\b(united kingdom|\buk\b|britain|england|london)\b/i], ["EU", /\b(european union|\beu\b|europe|eea)\b/i], ["CA", /\bcanada\b/i], ["DE", /\b(germany|berlin|munich)\b/i], ["FR", /\b(france|paris)\b/i]];
+function countryOf(text) { for (const [c, re] of COUNTRY_RE) if (re.test(text)) return c; return ""; }
+function pickOption(options, re) { return (options || []).find((o) => re.test(String(o))) || null; }
+const YES_RE = /^\s*(yes|y|true|i am|i do|i will|i can)\b/i, NO_RE = /^\s*(no|n|false|i am not|i do not|i don'?t|i will not)\b/i;
+const DECLINE_RE = /decline|prefer not|don'?t wish|do not wish|not to (say|answer|disclose)|rather not|choose not/i;
+function yn(q, yes) {
+  if (q.options && q.options.length) { const o = pickOption(q.options, yes ? YES_RE : NO_RE); return o ? { option: o } : { unresolved: "no " + (yes ? "Yes" : "No") + " option to choose" }; }
+  if (q.type === "checkbox") return yes ? { check: true } : { check: false };
+  return { value: yes ? "Yes" : "No" };
+}
+function resolveQuestion(q, job, asks) {
+  const L = String(q.label || "").replace(/\s+/g, " ").trim(), low = L.toLowerCase(), opts = q.options || [];
+  const parts = String(P.name).trim().split(/\s+/), links = P.links || {};
+  if (q.type === "file") { if (/cover/.test(low)) return { file: "cover" }; if (/resume|\bcv\b|curriculum/.test(low) || q.required) return { file: "resume" }; return { skip: true }; }
+  if (/first name|given name|forename/.test(low)) return { value: parts[0] };
+  if (/last name|surname|family name/.test(low)) return { value: parts[parts.length - 1] };
+  if (/preferred name/.test(low)) return { value: parts[0] };
+  if (/full name|^name\b|your name|legal name/.test(low)) return { value: P.name };
+  if (/e-?mail/.test(low) && !/opt|subscribe|marketing/.test(low)) return { value: P.email };
+  if (/phone|mobile|telephone/.test(low)) return P.phone ? { value: P.phone } : { unresolved: "phone number is not in the record" };
+  if (/linkedin/.test(low)) return { value: links.linkedin || "" };
+  if (/github/.test(low)) return { value: "https://github.com/rwnq8" };
+  if (/orcid/.test(low)) return { value: links.orcid || "" };
+  if (/website|portfolio|personal (site|url)|other (link|url)|^url\b|blog/.test(low)) return { value: links.site || "" };
+  if (/current (company|employer|organi[sz]ation)|^company\b|most recent (company|employer)/.test(low)) return { value: "Ultrastable" };
+  if (/current (title|role|position)|job title|most recent (title|role)/.test(low)) return { value: "Founder and Director" };
+  if (/gender|race|ethnic|veteran|disabilit|sexual orientation|pronoun|transgender|hispanic|latin[oa]|lgbt/.test(low)) {
+    const o = pickOption(opts, DECLINE_RE); if (o) return { option: o };
+    return q.required ? { unresolved: "demographic question without a decline option" } : { skip: true };
+  }
+  if (/(authori[sz]ed|eligible|legally (able|permitted)|right) to work|work authori[sz]ation|work permit/.test(low)) {
+    const c = countryOf(L) || countryOf(job.location || "") || "";
+    if (c && AUTH_OK().includes(c)) return yn(q, true);
+    if (c && c !== "EU") return yn(q, false);   // the record states authorization only in NL and US; any other single country is a truthful No
+    return { unresolved: "work authorization outside the Netherlands and the US is not in the record", ask: "auth_eu" };
+  }
+  if (/sponsor|visa/.test(low)) {
+    const c = countryOf(L) || countryOf(job.location || "") || "";
+    if (c && AUTH_OK().includes(c)) return yn(q, false);
+    if (c && c !== "EU") return yn(q, true);
+    return { unresolved: "sponsorship need outside the Netherlands and the US is not in the record", ask: "auth_eu" };
+  }
+  if (/relocat/.test(low)) return yn(q, /relocation/.test(String((LEDGER.owner_stated || {}).relocation || "")) || /anywhere/.test(String((LEDGER.owner_stated || {}).relocation || "")));
+  if (/salary|compensation|pay expectation|expected pay|desired pay|rate expectation/.test(low)) return q.required ? { unresolved: "salary expectation is not in the record" } : { skip: true };
+  if (/notice period|start date|when can you start|available to start|earliest start/.test(low)) {
+    const a = asks.notice; if (a) { const o = opts.length ? pickOption(opts, new RegExp(a.replace(/[^a-z0-9 ]/gi, "").split(" ")[0], "i")) : null; return opts.length ? (o ? { option: o } : { unresolved: "no option matches your notice period" }) : { value: a }; }
+    return q.required ? { unresolved: "notice period is not in the record", ask: "notice" } : { skip: true };
+  }
+  if (/how did you (hear|find|learn)|where did you (hear|find|see)|source/.test(low)) {
+    if (opts.length) { const o = pickOption(opts, /job board|website|careers|online|internet|other/i); return o ? { option: o } : { option: opts[opts.length - 1] }; }
+    return { value: "Your careers page" };
+  }
+  if (/privacy|consent|agree|acknowledg|terms|certify|confirm that|accurate|true and complete|data processing|gdpr/.test(low) && (q.type === "checkbox" || opts.length)) return opts.length ? (pickOption(opts, /yes|agree|accept|consent|i do|acknowledge/i) ? { option: pickOption(opts, /yes|agree|accept|consent|i do|acknowledge/i) } : { unresolved: "no agree option" }) : { check: true };
+  if (/years of (professional |relevant |work )?experience|how many years/.test(low)) {
+    const yrs = new Date().getUTCFullYear() - (+(P.career_start || 2004));
+    if (opts.length) { const o = opts.map((x) => [x, (String(x).match(/\d+/g) || []).map(Number)]).filter(([, ns]) => ns.length).sort((a, b) => Math.max(...b[1]) - Math.max(...a[1])).find(([, ns]) => Math.min(...ns) <= yrs); return o ? { option: o[0] } : { unresolved: "no years option fits" }; }
+    return { value: q.type === "number" ? String(yrs) : yrs + " years" };
+  }
+  if (/cover letter/.test(low) && q.type !== "file") return { cover: true };
+  if (q.type === "checkbox" && !q.required) return { skip: true };
+  // a yes/no question the rules above do not cover: the owner's tap decides, never a guess
+  const isYN = (opts.length && opts.length <= 3 && opts.some((o) => YES_RE.test(o)) && opts.some((o) => NO_RE.test(o))) || q.type === "checkbox";
+  if (isYN || (opts.length && q.type !== "textarea")) {
+    const key = "q:" + strHash(low.replace(/[^a-z0-9 ]/g, "").slice(0, 200)), a = asks[key];
+    if (isYN && a === "yes") return yn(q, true);
+    if (isYN && a === "no") return yn(q, false);
+    if (!q.required) return { skip: true };
+    return { unresolved: "the form asks something your record does not answer: " + L.slice(0, 160), ask: key, question: L };
+  }
+  if (q.type === "textarea" || q.type === "text") {
+    const banked = bankAnswerFor(L); if (banked && !checkAnswer(banked.answer, job).filter((p) => !/^reads as machine-written/.test(p)).length) return { value: banked.answer, source: "bank" };
+    return q.required || /why|interest|motivat|tell us|describe|additional/.test(low) ? { draft: true } : { skip: true };
+  }
+  return q.required ? { unresolved: "unrecognised required field: " + L.slice(0, 120) } : { skip: true };
+}
+async function autopilotAsks(env) {   // owner answers that unlock questions: kind apply-profile (taps on fleet.qnfo.org/focus)
+  const rows = (await env.JOBS_DB.prepare("SELECT ref, answer FROM owner_asks WHERE kind='apply-profile' AND answer IS NOT NULL").all().catch(() => ({ results: [] }))).results || [];
+  const out = {}; for (const r of rows) out[r.ref] = r.answer;
+  return out;
+}
+const APPLY_ASKS = {
+  auth_eu: { q: "Are you authorized to work in other EU countries (outside the Netherlands) without visa sponsorship?", cue: "Many European application forms ask this; your record says Netherlands and US only.", opts: [["yes", "Yes"], ["no", "No"], ["unsure", "Not sure"]] },
+  notice: { q: "If an employer asks when you could start, what is true?", cue: "Notice period or start date, asked on many application forms.", opts: [["Immediately", "Immediately"], ["2 weeks", "Within 2 weeks"], ["1 month", "Within a month"], ["unsure", "Not sure"]] },
+};
+async function queueApplyAsk(env, key, question, job) {
+  const base = APPLY_ASKS[key];
+  const q = base ? base.q : `An application form (${job.title}, ${job.company}) asks: "${String(question).slice(0, 220)}". Is the answer yes for you?`;
+  const cue = base ? base.cue : "Your answer is reused whenever a form asks the same question.";
+  const opts = base ? base.opts : [["yes", "Yes"], ["no", "No"], ["unsure", "Not sure"]];
+  await env.JOBS_DB.prepare("INSERT OR IGNORE INTO owner_asks (plane, kind, ref, question, cue, options_json, priority) VALUES ('jobs','apply-profile',?1,?2,?3,?4,1)")
+    .bind(key, q, cue, JSON.stringify(opts.map(([k, label]) => ({ key: k, label })))).run().catch((e) => logErr("apply-ask", e));
+}
+async function autopilotResolve(env, body) {
+  await ensure(env); await loadCtx(env);
+  const row = await env.JOBS_DB.prepare("SELECT id, title, company, location, url, desc_text, note_md FROM jobsearch_matches WHERE id=?").bind(String(body.id || "")).first();
+  if (!row) throw Object.assign(new Error("not found"), { status: 404 });
+  const job = { title: row.title, company: row.company, location: row.location || "", url: row.url, desc: row.desc_text || "" };
+  const asks = await autopilotAsks(env), qs = (Array.isArray(body.questions) ? body.questions : []).slice(0, 60);
+  const answers = [], unresolved = [];
+  for (const q0 of qs) {
+    const q = { label: String(q0.label || "").slice(0, 400), type: String(q0.type || "text"), options: (Array.isArray(q0.options) ? q0.options : []).map(String).slice(0, 80), required: !!q0.required, key: q0.key };
+    let r = resolveQuestion(q, job, asks);
+    if (r.cover) r = { value: plainOf(row.note_md || "") };
+    if (r.draft) {
+      let text = null;
+      try { const d = await draftAnswers(env, { title: job.title, company: job.company, text: job.desc || job.title, questions: [q.label] }); const a = (d.answers || [])[0] || {}; if (a.answer && a.status === "draft") text = a.answer; else if (a.answer && a.status === "from_bank" && !(a.problems || []).length) text = a.answer; } catch (e) { logErr("auto-draft", e); }
+      r = text ? { value: text, source: "draft" } : q.required ? { unresolved: "no answer to this question is fully backed by your record: " + q.label.slice(0, 140) } : { skip: true };
+    }
+    if (r.unresolved) { unresolved.push({ key: q.key, label: q.label, reason: r.unresolved }); if (r.ask) await queueApplyAsk(env, r.ask, r.question || q.label, job); continue; }
+    if (r.skip) continue;
+    answers.push({ key: q.key, label: q.label, ...r });
+  }
+  return { id: row.id, answers, unresolved, ready: !unresolved.length };
+}
+async function autopilotResult(env, b) {
+  await ensure(env);
+  const id = String(b.id || ""), outcome = String(b.outcome || "error"), now = new Date().toISOString();
+  const row = await env.JOBS_DB.prepare("SELECT id, url, status FROM jobsearch_matches WHERE id=?").bind(id).first();
+  if (!row) throw Object.assign(new Error("not found"), { status: 404 });
+  if (!["applied", "dry_ready", "captcha", "needs_answer", "unsupported", "unconfirmed", "closed", "error"].includes(outcome)) throw Object.assign(new Error("unknown outcome"), { status: 400 });
+  const ats = atsOf(row.url).ats, mode = String(b.mode || "dry");
+  const detail = { confirmation: String(b.confirmation || "").slice(0, 600), unresolved: (b.unresolved || []).slice(0, 20), error: String(b.error || "").slice(0, 400), run_url: String(b.run_url || "").slice(0, 200), resume_sha: String(b.resume_sha || "").slice(0, 32), questions: (b.questions || []).length };
+  await env.JOBS_DB.prepare("INSERT INTO jobsearch_auto (match_id, ts, mode, outcome, ats, detail_json) VALUES (?1,?2,?3,?4,?5,?6)").bind(id, now, mode, outcome, ats, JSON.stringify(detail)).run();
+  if (outcome === "applied") {
+    await setPipeStatus(env, id, "applied", ("auto-applied by the runner" + (detail.confirmation ? ": " + detail.confirmation : "")).slice(0, 400));
+    const qa = (Array.isArray(b.questions) ? b.questions : []).map((x) => ({ q: x.q || x.label, a: String(x.a == null ? x.value || x.option || "" : x.a) })).filter((x) => x.q && x.a);
+    if (qa.length) await saveQa(env, id, qa, detail.resume_sha || null).catch((e) => logErr("auto-qa", e));
+    await env.JOBS_DB.prepare("UPDATE jobsearch_apps SET notes=TRIM(COALESCE(notes,'') || ' ' || ?2) WHERE match_id=?1").bind(id, "auto-apply run " + detail.run_url).run().catch((e) => logErr("auto-notes", e));
+  } else if (outcome === "captcha" && row.status === "pending_owner_approval") {
+    await setPipeStatus(env, id, "approved", "auto-apply stopped at a human check (CAPTCHA); ready for one tap with Fill application");
+  } else if (outcome === "closed") {
+    await env.JOBS_DB.prepare("UPDATE jobsearch_matches SET status='expired', decided_at=?2 WHERE id=?1 AND status='pending_owner_approval'").bind(id, now).run();
+  }
+  // the loop tunes itself per form type: rehearsals promote a form type to real submission; unconfirmed submissions send it back to rehearsal
+  const recent = (await env.JOBS_DB.prepare("SELECT mode, outcome FROM jobsearch_auto WHERE ats=?1 AND outcome IN ('dry_ready','applied','unconfirmed','error') ORDER BY id DESC LIMIT 6").bind(ats).all()).results || [];
+  const cur = (await getMeta(env, "autopilot_mode_" + ats)) || "dry";
+  let next = cur;
+  if (cur === "dry" && recent.slice(0, AUTO_PROMOTE_AFTER).length === AUTO_PROMOTE_AFTER && recent.slice(0, AUTO_PROMOTE_AFTER).every((r) => r.outcome === "dry_ready")) next = "submit";
+  if (cur === "submit" && recent.slice(0, AUTO_DEMOTE_AFTER).length === AUTO_DEMOTE_AFTER && recent.slice(0, AUTO_DEMOTE_AFTER).every((r) => r.mode === "submit" && (r.outcome === "unconfirmed" || r.outcome === "error"))) next = "dry";
+  if (next !== cur) { await setMeta(env, "autopilot_mode_" + ats, next); log("autopilot-mode", { ats, from: cur, to: next }); }
+  return { ok: true, id, outcome, ats, mode_now: next };
+}
+async function autopilotStatus(env) {
+  await ensure(env);
+  const by = (await env.JOBS_DB.prepare("SELECT ats, outcome, COUNT(*) AS n FROM jobsearch_auto WHERE ts >= ? GROUP BY ats, outcome").bind(iso(Date.now() - 30 * 86400000)).all()).results || [];
+  const last = await env.JOBS_DB.prepare("SELECT ts FROM jobsearch_auto ORDER BY id DESC LIMIT 1").first();
+  let cov = {}; try { cov = sourceCoverage(JSON.parse((await getMeta(env, "mission_probe")) || "{}")); } catch (e) { logErr("coverage", e); }
+  return { on: env.AUTO_APPLY !== "off", modes: await autopilotModes(env), runner: AUTO_REPO + " .github/workflows/job-apply.yml", last_attempt: last ? last.ts : null, outcomes_30d: by, rules: { min_score: AUTO_MIN_SCORE, per_day: AUTO_PER_DAY, one_per_company_days: AUTO_COMPANY_DAYS, promote_after_rehearsals: AUTO_PROMOTE_AFTER }, sources: cov };
 }
 const handler = {
   async scheduled(event, env, ctx) {
     env = __aiAttrEnv(env, "qnfo-jobsearch", "AI", "JOBS_DB");
-    ctx.waitUntil(run(env).then(() => relevanceSweep(env)).catch((e) => console.log("[jobsearch] run failed " + e.message)));   // JOBS-PIPELINE-1: what fails the relevance gate is hidden after every run
+    ctx.waitUntil(run(env).then(() => relevanceSweep(env)).then(() => notifyOwner(env)).catch((e) => console.log("[jobsearch] run failed " + e.message)));   // JOBS-PIPELINE-1: what fails the relevance gate is hidden after every run
   },
   // JOBS-PIPELINE-1: Cloudflare Email Routing hands application confirmations, interview invitations and rejections to this address; they update the pipeline
   async email(message, env, ctx) {
@@ -3192,6 +3626,17 @@ const handler = {
     if (p === "/api/ops" && m === "GET") { const rep = await opsReportCached(env, url.searchParams.get("fresh") === "1"); return J(rep, rep.status === "ok" ? 200 : 503); }
     if ((p === "/api/outcomes" || p === "/api/funnel") && m === "GET") return J(await outcomes(env));
     if (p === "/api/followups" && m === "GET") return J(await followups(env));
+    // JOBSEARCH-AUTOPILOT-1: status is open; the queue, the answers and the results need the runner's GitHub OIDC token, the loop token or an owner session
+    if (p === "/api/autopilot" && m === "GET") return J(await autopilotStatus(env));
+    if (p === "/api/resume/consistency" && m === "GET") return J(await resumeConsistency(env, false));
+    if (p.startsWith("/api/autopilot/")) {
+      if (!(await autopilotAuthed(request, env))) return J({ error: "the auto-apply runner signs in with its GitHub OIDC token" }, 401);
+      try {
+        if (p === "/api/autopilot/queue" && m === "GET") return J(await autopilotQueue(env, Math.min(8, +url.searchParams.get("n") || 4)));
+        if (p === "/api/autopilot/resolve" && m === "POST") return J(await autopilotResolve(env, await request.json()));
+        if (p === "/api/autopilot/result" && m === "POST") return J(await autopilotResult(env, await request.json()));
+      } catch (e) { return J({ error: e.message }, e.status || 500); }
+    }
     if (p === "/api/linkedin" && m === "GET") return J(linkedinSearches(await loadCtx(env)));   // JOBSEARCH-LINKEDIN-1
     if (p === "/api/prefs" && m === "GET") {
       const ctx = await loadCtx(env);
@@ -3347,7 +3792,7 @@ const handler = {
       if (!q && url.searchParams.get("diverse") !== "0") rows = diversifyRows(rows);   // JOBSEARCH-DIVERSE-1
       return J({ count: rows.length, matches: rows.slice(0, lim) });
     }
-    const ax = p.match(/^\/api\/matches\/(.+?)\/(resume\.docx|resume\.pdf|resume\.html|resume\.txt|resume\.md|note\.txt|kit)$/);
+    const ax = p.match(/^\/api\/matches\/(.+?)\/(resume\.docx|resume\.pdf|resume\.html|resume\.txt|resume\.md|note\.txt|note\.pdf|kit)$/);
     if (ax && m === "GET") {
       const row = await env.JOBS_DB.prepare("SELECT * FROM jobsearch_matches WHERE id=?").bind(decodeURIComponent(ax[1])).first();
       if (!row) return J({ error: "not found" }, 404);
@@ -3357,6 +3802,12 @@ const handler = {
         try { return J(await matchKit(env, row)); } catch (e) { return J({ error: e.message }, e.status || 502); }
       }
       if (!row.resume_md) return J({ error: "no draft is kept for this match" }, 404);
+      // RESUME-ONE-TEMPLATE-1: a draft that is still open is rebuilt on the current template and bank before it is served; a sent resume is served as sent
+      if (!FROZEN_STATUSES.includes(row.status) && row.resume_rev !== (await loadBank(env), resumeRev())) {
+        const ctx = await loadCtx(env), job = { id: row.id, company: row.company, title: row.title, location: row.location || "", url: row.url, desc: row.desc_text || "" };
+        const a = tailoredResume(job, { clusters: scoreJob(job, ctx, "analyze").clusters });
+        if (a.verified) { row.resume_md = a.resume; row.note_md = a.note; await env.JOBS_DB.prepare("UPDATE jobsearch_matches SET resume_md=?2, note_md=?3, resume_rev=?4 WHERE id=?1").bind(row.id, a.resume, a.note, resumeRev()).run().catch((e) => logErr("rebuild-on-serve", e)); }
+      }
       return fileResponse(ax[2], row);
     }
     if (p === "/api/referrals" && m === "GET") { const ctx = await loadCtx(env); return J(await referralList(env, ctx)); }
@@ -3415,7 +3866,7 @@ const handler = {
     return J({ error: "not found", see: "/api" }, 404);
   },
 };
-handler.__test = { styleLint, laneGate, fitLine, shortlist, relevanceSweep, intakeJob, setPipeStatus, saveQa, answerLibrary, matchQuestions, pipeline, parseJobMail, applyJobMail, linkedinJobUrl, ANSWER_BANK, bankAnswerFor, credentialBacked, dropUnbackedCredentials, ensureCredentialEvidence, refreshRecallFacts, polishProse, polishBank, copyLint, toolCase, vocabulary, TOPIC_LABEL, SOFTWARE, PROSE_CASE, linkedinSearches, LINKEDIN_SEARCHES, codingLoad, CANDIDATE_BOARDS, collectAndRank, cosine, bestSim, semanticLens, scoreJob, exploreOverlap, recordTerms, diversifyRows, recallGaps, recallQuestion, recallAnswer, recallQueue, RECALL_SEED, loadCtx, referralKit, referralList, STAGES, judgeTop, buildResume, verify, headlineVerdict, outcomes, pdfOf, pdfClean, checkAnswer, jsonLoose, PROTECTED_Q, draftAnswers, prepBrief, quizFeedback, judgeJob, calibrate, calibration, followups, atsOf, keywordReport, docxOf, resumeHtml, plainOf, applyKit, matchKit, stripTags, postingTerms, evaluate, rank, buildResume, buildNote, verify, stripHtml, locationGate, has, LEDGER, dedupeKey, feedPrefix, makeCtx, scoreJob, scoreFeatures, featuresFromWhy, applicationSnapshot, parseApplicationSnapshot, outcomeScoreWeights, loadCtx, SURVEY, BOARDS, normKey, applyBank, BANK_SEED, QUESTIONS, TAG_TO_CLUSTERS, clustersOf, cvAnswer, cvFact, cvReview, cvSet, cvImport, mutateBank, loadBank, decidedKeys, FETCHERS, getBank: () => BANK, llmRerank, llmRerankRun, ensureResearchPubs, ensureAutonomyBrand, ensureUltrastableBrand, ultrastableBank, ultrastableSkillsBank, ULTRASTABLE_SKILL_FACTS, ULTRASTABLE_SKILLS, syncSkillAsks, skillAskOptions, cvSkills, ULTRASTABLE_S1, RESEARCH_PUBS, FAMILIES, CLUSTER_KW, headline, pubLine, parseRerank, reasonOk, rerankMessages, artifactsFor, titleCandidate, sitemapUrls, slugTitle, PUBLIC_SECTOR, opsReport };
+handler.__test = { orgKind, resumeSkeleton, canonicalSkeleton, tailoredResume, resumeConsistency, resolveQuestion, autopilotQueue, autopilotResolve, autopilotResult, autopilotStatus, githubOidcOk, parseRss, notifyOwner, followups, missionSources, saveMissionProbes, sourceCoverage, FETCHERS, styleLint, laneGate, fitLine, shortlist, relevanceSweep, intakeJob, setPipeStatus, saveQa, answerLibrary, matchQuestions, pipeline, parseJobMail, applyJobMail, linkedinJobUrl, ANSWER_BANK, bankAnswerFor, credentialBacked, dropUnbackedCredentials, ensureCredentialEvidence, refreshRecallFacts, polishProse, polishBank, copyLint, toolCase, vocabulary, TOPIC_LABEL, SOFTWARE, PROSE_CASE, linkedinSearches, LINKEDIN_SEARCHES, codingLoad, CANDIDATE_BOARDS, collectAndRank, cosine, bestSim, semanticLens, scoreJob, exploreOverlap, recordTerms, diversifyRows, recallGaps, recallQuestion, recallAnswer, recallQueue, RECALL_SEED, loadCtx, referralKit, referralList, STAGES, judgeTop, buildResume, verify, headlineVerdict, outcomes, pdfOf, pdfClean, checkAnswer, jsonLoose, PROTECTED_Q, draftAnswers, prepBrief, quizFeedback, judgeJob, calibrate, calibration, followups, atsOf, keywordReport, docxOf, resumeHtml, plainOf, applyKit, matchKit, stripTags, postingTerms, evaluate, rank, buildResume, buildNote, verify, stripHtml, locationGate, has, LEDGER, dedupeKey, feedPrefix, makeCtx, scoreJob, scoreFeatures, featuresFromWhy, applicationSnapshot, parseApplicationSnapshot, outcomeScoreWeights, loadCtx, SURVEY, BOARDS, normKey, applyBank, BANK_SEED, QUESTIONS, TAG_TO_CLUSTERS, clustersOf, cvAnswer, cvFact, cvReview, cvSet, cvImport, mutateBank, loadBank, decidedKeys, FETCHERS, getBank: () => BANK, llmRerank, llmRerankRun, ensureResearchPubs, ensureAutonomyBrand, ensureUltrastableBrand, ultrastableBank, ultrastableSkillsBank, ULTRASTABLE_SKILL_FACTS, ULTRASTABLE_SKILLS, syncSkillAsks, skillAskOptions, cvSkills, ULTRASTABLE_S1, RESEARCH_PUBS, FAMILIES, CLUSTER_KW, headline, pubLine, parseRerank, reasonOk, rerankMessages, artifactsFor, titleCandidate, sitemapUrls, slugTitle, PUBLIC_SECTOR, opsReport };
 export default handler;
 
 // ------------------------------------------------------------------ client script shared by both pages (JOBSEARCH-APPLY-1): kit handling and the Fill application bookmark
@@ -3857,7 +4308,7 @@ $('#list').addEventListener('click',async function(e){
  var a=b.dataset.act;if(!k)return;
  if(a==='open')fireKit(k);else if(a==='copy')navigator.clipboard.writeText(kitPayload(k));else if(a==='dl')saveFile(k.resume_file,k.resume_docx_b64);else if(a==='done')decide(id,'applied')});
 $('#bm').setAttribute('href',bookmarkHref());$('#bm').onclick=function(e){e.preventDefault();alert('Drag this button to your bookmarks bar. Do not click it here.')};
-api('/api/followups').then(function(f){if(!f.count)return;window.FU=f.items;$('#follow').innerHTML='<div class="note"><b>'+f.count+' application(s) with no reply after 7 days.</b> '+f.items.map(function(x,i){return esc(x.title)+' at '+esc(x.company)+' ('+x.days_waiting+' days) <button data-fu="'+i+'">Copy follow-up</button>'}).join(' | ')+'</div>'}).catch(function(e){console.warn('followups: '+e.message)});
+api('/api/followups').then(function(f){if(!f.count)return;window.FU=f.items;$('#follow').innerHTML='<div class="note"><b>'+f.count+' follow-up(s) after an interview or offer.</b> '+f.items.map(function(x,i){return esc(x.title)+' at '+esc(x.company)+' (to '+esc(x.to)+') <button data-fu="'+i+'">Copy note</button>'}).join(' | ')+'</div>'}).catch(function(e){console.warn('followups: '+e.message)});
 $('#follow').addEventListener('click',function(e){var b=e.target.closest&&e.target.closest('[data-fu]');if(b)navigator.clipboard.writeText(window.FU[+b.dataset.fu].note)});
 $('#ready').onclick=function(){$('#tier').value='A';$('#status').value='';load()};
 ${RECALL_UI_JS}
