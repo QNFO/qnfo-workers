@@ -1,7 +1,7 @@
 {
  "mode": "live",
- "at": "2026-11-12T11:01:14.659Z",
- "sha": "0b74cd229e7b8596988c2831765f9cc4e66989fe",
+ "at": "2026-11-12T11:09:22.692Z",
+ "sha": "f480508f74c217789f81134699305b6aa3fc451b",
  "apps": [
   {
    "app": "ask-qwav",
@@ -30,7 +30,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 2689,
+     "ms": 1510,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -59,7 +59,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 5599,
+     "ms": 1274,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -90,7 +90,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1552,
+     "ms": 1569,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -126,7 +126,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 8629,
+     "ms": 8541,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -155,7 +155,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1057,
+     "ms": 1022,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -182,7 +182,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 2661,
+     "ms": 2678,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -209,7 +209,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 347,
+     "ms": 352,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -255,7 +255,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 2191,
+     "ms": 2394,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -372,6 +372,56 @@
          "h": 22
         },
         {
+         "name": "Same search on Google",
+         "w": 166,
+         "h": 22
+        },
+        {
+         "name": "On Indeed",
+         "w": 72,
+         "h": 22
+        },
+        {
+         "name": "Same search on Google",
+         "w": 166,
+         "h": 22
+        },
+        {
+         "name": "On Indeed",
+         "w": 72,
+         "h": 22
+        },
+        {
+         "name": "Same search on Google",
+         "w": 166,
+         "h": 22
+        },
+        {
+         "name": "On Indeed",
+         "w": 72,
+         "h": 22
+        },
+        {
+         "name": "Same search on Google",
+         "w": 166,
+         "h": 22
+        },
+        {
+         "name": "On Indeed",
+         "w": 72,
+         "h": 22
+        },
+        {
+         "name": "Same search on Google",
+         "w": 166,
+         "h": 22
+        },
+        {
+         "name": "On Indeed",
+         "w": 72,
+         "h": 22
+        },
+        {
          "name": "Apply and prepare",
          "w": 138,
          "h": 23
@@ -402,7 +452,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 4032,
+     "ms": 4133,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -512,6 +562,56 @@
          "h": 22
         },
         {
+         "name": "Same search on Google",
+         "w": 166,
+         "h": 22
+        },
+        {
+         "name": "On Indeed",
+         "w": 72,
+         "h": 22
+        },
+        {
+         "name": "Same search on Google",
+         "w": 166,
+         "h": 22
+        },
+        {
+         "name": "On Indeed",
+         "w": 72,
+         "h": 22
+        },
+        {
+         "name": "Same search on Google",
+         "w": 166,
+         "h": 22
+        },
+        {
+         "name": "On Indeed",
+         "w": 72,
+         "h": 22
+        },
+        {
+         "name": "Same search on Google",
+         "w": 166,
+         "h": 22
+        },
+        {
+         "name": "On Indeed",
+         "w": 72,
+         "h": 22
+        },
+        {
+         "name": "Same search on Google",
+         "w": 166,
+         "h": 22
+        },
+        {
+         "name": "On Indeed",
+         "w": 72,
+         "h": 22
+        },
+        {
          "name": "Apply and prepare",
          "w": 138,
          "h": 23
@@ -542,7 +642,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1385,
+     "ms": 1420,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -574,7 +674,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1697,
+     "ms": 1740,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -582,8 +682,8 @@
     }
    ],
    "screenFindings": [
-    "home: 22 tap target(s) under 24px, e.g. \"Same search on Google\" 166x22, \"On Indeed\" 72x22, \"Same search on Google\" 166x22",
-    "home-recall: 22 tap target(s) under 24px, e.g. \"Same search on Google\" 166x22, \"On Indeed\" 72x22, \"Same search on Google\" 166x22"
+    "home: 32 tap target(s) under 24px, e.g. \"Same search on Google\" 166x22, \"On Indeed\" 72x22, \"Same search on Google\" 166x22",
+    "home-recall: 32 tap target(s) under 24px, e.g. \"Same search on Google\" 166x22, \"On Indeed\" 72x22, \"Same search on Google\" 166x22"
    ]
   },
   {
@@ -615,7 +715,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 8906,
+     "ms": 8972,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -635,7 +735,7 @@
      "ok": false,
      "error": "expected to see \"Order size\" on https://markets.q08.org/paper",
      "attempts": 2,
-     "ms": 12942,
+     "ms": 13137,
      "grade": {
       "status": "broken",
       "reasons": [
@@ -666,7 +766,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 983,
+     "ms": 1071,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -695,7 +795,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 2065,
+     "ms": 2064,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -731,7 +831,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 8431,
+     "ms": 8409,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -919,7 +1019,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 4842,
+     "ms": 4658,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -1077,7 +1177,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 3706,
+     "ms": 3911,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -1151,7 +1251,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 11986,
+     "ms": 9973,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -1180,7 +1280,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 8410,
+     "ms": 8427,
      "grade": {
       "status": "new",
       "reasons": [
@@ -1213,7 +1313,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 4121,
+     "ms": 3092,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -1244,7 +1344,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1352,
+     "ms": 1376,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -1275,7 +1375,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 2537,
+     "ms": 2518,
      "grade": {
       "status": "new",
       "reasons": [
@@ -1312,7 +1412,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 8742,
+     "ms": 8881,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -1454,7 +1554,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1796,
+     "ms": 1861,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -2822,7 +2922,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 2634,
+     "ms": 3090,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -2947,7 +3047,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1871,
+     "ms": 1725,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -2978,7 +3078,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 14336,
+     "ms": 14059,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3095,7 +3195,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 9115,
+     "ms": 9241,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3126,7 +3226,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 9274,
+     "ms": 9313,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3155,7 +3255,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1095,
+     "ms": 994,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3277,7 +3377,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 1665,
+     "ms": 1647,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3306,7 +3406,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 8716,
+     "ms": 8764,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3362,7 +3462,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 4190,
+     "ms": 4252,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3393,7 +3493,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 3184,
+     "ms": 3248,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3424,7 +3524,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 3033,
+     "ms": 3009,
      "grade": {
       "status": "ok",
       "reasons": []
@@ -3466,7 +3566,7 @@
      "ok": true,
      "error": null,
      "attempts": 1,
-     "ms": 902,
+     "ms": 965,
      "grade": {
       "status": "ok",
       "reasons": []
