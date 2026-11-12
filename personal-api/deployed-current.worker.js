@@ -296,7 +296,7 @@ function clampMaxTokens(requested, isReason) {
 __name(clampMaxTokens, "clampMaxTokens");
 __name2(clampMaxTokens, "clampMaxTokens");
 __name22(clampMaxTokens, "clampMaxTokens");
-var VERSION = "4.42.5";
+var VERSION = "4.42.6";
 // 4.37.2 KERNEL-PERSONAL-PRIVACY-1: preserve all ten registered reply categories across the content-free telemetry boundary.
 // 4.37.1 KERNEL-PERSONAL-PRIVACY-1: classify twin replies inside the personal plane; AUDIT receives only fixed categories and random event ids, never reply text or excerpts.
 // 4.37.0 KERNEL-EVERYWHERE-1 (2026-11-06, owner directive "IMPLEMENT EVERYWHERE ACROSS ALL AI APPS AND SERVICES AND SURFACES", pillar personal): the twin SYSTEM_PROMPT carries the DOCTRINE-1 kernel 8.2.1 reply recognitions (KERNEL-REPLY-4): end every reply on the answer or result, never on a question, conditional offer or menu; ambiguity gets a stated assumption; a refusal or limit with its reason is a disposition stated declaratively; reversible tool actions are taken and reported in the same reply, and a requested change is made with the tool, not described. Each twin reply is also mirrored to qnfo-audit.personal_replies so the kernel false-stop scan covers this surface. prior 4.36.2
@@ -3913,6 +3913,20 @@ async function cmpBriefNow(env, deps, fresh) {
     next_action: base.focus ? base.focus.title : null, open_actions: base.todo_count, done_today: base.done_today,
     new_mail: mailItems.map((m) => m.from + ": " + m.subject), ideas_nearby: base.radar.map((r) => r.title)
   };
+  const EMERGENCY_NUMBERS = {
+    "Netherlands": "112",
+    "United Kingdom": "999",
+    "Germany": "112",
+    "France": "112",
+    "USA": "911",
+    "Canada": "911",
+    "Australia": "000",
+    "New Zealand": "111"
+  };
+  // COMPANION-TRAVEL-OFFLINE-1: add emergency numbers for the current country to the brief payload
+  const emergency = base.where.country && EMERGENCY_NUMBERS[base.where.country] ? EMERGENCY_NUMBERS[base.where.country] : "112";
+  // attach to base so care panel can display it
+  base.emergency_numbers = emergency;
   const key = String(Math.floor(t.hour * 2)) + ":" + JSON.stringify(facts).length + ":" + JSON.stringify(facts).split("").reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) | 0, 7);
   await env.PERSONAL.prepare("CREATE TABLE IF NOT EXISTS cmp_brief (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT, day TEXT, fp TEXT, body TEXT)").run();
   let cached = null;

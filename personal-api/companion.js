@@ -1998,6 +1998,20 @@ async function cmpBriefNow(env, deps, fresh) {
     next_action: base.focus ? base.focus.title : null, open_actions: base.todo_count, done_today: base.done_today,
     new_mail: mailItems.map((m) => m.from + ": " + m.subject), ideas_nearby: base.radar.map((r) => r.title)
   };
+  const EMERGENCY_NUMBERS = {
+    "Netherlands": "112",
+    "United Kingdom": "999",
+    "Germany": "112",
+    "France": "112",
+    "USA": "911",
+    "Canada": "911",
+    "Australia": "000",
+    "New Zealand": "111"
+  };
+  // COMPANION-TRAVEL-OFFLINE-1: add emergency numbers for the current country to the brief payload
+  const emergency = base.where.country && EMERGENCY_NUMBERS[base.where.country] ? EMERGENCY_NUMBERS[base.where.country] : "112";
+  // attach to base so care panel can display it
+  base.emergency_numbers = emergency;
   const key = String(Math.floor(t.hour * 2)) + ":" + JSON.stringify(facts).length + ":" + JSON.stringify(facts).split("").reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) | 0, 7);
   await env.PERSONAL.prepare("CREATE TABLE IF NOT EXISTS cmp_brief (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT, day TEXT, fp TEXT, body TEXT)").run();
   let cached = null;
