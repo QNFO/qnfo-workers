@@ -2,7 +2,7 @@
 // rules that make output code must stay in it. The CLAUDE.md half is scripts/claude-md-rules.test.mjs.
 import { readFileSync } from "node:fs";
 const md = readFileSync(new URL("../AGENTS.md", import.meta.url), "utf8");
-const need = ["CODE-ONLY-OUTPUT-1", "CLOSE-OWN-LOOPS-1", "CLOSED-LOOPS-1", "NO-STANDALONE-DOCS-1", "SDLC-OWN-1", "LOOPS-SELF-CLOSED-1"];
+const need = ["CODE-ONLY-OUTPUT-1", "CLOSE-OWN-LOOPS-1", "CLOSED-LOOPS-1", "NO-STANDALONE-DOCS-1", "SDLC-OWN-1", "SELF-CLOSED-LOOPS-1"];
 let fail = 0;
 for (const id of need) if (!md.includes(id)) { console.log("FAIL AGENTS.md lost rule " + id); fail++; }
 if (!/The first thing after a request is the tool call/.test(md)) { console.log("FAIL CODE-ONLY-OUTPUT-1 lost its do-it-now line"); fail++; }
