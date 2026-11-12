@@ -2275,9 +2275,18 @@ async function statusAll(env, nowMs = Date.now()) {
       out.pipelines.push(view);
     } catch (e) { out.pipelines.push({ pipeline: def.name, error: String(e && e.message || e).slice(0, 200) }); }
   }
+  // CLOCKWORK-1: the clock of every scheduled loop, as qnfo-cloud-ops judges it every 10 minutes (clock_ticks in qnfo-audit).
+  if (!env.AUDIT) out.clock = { loops: [], skipped: "no AUDIT binding" };
+  else try {
+    const rows = (await env.AUDIT.prepare("SELECT loop, label, plane, cadence_min, state, why, latency_min, missed_24h, accuracy, action, checked_at FROM clock_ticks ORDER BY CASE state WHEN 'stopped' THEN 0 WHEN 'inaccurate' THEN 1 WHEN 'unreadable' THEN 2 WHEN 'late' THEN 3 ELSE 4 END, plane, loop").all()).results || [];
+    const checked = rows.reduce((m, r) => (r.checked_at > m ? r.checked_at : m), "");
+    out.clock = { loops: rows, checked_at: checked || null, watchdog_age_min: checked ? Math.round((nowMs - Date.parse(checked)) / 6e4) : null };
+  } catch (e) { const m = String(e && e.message || e).slice(0, 200); out.clock = /no such table/i.test(m) ? { loops: [], skipped: "no clock reading yet" } : { error: m, loops: [] }; }
   const p = out.pipelines[0] || {};
+  const clockBad = (out.clock.loops || []).filter((r) => r.state === "stopped" || r.state === "inaccurate" || r.state === "unreadable").length;
+  out.clock.not_ok = clockBad;
   const runsBad = out.pipelines.some((x) => x.error || (x.runs && ((x.runs.failed_24h || 0) > 0 || (x.runs.stuck || 0) > 0)));
-  out.healthy = !p.error && (p.failed_24h || 0) === 0 && (p.stuck || 0) === 0 && !runsBad;
+  out.healthy = !p.error && (p.failed_24h || 0) === 0 && (p.stuck || 0) === 0 && !runsBad && clockBad === 0 && !out.clock.error && !(Number(out.clock.watchdog_age_min) > 30);
   return out;
 }
 
@@ -2299,10 +2308,21 @@ function statusPage(st, head) {
     return '<section class="ds-card"><h2>' + esc(p.label) + '</h2><p class="pp-mute">' + how + "</p>"
       + '<ol class="pp-stages">' + stages + "</ol><p class=\"pp-mute\">" + p.total + " in total: " + states + "</p>" + extra + "</section>";
   };
-  const css = ".pp-stages{list-style:none;padding:0;margin:var(--ds-s2,8px) 0;display:grid;gap:4px}.pp-stages li{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--ds-line,#ddd)}.pp-mute{color:var(--ds-mute,#666);font-size:14px}.pp-bad{color:var(--ds-bad,#b00020)}";
-  const status = st.healthy ? "Every pipeline is reading, with no failed or stuck run." : "A pipeline has a failed or stuck run, or could not be read.";
+  const css = ".pp-clock{align-items:center;gap:var(--ds-s2,8px)}" + ".pp-stages{list-style:none;padding:0;margin:var(--ds-s2,8px) 0;display:grid;gap:4px}.pp-stages li{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--ds-line,#ddd)}.pp-mute{color:var(--ds-mute,#666);font-size:14px}.pp-bad{color:var(--ds-bad,#b00020)}";
+  const ck = st.clock || { loops: [] }, bad = ck.not_ok || 0;
+  const status = st.healthy ? "Every clock is ticking on time with correct output, and the personal pipeline has no failed or stuck run."
+    : bad ? bad + (bad === 1 ? " clock has" : " clocks have") + " stopped or gave wrong output; the watchdog is repairing " + (bad === 1 ? "it" : "them") + " and files a fleet issue if a repair does not hold."
+    : "A pipeline has a failed or stuck run, or a clock could not be read; the watchdog checks again within ten minutes.";
+  const LBL = { ok: "On time", late: "Late", stopped: "Stopped", inaccurate: "Wrong output", unreadable: "Unreadable" };
+  const clockRow = (r) => '<li class="pp-clock"><span><b>' + esc(r.label) + '</b><br><span class="pp-mute">' + esc(r.why || "") + (r.action ? " · repair: " + esc(r.action) : "") + '</span></span><span class="ds-badge ds-badge-' + (r.state === "ok" ? "good" : r.state === "late" ? "warn" : "bad") + '">' + esc(LBL[r.state] || r.state) + "</span></li>";
+  const acc = (ck.loops || []).filter((r) => r.accuracy !== null && r.accuracy !== undefined);
+  const clockCard = '<section class="ds-card"><h2>Clocks</h2>' + (ck.error ? '<p class="pp-bad">Could not read the clocks: ' + esc(ck.error) + ". The watchdog writes them every ten minutes.</p>"
+    : !(ck.loops || []).length ? '<p class="pp-mute">No clock reading yet. The watchdog writes the first one within ten minutes of its deploy.</p>'
+    : '<ol class="pp-stages">' + ck.loops.map(clockRow).join("") + '</ol><p class="pp-mute">' + ck.loops.length + " loops. Missed ticks in 24 h: " + ck.loops.reduce((n, r) => n + (Number(r.missed_24h) || 0), 0)
+      + ". Longest delay: " + ck.loops.reduce((m, r) => Math.max(m, Number(r.latency_min) || 0), 0) + " min. Correct output: " + (acc.length ? Math.round(100 * acc.reduce((n, r) => n + Number(r.accuracy), 0) / acc.length) + "%" : "not counted yet")
+      + ". Checked " + (ck.watchdog_age_min === null ? "never" : ck.watchdog_age_min + " min ago") + ".</p>") + "</section>";
   return "<!doctype html><html lang=\"en\"><head>" + (head ? head("Pipelines", css) : "<meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>Pipelines</title><style>body{font:16px/1.5 system-ui;max-width:640px;margin:auto;padding:16px}" + css + "</style>")
-    + '</head><body class="ds"><main class="ds-main"><h1>Pipelines</h1><p>' + esc(status) + "</p>" + st.pipelines.map(card).join("")
+    + '</head><body class="ds"><main class="ds-main"><h1>Pipelines</h1><p>' + esc(status) + "</p>" + clockCard + st.pipelines.map(card).join("")
     + '<p class="pp-mute">Counts only. Personal events stay in the private personal store. ' + esc(st.engine) + ".</p></main></body></html>";
 }
 
