@@ -4005,11 +4005,26 @@ async function accessOk(request, c, deps, nowMs) {
   } catch (e) { return false; }
 }
 
+// ME-HUB-1 (2026-11-12): one sign-in for everything about the owner. The companion's cmp_s cookie (Domain=q08.org, set by me.q08.org)
+// is read here against the same personal-life D1 (cmp_sessions keeps SHA-256 hashes only), so a device signed in at me.q08.org is
+// signed in to the travel planner. Read-only: this never writes the session row. Never throws.
+async function meSessionOk(request, db, nowMs) {
+  try {
+    const m = /(?:^|;\s*)cmp_s=([0-9a-f]{64})/.exec(String(request.headers.get("Cookie") || ""));
+    if (!m || !db) return false;
+    const d = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(m[1]));
+    const h = Array.from(new Uint8Array(d)).map((b) => b.toString(16).padStart(2, "0")).join("");
+    const row = await db.prepare("SELECT expires_ms FROM cmp_sessions WHERE token_hash = ? AND revoked = 0").bind(h).first();
+    return !!row && Number(row.expires_ms) > (nowMs || Date.now());
+  } catch (e) { return false; }
+}
+
 async function chatAuthed(request, env, db, c, deps, nowMs) {
   if (bearerOk(request, env)) return "bearer";
   if (env.COMPANION_KEY && sameString(cookie(request, "pc_key"), env.COMPANION_KEY)) return "companion-key";
   const key = deps.key !== undefined ? deps.key : await authKey(env, db);
   if (key && await tokenOk(key, "sess", cookie(request, "trv"), nowMs)) return "session";
+  if (await meSessionOk(request, db, nowMs)) return "me-session";
   if (await accessOk(request, c, deps, nowMs)) return "access";
   return "";
 }
@@ -4254,7 +4269,7 @@ const CHAT_CSS = "/* TRAVEL-DESIGN-1 (DESIGN-SYSTEM-3, #9929): neutrals, accent,
   ".taps{display:flex;flex-wrap:wrap;gap:.3rem;align-items:center;margin:.3rem 0}.taps button{min-height:44px;min-width:3.4rem}.chk{border-left:4px solid var(--line)}.chk.bad{border-left-color:var(--warn)}.chk.warn{border-left-color:var(--warn)}" +
   ".st{font-size:.875rem;border:1px solid var(--line);border-radius:.4rem;padding:0 .35rem;margin-left:.4rem;font-weight:400}.st.booked{border-color:var(--accent);color:var(--accent)}.st.draft{border-color:var(--warn);color:var(--warn)}.wild{font-size:.8rem;color:var(--accent);font-weight:600}";
 
-const CHAT_BODY = "<header><h1>Travel planner</h1><span id=\"where\"></span><nav class=\"tabs\"><button type=\"button\" data-tab=\"chat\" aria-pressed=\"true\">Chat</button><button type=\"button\" data-tab=\"places\" aria-pressed=\"false\">Places</button><button type=\"button\" data-tab=\"moving\" aria-pressed=\"false\">Getting around</button><button type=\"button\" data-tab=\"imp\" aria-pressed=\"false\">Import</button></nav></header>" +
+const CHAT_BODY = "<header><a href=\"https://me.q08.org/\" style=\"display:inline-block;min-height:44px;line-height:44px\">← Back to me</a><h1>Travel planner</h1><span id=\"where\"></span><nav class=\"tabs\"><button type=\"button\" data-tab=\"chat\" aria-pressed=\"true\">Chat</button><button type=\"button\" data-tab=\"places\" aria-pressed=\"false\">Places</button><button type=\"button\" data-tab=\"moving\" aria-pressed=\"false\">Getting around</button><button type=\"button\" data-tab=\"imp\" aria-pressed=\"false\">Import</button></nav></header>" +
   "<main id=\"log\" aria-live=\"polite\"></main>" +
   "<section class=\"tab\" id=\"places\" hidden><p class=\"muted\">Where to go, where to sleep, what to eat and what to do, stop by stop. Tap a question and the chat answers it.</p><div id=\"banner\"></div><div id=\"checks\"></div><div id=\"pairs\"></div><div id=\"visa\"></div><div id=\"checkins\"></div><h2>Stops</h2><div id=\"stops\"></div><p><button type=\"button\" id=\"addstop\">Add a stop</button> <button type=\"button\" id=\"addvisa\">Add a visa</button></p></section>" +
   "<section class=\"tab\" id=\"moving\" hidden><p class=\"muted\">How to get from one stop to the next, then every day with its weather.</p><h2>Moves</h2><div id=\"moves\"></div><h2>Day by day</h2><p class=\"muted\">Weather: forecast for the next 16 days; after that, the same dates last year.</p><div id=\"days\"></div></section>" +
@@ -5685,7 +5700,7 @@ function tripToday(plan) {
   };
 }
 
-return Object.freeze({ DDL, CALENDAR_SEED, DEFAULTS, MODELS, PROFILE_CHARS, BASE, PLANNER_URL, ensureTravel, ensureTravelCheap, cfg, addDays, localParts, tripState, bookingLink, transitLink, parseOptions, rankAndMark, promptFor, modelText, sign, verify, signingKey, optionId, mailFor, reconcile, travelTick, applyReaction, SESSION_DAYS, CODE_TRIES, LOGIN_TTL_MIN, LOGIN_MAILS_PER_HOUR, CHAT_MODEL_MENU, authKey, makeToken, tokenOk, accessOk, chatAuthed, firstJson, parseChat, CHAT_SYSTEM, chatContext, historyText, OPEN_TURN, chatPrompt, chatModels, chatTurn, chatState, handleTravel, WX_FORECAST_DAYS, VISA_WARN_DAYS, FOG_BELT, daysBetween, countryName, shiftYear, fogSeason, presence, visaStatus, weatherRequests, parseWeather, dayPlan, checkinDraft, placeCards, moveCards, planState, IMPORT_SYSTEM, parseImport, importText, saveStop, savePermit, planText, PICKS_SYSTEM, picksPrompt, parsePicks, mapLink, picksDue, makePicks, pickNo, SIGNALS, NEGATIVE, SIGNAL_DELTA, TARGET_ADJ, REASONS, REASON_LABELS, TASTE_HALF_LIFE_DAYS, TASTE_CLAMP, TASTE_FORMED_N, EXPLORE_SHARE, VIBE_LEXICON, pickTags, reasonDeltas, decayed, tasteMap, applyTap, addReason, TASTE_PAIRS, applyPair, tagLabel, rankPicks, tasteSummary, tasteHint, stopState, STATE_LABEL, tripBanner, WX_AVOID, WX_CAUTION, weatherVerdict, tripChecks, shiftPlan, tripToday });
+return Object.freeze({ DDL, CALENDAR_SEED, DEFAULTS, MODELS, PROFILE_CHARS, BASE, PLANNER_URL, ensureTravel, ensureTravelCheap, cfg, addDays, localParts, tripState, bookingLink, transitLink, parseOptions, rankAndMark, promptFor, modelText, sign, verify, signingKey, optionId, mailFor, reconcile, travelTick, applyReaction, SESSION_DAYS, CODE_TRIES, LOGIN_TTL_MIN, LOGIN_MAILS_PER_HOUR, CHAT_MODEL_MENU, authKey, makeToken, tokenOk, accessOk, meSessionOk, chatAuthed, firstJson, parseChat, CHAT_SYSTEM, chatContext, historyText, OPEN_TURN, chatPrompt, chatModels, chatTurn, chatState, handleTravel, WX_FORECAST_DAYS, VISA_WARN_DAYS, FOG_BELT, daysBetween, countryName, shiftYear, fogSeason, presence, visaStatus, weatherRequests, parseWeather, dayPlan, checkinDraft, placeCards, moveCards, planState, IMPORT_SYSTEM, parseImport, importText, saveStop, savePermit, planText, PICKS_SYSTEM, picksPrompt, parsePicks, mapLink, picksDue, makePicks, pickNo, SIGNALS, NEGATIVE, SIGNAL_DELTA, TARGET_ADJ, REASONS, REASON_LABELS, TASTE_HALF_LIFE_DAYS, TASTE_CLAMP, TASTE_FORMED_N, EXPLORE_SHARE, VIBE_LEXICON, pickTags, reasonDeltas, decayed, tasteMap, applyTap, addReason, TASTE_PAIRS, applyPair, tagLabel, rankPicks, tasteSummary, tasteHint, stopState, STATE_LABEL, tripBanner, WX_AVOID, WX_CAUTION, weatherVerdict, tripChecks, shiftPlan, tripToday });
 })(); // TRAVEL-INLINE-END
 
 var __defProp2 = Object.defineProperty;
@@ -5696,7 +5711,7 @@ var __name22 = __name2;
 // line below (VERSION-LINE-NOTES-1, 2026-10-19). Its older trailing notes stay until length-lede.test.mjs stops pinning "LENGTH-LEDE-1" on that line.
 // VERSION-NOTES-MOVED-1: release notes live in the block below
 // W-META-1 (agent_issues 1002316/1002317/1002318): aiRunAttr records in_tok/out_tok/neurons per purpose.
-var VERSION = "1.61.0-codeagent";
+var VERSION = "1.61.1-codeagent";
 // 1.46.0 KERNEL-EVERYWHERE-1 (2026-11-06, owner directive "IMPLEMENT EVERYWHERE ACROSS ALL AI APPS AND SERVICES AND SURFACES", pillar personal): the travel planner CHAT_SYSTEM carries the DOCTRINE-1 kernel 8.2.1 reply recognitions (KERNEL-REPLY-4, scoped to the planner's one designed question): end on the plan or proposal, never a conditional offer or questionnaire; refusals and limits are dispositions with their reason; reversible steps are taken and reported in the same reply. prior 1.45.8-codeagent
 /* 1.44.14 COMPANION-LENGTH-HEADROOM-1 (issue 1000633, pillar personal; patch): repeated length failures alongside exhausted retry budgets expose too little headroom for model output variation. Length-only repairs now target 500 words below the unchanged ceiling while remaining inside each form's normal writer band. */
 /* 1.43.6 BP26-AI-ACT-ART50-1 and BP26-STRUCTURED-DATA-1 (2026-10-26, agent_issues 1000341 and 1000336, pillar core; patch): the visible AI-generated label of every reading.q08.org piece now has its machine-readable half. A piece page carries an Article JSON-LD block (headline, datePublished, url, an Organization as author, never an AI or invented persona, and creditText saying it was written by AI and that no human reviews pieces before they appear) and the index page a Blog block. Measured before: the reading pages carried the visible label and no JSON-LD at all. */

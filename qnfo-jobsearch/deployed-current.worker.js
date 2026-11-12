@@ -9,7 +9,7 @@
 // JOBSEARCH-CV-1 (1.5.0): the CV is part of this worker (page /cv): a yes/no interview that builds the claim bank, review of unconfirmed claims, roles, achievements and publications edited in D1, a resume per job (summary, roles, selected work, education, skills) and a cover note, history and backup. The search is tied to that bank (evidence the owner can back up weighs more; what the CV lacks is shown as a gap), decided postings (rejected, applied, approved) never come back under another id, rejections carry a reason the search learns from, and a wider net: stretch matches outside the stated preferences, more boards and aggregators.
 // Routes: GET / (web UI) | GET /api | GET /api/matches | GET /api/matches/:id | GET /api/runs | GET /api/ledger | POST /api/run | POST /api/matches/:id/status | GET /health
 // Port of the jobsearch/ Python modules (tests: jobsearch/test_jobsearch.py, qnfo-jobsearch/worker.test.mjs).
-var VERSION = "1.30.1-codeagent";
+var VERSION = "1.30.2-codeagent";
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -2953,7 +2953,15 @@ async function ownerSession(request, env) {
     const c = /(?:^|;\s*)jobs_session=([0-9a-f]{64})/.exec(request.headers.get("cookie") || "");
     const b = /^Bearer ([0-9a-f]{64})$/.exec(request.headers.get("authorization") || "");
     const raw = (c && c[1]) || (b && b[1]);
-    if (!raw) return null;
+    // ME-HUB-1: the companion's sign-in (cmp_s, Domain=q08.org) is also a jobs sign-in, asked of the companion through a service binding.
+    if (!raw) {
+      const ck = request.headers.get("cookie") || "";
+      if (env.ME && /(?:^|;\s*)cmp_s=[0-9a-f]{64}/.test(ck)) {
+        const w = await env.ME.fetch("https://me.q08.org/companion/api/whoami", { headers: { cookie: ck } }).then((r) => r.json()).catch(() => null);
+        if (w && w.signed_in) return { kind: "me-session" };
+      }
+      return null;
+    }
     await ensure(env);
     const row = await env.JOBS_DB.prepare("SELECT expires_ms FROM jobsearch_sessions WHERE token_hash=?1 AND revoked=0").bind(await sha256hex(raw)).first();
     return row && Number(row.expires_ms) > Date.now() ? { kind: "session", hash: await sha256hex(raw) } : null;
@@ -4414,7 +4422,7 @@ $('#addsave').onclick=function(){addJob('saved')};$('#addapplied').onclick=funct
 const UI = `<!doctype html><html lang="en"><head>${dsHead("Job matches", "Job matches for an autonomous AI systems researcher, each resume line checked against the claim ledger.", JOBS_PAGE_CSS)}<link rel="manifest" href="/manifest.webmanifest"></head><body class="ds">
 <a class="ds-skip" href="#list">Skip to the job list</a>
 <header class="ds-top"><div class="ds-top-in"><a class="ds-brand" href="/">Jobs</a><a class="btn btn-quiet" href="/cv">My CV</a><span id="who" class="ds-muted ds-hide-sm"></span><button class="btn" id="signin" onclick="signIn()">Sign in</button><button class="btn btn-quiet" id="signout" style="display:none" onclick="api(\'/api/auth/logout\',{method:\'POST\'}).then(who)">Sign out</button></div></header>
-<main class="ds-main"><div class="ds-head"><h1>Your job matches</h1><p id="meta">Loading your matches…</p></div>
+<main class="ds-main"><a class="me-back" href="https://me.q08.org/" style="display:inline-block;min-height:44px;line-height:44px">← Back to me</a><div class="ds-head"><h1>Your job matches</h1><p id="meta">Loading your matches…</p></div>
 <div class="ds-seg" role="group" aria-label="Which jobs to show"><button id="vnew" aria-pressed="true">Today</button><button id="vmine" aria-pressed="false">My applications</button><button id="ready" aria-pressed="false">Answers</button><button id="recallbtn" aria-pressed="false">Questions about you</button></div>
 <div class="js-search"><label class="ds-sr" for="q">Search</label><input id="q" type="search" placeholder="Search title, company or place" autocomplete="off"></div>
 <details class="ds-more" id="addjob"><summary>Add a job from anywhere</summary><div class="ds-more-body"><label class="ds-sr" for="addin">Job link or posting text</label><textarea id="addin" rows="3" placeholder="Paste a job link (LinkedIn too) or the posting text"></textarea><div class="bar"><input id="addtitle" placeholder="Job title (needed for LinkedIn links)" aria-label="Job title"><input id="addco" placeholder="Employer" aria-label="Employer"></div><div class="bar"><button class="p" id="addsave">Save this job</button><button id="addapplied">I already applied</button><span id="addmsg" class="mute" role="status"></span></div><p class="mute">LinkedIn jobs: drag <a id="bm2" href="#" class="btn">Send to Jobs</a> to your bookmarks bar, open a LinkedIn job, and click it. On a phone, share the job to this site. LinkedIn pages are never fetched by the server.</p></div></details>

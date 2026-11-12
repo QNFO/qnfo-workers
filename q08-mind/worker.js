@@ -29,7 +29,7 @@ import B from "./data/entries-b.json";
 import BOOKS from "./data/books.json";
 import VIDEOS from "./data/videos.json";
 
-var VERSION = "2.4.0";
+var VERSION = "2.4.1";
 const BUILT = "2026-10-26";
 const ENTRIES = [...A, ...B];
 const BY_SLUG = new Map(ENTRIES.map((e) => [e.s, e]));
@@ -166,7 +166,7 @@ function pickBox(lane, atMs, heading) {
 }
 
 function home(atMs) {
-  const body = `<h1>Reading to understand yourself</h1>
+  const body = `<p><a href="https://me.q08.org/" style="display:inline-block;min-height:44px;line-height:44px">← Back to me</a></p><h1>Reading to understand yourself</h1>
 <p class="sub">Books, memoirs and essays about how your mind works, what you might be going through, and where you fit. Chosen from psychology, neuroscience, philosophy and honest first-person writing. No gurus, no personality types, no promises. Each one says plainly what it is good for and what to be careful about.</p>
 ${pickBox("gentle", atMs, "Today's pick")}
 ${QUESTIONS.map((q) => `<h2 id="${q.id}">${esc(q.label)}</h2><p class="note">${esc(q.blurb)}</p>${BOOKS.filter((b) => b.q === q.id).map((b) => bookLine(b, false)).join("")}`).join("")}

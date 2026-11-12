@@ -296,7 +296,7 @@ function clampMaxTokens(requested, isReason) {
 __name(clampMaxTokens, "clampMaxTokens");
 __name2(clampMaxTokens, "clampMaxTokens");
 __name22(clampMaxTokens, "clampMaxTokens");
-var VERSION = "4.45.0";
+var VERSION = "4.45.1";
 // 4.37.2 KERNEL-PERSONAL-PRIVACY-1: preserve all ten registered reply categories across the content-free telemetry boundary.
 // 4.37.1 KERNEL-PERSONAL-PRIVACY-1: classify twin replies inside the personal plane; AUDIT receives only fixed categories and random event ids, never reply text or excerpts.
 // 4.37.0 KERNEL-EVERYWHERE-1 (2026-11-06, owner directive "IMPLEMENT EVERYWHERE ACROSS ALL AI APPS AND SERVICES AND SURFACES", pillar personal): the twin SYSTEM_PROMPT carries the DOCTRINE-1 kernel 8.2.1 reply recognitions (KERNEL-REPLY-4): end every reply on the answer or result, never on a question, conditional offer or menu; ambiguity gets a stated assumption; a refusal or limit with its reason is a disposition stated declaratively; reversible tool actions are taken and reported in the same reply, and a requested change is made with the tool, not described. Each twin reply is also mirrored to qnfo-audit.personal_replies so the kernel false-stop scan covers this surface. prior 4.36.2
@@ -2648,6 +2648,8 @@ const LOGIN_FROM = [{ email: "companion@q08.org", name: "Companion" }, { email: 
 const SESSION_COOKIE = "cmp_s";
 const SESSION_MS = 180 * 864e5;
 const CODE_TTL_MS = 10 * 60000, CODE_MIN_GAP_MS = 60000, CODE_MAX_PER_HOUR = 5, CODE_MAX_TRIES = 5, VERIFY_FAILS_PER_HOUR = 20;
+// ME-HUB-1: on a q08.org host the sign-in cookie is shared by every q08.org dashboard; any other host (local harness, workers.dev) keeps it host-only.
+const cookieDomain = (host) => (/(^|\.)q08\.org$/.test(String(host || "")) ? "Domain=q08.org; " : "");
 async function liHash(t) { const d = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(String(t))); return Array.from(new Uint8Array(d)).map((b) => b.toString(16).padStart(2, "0")).join(""); }
 function liRand(n) { const a = new Uint8Array(n); crypto.getRandomValues(a); return Array.from(a).map((b) => b.toString(16).padStart(2, "0")).join(""); }
 function liEq(a, b) { a = String(a || ""); b = String(b || ""); let r = a.length === b.length ? 0 : 1; for (let i = 0; i < Math.max(a.length, b.length); i++) r |= (a.charCodeAt(i % (a.length || 1)) ^ b.charCodeAt(i % (b.length || 1))) | 0; return r === 0; }
@@ -2692,7 +2694,7 @@ async function sendLoginCode(env, nowMs) {
   if (!sentOk) return { ok: false, status: 502, error: "The code e-mail could not be sent (" + err + ")." };
   return { ok: true, sent: true, reply: "Sent to " + maskedLoginTo() + ". It works for 10 minutes." };
 }
-async function verifyLoginCode(env, codeIn, device, nowMs) {
+async function verifyLoginCode(env, codeIn, device, nowMs, host) {
   await ensureSchema(env.PERSONAL);
   const code = String(codeIn || "").replace(/\D/g, "");
   if (code.length !== 6) return { ok: false, status: 400, error: "The code has 6 digits." };
@@ -2707,7 +2709,7 @@ async function verifyLoginCode(env, codeIn, device, nowMs) {
       if (!(u.meta && u.meta.changes)) break;
       const token = liRand(32);
       await env.PERSONAL.prepare("INSERT INTO cmp_sessions (token_hash, created_ms, expires_ms, last_seen_ms, device) VALUES (?, ?, ?, ?, ?)").bind(await liHash(token), now, now + SESSION_MS, now, s(device, 120)).run();
-      return { ok: true, cookie: SESSION_COOKIE + "=" + token + "; Path=/; Max-Age=" + Math.round(SESSION_MS / 1000) + "; HttpOnly; Secure; SameSite=Lax" };
+      return { ok: true, cookie: SESSION_COOKIE + "=" + token + "; Path=/; Max-Age=" + Math.round(SESSION_MS / 1000) + "; " + cookieDomain(host) + "HttpOnly; Secure; SameSite=Lax" };
     }
   }
   if (rows.length) await env.PERSONAL.prepare("UPDATE cmp_login_codes SET tries = tries + 1 WHERE id = ?").bind(rows[0].id).run();
@@ -4606,6 +4608,28 @@ async function tripCard(db, day) {
     url: "https://travel.q08.org/travel"
   };
 }
+// ME-HUB-1 (2026-11-12, owner: "all of this is me ... separate dashboards for those things"): the places that hold the owner's own data,
+// as tiles on Today. Each tile has one plain line read from the shared data (the planner's trip, the job search's events in qnfo-audit,
+// the reading pick), so a trip, an interview or a reading pick shows here without the owner opening that dashboard. Read-only; a missing
+// table gives the tile a fixed line, never an error. The dashboards stay on their own q08.org addresses and share this sign-in.
+async function hubTiles(env, trip, reading, day) {
+  const tiles = [];
+  tiles.push({ key: "travel", title: "Travel", url: "https://travel.q08.org/travel", line: trip && trip.line ? trip.line : "Plan the next trip." });
+  let jobs = "Your job search.";
+  try {
+    if (env.AUDIT) {
+      const e = await env.AUDIT.prepare("SELECT m.company AS company, e.event AS event, e.ts AS ts FROM jobsearch_events e JOIN jobsearch_matches m ON m.id = e.match_id WHERE e.event IN ('interview','screening','offer') ORDER BY e.ts DESC LIMIT 1").first();
+      if (e && e.company) jobs = (e.event === "offer" ? "Offer from " : e.event === "interview" ? "Interview with " : "Screening with ") + String(e.company).slice(0, 60) + ".";
+      else {
+        const a = await env.AUDIT.prepare("SELECT COUNT(DISTINCT match_id) AS n FROM jobsearch_events WHERE event = 'applied'").first();
+        if (a && Number(a.n) > 0) jobs = Number(a.n) + " application" + (Number(a.n) === 1 ? "" : "s") + " sent.";
+      }
+    }
+  } catch (err) { /* table missing: fixed line */ }
+  tiles.push({ key: "jobs", title: "Jobs", url: "https://jobs.q08.org/", line: jobs });
+  tiles.push({ key: "mind", title: "Mind", url: reading && reading.url ? reading.url : MIND_URL, line: reading && reading.why ? reading.why : "Reading to understand yourself." });
+  return tiles;
+}
 // COMPANION-PLAIN-1: nothing a person reads on Today may carry an id, a raw log, a context tag or machine output.
 const PLAIN_BAD = /(@[a-z]+|\bcmp[-_][a-z]+|\b(task|inb|mood|jrn|ref|act)-[0-9a-f]{6,}|#\d+|\bundefined\b|\bnull\b|\[object|"\w+"\s*:|\bNUDGE-|\bNaN\b|\bfailed:|\bSELECT\b)/i;
 const plainAction = (a) => String(a && a.title || "") + " (" + ((a && a.minutes) || 15) + " min)";
@@ -4673,6 +4697,7 @@ async function today(env, deps) {
     day: st.day, greeting: greet, hour: Math.round(st.hour * 100) / 100, mood: st.mood, sleep, weather, week, travel: st.away, trip, events_today: st.events.length, light_day: st.events.length >= LIGHT_DAY_EVENTS, busy_now: st.events.some((e) => !e.allDay && e.startMs <= Date.parse(st.nowIso) && Date.parse(st.nowIso) < e.endMs),
     low_day: st.crisisLevel24h >= 2,
     reading: readingLane(st.mood, st.crisisLevel24h >= 1),
+    hub: await hubTiles(env, trip, readingLane(st.mood, st.crisisLevel24h >= 1), st.day).catch(() => []),
     one_thing: suggestion, next_actions: st.nextActions.slice(0, 12), actions_done_today: st.actionsDoneToday,
     due_cards: st.dueCards, open_nudges: open.filter((n) => (st.cfg.wellbeing_prompts === true || ["cmp-agenda", "cmp-soon", "cmp-deadline", "cmp-discovery", "cmp-care", "cmp-next", "cmp-anchor", "micro", "body", "contact", "cmp-connect", "cmp-review"].includes(n.kind)) && !(SILENT_KINDS.includes(n.kind) && st.mood && st.mood.today != null) && !doneAsks.has(n.id)), recap, forecast, inbox_unprocessed: inbox ? Number(inbox.n) : 0, last_journal: lastJournal,
     projects, push_ready: st.pushReady, nudges_today: st.todays.length, cap: st.cfg.max_per_day,
@@ -5371,10 +5396,12 @@ async function handleCompanion(request, env, ctx, deps) {
   if (r === "login/code" && m === "POST") { const o = await sendLoginCode(env); return J(o, o.status || 200); }
   if (r === "login/verify" && m === "POST") {
     const b = await request.json().catch(() => ({}));
-    const o = await verifyLoginCode(env, b.code, request.headers.get("User-Agent") || "");
+    const o = await verifyLoginCode(env, b.code, request.headers.get("User-Agent") || "", undefined, new URL(request.url).hostname);
     if (!o.ok) return J(o, o.status || 401);
     return new Response(JSON.stringify({ ok: true }), { headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", "Set-Cookie": o.cookie } });
   }
+  // ME-HUB-1: the other q08.org dashboards ask here whether this cookie is a live sign-in. Answers only about the cookie sent.
+  if (r === "whoami" && m === "GET") { const ss = await sessionFor(request, env); return J({ ok: true, signed_in: !!ss }, 200); }
   const bearerOk = await deps.auth(request, env);
   const session = bearerOk ? null : await sessionFor(request, env);
   if (!bearerOk && !session) return J({ ok: false, signed_in: false, error: "sign in: ask for a code by e-mail (or send Authorization: Bearer <personal API key>)", login_to: maskedLoginTo() }, 401);
@@ -5382,14 +5409,22 @@ async function handleCompanion(request, env, ctx, deps) {
   if (!bearerOk && m !== "GET" && request.headers.get("X-Companion") !== "1") return J({ ok: false, error: "missing X-Companion header" }, 403);
   if (r === "logout" && m === "POST") {
     if (session) await env.PERSONAL.prepare("UPDATE cmp_sessions SET revoked = 1 WHERE token_hash = ?").bind(session.hash).run();
-    return new Response(JSON.stringify({ ok: true }), { headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", "Set-Cookie": SESSION_COOKIE + "=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax" } });
+    return new Response(JSON.stringify({ ok: true }), { headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", "Set-Cookie": SESSION_COOKIE + "=; Path=/; Max-Age=0; " + cookieDomain(new URL(request.url).hostname) + "HttpOnly; Secure; SameSite=Lax" } });
   }
   await ensureSchema(env.PERSONAL);
   const body = async () => (m === "POST" ? await request.json().catch(() => ({})) : {});
   const stub = () => deps.doStub(env);
   const ensure = () => { try { ctx.waitUntil(stub().fetch("https://do/companion-do/ensure").catch(() => null)); } catch (e) { /* DO absent in tests */ } };
   try {
-    if (r === "today" && m === "GET") { ensure(); return J(await today(env, deps)); }
+    if (r === "today" && m === "GET") {
+      ensure();
+      const resp = J(await today(env, deps));
+      // ME-HUB-1: a device signed in before 12 Nov holds a host-only cookie; once per page load, re-issue it for all of q08.org so the
+      // travel and jobs dashboards see the same sign-in. Same token, same lifetime, no new session row.
+      const tk = /(?:^|;\s*)cmp_s=([0-9a-f]{64})/.exec(request.headers.get("Cookie") || "");
+      if (tk) { const h = new Headers(resp.headers); h.append("Set-Cookie", SESSION_COOKIE + "=" + tk[1] + "; Path=/; Max-Age=" + Math.round(SESSION_MS / 1000) + "; " + cookieDomain(new URL(request.url).hostname) + "HttpOnly; Secure; SameSite=Lax"); return new Response(resp.body, { status: resp.status, headers: h }); }
+      return resp;
+    }
     if (r === "dashboard" && m === "GET") return J(await dashboard(env));
     if (r === "capture" && m === "POST") {
       // COMPANION-FAST-CAPTURE-1: the note is stored and answered at once; sorting it (a model call) happens after the reply.
@@ -6142,6 +6177,7 @@ function renderToday(t){$('login').classList.add('hide');var v=$('v-today');v.in
  /* COMPANION-NO-TYPING-1:talk-cost (agent_issues 1001641): when the day's AI use passes $0.10 the number shows here, in plain words, so the cost is never out of sight */
  api('/companion/api/ai-use').then(function(u){if(u&&u.ok&&u.today&&u.today.usd>0.1)nowCard.appendChild(el('div',{cls:'mute',id:'today-ai-use',text:u.line}))}).catch(function(e){console.error(JSON.stringify({where:'today-ai-use',error:String(e&&e.message||e)}))});
  if(t.trip)v.appendChild(el('div',{cls:'card',id:'trip-card'},[el('h2',{text:'Your trip'}),el('div',{text:t.trip.line}),el('div',{cls:'row',style:'margin-top:8px'},[el('a',{cls:'btn',href:t.trip.url,text:'Open the plan'})])]));
+ if(t.hub&&t.hub.length)v.appendChild(el('div',{cls:'card',id:'hub'},[el('h2',{text:'Your places'})].concat(t.hub.map(function(h){return el('a',{href:h.url,cls:'btn',style:'display:block;min-height:44px;margin-top:8px;text-align:left'},[el('b',{text:h.title}),el('div',{cls:'mute',text:h.line})])}))));
  if(t.travel)v.appendChild(el('div',{cls:'mute',text:'Times follow you: '+t.travel.place+' ('+t.travel.tz.replace('_',' ')+'). Quiet hours and notifications run on local time.',style:'margin:-6px 0 12px'}));
  if(t.stale_reminders)v.appendChild(el('div',{cls:'card'},[el('div',{text:t.stale_reminders+(t.stale_reminders===1?' old reminder is':' old reminders are')+' past '+(t.stale_reminders===1?'its':'their')+' date. I stopped bringing '+(t.stale_reminders===1?'it':'them')+' up.'}),el('div',{cls:'row',style:'margin-top:8px'},[el('button',{text:'Tidy them on Do',onclick:function(){go('do')}})])]));
  if(t.crisis_lines)v.appendChild(el('div',{cls:'warn',style:'margin:0 0 12px'},[t.crisis_lines]));
@@ -6377,7 +6413,7 @@ window.addEventListener('online',flushQueue);document.addEventListener('visibili
 flushQueue();showPending();
 </script></body></html>`;
 
-return Object.freeze({ COMPANION_VERSION, TZ, CONTEXTS, ENERGY, NUDGE_KINDS, LADDER_KINDS, REVIEW_NUDGE_KIND, REVIEW_PUSH, reviewNudgeDue, COMPANION_BACKUP, sha256Hex, companionReleaseKeys, buildCompanionManifest, restoreCompanionRelease, INBOX_MAX_ATTEMPTS, inboxShouldFallback, DDL, TASK_COLUMNS, ensureSchema, nowIso, FRESH_DUE_SQL, rid, esc, tzOffsetMinutes, localParts, dayKey, OFFLINE_MAX_AGE_MS, clientStamp, inQuiet, FSRS_W, RETENTION, MAX_INTERVAL_DAYS, retrievability, intervalDays, fsrsSchedule, CLARIFY_SYSTEM, contextFor, heuristicClarify, parseClarify, crisisSignal, FALLBACK_CRISIS_LINES, crisisText, SAFETY_PLAN_FIELDS, normalizeSafetyPlan, saveSafetyPlan, ACTIVITY_CATEGORIES, SEED_ACTIVITIES, helpScores, pickActivity, AI_USD_PER_1K_NEURONS, aiUseSummary, aiUse, focusOptions, logActivity, whatHelps, activityBank, addActivity, WHO5_ITEMS, WHO5_SCALE, who5Score, who5Read, recordWho5, who5Status, setPause, fallbackReply, EMAIL_MODES, saveSettings, LOGIN_TO, SESSION_COOKIE, SESSION_MS, maskedLoginTo, sessionFor, sendLoginCode, verifyLoginCode, isPaused, NEVER_RETIRE, retiredFrom, DISCREET_KINDS, discreetPayload, pruneMedia, TEXTS, pickLru, energyFor, chooseAction, receptiveHours, addDays, mondayOf, weekWindow, weekText, weekLookback, weekSeen, transitionText, planNudge, b64u, unb64u, makeVapidKeys, vapidAuthHeader, encryptPayload, sendPush, pushAll, loadCfg, dayStartIso, COUNTRY_TZ, CITY_TZ, MULTI_TZ_COUNTRIES, countryCode, placeTz, stayAt, effectiveTz, localDay, EVENT_DEFAULT_MIN, eventMs, normalizeEvents, clearEventCache, loadEvents, afterEventText, GP_DAYS, gpSummaryBuild, gpSummary, sleepFromTimestamps, sleepWindow, moodStats, MIND_URL, readingLane, retiredKinds, daysSinceSocial, unansweredStreak, gatherState, remember, recall, contextSnapshot, recordMood, moodReply, addAction, upsertProject, actionDone, addJournal, addCard, reviewCard, answerNudge, MAX_CAPTURE_BYTES, transcribe, describeImage, describeImages, capture, shortClarify, clarify, dueFromWords, processItem, processInbox, pushPayloadFor, companionTick, agenda, FB_KINDS, fbKey, tasteTokens, tasteModel, tasteScore, applyTaste, loadFeedback, recordFeedback, tasteSummary, tripCard, PLAIN_BAD, plainAction, SILENT_KINDS, recapFor, recapCarry, lowMoodForecast, forecastFor, today, tasteFilterToday, dashboard, PRIVACY_TABLES, privacy, exportAll, deleteData, PERSONA, untrusted, checkInAnswer, chatFollowUp, chatContext, noteRiskInChat, companionTools, TOOL_APPENDIX_LINE, TICK_MS, doKeys, doEnsure, doTick, SELF_CHECKS, selfHeal, selfCheckState, selfCheck, sendToFleet, doAlarm, doFetch, RECALL_DDL, RECALL_UNSURE_DAYS, RECALL_OPEN_MAX, RECALL_PARTS, recallOptions, isoWeekKey, recallGenerate, recallNext, recallAnswer, recallSummary, handleTranscription, handleCompanion, MANIFEST, ICON_SVG, SW_JS, CALM_STEPS, MIND_MAX_WORDS, MIND_TAGS, MIND_CARDS, MIND_BOOKS, mindWords, mindLint, mindTags, pickMindCard, mindAllCards, mindVotes, mindStateFor, mindFor, mindVote, MIND_GROW_CAP, MIND_GROW_SYSTEM, mindGrowTag, mindParseGrown, mindGrow, MIND_JS, CALM_JS, OFFLINE_JS, GUIDE_HTML, PAGE_HTML });
+return Object.freeze({ COMPANION_VERSION, TZ, CONTEXTS, ENERGY, NUDGE_KINDS, LADDER_KINDS, REVIEW_NUDGE_KIND, REVIEW_PUSH, reviewNudgeDue, COMPANION_BACKUP, sha256Hex, companionReleaseKeys, buildCompanionManifest, restoreCompanionRelease, INBOX_MAX_ATTEMPTS, inboxShouldFallback, DDL, TASK_COLUMNS, ensureSchema, nowIso, FRESH_DUE_SQL, rid, esc, tzOffsetMinutes, localParts, dayKey, OFFLINE_MAX_AGE_MS, clientStamp, inQuiet, FSRS_W, RETENTION, MAX_INTERVAL_DAYS, retrievability, intervalDays, fsrsSchedule, CLARIFY_SYSTEM, contextFor, heuristicClarify, parseClarify, crisisSignal, FALLBACK_CRISIS_LINES, crisisText, SAFETY_PLAN_FIELDS, normalizeSafetyPlan, saveSafetyPlan, ACTIVITY_CATEGORIES, SEED_ACTIVITIES, helpScores, pickActivity, AI_USD_PER_1K_NEURONS, aiUseSummary, aiUse, focusOptions, logActivity, whatHelps, activityBank, addActivity, WHO5_ITEMS, WHO5_SCALE, who5Score, who5Read, recordWho5, who5Status, setPause, fallbackReply, EMAIL_MODES, saveSettings, LOGIN_TO, SESSION_COOKIE, SESSION_MS, maskedLoginTo, sessionFor, sendLoginCode, verifyLoginCode, isPaused, NEVER_RETIRE, retiredFrom, DISCREET_KINDS, discreetPayload, pruneMedia, TEXTS, pickLru, energyFor, chooseAction, receptiveHours, addDays, mondayOf, weekWindow, weekText, weekLookback, weekSeen, transitionText, planNudge, b64u, unb64u, makeVapidKeys, vapidAuthHeader, encryptPayload, sendPush, pushAll, loadCfg, dayStartIso, COUNTRY_TZ, CITY_TZ, MULTI_TZ_COUNTRIES, countryCode, placeTz, stayAt, effectiveTz, localDay, EVENT_DEFAULT_MIN, eventMs, normalizeEvents, clearEventCache, loadEvents, afterEventText, GP_DAYS, gpSummaryBuild, gpSummary, sleepFromTimestamps, sleepWindow, moodStats, MIND_URL, readingLane, retiredKinds, daysSinceSocial, unansweredStreak, gatherState, remember, recall, contextSnapshot, recordMood, moodReply, addAction, upsertProject, actionDone, addJournal, addCard, reviewCard, answerNudge, MAX_CAPTURE_BYTES, transcribe, describeImage, describeImages, capture, shortClarify, clarify, dueFromWords, processItem, processInbox, pushPayloadFor, companionTick, agenda, FB_KINDS, fbKey, tasteTokens, tasteModel, tasteScore, applyTaste, loadFeedback, recordFeedback, tasteSummary, tripCard, hubTiles, PLAIN_BAD, plainAction, SILENT_KINDS, recapFor, recapCarry, lowMoodForecast, forecastFor, today, tasteFilterToday, dashboard, PRIVACY_TABLES, privacy, exportAll, deleteData, PERSONA, untrusted, checkInAnswer, chatFollowUp, chatContext, noteRiskInChat, companionTools, TOOL_APPENDIX_LINE, TICK_MS, doKeys, doEnsure, doTick, SELF_CHECKS, selfHeal, selfCheckState, selfCheck, sendToFleet, doAlarm, doFetch, RECALL_DDL, RECALL_UNSURE_DAYS, RECALL_OPEN_MAX, RECALL_PARTS, recallOptions, isoWeekKey, recallGenerate, recallNext, recallAnswer, recallSummary, handleTranscription, handleCompanion, MANIFEST, ICON_SVG, SW_JS, CALM_STEPS, MIND_MAX_WORDS, MIND_TAGS, MIND_CARDS, MIND_BOOKS, mindWords, mindLint, mindTags, pickMindCard, mindAllCards, mindVotes, mindStateFor, mindFor, mindVote, MIND_GROW_CAP, MIND_GROW_SYSTEM, mindGrowTag, mindParseGrown, mindGrow, MIND_JS, CALM_JS, OFFLINE_JS, GUIDE_HTML, PAGE_HTML });
 })();
 // COMPANION-INLINE-END
 var CMP_DEPS = {
