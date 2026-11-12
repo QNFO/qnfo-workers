@@ -15,7 +15,7 @@
 //
 // Pure ESM, no imports: personal-companion inlines it (scripts/inline-pipeline-modules.mjs); tests load it directly.
 
-export const ENGINE_VERSION = "1.0.0";
+export const ENGINE_VERSION = "1.1.0";
 
 export const ENGINE_DDL = [
   `CREATE TABLE IF NOT EXISTS pipeline_runs (
@@ -80,7 +80,8 @@ export function definePipeline(def) {
   for (const s of stages) {
     if (!s.key || seen.has(s.key)) throw new Error("pipeline " + def.name + ": stage key " + s.key);
     seen.add(s.key);
-    if (def.mode === "observed" ? false : typeof s.run !== "function") throw new Error("pipeline " + def.name + ": stage " + s.key + " has no run()");
+    // a funnel view (observed, or executed by a sibling pipeline named in def.runs) projects stages and needs no run()
+    if (def.mode === "observed" || typeof def.project === "function" ? false : typeof s.run !== "function") throw new Error("pipeline " + def.name + ": stage " + s.key + " has no run()");
     if (s.wait && (typeof s.wait.poll !== "function" || typeof s.wait.resume !== "function")) throw new Error("pipeline " + def.name + ": stage " + s.key + " wait needs poll and resume");
   }
   if (def.mode === "observed" && typeof def.project !== "function") throw new Error("pipeline " + def.name + ": observed needs project()");
@@ -240,8 +241,9 @@ export async function resumeDue(db, def, ctx = {}, limit = 20) {
 
 // ------------------------------------------------------------------ status
 // Counts only: no input, state or output leaves the plane through this view.
-export async function statusOf(db, def, nowMs = Date.now()) {
-  await ensureEngine(db);
+// opts.ensure=false reads a plane this worker does not own: no DDL, and a missing table reads as an error the caller catches.
+export async function statusOf(db, def, nowMs = Date.now(), opts = {}) {
+  if (opts.ensure !== false) await ensureEngine(db);
   const rows = (await db.prepare("SELECT status, stage, COUNT(*) AS n, MIN(updated_at) AS oldest FROM pipeline_runs WHERE pipeline = ? GROUP BY status, stage").bind(def.name).all()).results || [];
   const since = new Date(nowMs - 864e5).toISOString();
   const f = await db.prepare("SELECT COUNT(*) AS n FROM pipeline_runs WHERE pipeline = ? AND status = 'failed' AND updated_at >= ?").bind(def.name, since).first();
@@ -274,7 +276,7 @@ function summarise(def, rows, nowMs, extra) {
     if (["queued", "running", "waiting", "active"].includes(r.state) && r.oldest && (!oldestActive || r.oldest < oldestActive)) oldestActive = r.oldest;
   }
   return Object.assign({
-    pipeline: def.name, label: def.label || def.name, plane: def.plane, version: def.version, mode: def.mode,
+    pipeline: def.name, label: def.label || def.name, plane: def.plane, version: def.version, mode: def.mode, executor: def.executor || null,
     stages: def.stages.map((s) => ({ key: s.key, label: s.label || s.key, active: by_stage[s.key] || 0 })),
     total, by_state, oldest_active_min: oldestActive ? Math.round((nowMs - Date.parse(oldestActive)) / 6e4) : null
   }, extra);
