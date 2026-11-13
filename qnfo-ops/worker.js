@@ -552,7 +552,7 @@ __name222(gateAudit1CfWorkerDeploy, "gateAudit1CfWorkerDeploy");
 __name2222(gateAudit1CfWorkerDeploy, "gateAudit1CfWorkerDeploy");
 __name22222(gateAudit1CfWorkerDeploy, "gateAudit1CfWorkerDeploy");
 __name222222(gateAudit1CfWorkerDeploy, "gateAudit1CfWorkerDeploy");
-var VERSION = "2.73.0-codeagent";
+var VERSION = "2.73.1-codeagent";
 /* 2.62.20 OPS-ARG-ALIAS-1 (issues 5775, 5780, 6173, 6193, 6671, 6792, 6767, 6826, 6015, 6860, pillar autonomy; patch). Caller-input mistakes are no longer fleet failures: workspace_grep accepts query/regex/search for pattern, cf_worker_read/deploy/bindings accept name/script for worker, fleet_graph infers a missing op from its other arguments and accepts filter/q/name for query; a still-missing argument answers arg_error with a hint, and an arg_error or an exception thrown by the caller own run_code or run_code_net JavaScript (user_code_error) is logged as status rejected, so it files no TOOL-FAILURE or LOOP-BREAKER issue. errorDetailCapture writes worker_logs in batches of 25 and records a D1 overload as a deferral, not an error. qnfo-ops/tool-arg-alias.test.mjs. */
 /* 2.62.11 WORKER-LOAD-GATE-1 (issue #6518, pillar autonomy; patch): inline the OAuth broker in the deployable single-module worker. */
 /* 2.62.1 CONTAINER-WORKSPACE-TIMEOUT-1 (#3922, issue 1000117, pillar autonomy; patch): container_workspace_exec allows 120 seconds for cold-start initialization while preserving its 300-second ceiling. */
@@ -10386,7 +10386,7 @@ var AgenticOpsExec = class extends DurableObject {
           const res = (fn.name === "ops_d1_query" && ++_d1Reads > OPS_D1_RUN_BUDGET)
             ? { text: JSON.stringify({ ok: false, error: "D1 read budget for this run is spent (" + OPS_D1_RUN_BUDGET + " queries). Stop reading: make the change now with ship_change, or report the result you already have." }) }
             : await opsAgentTool(this.env, fn.name, fn.arguments, userContent, 16e3, conversationId);
-          if (fn.name === "ship_change" || fn.name === "github_pr" || fn.name === "github_file_write") _shipped = true;
+          if ((fn.name === "ship_change" || fn.name === "github_pr" || fn.name === "github_file_write") && /"ok"\s*:\s*true/.test(String(res && res.text || ""))) _shipped = true; // only a successful call counts
           const tMsg = { role: "tool", tool_call_id: tc.id, name: fn.name, content: res.text };
           history.push(tMsg);
           messages.push(tMsg);
