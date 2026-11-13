@@ -11,7 +11,7 @@ var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target,
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
 // 1.77.2 ERRATA-CHAIN-DISPATCH-1 (pillar research): wake the folded errata consumer and retry its legacy parked receipts.
 // VERSION-LINE-SPLIT-1 (agent_issues 100220): the release notes sit one per line below this statement, newest first, so a VERSION bump is a one-line patch; add a new note as the first line under it.
-var VERSION = "1.110.0";
+var VERSION = "1.110.1";
 // 1.89.0 NOW-NORTH-1 and HOME-MORE-1 (pillar core; minor): the Now screen opens with four numbers tied to the owner goals (readers, fleet cost, owner load, reliability) and drops the count of metrics off target (95 of 297; nothing can be done with it); a quiet footer on the home links the full dashboard, changelog, data index and managers.
 // 1.89.0 (cont.) MONEY-FIX-1 (pillar cost; patch): the Money card subtracted the subscription figure from a pace that never included it (fleet scope of v_cost_forecast), so it showed the fleet at 701 instead of 1151 a month; it now shows the fleet line, the subscriptions line and both together.
 // 1.85.0 (cont.) NOW-REVIEW-1: independent review fixes: Snooze and Not needed hide the card; a tap removes the card at once and reloads fresh, and the hand-back claims the card before filing (no duplicate tickets); strangers get no card keys or raw error text; only the signed-in owner (not the loop token) can run commands or hand work back; bound cards are read first; an unrefreshed metric reads n/a, not 0; one refresh in flight at a time and a failed refresh retries in 10 s; the Code poll says when the executor does not answer.
@@ -4730,7 +4730,7 @@ if (path === "/health") {
     return rtRead(request, url, await costFeedData(env), { schema: "fleet-cost/v1" });
   }
   if (path === "/api/reach") {
-    return rtRead(request, url, await reachScorecardData(env), { schema: "reach-scorecard/v1" });
+    return rtRead(request, url, await reachScorecardCached(env, ctx), { schema: "reach-scorecard/v1" });
   }
   // ATTENTION-LOOP-1 (OPEN-ACCESS-1): the per-channel attention scorecard, verdicts, shares and decisions, read-only.
   if (path === "/api/attention") {
@@ -7965,6 +7965,30 @@ async function costFeedData(env) {
   out.est_usd_basis = "worker counters (ai_call_counters) at list price, before the 10,000 neurons/day free tier";
   out.free_tier_neurons_per_day = COST_FREE_NEURONS_PER_DAY;
   return out;
+}
+// D1-ROWS-READ-REACH-1: /api/reach ran the reach_signals latest-per-entity join (about 45 K rows) on every request, 9,210 times in
+// 3 days (416 M rows read, the top statement of qnfo-audit on 2026-11-13). The scorecard changes once a day, so the edge cache holds it 15 minutes.
+async function reachScorecardCached(env, ctx) {
+  const key = new Request("https://cache.invalid/reach-scorecard-v1");
+  let c = null;
+  try { c = typeof caches !== "undefined" ? caches.default : null; } catch (e) { c = null; }
+  if (c) {
+    try {
+      const hit = await c.match(key);
+      if (hit) return await hit.json();
+    } catch (e) {
+    }
+  }
+  const data = await reachScorecardData(env);
+  if (c) {
+    try {
+      const put = c.put(key, new Response(JSON.stringify(data), { headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=900" } })).catch(function() {
+      });
+      if (ctx && ctx.waitUntil) ctx.waitUntil(put);
+    } catch (e) {
+    }
+  }
+  return data;
 }
 async function reachScorecardData(env, nowMs) {
   const end = reachYesterday(nowMs || Date.now());
