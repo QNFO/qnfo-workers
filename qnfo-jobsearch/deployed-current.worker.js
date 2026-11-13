@@ -3895,7 +3895,7 @@ function handleDossier(a, v, existing) {
 // what the record and the survey answers say, and says nothing when it cannot tell.
 async function handleLifeFit(env, a) {
   try {
-    const prefs = await env.JOBS_DB.prepare("SELECT v FROM jobsearch_prefs WHERE k='survey'").first().then((r) => (r ? String(r.v).slice(0, 1500) : "")).catch(() => "");
+    const prefs = await env.JOBS_DB.prepare("SELECT v FROM jobsearch_prefs WHERE k='survey'").first().then((r) => (r ? String(r.v).slice(0, 1500) : "")).catch((e) => { logErr("handle-prefs", e); return ""; });
     const sys = "You tell one candidate, candidly, whether a job would suit him as a person: the day-to-day work, pace, travel, on-call, people-versus-code balance, management style signals, employer type and stability. Use ONLY the candidate record and stated preferences given; never invent traits. If the posting gives no signal, say nothing about that. Reply JSON only: {\"suits\":[up to 2 short sentences],\"grates\":[up to 3 short sentences],\"call\":\"suits|mixed|miserable\"}.";
     const out = await askModel(env, sys, "CANDIDATE:\n" + bankDigest() + "\nSTATED PREFERENCES: " + prefs + "\nPOSTING: " + a.title + " at " + a.company + "\n" + String(a.desc_excerpt || "").slice(0, 6000));
     const j = jsonLoose(out); if (!j) return null;
