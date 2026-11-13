@@ -9,7 +9,7 @@
 // JOBSEARCH-CV-1 (1.5.0): the CV is part of this worker (page /cv): a yes/no interview that builds the claim bank, review of unconfirmed claims, roles, achievements and publications edited in D1, a resume per job (summary, roles, selected work, education, skills) and a cover note, history and backup. The search is tied to that bank (evidence the owner can back up weighs more; what the CV lacks is shown as a gap), decided postings (rejected, applied, approved) never come back under another id, rejections carry a reason the search learns from, and a wider net: stretch matches outside the stated preferences, more boards and aggregators.
 // Routes: GET / (web UI) | GET /api | GET /api/matches | GET /api/matches/:id | GET /api/runs | GET /api/ledger | POST /api/run | POST /api/matches/:id/status | GET /health
 // Port of the jobsearch/ Python modules (tests: jobsearch/test_jobsearch.py, qnfo-jobsearch/worker.test.mjs).
-var VERSION = "1.33.2-codeagent";
+var VERSION = "1.33.3-codeagent";
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -600,6 +600,33 @@ function titleCandidate(title) {
   return has(t, TITLE_MEDIUM).length > 0 || Object.values(FAMILIES).some((kws) => has(t, kws).length > 0);
 }
 const familyTitle = (title) => { const t = String(title || "").toLowerCase(); return Object.values(FAMILIES).some((kws) => has(t, kws).length > 0); };
+
+// JOBS-COMPANY-1: fetch a brief company card (description, size, recent news) without user typing.
+async function fetchCompanyCard(companySlug) {
+  try {
+    // Try a lightweight public endpoint; if it fails we fall back to minimal info.
+    const data = await getJson(`https://api.companyinfo.io/v1/companies/${encodeURIComponent(companySlug)}`);
+    return {
+      name: data.name || companySlug,
+      description: data.description || "",
+      size: data.size || "",
+      recentNews: data.recentNews || [],
+    };
+  } catch (_) {
+    return { name: companySlug, description: "", size: "", recentNews: [] };
+  }
+}
+
+// JOBS-PROGRESS-1: provide a weekly progress summary of applied and saved jobs.
+async function getWeeklyProgress() {
+  // Placeholder: real implementation would aggregate the user's activity over the past week.
+  return {
+    weekStart: new Date().toISOString().slice(0, 10),
+    applied: 0,
+    saved: 0,
+    interviews: 0,
+  };
+}
 // The answer to lever (1) of the issue, per site: what robots.txt and the terms allow, and how this reader behaves.
 //  werkenvoornederland.nl  robots: allow all except /login, Request-rate 10/1, publishes sitemap-vacatures.xml (about 1,300 open vacancies of Dutch ministries and agencies) ->
 //                          read the sitemap (1 request), then at most 30 posting pages an hour, one a second, each through its schema.org JobPosting JSON-LD.
