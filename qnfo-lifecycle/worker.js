@@ -1,4 +1,4 @@
-var VERSION = "1.20.7-codeagent";
+var VERSION = "1.20.8-codeagent";
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -3273,7 +3273,7 @@ async function plRetriage(env, o, mechs, now, out) {
     await plCloseProbationGoal(env, staleRows[s].learning_id);
   }
   var cut = new Date(Date.parse(now) - (o.retriageGapH == null ? PL_RETRIAGE_GAP_H : o.retriageGapH) * 3600e3).toISOString();
-  var prows = ((await env.QNFO_AUDIT.prepare("SELECT id, slug, version, kind, verification, claim, fleet_lever, application, status_note FROM paper_learnings WHERE fleet_status = 'probation' AND applicability = 'direct' AND updated_at < ?1 ORDER BY updated_at ASC LIMIT ?2").bind(cut, o.retriage || PL_RETRIAGE_EXAMINE).all()).results) || [];
+  var prows = ((await env.QNFO_AUDIT.prepare("SELECT id, slug, version, kind, verification, claim, fleet_lever, application, status_note, updated_at FROM paper_learnings WHERE fleet_status = 'probation' AND applicability = 'direct' AND updated_at < ?1 ORDER BY updated_at ASC LIMIT ?2").bind(cut, o.retriage || PL_RETRIAGE_EXAMINE).all()).results) || [];
   var budget = o.retriageModelMax == null ? PL_RETRIAGE_MODEL_MAX : o.retriageModelMax;
   for (var p = 0; p < prows.length; p++) {
     var R = prows[p];
@@ -3292,12 +3292,22 @@ async function plRetriage(env, o, mechs, now, out) {
     }
     if (budget <= 0 || !env.AI) continue;
     budget--;
+    try {
     var v = await plTriageModel(env, R, mechs, now);
     if (v.settled) {
       await env.QNFO_AUDIT.prepare("UPDATE paper_learnings SET fleet_status = ?2, status_note = ?3, updated_at = ?4 WHERE id = ?1 AND fleet_status = 'probation'").bind(R.id, v.status, v.note.slice(0, 700), now).run();
       await plCloseProbationGoal(env, R.id);
       if (v.status === "rejected") out.rejected++; else out.in_place++;
     } else if (v.apply) {
+      // PAPER-LEARN-RETRIAGE-1: an apply signal is only honoured while the probation is young; past 72h it is clamped to a lapse.
+      var plGoal = null;
+      try { plGoal = await env.QNFO_AUDIT.prepare("SELECT id FROM goals WHERE goal_key = ?1 AND status = 'adopted'").bind("PAPER-LEARN-" + R.id).first(); } catch (ge) { plGoal = null; }
+      if (plGoal && Date.parse(R.updated_at || now) < Date.parse(now) - 72 * 3600e3) {
+        var staleLapse = ("PL-TRIAGE-2 rejected (lapsed; apply signal after 72 hours of probation, " + now + "): last signal " + plStr(v.apply.model, 60) + ": " + plStr(v.apply.reason, 300) + " Re-propose with a measured fleet gap.").slice(0, 700);
+        await env.QNFO_AUDIT.prepare("UPDATE paper_learnings SET fleet_status = 'rejected', status_note = ?2, updated_at = ?3 WHERE id = ?1 AND fleet_status = 'probation'").bind(R.id, staleLapse, now).run();
+        await plCloseProbationGoal(env, R.id);
+        out.lapsed++;
+      } else {
       passes++;
       if (passes >= PL_RETRIAGE_PASSES) {
         var lapse = ("PL-TRIAGE-2 rejected (lapsed; " + passes + " triage passes by two model families over " + (PL_RETRIAGE_GAP_H * (passes - 1)) + " hours or more found no covering mechanism and no taker for the apply signal, " + now + "): last signal " + plStr(v.apply.model, 60) + ": " + plStr(v.apply.reason, 300) + " Re-propose with a measured fleet gap.").slice(0, 700);
@@ -3308,11 +3318,18 @@ async function plRetriage(env, o, mechs, now, out) {
         await env.QNFO_AUDIT.prepare("UPDATE paper_learnings SET status_note = ?2, updated_at = ?3 WHERE id = ?1 AND fleet_status = 'probation'")
           .bind(R.id, (base + " | PL-RETRIAGE " + passes + " (" + now + "): apply again, " + plStr(v.apply.reason, 200)).slice(0, 700), now).run();
       }
+      }
     } else {
       // No agreement or an unreadable answer: no pass is counted, the row waits its gap again so it does not starve the others.
       await env.QNFO_AUDIT.prepare("UPDATE paper_learnings SET updated_at = ?2 WHERE id = ?1 AND fleet_status = 'probation'").bind(R.id, now).run();
     }
+    } catch (e) {
+      await env.QNFO_AUDIT.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, job, status) VALUES (?1, ?2, 'PAPER-LEARN-RETRIAGE', ?3, 'paper-learn', 'error')").bind("plretriage-" + R.id + "-" + now, now, String(e && e.message || e).slice(0, 400)).run();
+      throw e;
+    }
   }
+  // PAPER-LEARN-RETRIAGE-1 backfill: any probation row that still carries an adopted goal past 72h lapses now.
+  await env.QNFO_AUDIT.prepare("UPDATE paper_learnings SET fleet_status = 'lapsed', updated_at = ?2 WHERE fleet_status = 'probation' AND updated_at < ?3 AND EXISTS (SELECT 1 FROM goals g WHERE g.goal_key = 'PAPER-LEARN-' || paper_learnings.id AND g.status = 'adopted')").bind(now, new Date(Date.now() - 72 * 3600e3).toISOString()).run();
 }
 // ---- PAPER-LEDGER-CHAIN-1:BEGIN (RM-ADR-013-014-ENFORCEMENT-1, roadmap_implementation 115, charter pillar security, 2026-11-05) ----
 // ADR-013 (legal immutability) wants a published artifact that cannot be changed without a trace. living-paper's paper_change_ledger already refuses UPDATE and DELETE of its own rows, but a
