@@ -11,7 +11,7 @@ var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target,
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
 // 1.77.2 ERRATA-CHAIN-DISPATCH-1 (pillar research): wake the folded errata consumer and retry its legacy parked receipts.
 // VERSION-LINE-SPLIT-1 (agent_issues 100220): the release notes sit one per line below this statement, newest first, so a VERSION bump is a one-line patch; add a new note as the first line under it.
-var VERSION = "1.110.4";
+var VERSION = "1.110.5";
 // 1.89.0 NOW-NORTH-1 and HOME-MORE-1 (pillar core; minor): the Now screen opens with four numbers tied to the owner goals (readers, fleet cost, owner load, reliability) and drops the count of metrics off target (95 of 297; nothing can be done with it); a quiet footer on the home links the full dashboard, changelog, data index and managers.
 // 1.89.0 (cont.) MONEY-FIX-1 (pillar cost; patch): the Money card subtracted the subscription figure from a pace that never included it (fleet scope of v_cost_forecast), so it showed the fleet at 701 instead of 1151 a month; it now shows the fleet line, the subscriptions line and both together.
 // 1.85.0 (cont.) NOW-REVIEW-1: independent review fixes: Snooze and Not needed hide the card; a tap removes the card at once and reloads fresh, and the hand-back claims the card before filing (no duplicate tickets); strangers get no card keys or raw error text; only the signed-in owner (not the loop token) can run commands or hand work back; bound cards are read first; an unrefreshed metric reads n/a, not 0; one refresh in flight at a time and a failed refresh retries in 10 s; the Code poll says when the executor does not answer.
@@ -7855,7 +7855,9 @@ async function q08ReviewStatus(env) {
 // Scorecard (STRATEGY 6.3) over reach_signals. Flows (pageviews, outreach) are summed over the window; stocks
 // (Bluesky counts per post, citations per DOI, subscribers) take each entity's latest row in it.
 async function reachLatestAgg(env, source, from, to) {
-  return d1all(env.AUDIT, "SELECT r.metric AS metric, r.quality AS quality, COUNT(*) AS n, SUM(r.value) AS v FROM reach_signals r JOIN (SELECT channel, entity_type, entity_id, metric, MAX(date) AS md FROM reach_signals WHERE source = ? AND date >= ? AND date <= ? GROUP BY channel, entity_type, entity_id, metric) m ON r.channel = m.channel AND r.entity_type = m.entity_type AND r.entity_id = m.entity_id AND r.metric = m.metric AND r.date = m.md WHERE r.source = ? GROUP BY r.metric, r.quality", [source, from, to, source]);
+  // D1-ROWS-READ-COST-1 (F2): one pass over the window (idx_rs_source_date) with RANK() in place of the MAX(date) join, which read the window twice plus the join
+  // (27 M rows in 6 hours). RANK keeps ties, so rows sharing a latest date still all count, as the join did.
+  return d1all(env.AUDIT, "SELECT metric, quality, COUNT(*) AS n, SUM(value) AS v FROM (SELECT metric, quality, value, RANK() OVER (PARTITION BY channel, entity_type, entity_id, metric ORDER BY date DESC) AS rk FROM reach_signals WHERE source = ? AND date >= ? AND date <= ?) WHERE rk = 1 GROUP BY metric, quality", [source, from, to]);
 }
 // RUM-ZERO-DAY-1 part C (issue 100171, 2026-10-19): the window reads one source per day. A day's pageviews are its cf-rum-human site row
 // (bot:0 ground truth, rows begin 2026-10-06) and otherwise its cf-rum site row; a stored 0 is skipped when the same source holds a referrer
