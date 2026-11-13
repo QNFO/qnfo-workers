@@ -494,6 +494,8 @@ export async function tick(env, nowMs = Date.now()) {
   }
   if (spin.halted) error = "self-halted: 95% interval of value added is below zero on " + spin.settled + " settled";
   // Q08-CLOCK-1: settlement by name first, so a market that closed and left the open feed still settles this hour.
+  let occurrence = null;
+  try { occurrence = await occurrenceLane(env, markets, news.added.concat(signals), nowMs); } catch (e) { occurrence = { error: String(e && e.message || e).slice(0, 160) }; }
   let settle = null;
   try { settle = await settleLane(env, env.__fetchText || defaultFetchText, nowMs); } catch (e) { settle = [{ error: String(e && e.message || e).slice(0, 160) }]; }
   // Resolution: a closed market whose YES price sits at 0 or 1 settles every forecast on it (the pilot's fetch keeps pt_market current).
@@ -513,7 +515,7 @@ export async function tick(env, nowMs = Date.now()) {
   let clock = null;
   try { const c = await clockStatus(env, nowMs); clock = { on_time: c.on_time, stages: c.stages, late: c.list.filter((x) => !x.on_time).map((x) => x.key), escalated: await escalateClock(env, c, nowMs) }; } catch (e) { clock = { error: String(e && e.message || e).slice(0, 160) }; }
   await env.TRADES_DB.prepare("INSERT INTO fe_tick (ran_at, candidates, consequential, updated, tokens, skipped_json, error) VALUES (?,?,?,?,?,?,?)")
-    .bind(new Date(nowMs).toISOString(), pl.candidates, pl.consequential, updated, tokens, JSON.stringify({ ...pl.skipped, coverage: pl.coverage, news: news.log, proxies, stages, broadcast, settle, clock, pm: pm && { ran: !!pm.ran, decisions: (pm.decisions || []).length, experiments: pm.experiments, filed: (pm.filed || []).length, error: pm.error } }), error).run();
+    .bind(new Date(nowMs).toISOString(), pl.candidates, pl.consequential, updated, tokens, JSON.stringify({ ...pl.skipped, coverage: pl.coverage, news: news.log, occurrence, proxies, stages, broadcast, settle, clock, pm: pm && { ran: !!pm.ran, decisions: (pm.decisions || []).length, experiments: pm.experiments, filed: (pm.filed || []).length, error: pm.error } }), error).run();
   return { candidates: pl.candidates, consequential: pl.consequential, updated, tokens, skipped: pl.skipped, coverage: pl.coverage, news: news.log, chosen: pl.chosen.map((q) => ({ slug: q.slug, score: q.score })), broadcast, settle, clock, pm, error };
 }
 
@@ -567,7 +569,7 @@ export async function latestRows(env) {
 // never written by hand: every forecast that disagrees with the crowd opens one simulated position at the crowd's price at that moment
 // (the side the forecast favours, a fixed stake), held to resolution with no hindsight exit and marked to the live market until then.
 // A forecast that agrees with the crowd holds no position: there is no edge to trade. Paper only: no order, wallet or account exists.
-export const STAKE = 100, MIN_EDGE = 0.02, QUOTE_TOL = 0.2;
+export const STAKE = 100, MIN_EDGE = 0.02, QUOTE_TOL = 0.2, ACTIONABLE_EDGE = 0.05;
 const r2 = (x) => Math.round(x * 100) / 100;
 export function simulateBook(rows, yesBySlug = {}, { stake = STAKE, minEdge = MIN_EDGE } = {}) {
   const first = new Map(), last = new Map();
@@ -586,7 +588,9 @@ export function simulateBook(rows, yesBySlug = {}, { stake = STAKE, minEdge = MI
     const mark = side === "YES" ? yesNow : 1 - yesNow, shares = stake / entry, value = shares * mark;
     positions.push({ slug, title: e.title, category: e.category, side, opened_at: e.created_at, deadline: e.deadline, crowd_at_entry: +e.prior.toFixed(4), forecast_at_entry: +e.p.toFixed(4),
       forecast_now: +l.p.toFixed(4), entry: +entry.toFixed(4), mark: +mark.toFixed(4), marked_live: outcome == null && live != null, mark_source: outcome != null ? "outcome" : live != null ? "live quote" : rawLive != null ? "ledger (live quote " + Math.round(100 * rawLive) + "¢ incoherent)" : "ledger", settled: outcome != null, outcome, stake, shares: +shares.toFixed(2),
-      value: r2(value), pnl: r2(value - stake), expected_pnl: r2(stake * (belief / entry - 1)) });
+      value: r2(value), pnl: r2(value - stake), expected_pnl: r2(stake * (belief / entry - 1)),
+      // SPECIFICITY-1: the position states its own edge, the price at which the edge is gone (take profit there) and the price that proves it wrong.
+      edge_pts: +(100 * (belief - entry)).toFixed(1), actionable: belief - entry >= ACTIONABLE_EDGE, take_profit_at: +belief.toFixed(4), wrong_if_crowd_below: +Math.max(0.01, entry - (belief - entry)).toFixed(4) });
   }
   positions.sort((a, b) => Number(a.settled) - Number(b.settled) || Math.abs(b.pnl) - Math.abs(a.pnl));
   const sum = (f) => r2(positions.reduce((a, x) => a + f(x), 0)), settled = positions.filter((x) => x.settled);
@@ -595,6 +599,7 @@ export function simulateBook(rows, yesBySlug = {}, { stake = STAKE, minEdge = MI
     wins: settled.filter((x) => x.pnl > 0).length, losses: settled.filter((x) => x.pnl <= 0).length, staked, value: sum((x) => x.value), pnl,
     realized: r2(settled.reduce((a, x) => a + x.pnl, 0)), unrealized: r2(positions.filter((x) => !x.settled).reduce((a, x) => a + x.pnl, 0)),
     return_pct: staked ? r2((100 * pnl) / staked) : null, expected_pnl_at_entry: sum((x) => x.expected_pnl),
+    actionable: { positions: positions.filter((x) => x.actionable).length, pnl: r2(positions.filter((x) => x.actionable).reduce((a, x) => a + x.pnl, 0)), note: "positions whose edge is at least " + Math.round(100 * ACTIONABLE_EDGE) + " points; thinner edges are shown but are not worth a trade after costs" },
     with_crowd: new Set((rows || []).map((r) => r.slug)).size - positions.length } };
 }
 
@@ -723,7 +728,7 @@ export function stageScores(d) {
 }
 
 // ---------- 10 the pages: one story, one navigation across q08.org and markets.q08.org ----------
-export const NAV = [["pipeline", Q08_ORIGIN + "/", "Pipeline"], ["forecasts", MARKETS_ORIGIN + "/", "Forecasts"], ["ledger", MARKETS_ORIGIN + "/ledger", "Ledger"], ["track", MARKETS_ORIGIN + "/track-record", "Track record"], ["improves", MARKETS_ORIGIN + "/improves", "Self-improving"], ["reports", Q08_ORIGIN + "/#reports", "Signal reports"], ["paper", MARKETS_ORIGIN + "/paper", "Paper desk"]];
+export const NAV = [["pipeline", Q08_ORIGIN + "/", "Pipeline"], ["forecasts", MARKETS_ORIGIN + "/", "Forecasts"], ["ledger", MARKETS_ORIGIN + "/ledger", "Ledger"], ["track", MARKETS_ORIGIN + "/track-record", "Track record"], ["improves", MARKETS_ORIGIN + "/improves", "Self-improving"], ["mistakes", MARKETS_ORIGIN + "/mistakes", "Mistakes"], ["reports", Q08_ORIGIN + "/#reports", "Signal reports"], ["paper", MARKETS_ORIGIN + "/paper", "Paper desk"]];
 export function siteTop(active) {
   return `<header class="ds-top"><div class="ds-top-in"><a class="ds-brand" href="${Q08_ORIGIN}/">q08 <span class="ds-muted vp-tag">signal to value</span></a><nav class="vp-nav" aria-label="q08">${NAV.map(([k, h, l]) => `<a href="${h}"${k === active ? ' aria-current="page"' : ""}>${l}</a>`).join("")}</nav></div></header>`;
 }
@@ -1539,4 +1544,137 @@ export function sitemapXml(d) {
   const slugs = [...new Set((d.latest || []).map((r) => r.slug))];
   const urls = ["/", "/ledger", "/track-record"].map((p) => MARKETS_ORIGIN + p).concat(slugs.map((s) => MARKETS_ORIGIN + "/f/" + s));
   return `<?xml version="1.0" encoding="utf-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls.map((u) => `<url><loc>${x(u)}</loc></url>`).join("")}</urlset>`;
+}
+
+// ---------- OCCURRENCE-1: an event that already happened is settled, not forecast ----------
+// Owner, 2026-11-13: a question about an event the signals report as done showed a future date and a probability below 100%. The ledger waited for the
+// market to print a final price, and the crowd's quote on an illiquid leg lags. This lane reads the same signals the forecasts use: when a question asks
+// whether an event class will occur by a date, and two independent outlets report the event in the past tense with no hedge, the question settles YES
+// from that evidence (fe_event keeps the headlines), leaves the open calls, and every later deadline of the same family settles with it. The market's own
+// final price stays the authority: when it disagrees, the call is reversed and counted as a detector miss on the mistakes feed.
+export const OCCURRENCE = [
+  { key: "leader-exit", q: /\b(resign(s|ed|ation)?|removal|removed|step(s|ped)? down|ousted|fired)\b/i, done: /\b(resigns|resigned|has resigned|steps down|stepped down|is stepping down|ousted|has been (fired|removed|ousted)|(is|was) (fired|removed|ousted)|quits|has quit)\b/i },
+  { key: "deal-closed", q: /\b(acqui(re|res|sition)|merger|merge with|buyout)\b/i, done: /\b(completes|completed|closes|closed|finalizes|finalized|has acquired|acquired)\b/i },
+  { key: "rate-move", q: /\b(cut|cuts|hike|hikes|raise|raises)\b.*\b(rates?|interest)\b|\b(rate|rates)\b.*\b(cut|hike)\b/i, done: /\b(cuts|cut|hikes|hiked|raises|raised|slashes|lowers|lowered)\b.{0,30}\b(rates?|interest rates?)\b/i },
+];
+export const HEDGE = /\b(may|might|could|would|should|calls? for|called for|demands?|urged?|urges|speculat\w*|rumou?rs?|reportedly|considers?|considering|weighs?|weighing|expected to|set to|plans? to|poised|will|if|whether|denies|denied|deny|refuses|refused|no plans|won't|not (going to|resign|step)|investigat\w*|probe|pressure|amid|questions?|why|how)\b|\?/i;
+const host = (u) => { try { return new URL(u).hostname.replace(/^www\./, ""); } catch (err) { return String(u || "").slice(0, 40); } };
+// The occurrence class of a question, or null. Only "by <date>" style questions about a single event can be settled by the event having occurred.
+export function occurrenceClass(title) {
+  const t = String(title || "");
+  if (!/\b(by|before|in|on)\b/i.test(t)) return null;
+  return OCCURRENCE.find((c) => c.q.test(t)) || null;
+}
+// Pure: the signals that prove the question's event happened. >= 2 distinct hosts, past tense, no hedge, every proper entity of the question named.
+export function detectOccurrence(question, signals, { minHosts = 2, sinceMs = 0 } = {}) {
+  const cls = occurrenceClass(question.title);
+  if (!cls) return null;
+  const proper = properEntities(question.title);
+  if (!proper.length) return null;
+  const has = (text, en) => new RegExp("\\b" + en.replace(/[.$-]/g, "\\$&") + "\\b", "i").test(text);
+  const hits = [];
+  for (const s of signals || []) {
+    const t = Date.parse(String(s.created_at || "").replace(" ", "T") + (/Z|\+/.test(String(s.created_at)) ? "" : "Z"));
+    if (Number.isFinite(t) && t < sinceMs) continue;
+    const title = String(s.title || "");
+    if (!proper.every((en) => has(title, en)) || !cls.done.test(title) || HEDGE.test(title)) continue;
+    hits.push({ title, url: s.url, host: host(s.url), source: s.source, date: String(s.created_at || "").slice(0, 10) });
+  }
+  const hosts = new Set(hits.map((h) => h.host));
+  if (hosts.size < minHosts) return null;
+  const seen = new Set(), evidence = hits.filter((h) => (seen.has(h.host) ? false : seen.add(h.host))).slice(0, 4);
+  return { class: cls.key, hosts: hosts.size, evidence };
+}
+async function ensureEvents(db) {
+  await db.prepare("CREATE TABLE IF NOT EXISTS fe_event (slug TEXT PRIMARY KEY, detected_at TEXT NOT NULL, class TEXT, family TEXT, kind TEXT NOT NULL, p_before REAL, crowd_before REAL, evidence_json TEXT, confirmed INTEGER, confirmed_at TEXT, note TEXT)").run();
+}
+// Settle every open question the signals prove occurred, plus later legs of the same family; then check earlier detections against the market's final price.
+export async function occurrenceLane(env, markets, signals, nowMs) {
+  const db = env.TRADES_DB;
+  await ensureEvents(db);
+  const now = new Date(nowMs).toISOString(), out = { settled: [], reversed: [], confirmed: [] };
+  const open = (await db.prepare("SELECT f.* FROM fe_forecast f JOIN (SELECT slug, max(id) id FROM fe_forecast GROUP BY slug) l ON l.id = f.id WHERE f.outcome IS NULL").all()).results || [];
+  const byFam = new Map();
+  const qs = open.map((r) => ({ slug: r.slug, title: r.title, deadline: r.deadline, family: familyKey(r.title), row: r }));
+  for (const m of markets || []) if (!qs.some((q) => q.slug === m.slug)) { const dl = deadlineOf(m.title, new Date(nowMs).getUTCFullYear()); qs.push({ slug: m.slug, title: m.title, deadline: dl, family: familyKey(m.title), row: null, yes: m.yes }); }
+  for (const q of qs) { if (!byFam.has(q.family)) byFam.set(q.family, []); byFam.get(q.family).push(q); }
+  for (const q of qs) {
+    if (!q.row) continue; // only questions the ledger already forecast are settled; the rest are not ours to score
+    const dlMs = Date.parse(q.deadline || "");
+    const found = detectOccurrence(q, signals, { sinceMs: nowMs - 21 * 86400000 });
+    if (!found) continue;
+    // The proof must not be later than the deadline's day: a resignation after the deadline does not make a "by <date>" question YES.
+    const latest = found.evidence.reduce((a, h) => (h.date > a ? h.date : a), "");
+    if (Number.isFinite(dlMs) && latest > new Date(dlMs + 86400000).toISOString().slice(0, 10)) continue;
+    const family = (byFam.get(q.family) || []).filter((x) => x.row && (!x.deadline || !q.deadline || x.deadline >= q.deadline));
+    for (const x of family) {
+      const kind = x.slug === q.slug ? "occurred" : "later-leg";
+      const r = await db.prepare("UPDATE fe_forecast SET outcome = 1, resolved_at = ? WHERE slug = ? AND outcome IS NULL").bind(now, x.slug).run();
+      if (!r.meta || !r.meta.changes) continue;
+      await db.prepare("INSERT OR REPLACE INTO fe_event (slug, detected_at, class, family, kind, p_before, crowd_before, evidence_json, confirmed, confirmed_at, note) VALUES (?,?,?,?,?,?,?,?,NULL,NULL,?)")
+        .bind(x.slug, now, found.class, q.family, kind, x.row.p, x.row.prior, JSON.stringify(found.evidence), kind === "occurred" ? "settled YES from " + found.hosts + " outlets" : "settled YES: an earlier leg of the same event occurred (" + q.slug + ")").run();
+      out.settled.push({ slug: x.slug, kind, was: +x.row.p.toFixed(3), crowd: +x.row.prior.toFixed(3) });
+    }
+  }
+  // The market is the authority. A detection the market's final price contradicts is reversed and kept as a detector miss.
+  const pend = (await db.prepare("SELECT e.slug, e.evidence_json, m.yes, m.closed FROM fe_event e JOIN pt_market m ON m.slug = e.slug WHERE e.confirmed IS NULL").all().catch(() => ({ results: [] }))).results || [];
+  for (const p of pend) {
+    if (p.yes >= 0.99) { await db.prepare("UPDATE fe_event SET confirmed = 1, confirmed_at = ? WHERE slug = ?").bind(now, p.slug).run(); out.confirmed.push(p.slug); }
+    else if (p.closed && p.yes <= 0.01) {
+      await db.prepare("UPDATE fe_forecast SET outcome = 0, resolved_at = ? WHERE slug = ?").bind(now, p.slug).run();
+      await db.prepare("UPDATE fe_event SET confirmed = 0, confirmed_at = ?, note = 'detector miss: the market closed NO; headlines were read as the event having occurred' WHERE slug = ?").bind(now, p.slug).run();
+      out.reversed.push(p.slug);
+    }
+  }
+  return out;
+}
+
+// ---------- MISTAKES-1: what we got wrong and what changed, computed from the ledger ----------
+// A settled call is a mistake when it picked the wrong side or scored worse than the crowd's price. The cause is assigned by rule from the row itself,
+// never written by hand, and each cause names the knob or lane that answers it. The changes list is the self-improvement loop's own record, dated after
+// the mistake, so a reader can see which changes followed which losses.
+export function mistakeCause(r, ev) {
+  if (ev && ev.confirmed === 0) return { key: "detector-miss", fix: "the occurrence detector needs a stricter past-tense or hedge rule" };
+  const o = Number(r.outcome), shift = r.p - r.prior;
+  const wrong = (r.p >= 0.5 ? 1 : 0) !== o;
+  if (Math.abs(shift) >= 0.1 && (o === 1 ? shift < 0 : shift > 0)) return { key: "overshift", fix: "the shift scale knob (fe_config shift_scale) shrinks adjustments" };
+  if (Math.abs(shift) < 0.02) return { key: "no-edge", fix: "agreed with the crowd, so it held no position; the crowd itself was wrong" };
+  if (wrong) return { key: "wrong-direction", fix: "evidence matching and the domain pause in the calibration tuner" };
+  return { key: "underconfident", fix: "the calibration slope refit once enough calls settle" };
+}
+export async function mistakesData(env, nowMs = Date.now()) {
+  const db = env && env.TRADES_DB;
+  if (!db) return { empty: true };
+  await safe(() => ensureSchema(db)); await safe(() => ensureEvents(db));
+  const rows = await all(db, "SELECT f.slug, f.title, f.created_at, f.resolved_at, f.prior, f.p, f.outcome, f.why FROM fe_forecast f JOIN (SELECT slug, max(id) id FROM fe_forecast GROUP BY slug) l ON l.id = f.id WHERE f.outcome IN (0,1) ORDER BY f.resolved_at DESC LIMIT 400");
+  const evs = await all(db, "SELECT * FROM fe_event ORDER BY detected_at DESC LIMIT 100");
+  const evBy = Object.fromEntries(evs.map((x) => [x.slug, x]));
+  const changes = (await improvesData(env, nowMs)).events || [];
+  const mistakes = [], right = [];
+  for (const r of rows) {
+    const o = Number(r.outcome), be = brier(r.p, o), bc = brier(r.prior, o), wrong = (r.p >= 0.5 ? 1 : 0) !== o;
+    if (!(wrong || be > bc + 1e-9)) { right.push(r); continue; }
+    const c = mistakeCause(r, evBy[r.slug]);
+    const after = changes.filter((x) => String(x.at) >= String(r.resolved_at || "")).slice(-3).map((x) => ({ at: x.at, kind: x.kind, what: x.what }));
+    mistakes.push({ slug: r.slug, title: r.title, said: +r.p.toFixed(3), crowd: +r.prior.toFixed(3), outcome: o, loss_vs_crowd: +(be - bc).toFixed(4), cause: c.key, answered_by: c.fix, settled_at: r.resolved_at, changes_after: after });
+  }
+  const causes = {};
+  for (const m of mistakes) causes[m.cause] = (causes[m.cause] || 0) + 1;
+  const research = await all(db, "SELECT source, title, url, need, issue_id, seen_at FROM fe_research WHERE issue_id IS NOT NULL ORDER BY seen_at DESC LIMIT 10");
+  return { empty: false, at: new Date(nowMs).toISOString(), settled: rows.length, wrong_or_worse_than_crowd: mistakes.length, beat_or_matched_crowd: right.length, causes, mistakes: mistakes.slice(0, 40),
+    occurrences: evs.slice(0, 30).map((x) => ({ slug: x.slug, at: x.detected_at, kind: x.kind, class: x.class, was: x.p_before, crowd: x.crowd_before, confirmed: x.confirmed, note: x.note, evidence: JSON.parse(x.evidence_json || "[]") })),
+    recent_changes: changes.slice(0, 15), research_to_code: research };
+}
+export function renderMistakes(d, head) {
+  const m = d.mistakes || [], oc = d.occurrences || [];
+  const pc = (x) => Math.round(100 * x) + "%";
+  return `<!doctype html><html lang="en"><head>${head("What q08 got wrong and what changed", "Every settled call the forecasts lost on, why, and the change the loop made afterwards. Computed from the ledger, never written by hand.", FE_CSS + VP_CSS + GROWTH_CSS)}</head><body class="ds">
+${siteTop("mistakes")}
+<main class="ds-main"><div class="ds-head"><h1>What we got wrong, and what changed</h1><p>${e(d.wrong_or_worse_than_crowd || 0)} of ${e(d.settled || 0)} settled calls were on the wrong side or scored worse than the market price. Each one is listed with its cause, assigned by rule, and the self-changes recorded after it. Paper money only.</p></div>
+<section class="ds-stats">${Object.entries(d.causes || {}).map(([k, n]) => `<div class="ds-stat"><div class="k">${e(k)}</div><div class="v">${e(n)}</div></div>`).join("") || `<div class="ds-stat"><div class="k">Mistakes</div><div class="v">0</div></div>`}</section>
+<h2>Events settled from the news</h2>${oc.length ? `<div class="vp-wrap"><table class="vp-tbl"><thead><tr><th>When (UTC)</th><th>Question</th><th>Settled</th><th>Proof</th></tr></thead><tbody>${oc.map((x) => `<tr><td>${e(String(x.at).replace("T", " ").slice(0, 16))}</td><td><a href="/f/${e(x.slug)}">${e(x.slug)}</a><br><small class="ds-muted">we said ${e(pc(x.was))}, market ${e(pc(x.crowd))}</small></td><td>YES (100%)<br><small class="ds-muted">${x.confirmed === 1 ? "market confirmed" : x.confirmed === 0 ? "market disagreed: reversed" : "awaiting the market's final price"}</small></td><td>${(x.evidence || []).map((h) => `<a href="${e(h.url)}" rel="noopener">${e(h.host)}</a>`).join(", ")}</td></tr>`).join("")}</tbody></table></div>` : `<p class="ds-empty">No question has been settled from the news yet. It happens when two outlets report an event in the past tense.</p>`}
+<h2>Calls we lost on</h2>${m.length ? `<div class="vp-wrap"><table class="vp-tbl"><thead><tr><th>Question</th><th>Said / market / result</th><th>Cause</th><th>What changed after</th></tr></thead><tbody>${m.map((x) => `<tr><td><a href="/f/${e(x.slug)}">${e(x.title)}</a></td><td class="n">${e(pc(x.said))} / ${e(pc(x.crowd))} / ${x.outcome ? "YES" : "NO"}</td><td>${e(x.cause)}<br><small class="ds-muted">${e(x.answered_by)}</small></td><td>${(x.changes_after || []).map((c) => `<small>${e(String(c.at).slice(0, 10))} ${e(c.kind)}: ${e(c.what)}</small>`).join("<br>") || `<small class="ds-muted">none yet</small>`}</td></tr>`).join("")}</tbody></table></div>` : `<p class="ds-empty">No settled call has lost to the market yet.</p>`}
+<h2>Research that became code</h2>${(d.research_to_code || []).length ? `<div class="vp-wrap"><table class="vp-tbl"><tbody>${d.research_to_code.map((x) => `<tr><td>${e(String(x.seen_at || "").slice(0, 10))}</td><td><a href="${e(x.url)}" rel="noopener">${e(x.title)}</a></td><td>${e(x.need)}</td><td class="n">#${e(x.issue_id)}</td></tr>`).join("")}</tbody></table></div>` : `<p class="ds-empty">No research item has been filed as a code task yet.</p>`}
+<footer class="fe-foot"><a href="/">Forecasts</a><a href="/improves">Self-improving</a><a href="/api/mistakes">This page (JSON)</a><span>Simulated positions only. Not investment advice.</span></footer>
+</main></body></html>`;
 }
