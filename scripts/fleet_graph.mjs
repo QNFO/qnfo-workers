@@ -429,7 +429,7 @@ export function addWorkerCode(g, worker, src, path, ctx) {
         // SQL through .prepare / .exec on a binding (alias or env.X)
         if (c.type === "MemberExpression" && !c.computed && (c.property.name === "prepare" || c.property.name === "exec") && n.arguments.length) {
           const s = strValue(n.arguments[0]);
-          if (s && looksLikeSql(s) && /^\s*(SELECT|INSERT|UPDATE|DELETE|REPLACE|WITH|CREATE|ALTER|DROP|PRAGMA)\b/i.test(s)) sqlSeen.push({ sql: s, binding: bindingOf(c.object), line: lineOf(n) });
+          if (s && looksLikeSql(s) && /^\s*(SELECT|INSERT|UPDATE|DELETE|REPLACE|WITH|CREATE|ALTER|DROP|PRAGMA|EXPLAIN|BEGIN|VALUES)\b/i.test(s)) sqlSeen.push({ sql: s, binding: bindingOf(c.object), line: lineOf(n) });
         }
         // fetch to a literal (or constant) URL
         const isFetch = (c.type === "Identifier" && c.name === "fetch") || (c.type === "MemberExpression" && !c.computed && c.property.name === "fetch" && !bindingOf(c.object));
@@ -451,7 +451,7 @@ export function addWorkerCode(g, worker, src, path, ctx) {
       }
       if ((n.type === "Literal" && typeof n.value === "string") || n.type === "TemplateLiteral") {
         const s = strValue(n);
-        if (s && s.length > 20 && looksLikeSql(s) && /^\s*(SELECT|INSERT|UPDATE|DELETE|REPLACE|WITH|CREATE|ALTER|DROP|PRAGMA)\b/i.test(s) && !sqlSeen.some((x) => x.sql === s)) sqlSeen.push({ sql: s, binding: null, line: lineOf(n) });
+        if (s && s.length > 20 && looksLikeSql(s) && /^\s*(SELECT|INSERT|UPDATE|DELETE|REPLACE|WITH|CREATE|ALTER|DROP|PRAGMA|EXPLAIN|BEGIN|VALUES)\b/i.test(s) && !sqlSeen.some((x) => x.sql === s)) sqlSeen.push({ sql: s, binding: null, line: lineOf(n) });
         if (s && s.includes(FLEET_SUBDOMAIN)) for (const m of s.matchAll(/([a-z0-9-]+)\.q08\.workers\.dev/g)) if (m[1] !== worker && hosts.get(m[0])) g.edge(uid, "references", "worker:" + m[1], { path, confidence: "INFERRED" });
       }
     });
