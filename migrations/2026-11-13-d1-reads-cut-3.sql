@@ -1,0 +1,12 @@
+-- APPLY-BY: ci
+-- DB: qnfo-audit
+-- Rollback: DROP INDEX IF EXISTS idx_iwcl_pending;
+-- spof-review: no new component; one partial index.
+-- charter-pillar: cost
+-- CAUSE-MAPPED: no metric registered.
+--
+-- D1-READS-COST-3 (owner 2026-11-13). Live d1QueriesAdaptiveGroups, qnfo-audit, 1 h after PR 11435: the issue-week-cap step
+-- `UPDATE agent_issues ... WHERE id IN (SELECT issue_id FROM issue_week_cap_ledger WHERE applied = 0 AND action = 'wontfix')` read
+-- 1.74 M rows in 115 runs (15 K each: the ledger had no index on applied), and its INSERT sibling 1.06 M in 60 runs.
+-- A partial index on the pending rows makes both seek an almost empty set. Same answers.
+CREATE INDEX IF NOT EXISTS idx_iwcl_pending ON issue_week_cap_ledger (action, issue_id) WHERE applied = 0;
