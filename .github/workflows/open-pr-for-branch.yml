@@ -25,5 +25,5 @@ jobs:
         run: |
           n=$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$BRANCH" --state open --json number --jq 'length')
           if [ "$n" = "0" ]; then
-            gh pr create --repo "$GITHUB_REPOSITORY" --head "$BRANCH" --base main --title "$BRANCH" --body "Opened by open-pr-for-branch (COMPANION-PR-1) for a session without a GitHub token. work-claim: unreachable (no fleet network); no other open PR touches this branch."
+            gh pr create --repo "$GITHUB_REPOSITORY" --head "$BRANCH" --base main --title "$BRANCH" --body "Opened by open-pr-for-branch (COMPANION-PR-1) for a session without a GitHub token. work-claim: unreachable (no fleet network); no other open PR touches this branch." || gh pr list --repo "$GITHUB_REPOSITORY" --head "$BRANCH" --state open --json number --jq 'length' | grep -qv "^0$"
           fi
