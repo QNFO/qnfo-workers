@@ -2606,6 +2606,8 @@ export async function companionTick(env, deps, opts) {
         // Exercise the “for you” feed (already built above) and a few other read‑only paths.
         await fyBuild(env, deps, { days: 1 });
         // Simple read of moments and insights tables to ensure they are reachable.
+        await env.PERSONAL.prepare("CREATE TABLE IF NOT EXISTS cmp_moments (id TEXT PRIMARY KEY, ts TEXT, kind TEXT, place TEXT, note TEXT, media_id TEXT)").run();
+        await env.PERSONAL.prepare("CREATE TABLE IF NOT EXISTS cmp_insights (id TEXT PRIMARY KEY, ts TEXT, kind TEXT, text TEXT)").run();
         await all(env.PERSONAL, "SELECT COUNT(*) FROM cmp_moments");
         await all(env.PERSONAL, "SELECT COUNT(*) FROM cmp_insights");
         // Write a temporary test row that will be cleaned up later.
