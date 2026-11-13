@@ -1,8 +1,8 @@
 {
  "ok": false,
  "marker": "REMEDIATION-CONSUMER-1",
- "error": "HTTP 429 from https://api.cloudflare.com/client/v4/accounts/edb167b78c9fb901ea5bca3ce58ccc4b/d1/database/35e2e573-92f3-46ac-83c6-22f6429fc5e5/query: {\"messages\":[],\"result\":null,\"success\":false,\"errors\":[{\"code\":7429,\"message\":\"D1 DB is overloaded. Too many resources consumed within a 10 second window.\"}]}",
+ "error": "HTTP 429 from https://api.cloudflare.com/client/v4/accounts/edb167b78c9fb901ea5bca3ce58ccc4b/d1/database/35e2e573-92f3-46ac-83c6-22f6429fc5e5/query: {\"messages\":[],\"result\":null,\"success\":false,\"errors\":[{\"code\":7429,\"message\":\"D1 DB exceeded its CPU time limit and was reset.\"}]}",
  "head": "bc596610239fbea28fe43f737aa1b7c30c95d82b",
  "job_status": "success",
- "ts": "2026-11-13T18:32:39Z"
+ "ts": "2026-11-13T19:01:55Z"
 }
