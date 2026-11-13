@@ -103,6 +103,25 @@ export const journeys = [
       await u.tap("Go deeper: books, one tap each"); await u.see("Seven and a Half Lessons About the Brain", { wait: 5000 });
       await u.tap("Seven and a Half Lessons About the Brain"); await u.see("Short essays on what a brain is actually for");
     } },
+  // ASK-FAST-1 (Rowan's screenshot 2026-11-13): "What's on tonight?" sat on "Looking..." and the mic-blocked message covered the input.
+  { id: "ask-tonight", title: "Ask: tap What's on tonight? and get an answer at once, with one tap for the live look-up",
+    async run(u) {
+      await u.open("/__harness/session"); await u.open("/companion"); await u.tap("Ask", { within: "nav" });
+      await u.tap("What's on tonight?"); await u.see("on your calendar tonight", { timeout: 8000 }); await u.see("Search venue listings for tonight");
+      await u.expect(async () => (await u.page.locator(".msg.bot.mute", { hasText: "Looking" }).count()) === 0, "Ask still shows Looking... after the answer");
+      await u.screen("ask-tonight");
+    } },
+  { id: "ask-mic-blocked", title: "Ask with the microphone blocked: a short note that never covers the input, and one-tap questions",
+    async run(u) {
+      await u.page.addInitScript(() => { const SR = function () {}; SR.prototype.start = function () { const s = this; setTimeout(() => { s.onerror && s.onerror({ error: "not-allowed" }); s.onend && s.onend(); }, 50); }; SR.prototype.stop = function () {}; window.SpeechRecognition = SR; window.webkitSpeechRecognition = SR; });
+      await u.open("/__harness/session"); await u.open("/companion"); await u.tap("Ask", { within: "nav" });
+      await u.tap("Speak your question"); await u.see("Voice is switched off for this site, so tap a question instead.");
+      const box = async (sel) => u.page.locator(sel).first().boundingBox();
+      await u.expect(async () => { const n = await box("#micnote"), c = await box("#dock .composer"); return !!(n && c) && (n.y + n.height <= c.y || n.y >= c.y + c.height); }, "the mic-blocked note overlaps the Ask input");
+      await u.expect(async () => !(await u.page.locator("#toast.show").count()), "a toast covers the screen when the mic is blocked");
+      await u.screen("ask-mic-blocked");
+      await u.tap("What's on tonight?"); await u.see("on your calendar tonight", { timeout: 8000 });
+    } },
   { id: "today-default", title: "Open the companion and see Today with Ask and Capture",
     async run(u) { await u.open("/__harness/session"); await u.open("/"); await u.see("Ask me"); await u.see("Capture", { within: "nav" }); await u.screen("today-default"); } },
   { id: "live-sign-in-screen", title: "Open me.q08.org on a phone that is not signed in", modes: ["live"],
