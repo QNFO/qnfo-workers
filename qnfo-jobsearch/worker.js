@@ -4006,7 +4006,7 @@ async function choose(li,n,o){li.querySelectorAll('button').forEach(b=>b.disable
  try{render(await authed(()=>post('/api/handle/act',body)))}catch(e){add('agent','<p>That did not work: '+esc(e.message)+'. Try again.</p>')}}
 $('#f').onsubmit=async e=>{e.preventDefault();const v=$('#t').value.trim();if(!v)return;const input=needText&&lastInput?lastInput+'\n'+v:v;$('#go').disabled=true;add('you','<p>'+esc(v.length>240?v.slice(0,240)+'…':v)+'</p>');$('#t').value='';
  const w=add('agent','<p class="ds-muted">Reading it…</p>');try{const body=needText&&/^https?:\/\/\S+$/.test(lastInput)?{input:v,url:lastInput}:{input:v};lastInput=v;const r=await authed(()=>post('/api/handle',body));w.remove();render(r)}catch(x){w.remove();add('agent','<p>'+esc(x.message)+'</p>')}$('#go').disabled=false};
-$('#signin').onclick=signIn;api('/api/auth/me').then(m=>{if(m.signed_in)$('#signin').hidden=true}).catch(()=>{});
+$('#signin').onclick=signIn;api('/api/auth/me').then(m=>{if(m.signed_in)$('#signin').hidden=true}).catch(e=>{console.error('auth-me',e.message)});
 </script></body></html>`;
 const handler = {
   async scheduled(event, env, ctx) {
