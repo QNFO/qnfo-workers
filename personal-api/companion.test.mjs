@@ -96,8 +96,8 @@ ok("rule 2: only one care touch a day", C.planNudge(base({ mood: { today: 1 }, t
 const nx = C.planNudge(base({ nextActions: acts }));
 ok("rule 3: one thing, the smallest that fits okay energy", nx.kind === "cmp-next" && /Water the plants/.test(nx.ask) && nx.action_id === "t2", nx);
 ok("rule 3: high energy may get the bigger task only if it is the smallest fit", C.chooseAction(acts, "high").id === "t2");
-ok("rule 4: three unanswered -> presence", C.planNudge(base({ unansweredStreak: 3, nextActions: acts })).kind === "cmp-presence");
-ok("rule 4: presence once a day", C.planNudge(base({ unansweredStreak: 3, todays: [{ kind: "presence" }] })).skip === "presence-already-sent");
+ok("rule 4 (PRODUCT-RESEARCH-1): the unanswered-streak presence ask is no longer sent", C.planNudge(base({ unansweredStreak: 3, nextActions: acts })).skip === "presence-retired");
+ok("rule 4: still nothing on a day a presence-like ask already went out", C.planNudge(base({ unansweredStreak: 3, todays: [{ kind: "presence" }] })).skip === "presence-retired");
 ok("rule 5: retired kinds are not used", C.planNudge(base({ nextActions: acts, retired: new Set(["cmp-next"]) })).skip === "nothing-useful");
 ok("morning: check-in reaches the phone", C.planNudge(base({ hour: 9, mood: {}, checkinSentToday: true })).kind === "cmp-checkin");
 ok("evening: one-line journal prompt", C.planNudge(base({ hour: 20 })).kind === "cmp-reflect");

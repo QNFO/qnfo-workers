@@ -296,7 +296,7 @@ function clampMaxTokens(requested, isReason) {
 __name(clampMaxTokens, "clampMaxTokens");
 __name2(clampMaxTokens, "clampMaxTokens");
 __name22(clampMaxTokens, "clampMaxTokens");
-var VERSION = "4.47.1";
+var VERSION = "4.47.2";
 // 4.37.2 KERNEL-PERSONAL-PRIVACY-1: preserve all ten registered reply categories across the content-free telemetry boundary.
 // 4.37.1 KERNEL-PERSONAL-PRIVACY-1: classify twin replies inside the personal plane; AUDIT receives only fixed categories and random event ids, never reply text or excerpts.
 // 4.37.0 KERNEL-EVERYWHERE-1 (2026-11-06, owner directive "IMPLEMENT EVERYWHERE ACROSS ALL AI APPS AND SERVICES AND SURFACES", pillar personal): the twin SYSTEM_PROMPT carries the DOCTRINE-1 kernel 8.2.1 reply recognitions (KERNEL-REPLY-4): end every reply on the answer or result, never on a question, conditional offer or menu; ambiguity gets a stated assumption; a refusal or limit with its reason is a disposition stated declaratively; reversible tool actions are taken and reported in the same reply, and a requested change is made with the tool, not described. Each twin reply is also mirrored to qnfo-audit.personal_replies so the kernel false-stop scan covers this surface. prior 4.36.2
@@ -2974,10 +2974,10 @@ function planNudge(st) {
   if (todays.length >= Number(cfg.max_per_day)) return { skip: "daily-cap" };
   const lastSent = (st.recent || []).map((r) => new Date(r.sent_at || r.ts).getTime()).filter(Number.isFinite).sort((a, b) => b - a)[0];
   if (lastSent && nowMs - lastSent < Number(cfg.min_gap_min) * 60000) return { skip: "min-gap" };
-  if (cfg.wellbeing_prompts === true && (st.unansweredStreak || 0) >= Number(cfg.max_unanswered)) {
-    if (kindsToday.has("presence") || kindsToday.has("cmp-presence")) return { skip: "presence-already-sent" };
-    return mk("cmp-presence", TEXTS.presence[0], 0, 360, "unanswered-streak=" + st.unansweredStreak);
-  }
+  // PRODUCT-RESEARCH-1 (issue #1003222): the "cmp-presence" ask went out 4 times in 14 days and was answered 0 times —
+  // Rowan does not use it as it is. Chosen option: stop sending it. Nothing is sent in its place; the streak is left
+  // to the next real check-in or journal entry instead of a generic ping.
+  if (cfg.wellbeing_prompts === true && (st.unansweredStreak || 0) >= Number(cfg.max_unanswered)) return { skip: "presence-retired" };
   // Rule 23: the calendar. A timed event that is on now holds every ask (risk-word care above is never held); three or more
   // events make a lighter day.
   const events = st.events || [];

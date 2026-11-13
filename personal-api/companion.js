@@ -1059,10 +1059,10 @@ export function planNudge(st) {
   if (todays.length >= Number(cfg.max_per_day)) return { skip: "daily-cap" };
   const lastSent = (st.recent || []).map((r) => new Date(r.sent_at || r.ts).getTime()).filter(Number.isFinite).sort((a, b) => b - a)[0];
   if (lastSent && nowMs - lastSent < Number(cfg.min_gap_min) * 60000) return { skip: "min-gap" };
-  if (cfg.wellbeing_prompts === true && (st.unansweredStreak || 0) >= Number(cfg.max_unanswered)) {
-    if (kindsToday.has("presence") || kindsToday.has("cmp-presence")) return { skip: "presence-already-sent" };
-    return mk("cmp-presence", TEXTS.presence[0], 0, 360, "unanswered-streak=" + st.unansweredStreak);
-  }
+  // PRODUCT-RESEARCH-1 (issue #1003222): the "cmp-presence" ask went out 4 times in 14 days and was answered 0 times —
+  // Rowan does not use it as it is. Chosen option: stop sending it. Nothing is sent in its place; the streak is left
+  // to the next real check-in or journal entry instead of a generic ping.
+  if (cfg.wellbeing_prompts === true && (st.unansweredStreak || 0) >= Number(cfg.max_unanswered)) return { skip: "presence-retired" };
   // Rule 23: the calendar. A timed event that is on now holds every ask (risk-word care above is never held); three or more
   // events make a lighter day.
   const events = st.events || [];
