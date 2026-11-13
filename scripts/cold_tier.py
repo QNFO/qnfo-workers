@@ -172,7 +172,9 @@ def rollup(d1, t, now=None, max_days=40):
 def _edge_id(d1, tab, ts, cutoff):
     """The largest id whose ts is below cutoff, found by about 20 primary-key probes (ids follow time in an append-only log), or None.
     A ts scan would read every old row on each run; a table with no index on ts (bp26_probe_results) would read the whole table."""
-    r = d1('SELECT MIN(id) AS lo, MAX(id) AS hi FROM "%s"' % tab)
+    # two scalar subqueries: SQLite answers a lone MIN or MAX from the key in O(1), but MIN and MAX together scan the table
+    # (D1-READS-COST-5: 1.28 M rows read in 33 runs of one hour on fleet_probe_log)
+    r = d1('SELECT (SELECT MIN(id) FROM "%s") AS lo, (SELECT MAX(id) FROM "%s") AS hi' % (tab, tab))
     if not r or r[0]["lo"] is None:
         return None
     lo, hi, best = int(r[0]["lo"]), int(r[0]["hi"]), None
