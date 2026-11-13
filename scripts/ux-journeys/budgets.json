@@ -64,6 +64,14 @@
   "hub-places": {
    "taps": 0,
    "typing": 0
+  },
+  "ask-tonight": {
+   "taps": 2,
+   "typing": 0
+  },
+  "ask-mic-blocked": {
+   "taps": 3,
+   "typing": 0
   }
  },
  "public": {

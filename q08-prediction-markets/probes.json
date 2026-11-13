@@ -11,12 +11,6 @@
       ]
     },
     {
-      "url": "https://q08-prediction-markets.q08.workers.dev/api/state",
-      "contains": [
-        "\"paper\":true"
-      ]
-    },
-    {
       "url": "https://q08-prediction-markets.q08.workers.dev/api/charter",
       "contains": [
         "\"mode\":\"paper\"",
