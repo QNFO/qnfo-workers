@@ -9,7 +9,7 @@
 // JOBSEARCH-CV-1 (1.5.0): the CV is part of this worker (page /cv): a yes/no interview that builds the claim bank, review of unconfirmed claims, roles, achievements and publications edited in D1, a resume per job (summary, roles, selected work, education, skills) and a cover note, history and backup. The search is tied to that bank (evidence the owner can back up weighs more; what the CV lacks is shown as a gap), decided postings (rejected, applied, approved) never come back under another id, rejections carry a reason the search learns from, and a wider net: stretch matches outside the stated preferences, more boards and aggregators.
 // Routes: GET / (web UI) | GET /api | GET /api/matches | GET /api/matches/:id | GET /api/runs | GET /api/ledger | POST /api/run | POST /api/matches/:id/status | GET /health
 // Port of the jobsearch/ Python modules (tests: jobsearch/test_jobsearch.py, qnfo-jobsearch/worker.test.mjs).
-var VERSION = "1.33.0-codeagent";
+var VERSION = "1.33.1-codeagent";
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -3627,6 +3627,19 @@ async function autopilotAuthed(request, env) { return (await githubOidcOk(reques
 async function autopilotModes(env) {
   const out = {};
   for (const a of AUTO_ATS) out[a] = (await getMeta(env, "autopilot_mode_" + a)) || "dry";
+  const hist = (await env.JOBS_DB.prepare("SELECT match_id, outcome, COUNT(*) AS n FROM jobsearch_auto GROUP BY match_id, outcome").all().catch(() => ({ results: [] }))).results || [];
+  const urls = new Map(((await env.JOBS_DB.prepare("SELECT id, url FROM jobsearch_matches").all().catch(() => ({ results: [] }))).results || []).map((r) => [r.id, r.url]));
+  const clean = {}, bad = {};
+  for (const h of hist) {
+    const a = atsOf(urls.get(h.match_id) || "").ats;
+    if (!AUTO_ATS.includes(a)) continue;
+    if (h.outcome === "dry_ready") clean[a] = (clean[a] || 0) + h.n;
+    else if (h.outcome === "unconfirmed") bad[a] = (bad[a] || 0) + h.n;
+  }
+  for (const a of AUTO_ATS) {
+    const want = (clean[a] || 0) >= AUTO_PROMOTE_AFTER + (bad[a] || 0) ? "submit" : (bad[a] || 0) >= AUTO_DEMOTE_AFTER ? "dry" : out[a];
+    if (want !== out[a]) { out[a] = want; await setMeta(env, "autopilot_mode_" + a, want).catch((e) => logErr("autopilot-mode", e)); }
+  }
   return out;
 }
 // APPROVED-AUTO-1 (issue 11175): the owner's own approval is the gate for an approved match; the relevance gate's score bar applies only to matches nobody decided on.
