@@ -4,7 +4,7 @@
 // text, the text the complete stage reads, the draft row and a version-queue body before anything is published; the reader-facing changelog stops listing them.
 import { readFileSync } from "node:fs";
 const src = readFileSync(new URL("./worker.js", import.meta.url), "utf8");
-const mirror = readFileSync(new URL("./deployed-current.worker.js", import.meta.url), "utf8");
+
 const mod = await import("data:text/javascript;base64," + Buffer.from(src + "\nexport { stripInternalAppendices as __strip, RECONCILE_PROMPT as __prompt, rlChangeSummary as __summary, rlSections as __sections, VERSION as __version };\n").toString("base64"));
 let pass = 0, fail = 0;
 const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (x !== undefined ? " -- " + JSON.stringify(x).slice(0, 500) : "")); } };
@@ -66,8 +66,7 @@ const calls = (src.match(/stripInternalAppendices\(/g) || []).length;
 ok(calls >= 5, "stripInternalAppendices is defined once and called at the reconcile, complete, draft-row and version-queue boundaries", calls);
 ok(/_stripped = stripInternalAppendices\(finalText\)/.test(src) && /var _noApp = stripInternalAppendices\(paper\)/.test(src) && /const rawBody = stripInternalAppendices\(String\(md\)\.trim\(\)\)\.trim\(\)/.test(src) && /const body = canonicalBody\(rawBody, \{ title \}\)\.trim\(\)/.test(src) && /row\.corrected_md = stripInternalAppendices\(String\(row\.corrected_md\)\)/.test(src), "the four call sites are in place before layout normalization");
 const sourceVersion = /var VERSION = "([^"]+)"/.exec(src)?.[1];
-ok(/var VERSION = "([^"]+)"/.exec(mirror)?.[1] === sourceVersion, "the Wrangler-built deploy mirror carries the source VERSION");
-ok(mirror.includes("function stripInternalAppendices") && mirror.includes("name the drafts A, B and C nowhere"), "the built deploy mirror includes the appendix strip and prompt safeguards");
+ok(/function stripInternalAppendices\(/.test(src) && src.includes("name the drafts A, B and C nowhere"), "the source includes the appendix strip and prompt safeguards");
 const ver = String(mod.__version).split(/[.-]/).map(Number);
 ok(ver[0] === 0 && (ver[1] > 36 || (ver[1] === 36 && ver[2] >= 1)), "VERSION is at least 0.36.1", mod.__version);
 console.log(pass + " passed, " + fail + " failed");

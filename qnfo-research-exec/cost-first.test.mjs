@@ -1,5 +1,6 @@
 // RESEARCH-COST-FIRST-1 (qnfo-research-exec 0.36.0, pillar cost). glm-5.3-flash runs first while ops_config research_primary_model is
-// auto; empty or rate-limited glm replies fall back per request without switching later stages to gpt-oss-120b.
+// auto; a rate-limited glm reply falls back per request, and an empty glm reply is kept empty (no dearer gpt-oss-120b call), without
+// switching later stages.
 // Runs aiText and applyModelOrder from the source. Run: node qnfo-research-exec/cost-first.test.mjs
 import { readFileSync } from "node:fs";
 const src = readFileSync(new URL("./worker.js", import.meta.url), "utf8");
@@ -22,7 +23,7 @@ const ai = (script) => { const calls = []; return { calls, run: async (m) => { c
 let r = await W.applyModelOrder({ QNFO_AUDIT: d1(null, 0) });
 ok(r.costFirst && W.MODELS[0] === GLM && W.MODELS[1] === OSS, "auto by default: glm-5.3-flash first, gpt-oss-120b second", W.MODELS);
 let a = ai((m) => m === GLM ? { response: "" } : { response: "answer" });
-ok((await W.aiText({ AI: a }, GLM, "p", 100, "low")) === "answer" && a.calls.join() === [GLM, OSS].join(), "an empty glm reply is asked once of gpt-oss-120b", a.calls);
+ok((await W.aiText({ AI: a }, GLM, "p", 100, "low")) === "" && a.calls.join() === [GLM].join(), "an empty glm reply is kept empty instead of paying for gpt-oss-120b", a.calls);
 a = ai((m) => m === GLM ? { response: "glm answer" } : { response: "x" });
 ok((await W.aiText({ AI: a }, GLM, "p", 100, "low")) === "glm answer" && a.calls.length === 1, "a glm answer is used as is", a.calls);
 a = ai((m) => m === GLM ? new Error("3021: rate limit") : { response: "oss" });
@@ -31,7 +32,7 @@ ok(W.evs.filter((k) => k === "cost-first-empty").length === 2, "each fallback is
 r = await W.applyModelOrder({ QNFO_AUDIT: d1("auto", 50) });
 ok(r.costFirst && W.MODELS[0] === GLM, "a fallback burst keeps glm first for later requests", r);
 a = ai((m) => m === GLM ? { response: "" } : { response: "fallback answer" });
-ok((await W.aiText({ AI: a }, GLM, "p", 100, "low")) === "fallback answer" && a.calls.join() === [GLM, OSS].join(), "empty replies still fall back per request after a burst", a.calls);
+ok((await W.aiText({ AI: a }, GLM, "p", 100, "low")) === "" && a.calls.join() === [GLM].join(), "empty replies stay empty after a burst too", a.calls);
 r = await W.applyModelOrder({ QNFO_AUDIT: d1("gpt-oss-120b", 0) });
 ok(!r.costFirst && W.MODELS[0] === OSS, "research_primary_model = gpt-oss-120b keeps the old order", r);
 r = await W.applyModelOrder({ QNFO_AUDIT: d1("glm-5.3-flash", 50) });
