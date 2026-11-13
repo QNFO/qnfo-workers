@@ -1,0 +1,12 @@
+-- APPLY-BY: ci
+-- DB: qnfo-audit
+-- Rollback: DROP INDEX IF EXISTS idx_agent_issues_title_nocase;
+-- spof-review: no new component; one index.
+-- charter-pillar: cost
+-- CAUSE-MAPPED: no metric registered.
+--
+-- D1-READS-COST-6 (owner 2026-11-13). Live d1QueriesAdaptiveGroups, qnfo-audit, 2026-11-13: statements of the form
+-- `agent_issues WHERE title LIKE 'PREFIX%'` (cron-watch CRON-FAULT-1 closed-seen insert, 19 K rows a call, 1.0 M per 20 minutes;
+-- the ROOT-CAUSE-1 lookup, 337 K per 20 minutes; the METRIC-TRIGGER prefix probes) scan agent_issues, because LIKE is
+-- case-insensitive and idx_agent_issues_title is BINARY. A COLLATE NOCASE index lets every such prefix LIKE seek. Same answers.
+CREATE INDEX IF NOT EXISTS idx_agent_issues_title_nocase ON agent_issues (title COLLATE NOCASE, status);
