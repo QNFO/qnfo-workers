@@ -4,6 +4,7 @@
 -- spof-review: no new component; one BEFORE INSERT trigger. It only drops a fleet_tick row when another row landed in the previous 8 minutes, so the table still gets a row in every 10-minute slot (tick_slot_coverage_24h, v_audit_freshness 30 min, the hourly :00-:09 trigger window all still see one).
 -- charter-pillar: cost
 -- CAUSE-MAPPED: no metric registered.
+-- Probe: qnfo-audit rows read per hour from d1AnalyticsAdaptiveGroups, target < 15 M within 3 h of apply.
 --
 -- D1-READS-COST-9 (D1-ROWS-READ-COST-1, 2026-11-13). Measured live (d1QueriesAdaptiveGroups, qnfo-audit, 17:00 to 20:00 UTC): qnfo-audit still read 35 to 45 M rows an
 -- hour after cut 7. The top statements are the fleet_tick inserts themselves: `INSERT INTO fleet_tick ... WHERE NOT EXISTS` 12 M rows over 106 calls and
