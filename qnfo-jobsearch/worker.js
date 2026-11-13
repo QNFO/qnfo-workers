@@ -9,7 +9,7 @@
 // JOBSEARCH-CV-1 (1.5.0): the CV is part of this worker (page /cv): a yes/no interview that builds the claim bank, review of unconfirmed claims, roles, achievements and publications edited in D1, a resume per job (summary, roles, selected work, education, skills) and a cover note, history and backup. The search is tied to that bank (evidence the owner can back up weighs more; what the CV lacks is shown as a gap), decided postings (rejected, applied, approved) never come back under another id, rejections carry a reason the search learns from, and a wider net: stretch matches outside the stated preferences, more boards and aggregators.
 // Routes: GET / (web UI) | GET /api | GET /api/matches | GET /api/matches/:id | GET /api/runs | GET /api/ledger | POST /api/run | POST /api/matches/:id/status | GET /health
 // Port of the jobsearch/ Python modules (tests: jobsearch/test_jobsearch.py, qnfo-jobsearch/worker.test.mjs).
-var VERSION = "1.31.0-codeagent";
+var VERSION = "1.32.0-codeagent";
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -3339,7 +3339,35 @@ async function recordWeightsAdaptation(env, ctx, which = "outcome") {
     .bind(hash, json, base && base.last_value !== null && base.last_value !== "" ? Number(base.last_value) : null, now, due, resume ? 'resume-outcome-learner' : 'jobs-outcome-learner', resume ? 'jobs.resume_weights' : 'jobs.outcome_weights').run();
   return { recorded: !!(r.meta && r.meta.changes), hash };
 }
+// LINKEDIN-ALERT-1: a LinkedIn job-alert mail the owner receives or forwards lists postings that never reach a feed. Each listing is title, employer, place, then a
+// jobs/view link. The mail is the owner's own; no LinkedIn page is fetched or scraped (their terms), so every title and employer comes from the mail text.
+function parseLinkedinAlert(from, subject, body) {
+  if (!/linkedin\.com/i.test(String(from)) && !/linkedin/i.test(String(subject))) return [];
+  const lines = String(body || "").split(/\r?\n/).map((l) => l.replace(/^[\s>*•\-]+/, "").trim());
+  const out = [], seen = new Set();
+  lines.forEach((l, i) => {
+    const id = linkedinJobUrl(l); if (!id || seen.has(id)) return;
+    const ctx = []; for (let j = i - 1; j >= 0 && ctx.length < 3; j--) { const t = lines[j]; if (!t) { if (ctx.length) break; continue; } if (linkedinJobUrl(t) || /^(view job|apply|new jobs?|see all|unsubscribe)/i.test(t)) { if (ctx.length) break; continue; } ctx.unshift(t); }
+    let title = "", company = "", location = "";
+    if (ctx.length >= 3) [title, company, location] = ctx.slice(-3);
+    else if (ctx.length === 2) { title = ctx[0]; const m = /^(.+?)\s+[·|\-–]\s+(.+)$/.exec(ctx[1]); company = m ? m[1] : ctx[1]; location = m ? m[2] : ""; }
+    else if (ctx.length === 1) { const m = /^(.+?)\s+(?:at|·)\s+(.+)$/.exec(ctx[0]); title = m ? m[1] : ctx[0]; company = m ? m[2] : ""; }
+    if (!title || title.length > 140) return;
+    seen.add(id); out.push({ title, company, location, url: id });
+  });
+  return out;
+}
+async function intakeLinkedinAlert(env, m) {
+  const jobs = parseLinkedinAlert(m.from, m.subject, m.body).slice(0, 25);
+  const added = [];
+  for (const j of jobs) {
+    try { const r = await intakeJob(env, { input: j.url, url: j.url, title: j.title, company: j.company, location: j.location, status: "saved", source: "linkedin-alert" }); added.push({ title: j.title, company: j.company, duplicate: !!r.duplicate, fit: r.fit }); }
+    catch (e) { logErr("linkedin-alert", e); }
+  }
+  return { matched: added.length > 0, linkedin_alert: true, found: jobs.length, added: added.filter((a) => !a.duplicate).length, items: added };
+}
 async function applyJobMail(env, m) {
+  if (parseLinkedinAlert(m.from, m.subject, m.body).length) return await intakeLinkedinAlert(env, m);
   const p = parseJobMail(m.from || "", m.subject || "", m.body || "");
   if (!p.event) return { matched: false, reason: "not a job status mail" };
   if (!p.company) return { matched: false, reason: "could not tell which employer" };
@@ -4063,7 +4091,7 @@ const handler = {
     return J({ error: "not found", see: "/api" }, 404);
   },
 };
-handler.__test = { isoDate, findEmployerForm, FORM_SLUGS, sameTitle, autoGateOk, resumeElements, resumeOutcomeWeights, outcomeRowsOf, resumeRowsOf, orgKind, resumeSkeleton, canonicalSkeleton, tailoredResume, resumeConsistency, resolveQuestion, autopilotQueue, autopilotResolve, autopilotResult, autopilotStatus, githubOidcOk, parseRss, notifyOwner, followups, missionSources, saveMissionProbes, sourceCoverage, FETCHERS, styleLint, laneGate, fitLine, shortlist, relevanceSweep, intakeJob, setPipeStatus, saveQa, answerLibrary, matchQuestions, pipeline, parseJobMail, applyJobMail, linkedinJobUrl, ANSWER_BANK, bankAnswerFor, credentialBacked, dropUnbackedCredentials, ensureCredentialEvidence, refreshRecallFacts, polishProse, polishBank, copyLint, toolCase, vocabulary, TOPIC_LABEL, SOFTWARE, PROSE_CASE, linkedinSearches, LINKEDIN_SEARCHES, codingLoad, CANDIDATE_BOARDS, collectAndRank, cosine, bestSim, semanticLens, scoreJob, exploreOverlap, recordTerms, diversifyRows, recallGaps, recallQuestion, recallAnswer, recallQueue, RECALL_SEED, loadCtx, referralKit, referralList, STAGES, judgeTop, buildResume, verify, headlineVerdict, outcomes, pdfOf, pdfClean, checkAnswer, jsonLoose, PROTECTED_Q, draftAnswers, prepBrief, quizFeedback, judgeJob, calibrate, calibration, followups, atsOf, keywordReport, docxOf, resumeHtml, plainOf, applyKit, matchKit, stripTags, postingTerms, evaluate, rank, buildResume, buildNote, verify, stripHtml, locationGate, has, LEDGER, dedupeKey, feedPrefix, makeCtx, scoreJob, scoreFeatures, featuresFromWhy, applicationSnapshot, parseApplicationSnapshot, outcomeScoreWeights, loadCtx, SURVEY, BOARDS, normKey, applyBank, BANK_SEED, QUESTIONS, TAG_TO_CLUSTERS, clustersOf, cvAnswer, cvFact, cvReview, cvSet, cvImport, mutateBank, loadBank, decidedKeys, FETCHERS, getBank: () => BANK, llmRerank, llmRerankRun, ensureResearchPubs, ensureAutonomyBrand, ensureUltrastableBrand, ultrastableBank, ultrastableSkillsBank, ULTRASTABLE_SKILL_FACTS, ULTRASTABLE_SKILLS, syncSkillAsks, skillAskOptions, cvSkills, ULTRASTABLE_S1, RESEARCH_PUBS, FAMILIES, CLUSTER_KW, headline, pubLine, parseRerank, reasonOk, rerankMessages, artifactsFor, titleCandidate, sitemapUrls, slugTitle, PUBLIC_SECTOR, opsReport };
+handler.__test = { isoDate, findEmployerForm, FORM_SLUGS, sameTitle, autoGateOk, resumeElements, resumeOutcomeWeights, outcomeRowsOf, resumeRowsOf, orgKind, resumeSkeleton, canonicalSkeleton, tailoredResume, resumeConsistency, resolveQuestion, autopilotQueue, autopilotResolve, autopilotResult, autopilotStatus, githubOidcOk, parseRss, notifyOwner, followups, missionSources, saveMissionProbes, sourceCoverage, FETCHERS, styleLint, laneGate, fitLine, shortlist, relevanceSweep, intakeJob, setPipeStatus, saveQa, answerLibrary, matchQuestions, pipeline, parseJobMail, applyJobMail, linkedinJobUrl, parseLinkedinAlert, intakeLinkedinAlert, ANSWER_BANK, bankAnswerFor, credentialBacked, dropUnbackedCredentials, ensureCredentialEvidence, refreshRecallFacts, polishProse, polishBank, copyLint, toolCase, vocabulary, TOPIC_LABEL, SOFTWARE, PROSE_CASE, linkedinSearches, LINKEDIN_SEARCHES, codingLoad, CANDIDATE_BOARDS, collectAndRank, cosine, bestSim, semanticLens, scoreJob, exploreOverlap, recordTerms, diversifyRows, recallGaps, recallQuestion, recallAnswer, recallQueue, RECALL_SEED, loadCtx, referralKit, referralList, STAGES, judgeTop, buildResume, verify, headlineVerdict, outcomes, pdfOf, pdfClean, checkAnswer, jsonLoose, PROTECTED_Q, draftAnswers, prepBrief, quizFeedback, judgeJob, calibrate, calibration, followups, atsOf, keywordReport, docxOf, resumeHtml, plainOf, applyKit, matchKit, stripTags, postingTerms, evaluate, rank, buildResume, buildNote, verify, stripHtml, locationGate, has, LEDGER, dedupeKey, feedPrefix, makeCtx, scoreJob, scoreFeatures, featuresFromWhy, applicationSnapshot, parseApplicationSnapshot, outcomeScoreWeights, loadCtx, SURVEY, BOARDS, normKey, applyBank, BANK_SEED, QUESTIONS, TAG_TO_CLUSTERS, clustersOf, cvAnswer, cvFact, cvReview, cvSet, cvImport, mutateBank, loadBank, decidedKeys, FETCHERS, getBank: () => BANK, llmRerank, llmRerankRun, ensureResearchPubs, ensureAutonomyBrand, ensureUltrastableBrand, ultrastableBank, ultrastableSkillsBank, ULTRASTABLE_SKILL_FACTS, ULTRASTABLE_SKILLS, syncSkillAsks, skillAskOptions, cvSkills, ULTRASTABLE_S1, RESEARCH_PUBS, FAMILIES, CLUSTER_KW, headline, pubLine, parseRerank, reasonOk, rerankMessages, artifactsFor, titleCandidate, sitemapUrls, slugTitle, PUBLIC_SECTOR, opsReport };
 export default handler;
 
 // ------------------------------------------------------------------ client script shared by both pages (JOBSEARCH-APPLY-1): kit handling and the Fill application bookmark
