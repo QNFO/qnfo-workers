@@ -30,7 +30,7 @@ ok(/metric = 'sla_breaches_over_120m'/.test(fn), "slaTick10m writes sla_breaches
 ok((fn.match(/catch \(e\) \{ console\.error/g) || []).length >= 3, "each step logs its own failure and the others still run");
 
 const esc = src.slice(src.indexOf("async function slaEscalate(env)"), src.indexOf('__name(slaEscalate, "slaEscalate")'));
-ok(/datetime\(created_at\) > datetime\('now','-120 minutes'\)/.test(esc), "slaEscalate re-alerts after 120 minutes and reads created_at through datetime()");
+ok(/Date\.now\(\) - 120 \* 60000/.test(esc) && /created_at > \?2/.test(esc) && !/datetime\(created_at\)/.test(esc), "slaEscalate re-alerts after 120 minutes with a 120-minute bound compared to the bare created_at column (D1-ROWS-READ-COST-1 F3: datetime() hid idx_alerts_source_created)");
 ok(!/-1 day/.test(esc), "slaEscalate no longer waits a day");
 
 const v = (/var VERSION = "([^"]+)"/.exec(src) || [])[1];
