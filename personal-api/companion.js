@@ -2304,7 +2304,7 @@ async function fyEnsure(env) {
   await env.PERSONAL.prepare("CREATE TABLE IF NOT EXISTS cmp_feed (id TEXT PRIMARY KEY, date TEXT NOT NULL, time TEXT, title TEXT NOT NULL, venue TEXT, kind TEXT, url TEXT, why TEXT, score REAL DEFAULT 0, state TEXT DEFAULT 'new', reason TEXT, built_at TEXT)").run();
   await env.PERSONAL.prepare("CREATE INDEX IF NOT EXISTS cmp_feed_date ON cmp_feed (date, state)").run();
   await env.PERSONAL.prepare("CREATE TABLE IF NOT EXISTS cmp_feed_meta (k TEXT PRIMARY KEY, v TEXT)").run();
-  if (!fyShownReady) { for (const c of ["shown INTEGER DEFAULT 0", "shown_day TEXT"]) await env.PERSONAL.prepare("ALTER TABLE cmp_feed ADD COLUMN " + c).run().catch(() => {}); fyShownReady = true; }
+  if (!fyShownReady) { for (const c of ["shown INTEGER DEFAULT 0", "shown_day TEXT"]) await env.PERSONAL.prepare("ALTER TABLE cmp_feed ADD COLUMN " + c).run().catch((e) => { if (!/duplicate column/i.test(String(e && e.message))) console.error(JSON.stringify({ where: "fy-shown-column", error: String(e && e.message || e) })); }); fyShownReady = true; }
 }
 let fyShownReady = false;
 // COMPANION-OPS-SEC-1: every admin action the Ask takes is logged, and at most 12 run in a day.
