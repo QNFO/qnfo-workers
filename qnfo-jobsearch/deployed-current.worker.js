@@ -9,7 +9,7 @@
 // JOBSEARCH-CV-1 (1.5.0): the CV is part of this worker (page /cv): a yes/no interview that builds the claim bank, review of unconfirmed claims, roles, achievements and publications edited in D1, a resume per job (summary, roles, selected work, education, skills) and a cover note, history and backup. The search is tied to that bank (evidence the owner can back up weighs more; what the CV lacks is shown as a gap), decided postings (rejected, applied, approved) never come back under another id, rejections carry a reason the search learns from, and a wider net: stretch matches outside the stated preferences, more boards and aggregators.
 // Routes: GET / (web UI) | GET /api | GET /api/matches | GET /api/matches/:id | GET /api/runs | GET /api/ledger | POST /api/run | POST /api/matches/:id/status | GET /health
 // Port of the jobsearch/ Python modules (tests: jobsearch/test_jobsearch.py, qnfo-jobsearch/worker.test.mjs).
-var VERSION = "1.33.0-codeagent";
+var VERSION = "1.33.1-codeagent";
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -3502,7 +3502,7 @@ async function saveMissionProbes(env, cache, results) {
   for (const r of results) {
     const prev = cache[r.feed] || {};
     if (r.ok && r.count > 0) cache[r.feed] = { s: "live", n: r.count, at: now, fails: 0 };
-    else if (prev.s === "live" && (prev.fails || 0) < 2) cache[r.feed] = { ...prev, fails: (prev.fails || 0) + 1, at: now };   // a live source gets three runs before it is dropped
+    else if (prev.s === "live" && (prev.n || 0) > 0 && (prev.fails || 0) < 2) cache[r.feed] = { ...prev, fails: (prev.fails || 0) + 1, at: now };   // only a source that has actually delivered (a clean run with content) keeps its live slot through a failed run; a probe that never delivered is dead at once
     else cache[r.feed] = { s: "dead", at: now };
   }
   await setMeta(env, "mission_probe", JSON.stringify(cache));
