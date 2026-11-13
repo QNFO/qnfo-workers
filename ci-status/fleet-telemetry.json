@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-11-13T14:05:29Z",
+ "generated_at": "2026-11-13T14:14:48Z",
  "account": "edb167b78c9fb901ea5bca3ce58ccc4b",
  "errors_24h": {
   "qnfo-ai-search": {
@@ -164,27 +164,27 @@
    {
     "script": "qnfo-gateway",
     "errors": 630,
-    "requests": 792250,
-    "subrequests": 131170,
-    "cpuTimeP50": 5242,
+    "requests": 792280,
+    "subrequests": 131210,
+    "cpuTimeP50": 5243,
     "cpuTimeP99": 316020,
     "wallTimeP99": 11228082
    },
    {
     "script": "qnfo-fleet-control",
     "errors": 0,
-    "requests": 182750,
-    "subrequests": 734120,
-    "cpuTimeP50": 1587,
-    "cpuTimeP99": 1009461,
-    "wallTimeP99": 195492240
+    "requests": 183000,
+    "subrequests": 734250,
+    "cpuTimeP50": 1588,
+    "cpuTimeP99": 1009418,
+    "wallTimeP99": 195364080
    },
    {
     "script": "q08-signal-engine",
     "errors": 40,
     "requests": 156120,
     "subrequests": 36310,
-    "cpuTimeP50": 4745,
+    "cpuTimeP50": 4742,
     "cpuTimeP99": 41310,
     "wallTimeP99": 9574045
    },
@@ -200,20 +200,20 @@
    {
     "script": "qnfo-deploy-guard",
     "errors": 0,
-    "requests": 99830,
-    "subrequests": 16640,
-    "cpuTimeP50": 2104,
+    "requests": 99840,
+    "subrequests": 16650,
+    "cpuTimeP50": 2105,
     "cpuTimeP99": 53845,
     "wallTimeP99": 10043517
    },
    {
     "script": "qnfo-fleet-dashboard",
     "errors": 0,
-    "requests": 96840,
-    "subrequests": 484610,
-    "cpuTimeP50": 5389,
-    "cpuTimeP99": 347960,
-    "wallTimeP99": 79918680
+    "requests": 96880,
+    "subrequests": 484950,
+    "cpuTimeP50": 5410,
+    "cpuTimeP99": 349100,
+    "wallTimeP99": 79940856
    },
    {
     "script": "__unknown__",
@@ -227,25 +227,25 @@
    {
     "script": "qnfo-lifecycle",
     "errors": 10,
-    "requests": 75260,
+    "requests": 75280,
     "subrequests": 35080,
-    "cpuTimeP50": 623,
+    "cpuTimeP50": 624,
     "cpuTimeP99": 122027,
     "wallTimeP99": 9939993
    },
    {
     "script": "qnfo-ai",
     "errors": 0,
-    "requests": 68990,
+    "requests": 68980,
     "subrequests": 38410,
-    "cpuTimeP50": 2264,
+    "cpuTimeP50": 2263,
     "cpuTimeP99": 26832,
     "wallTimeP99": 116042984
    },
    {
     "script": "qnfo-memory-mcp",
     "errors": 0,
-    "requests": 61250,
+    "requests": 61280,
     "subrequests": 2130,
     "cpuTimeP50": 1561,
     "cpuTimeP99": 14153,
@@ -254,7 +254,7 @@
    {
     "script": "qnfo-ai-search",
     "errors": 210,
-    "requests": 58090,
+    "requests": 58100,
     "subrequests": 24500,
     "cpuTimeP50": 921,
     "cpuTimeP99": 94706,
@@ -263,9 +263,9 @@
    {
     "script": "qnfo-containers-pilot",
     "errors": 0,
-    "requests": 52260,
+    "requests": 52240,
     "subrequests": 4410,
-    "cpuTimeP50": 490,
+    "cpuTimeP50": 489,
     "cpuTimeP99": 1720,
     "wallTimeP99": 4519232
    },
@@ -274,32 +274,32 @@
     "errors": 10,
     "requests": 47100,
     "subrequests": 37450,
-    "cpuTimeP50": 5713,
+    "cpuTimeP50": 5716,
     "cpuTimeP99": 320489,
-    "wallTimeP99": 300433760
+    "wallTimeP99": 300711000
    },
    {
     "script": "qnfo-subscribers",
     "errors": 0,
-    "requests": 46630,
+    "requests": 46600,
     "subrequests": 0,
-    "cpuTimeP50": 1903,
+    "cpuTimeP50": 1902,
     "cpuTimeP99": 6794,
     "wallTimeP99": 1812511
    },
    {
     "script": "qnfo-code-orchestrator",
     "errors": 20,
-    "requests": 45350,
+    "requests": 45360,
     "subrequests": 92800,
-    "cpuTimeP50": 3678,
+    "cpuTimeP50": 3677,
     "cpuTimeP99": 376132,
     "wallTimeP99": 263266240
    },
    {
     "script": "personal-api",
     "errors": 0,
-    "requests": 40660,
+    "requests": 40650,
     "subrequests": 4940,
     "cpuTimeP50": 4161,
     "cpuTimeP99": 53103,
@@ -335,7 +335,7 @@
    {
     "script": "qnfo-research-exec",
     "errors": 90,
-    "requests": 31390,
+    "requests": 31380,
     "subrequests": 179980,
     "cpuTimeP50": 822,
     "cpuTimeP99": 1089919,
@@ -344,7 +344,7 @@
    {
     "script": "qnfo-email",
     "errors": 20,
-    "requests": 31130,
+    "requests": 31120,
     "subrequests": 20,
     "cpuTimeP50": 935,
     "cpuTimeP99": 12425,
@@ -353,7 +353,7 @@
    {
     "script": "qnfo-ai-calibration",
     "errors": 0,
-    "requests": 28950,
+    "requests": 28940,
     "subrequests": 46220,
     "cpuTimeP50": 567,
     "cpuTimeP99": 83505,
@@ -371,8 +371,8 @@
    {
     "script": "qnfo-cloud-ops",
     "errors": 0,
-    "requests": 27980,
-    "subrequests": 47930,
+    "requests": 27970,
+    "subrequests": 47920,
     "cpuTimeP50": 1296,
     "cpuTimeP99": 3894705,
     "wallTimeP99": 109201760
@@ -389,7 +389,7 @@
    {
     "script": "qnfo-social",
     "errors": 20,
-    "requests": 26520,
+    "requests": 26480,
     "subrequests": 71850,
     "cpuTimeP50": 1077,
     "cpuTimeP99": 106655,
@@ -398,8 +398,8 @@
    {
     "script": "qnfo-tools-mcp",
     "errors": 0,
-    "requests": 26230,
-    "subrequests": 25050,
+    "requests": 26240,
+    "subrequests": 25060,
     "cpuTimeP50": 955,
     "cpuTimeP99": 5009,
     "wallTimeP99": 2997933
@@ -407,8 +407,8 @@
    {
     "script": "qnfo-intent-orchestrator",
     "errors": 0,
-    "requests": 25480,
-    "subrequests": 24180,
+    "requests": 25470,
+    "subrequests": 24170,
     "cpuTimeP50": 1055,
     "cpuTimeP99": 4365,
     "wallTimeP99": 3995640
@@ -416,18 +416,18 @@
    {
     "script": "qnfo-infra",
     "errors": 220,
-    "requests": 25360,
+    "requests": 25350,
     "subrequests": 29870,
-    "cpuTimeP50": 871,
+    "cpuTimeP50": 873,
     "cpuTimeP99": 82338,
     "wallTimeP99": 58139868
    },
    {
     "script": "radar-hub",
     "errors": 0,
-    "requests": 25310,
+    "requests": 25300,
     "subrequests": 710,
-    "cpuTimeP50": 465,
+    "cpuTimeP50": 464,
     "cpuTimeP99": 3280,
     "wallTimeP99": 2010802
    },
@@ -461,8 +461,8 @@
    {
     "script": "ultrastable-site",
     "errors": 20,
-    "requests": 18200,
-    "subrequests": 1680,
+    "requests": 18220,
+    "subrequests": 1690,
     "cpuTimeP50": 427,
     "cpuTimeP99": 8296,
     "wallTimeP99": 2759355
@@ -470,9 +470,9 @@
    {
     "script": "q08-prediction-markets",
     "errors": 0,
-    "requests": 16840,
+    "requests": 16850,
     "subrequests": 13750,
-    "cpuTimeP50": 4298,
+    "cpuTimeP50": 4315,
     "cpuTimeP99": 118127,
     "wallTimeP99": 78717490
    },
@@ -488,16 +488,16 @@
    {
     "script": "qnfo-waste-agent",
     "errors": 0,
-    "requests": 5030,
+    "requests": 5040,
     "subrequests": 0,
-    "cpuTimeP50": 329,
+    "cpuTimeP50": 328,
     "cpuTimeP99": 49614,
     "wallTimeP99": 17006908
    },
    {
     "script": "qnfo-workers",
     "errors": 0,
-    "requests": 4570,
+    "requests": 4600,
     "subrequests": 0,
     "cpuTimeP50": 228,
     "cpuTimeP99": 957,
@@ -542,7 +542,7 @@
    {
     "script": "personal-watch",
     "errors": 0,
-    "requests": 2460,
+    "requests": 2470,
     "subrequests": 250,
     "cpuTimeP50": 332,
     "cpuTimeP99": 1237,
@@ -551,7 +551,7 @@
    {
     "script": "ultrastable-ultrastable",
     "errors": 0,
-    "requests": 1080,
+    "requests": 1090,
     "subrequests": 340,
     "cpuTimeP50": 2849,
     "cpuTimeP99": 49187,
@@ -578,9 +578,9 @@
    {
     "script": "ultrastable-tick",
     "errors": 0,
-    "requests": 640,
-    "subrequests": 170,
-    "cpuTimeP50": 15556,
+    "requests": 650,
+    "subrequests": 300,
+    "cpuTimeP50": 15580,
     "cpuTimeP99": 36651,
     "wallTimeP99": 8758378
    },
@@ -597,27 +597,27 @@
  },
  "workers_ai": {
   "window": "30d",
-  "neurons_total": 54603116.75211487,
+  "neurons_total": 54613329.78140798,
   "models": [
    {
     "model": "@cf/openai/gpt-oss-120b",
-    "requests": 60606,
-    "neurons": 19072761.48434475
+    "requests": 60603,
+    "neurons": 19073413.078918725
    },
    {
     "model": "@cf/zai-org/glm-5.3-flash",
-    "requests": 44551,
-    "neurons": 7769364.764198989
+    "requests": 44557,
+    "neurons": 7769127.062313795
    },
    {
     "model": "@cf/moonshotai/kimi-k2.7-code",
     "requests": 13438,
-    "neurons": 6958954.525612384
+    "neurons": 6961341.778297931
    },
    {
     "model": "@cf/moonshotai/kimi-k2.6",
-    "requests": 18822,
-    "neurons": 6291530.061810523
+    "requests": 18821,
+    "neurons": 6294059.249035865
    },
    {
     "model": "@cf/deepseek-ai/deepseek-v4.1-flash-1017",
@@ -631,18 +631,18 @@
    },
    {
     "model": "@cf/deepseek-ai/deepseek-v4-flash-0731",
-    "requests": 8534,
+    "requests": 8533,
     "neurons": 1250189.0467883646
    },
    {
     "model": "@cf/nvidia/nemotron-3-120b-a12b",
-    "requests": 5270,
-    "neurons": 1176592.3009999997
+    "requests": 5267,
+    "neurons": 1179283.3429999996
    },
    {
     "model": "@cf/deepseek-ai/deepseek-v4-pro-0813",
-    "requests": 3262,
-    "neurons": 453080.9219837189
+    "requests": 3260,
+    "neurons": 455612.2339954376
    },
    {
     "model": "@cf/zai-org/glm-5.2",
@@ -651,8 +651,8 @@
    },
    {
     "model": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
-    "requests": 2977,
-    "neurons": 327088.47896412015
+    "requests": 2978,
+    "neurons": 326905.0737004578
    },
    {
     "model": "@cf/openai/gpt-oss-20b",
@@ -661,13 +661,13 @@
    },
    {
     "model": "@cf/baai/bge-base-en-v1.5",
-    "requests": 17595,
-    "neurons": 223603.54442250004
+    "requests": 17593,
+    "neurons": 223597.34154249993
    },
    {
     "model": "@cf/qwen/qwen3-30b-a3b-fp8",
-    "requests": 1829,
-    "neurons": 92707.29862106964
+    "requests": 1827,
+    "neurons": 92552.56581009552
    },
    {
     "model": "@cf/qwen/qwen3.8-27b",
@@ -681,8 +681,8 @@
    },
    {
     "model": "@cf/qwen/qwen2.5-coder-32b-instruct",
-    "requests": 274,
-    "neurons": 70475.31818180898
+    "requests": 276,
+    "neurons": 70480.00181817262
    },
    {
     "model": "@cf/deepgram/aura-2-en",
@@ -692,7 +692,7 @@
    {
     "model": "@cf/zai-org/glm-4.7-flash",
     "requests": 4199,
-    "neurons": 23912.03889999995
+    "neurons": 23912.038899999952
    },
    {
     "model": "@cf/meta/llama-3.2-3b-instruct",
@@ -707,7 +707,7 @@
    {
     "model": "@cf/cloudflare/clef-flash",
     "requests": 1325,
-    "neurons": 4546.363324319999
+    "neurons": 4546.363324320001
    },
    {
     "model": "@cf/google/gemma-2b-it-lora",
@@ -717,12 +717,12 @@
    {
     "model": "@cf/deepseek-ai/deepseek-r1-distill-qwen-32b",
     "requests": 15,
-    "neurons": 1906.3781842506473
+    "neurons": 1906.3781842506469
    },
    {
     "model": "@cf/openai/whisper-large-v3-turbo",
     "requests": 47,
-    "neurons": 927.6417424470375
+    "neurons": 927.6417424470374
    },
    {
     "model": "@cf/qwen/qwq-32b",
@@ -757,7 +757,7 @@
    {
     "model": "@cf/aisingapore/gemma-sea-lion-v4-27b-it",
     "requests": 40,
-    "neurons": 90.94130799999999
+    "neurons": 90.94130800000002
    },
    {
     "model": "@cf/myshell-ai/melotts",
@@ -856,36 +856,36 @@
    "gateway": "default",
    "model": "@cf/openai/gpt-oss-120b",
    "provider": "workers-ai",
-   "requests": 856,
+   "requests": 859,
    "cachedRequests": 92,
-   "cost": 3.9219511124230184,
+   "cost": 3.9390560587120795,
    "erroredRequests": 0
   },
   {
    "gateway": "default",
    "model": "@cf/moonshotai/kimi-k2.6",
    "provider": "workers-ai",
-   "requests": 2526,
+   "requests": 2530,
    "cachedRequests": 0,
-   "cost": 3.8470280918569855,
+   "cost": 3.8748491513357464,
    "erroredRequests": 0
   },
   {
    "gateway": "default",
    "model": "@cf/nvidia/nemotron-3-120b-a12b",
    "provider": "workers-ai",
-   "requests": 583,
+   "requests": 587,
    "cachedRequests": 0,
-   "cost": 3.7280104949999986,
+   "cost": 3.757611957,
    "erroredRequests": 0
   },
   {
    "gateway": "default",
    "model": "@cf/deepseek-ai/deepseek-v4-pro-0813",
    "provider": "workers-ai",
-   "requests": 369,
+   "requests": 370,
    "cachedRequests": 0,
-   "cost": 3.635529489177228,
+   "cost": 3.663373921306134,
    "erroredRequests": 0
   },
   {
@@ -910,27 +910,27 @@
    "gateway": "qnfo-infra",
    "model": "@cf/moonshotai/kimi-k2.6",
    "provider": "workers-ai",
-   "requests": 234,
+   "requests": 230,
    "cachedRequests": 0,
-   "cost": 1.1664375548095702,
+   "cost": 1.1468516954498287,
    "erroredRequests": 0
   },
   {
    "gateway": "default",
    "model": "@cf/zai-org/glm-5.3-flash",
    "provider": "workers-ai",
-   "requests": 730,
+   "requests": 732,
    "cachedRequests": 38,
-   "cost": 0.637826753936529,
+   "cost": 0.6381909039170744,
    "erroredRequests": 3
   },
   {
    "gateway": "qnfo-infra",
    "model": "@cf/openai/gpt-oss-20b",
    "provider": "workers-ai",
-   "requests": 248,
+   "requests": 246,
    "cachedRequests": 0,
-   "cost": 0.6234534765459,
+   "cost": 0.6172426827567001,
    "erroredRequests": 0
   },
   {
@@ -946,27 +946,27 @@
    "gateway": "qnfo-infra",
    "model": "@cf/deepseek-ai/deepseek-v4-flash-0731",
    "provider": "workers-ai",
-   "requests": 263,
+   "requests": 259,
    "cachedRequests": 1,
-   "cost": 0.5300999542942049,
+   "cost": 0.5180831146030427,
    "erroredRequests": 0
   },
   {
    "gateway": "qnfo-infra",
    "model": "@cf/openai/gpt-oss-120b",
    "provider": "workers-ai",
-   "requests": 65,
+   "requests": 63,
    "cachedRequests": 0,
-   "cost": 0.33744761717224114,
+   "cost": 0.32627326509094234,
    "erroredRequests": 0
   },
   {
    "gateway": "qnfo-infra",
    "model": "@cf/zai-org/glm-5.3-flash",
    "provider": "workers-ai",
-   "requests": 61,
+   "requests": 60,
    "cachedRequests": 1,
-   "cost": 0.0894324477081299,
+   "cost": 0.08766649754333497,
    "erroredRequests": 0
   },
   {
@@ -1002,15 +1002,15 @@
    "provider": "workers-ai",
    "requests": 110,
    "cachedRequests": 0,
-   "cost": 0.020754250682860614,
+   "cost": 0.020754250682860617,
    "erroredRequests": 0
   },
   {
    "gateway": "default",
    "model": "@cf/baai/bge-base-en-v1.5",
    "provider": "workers-ai",
-   "requests": 1507,
-   "cachedRequests": 648,
+   "requests": 1506,
+   "cachedRequests": 647,
    "cost": 0.012728429999999997,
    "erroredRequests": 0
   },
@@ -1029,7 +1029,7 @@
    "provider": "workers-ai",
    "requests": 53,
    "cachedRequests": 0,
-   "cost": 0.008732199474573139,
+   "cost": 0.008732199474573136,
    "erroredRequests": 0
   },
   {
@@ -1054,7 +1054,7 @@
    "gateway": "default",
    "model": "@cf/zai-org/glm-4.7-flash",
    "provider": "workers-ai",
-   "requests": 2034,
+   "requests": 2037,
    "cachedRequests": 0,
    "cost": 0,
    "erroredRequests": 0
@@ -1166,13 +1166,13 @@
   {
    "gateway": "default",
    "model": "@cf/moonshotai/kimi-k2.6",
-   "requests_7d": 2526,
+   "requests_7d": 2530,
    "logs": []
   },
   {
    "gateway": "default",
    "model": "@cf/zai-org/glm-4.7-flash",
-   "requests_7d": 2034,
+   "requests_7d": 2037,
    "logs": []
   }
  ]
