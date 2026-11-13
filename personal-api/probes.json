@@ -42,6 +42,17 @@
         "function mindCard",
         "Go deeper"
       ]
+    },
+    {
+      "url": "https://me.q08.org/companion",
+      "status": 200,
+      "contains": [
+        "/companion/api/chat/latest",
+        "Voice is switched off for this site"
+      ],
+      "absent": [
+        "The microphone is blocked for this site. Tap the lock icon"
+      ]
     }
   ]
 }
