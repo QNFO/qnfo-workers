@@ -9,7 +9,7 @@
 // JOBSEARCH-CV-1 (1.5.0): the CV is part of this worker (page /cv): a yes/no interview that builds the claim bank, review of unconfirmed claims, roles, achievements and publications edited in D1, a resume per job (summary, roles, selected work, education, skills) and a cover note, history and backup. The search is tied to that bank (evidence the owner can back up weighs more; what the CV lacks is shown as a gap), decided postings (rejected, applied, approved) never come back under another id, rejections carry a reason the search learns from, and a wider net: stretch matches outside the stated preferences, more boards and aggregators.
 // Routes: GET / (web UI) | GET /api | GET /api/matches | GET /api/matches/:id | GET /api/runs | GET /api/ledger | POST /api/run | POST /api/matches/:id/status | GET /health
 // Port of the jobsearch/ Python modules (tests: jobsearch/test_jobsearch.py, qnfo-jobsearch/worker.test.mjs).
-var VERSION = "1.30.2-codeagent";
+var VERSION = "1.31.0-codeagent";
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -335,6 +335,7 @@ const LEDGER = {
 
 // ------------------------------------------------------------------ operations layer (JOBSEARCH-OPS-1)
 const OWNER_EMAIL = LEDGER.person.sign_in_email || LEDGER.person.email;
+const OWNER_EMAIL_2 = "rwnquni@gmail.com";
 let LEDGER_VERIFIED_ON = LEDGER.ledger_verified_on || "2026-10-01";
 const SESSION_MS = 12 * 3600 * 1000, CODE_MS = 15 * 60 * 1000, CODE_MAX_PER_HOUR = 6, CODE_MIN_GAP_MS = 60 * 1000, CODE_MAX_TRIES = 5;
 const DDL = [
@@ -2982,12 +2983,18 @@ async function authRequest(env) {
   const code = String(crypto.getRandomValues(new Uint32Array(1))[0] % 1000000).padStart(6, "0");
   const salt = randHex(8);
   await env.JOBS_DB.prepare("INSERT INTO jobsearch_codes (code_hash, salt, created_ms, expires_ms) VALUES (?1,?2,?3,?4)").bind(await sha256hex(salt + code), salt, now, now + CODE_MS).run();
-  try {
-    const r = await env.EMAIL.fetch("https://qnfo-email/send", { method: "POST", headers: { "content-type": "application/json" },
-      body: JSON.stringify({ to: OWNER_EMAIL, subject: "Job matches sign-in code", body: `Your sign-in code for the job matches page is ${code}. It expires in 15 minutes. If you did not ask for it, ignore this message.`, notify: true }) });
-    if (!r.ok) { logErr("auth-mail", "send HTTP " + r.status); return [502, { error: "the code could not be e-mailed (HTTP " + r.status + ")" }]; }
-  } catch (e) { logErr("auth-mail", e); return [502, { error: "the code could not be e-mailed" }]; }
-  return [200, { ok: true, sent: true, to: maskedOwner(), expires_minutes: 15 }];
+  // CODE-MAIL-BOTH-1 (2026-11-13): the code goes to both owner addresses, Gmail first. The Outlook address was soft-bounced and suppressed by Cloudflare Email Sending,
+  // so a send it accepted never arrived; one accepted send is enough to answer ok.
+  let okTo = 0, lastStatus = 0;
+  for (const to of [OWNER_EMAIL_2, OWNER_EMAIL]) {
+    try {
+      const r = await env.EMAIL.fetch("https://qnfo-email/send", { method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ to, subject: "Job matches sign-in code", body: `Your sign-in code for the job matches page is ${code}. It expires in 15 minutes. If you did not ask for it, ignore this message.`, notify: true }) });
+      if (r.ok) okTo++; else { lastStatus = r.status; logErr("auth-mail", "send HTTP " + r.status); }
+    } catch (e) { logErr("auth-mail", e); }
+  }
+  if (!okTo) return [502, { error: "the code could not be e-mailed" + (lastStatus ? " (HTTP " + lastStatus + ")" : "") }];
+  return [200, { ok: true, sent: true, to: maskedOwner() + " and r***@gmail.com", expires_minutes: 15 }];
 }
 async function authVerify(env, code) {
   await ensure(env);
