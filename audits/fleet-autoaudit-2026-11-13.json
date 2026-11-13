@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-11-13 00:04:21",
+  "audited_at": "2026-11-13 08:42:10",
   "d1_write_failures": [],
   "d1_writes_ok": 7,
   "guard": {
@@ -58,7 +58,7 @@
         "worker": "ultrastable-site"
       },
       {
-        "http": 404,
+        "http": 200,
         "version": null,
         "worker": "ultrastable-tick"
       },
@@ -113,10 +113,10 @@
     },
     "ultrastable-tick": {
       "before": null,
-      "http": 404,
+      "http": 200,
       "live": null,
       "match": 0,
-      "note": "UNMANAGED_NO_HEALTH",
+      "note": "UNMANAGED_OK",
       "worker": "ultrastable-tick"
     },
     "ultrastable-ultrastable": {
