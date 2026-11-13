@@ -296,7 +296,7 @@ function clampMaxTokens(requested, isReason) {
 __name(clampMaxTokens, "clampMaxTokens");
 __name2(clampMaxTokens, "clampMaxTokens");
 __name22(clampMaxTokens, "clampMaxTokens");
-var VERSION = "4.45.6";
+var VERSION = "4.45.7";
 // 4.37.2 KERNEL-PERSONAL-PRIVACY-1: preserve all ten registered reply categories across the content-free telemetry boundary.
 // 4.37.1 KERNEL-PERSONAL-PRIVACY-1: classify twin replies inside the personal plane; AUDIT receives only fixed categories and random event ids, never reply text or excerpts.
 // 4.37.0 KERNEL-EVERYWHERE-1 (2026-11-06, owner directive "IMPLEMENT EVERYWHERE ACROSS ALL AI APPS AND SERVICES AND SURFACES", pillar personal): the twin SYSTEM_PROMPT carries the DOCTRINE-1 kernel 8.2.1 reply recognitions (KERNEL-REPLY-4): end every reply on the answer or result, never on a question, conditional offer or menu; ambiguity gets a stated assumption; a refusal or limit with its reason is a disposition stated declaratively; reversible tool actions are taken and reported in the same reply, and a requested change is made with the tool, not described. Each twin reply is also mirrored to qnfo-audit.personal_replies so the kernel false-stop scan covers this surface. prior 4.36.2
@@ -4446,14 +4446,25 @@ async function processItem(env, deps, row) {
 }
 async function cmp_checkin(env, deps, { text }) {
   if (!text || typeof text !== "string") throw new Error("checkin text required");
+  // Same crisis handling as the check-in route: surface the crisis level when present.
+  const sig = crisisSignal(text);
   const id = "chk-" + Date.now();
-  // Insert a check‑in row; venue placeholder null.
+  // Attempt to extract the nearest place from the free-form text ("at a jazz club").
+  let venue = null;
+  const venueMatch = text.match(/\bat (?:a|an|the)\s+([^.,;!?]+)/i);
+  if (venueMatch && venueMatch[1]) {
+    venue = venueMatch[1].trim().slice(0, 120) || null;
+  }
+  // Insert a check-in row with the extracted venue when one is present.
   await env.PERSONAL.prepare(
     "INSERT INTO cmp_feed (id, title, venue, kind, day, state) VALUES (?,?,?,?,?,?)"
   )
-    .bind(id, text.slice(0, 120), null, "cmp-checkin", nowIso().slice(0, 10), "saved")
+    .bind(id, text.slice(0, 120), venue, "cmp-checkin", nowIso().slice(0, 10), "saved")
     .run();
-  return { ok: true, id };
+  const res = { ok: true, id };
+  if (sig.level >= 1) res.crisis_level = sig.level;
+  if (sig.level >= 2) res.crisis = crisisText(await loadCfg(env));
+  return res;
 }
 async function cmp_insights(env, deps, { limit = 10 } = {}) {
   const rows = await all(env.PERSONAL, "SELECT * FROM cmp_insights ORDER BY ts DESC LIMIT ?", limit);
@@ -4540,6 +4551,34 @@ async function companionTick(env, deps, opts) {
       }
     })();
   })();
+  // OWNER-ASK-2026-11-12-voice-input-mic-failing-duplicate-mic-icons
+  // Server-side health check for the speech-to-text path so failures are caught proactively.
+  (async () => {
+    if (!env.AUDIT) return;
+    try {
+      if (typeof env.speechToTextHealth === "function") await env.speechToTextHealth();
+    } catch (e) {
+      const title = "OWNER-ASK-2026-11-12-voice-input-mic-failing-duplicate-mic-icons";
+      const desc = "Speech-to-text health check failed: " + String(e);
+      const ms = Date.now();
+      await env.AUDIT.prepare(
+        "INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at, predicate_id) VALUES (?,?,?,?,?,?,?,?,?)"
+      )
+        .bind(
+          title,
+          desc + "\ncode-task: repo=qnfo-workers path=personal-api/companion.js\ncode-probe: {\"paths\": [\"personal-api/companion.js\"], \"contains\": \"OWNER-ASK-2026-11-12-voice-input-mic-failing-duplicate-mic-icons\"}",
+          "session",
+          "reliability",
+          "high",
+          "open",
+          ms,
+          ms,
+          "OWNER-ASK-2026-11-12-voice-input-mic-failing-duplicate-mic-icons"
+        )
+        .run();
+    }
+  })();
+
   // COMPANION-FORYOU-5
   // Accuracy audit for “For you” cards: verify date matches source excerpt.
   (async () => {

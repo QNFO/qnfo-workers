@@ -2531,14 +2531,25 @@ export async function processItem(env, deps, row) {
 }
 export async function cmp_checkin(env, deps, { text }) {
   if (!text || typeof text !== "string") throw new Error("checkin text required");
+  // Same crisis handling as the check-in route: surface the crisis level when present.
+  const sig = crisisSignal(text);
   const id = "chk-" + Date.now();
-  // Insert a check‑in row; venue placeholder null.
+  // Attempt to extract the nearest place from the free-form text ("at a jazz club").
+  let venue = null;
+  const venueMatch = text.match(/\bat (?:a|an|the)\s+([^.,;!?]+)/i);
+  if (venueMatch && venueMatch[1]) {
+    venue = venueMatch[1].trim().slice(0, 120) || null;
+  }
+  // Insert a check-in row with the extracted venue when one is present.
   await env.PERSONAL.prepare(
     "INSERT INTO cmp_feed (id, title, venue, kind, day, state) VALUES (?,?,?,?,?,?)"
   )
-    .bind(id, text.slice(0, 120), null, "cmp-checkin", nowIso().slice(0, 10), "saved")
+    .bind(id, text.slice(0, 120), venue, "cmp-checkin", nowIso().slice(0, 10), "saved")
     .run();
-  return { ok: true, id };
+  const res = { ok: true, id };
+  if (sig.level >= 1) res.crisis_level = sig.level;
+  if (sig.level >= 2) res.crisis = crisisText(await loadCfg(env));
+  return res;
 }
 export async function cmp_insights(env, deps, { limit = 10 } = {}) {
   const rows = await all(env.PERSONAL, "SELECT * FROM cmp_insights ORDER BY ts DESC LIMIT ?", limit);
@@ -2625,6 +2636,34 @@ export async function companionTick(env, deps, opts) {
       }
     })();
   })();
+  // OWNER-ASK-2026-11-12-voice-input-mic-failing-duplicate-mic-icons
+  // Server-side health check for the speech-to-text path so failures are caught proactively.
+  (async () => {
+    if (!env.AUDIT) return;
+    try {
+      if (typeof env.speechToTextHealth === "function") await env.speechToTextHealth();
+    } catch (e) {
+      const title = "OWNER-ASK-2026-11-12-voice-input-mic-failing-duplicate-mic-icons";
+      const desc = "Speech-to-text health check failed: " + String(e);
+      const ms = Date.now();
+      await env.AUDIT.prepare(
+        "INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at, predicate_id) VALUES (?,?,?,?,?,?,?,?,?)"
+      )
+        .bind(
+          title,
+          desc + "\ncode-task: repo=qnfo-workers path=personal-api/companion.js\ncode-probe: {\"paths\": [\"personal-api/companion.js\"], \"contains\": \"OWNER-ASK-2026-11-12-voice-input-mic-failing-duplicate-mic-icons\"}",
+          "session",
+          "reliability",
+          "high",
+          "open",
+          ms,
+          ms,
+          "OWNER-ASK-2026-11-12-voice-input-mic-failing-duplicate-mic-icons"
+        )
+        .run();
+    }
+  })();
+
   // COMPANION-FORYOU-5
   // Accuracy audit for “For you” cards: verify date matches source excerpt.
   (async () => {
