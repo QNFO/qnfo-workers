@@ -4,7 +4,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 export const BEGIN = "// FORECAST-ENGINE-1:BEGIN (sourced from forecast-engine.mjs by inline-forecast-engine.mjs; do not edit inside worker.js)";
 export const END = "// FORECAST-ENGINE-1:END";
-const EXPORTS = ["tick", "plan", "renderPage", "latestRows", "ensureSchema", "MODELS", "LIMITS", "FE_VERSION", "storyData", "renderStory", "renderTrackRecord", "flowHtml", "stageScores", "siteTop", "VP_CSS", "NAV", "forecastData", "renderForecast", "ledgerData", "renderLedger", "pmStatus", "productManager", "clockStatus", "feedXml", "sitemapXml"];
+const EXPORTS = ["tick", "plan", "renderPage", "latestRows", "ensureSchema", "MODELS", "LIMITS", "FE_VERSION", "storyData", "renderStory", "renderTrackRecord", "flowHtml", "stageScores", "siteTop", "VP_CSS", "NAV", "forecastData", "renderForecast", "ledgerData", "renderLedger", "pmStatus", "productManager", "clockStatus", "improvesData", "renderImproves", "feedXml", "sitemapXml"];
 export function block() {
   const src = readFileSync(new URL("./forecast-engine.mjs", import.meta.url), "utf8").replace(/\r\n/g, "\n")
     .replace(/^export (async function|function|const) /gm, "$1 ").trimEnd();

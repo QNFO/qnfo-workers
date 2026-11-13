@@ -62,6 +62,13 @@
         "\"research\":",
         "\"competitors\":"
       ]
+    },
+    {
+      "url": "https://q08-prediction-markets.q08.workers.dev/improves",
+      "contains": [
+        "A system that rewrites itself toward a score",
+        "Every change it has made"
+      ]
     }
   ]
 }
