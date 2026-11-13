@@ -10386,7 +10386,7 @@ var AgenticOpsExec = class extends DurableObject {
           const res = (fn.name === "ops_d1_query" && ++_d1Reads > OPS_D1_RUN_BUDGET)
             ? { text: JSON.stringify({ ok: false, error: "D1 read budget for this run is spent (" + OPS_D1_RUN_BUDGET + " queries). Stop reading: make the change now with ship_change, or report the result you already have." }) }
             : await opsAgentTool(this.env, fn.name, fn.arguments, userContent, 16e3, conversationId);
-          if (fn.name === "ship_change" || fn.name === "github_pr" || fn.name === "github_file_write") _shipped = true;
+          if ((fn.name === "ship_change" || fn.name === "github_pr" || fn.name === "github_file_write") && /"ok"\s*:\s*true/.test(String(res && res.text || ""))) _shipped = true; // only a successful call counts
           const tMsg = { role: "tool", tool_call_id: tc.id, name: fn.name, content: res.text };
           history.push(tMsg);
           messages.push(tMsg);

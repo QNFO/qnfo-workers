@@ -167,7 +167,7 @@ const cookieOf = (r) => { const c = r.headers.get("Set-Cookie") || ""; const m =
   const { env, db } = mk({ env: { SEND_EMAIL: m.SEND_EMAIL } });
   await postW(env, "/api/cmd/code", {});
   for (let i = 0; i < 8; i++) { db.prepare("UPDATE owner_codes SET created_ms = created_ms - 61000").run(); await postW(env, "/api/cmd/code", {}); }
-  ok(m.sent.length === 12, "G22 at most 6 codes an hour (" + m.sent.length + ")");
+  ok(m.sent.length === 12, "G22 at most 6 code requests an hour, two e-mails each (" + m.sent.length + ")");
   for (let i = 0; i < 12; i++) await postW(env, "/api/cmd/verify", { code: String(100000 + i) });
   const tries = db.prepare("SELECT MAX(tries) t FROM owner_codes").get().t;
   ok(tries >= 5, "G23 wrong tries are counted (" + tries + ")");
