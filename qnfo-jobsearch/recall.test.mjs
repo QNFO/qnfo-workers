@@ -84,7 +84,7 @@ ok((await call("/api/matches?status=mine"))[1].count === 1 && (await call("/api/
 await w.scheduled({}, env, ctxStub); await settle();
 ok((await call("/api/matches"))[1].count === 0, "the next run does not bring it back");
 
-const page = await (await w.fetch(new Request("https://x/"), env, ctxStub)).text();
+const page = await (await w.fetch(new Request("https://x/matches"), env, ctxStub)).text();
 ok(page.includes('id="recallbtn"') && page.includes("function recallGate") && page.includes('value="mine"') && page.includes("Not for me"), "the page has the questions, the gate and the two views");
 const api = (await call("/api"))[1];
 ok(api.routes["GET /api/recall?match="] && api.routes["POST /api/recall/answer"], "the API index lists the recall routes");
