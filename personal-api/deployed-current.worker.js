@@ -296,7 +296,7 @@ function clampMaxTokens(requested, isReason) {
 __name(clampMaxTokens, "clampMaxTokens");
 __name2(clampMaxTokens, "clampMaxTokens");
 __name22(clampMaxTokens, "clampMaxTokens");
-var VERSION = "4.45.7";
+var VERSION = "4.45.8";
 // 4.37.2 KERNEL-PERSONAL-PRIVACY-1: preserve all ten registered reply categories across the content-free telemetry boundary.
 // 4.37.1 KERNEL-PERSONAL-PRIVACY-1: classify twin replies inside the personal plane; AUDIT receives only fixed categories and random event ids, never reply text or excerpts.
 // 4.37.0 KERNEL-EVERYWHERE-1 (2026-11-06, owner directive "IMPLEMENT EVERYWHERE ACROSS ALL AI APPS AND SERVICES AND SURFACES", pillar personal): the twin SYSTEM_PROMPT carries the DOCTRINE-1 kernel 8.2.1 reply recognitions (KERNEL-REPLY-4): end every reply on the answer or result, never on a question, conditional offer or menu; ambiguity gets a stated assumption; a refusal or limit with its reason is a disposition stated declaratively; reversible tool actions are taken and reported in the same reply, and a requested change is made with the tool, not described. Each twin reply is also mirrored to qnfo-audit.personal_replies so the kernel false-stop scan covers this surface. prior 4.36.2
@@ -5211,7 +5211,8 @@ function companionTools(deps) {
     cmp_helps: T("Companion: what has helped Rowan before, from their own activity ratings, plus their activity bank", {}, async (env) => { await ensureSchema(env.PERSONAL); return Object.assign(await whatHelps(env, 90), { bank: await activityBank(env) }); })
   };
 }
-const TOOL_APPENDIX_LINE = " cmp_foryou {}; cmp_capture {text}; cmp_mood {score,energy?,tags?,note?}; cmp_next {energy?}; cmp_action_add {title,context?,energy?,minutes?,project?,due?}; cmp_action_done {id}; cmp_card_add {front,back}; cmp_cards_due {}; cmp_card_review {id,rating}; cmp_today {}; cmp_dashboard {}; cmp_activity {title,pleasure?,mastery?,category?}; cmp_helps {}; cmp_interest {topic,like?}; cmp_source_add {name,url,kind?}; cmp_feed_refresh {days?}; cmp_ops_status {}; cmp_ops_issue {title,detail,priority?,path?}.";
+const TOOL_APPENDIX_LINE = " cmp_foryou {}; cmp_capture {text}; cmp_mood {score,energy?,tags?,note?}; cmp_next {energy?}; cmp_action_add {title,context?,energy?,minutes?,project?,due?}; cmp_action_done {id}; cmp_card_add {front,back}; cmp_cards_due {}; cmp_card_review {id,rating}; cmp_today {}; cmp_dashboard {}; cmp_activity {title,pleasure?,mastery?,category?}; cmp_helps {}; cmp_interest {topic,like?}; cmp_source_add {name,url,kind?}; cmp_feed_refresh {days?}; cmp_ops_status {}; cmp_ops_issue {title,detail,priority?,path?}."
+// OWNER-ASK-2026-11-12-no-email-delete-dismiss-capability-repeated-unwant: add email_delete/email_dismiss tools and Today-list dismissal action;
 
 // ---------------------------------------------------------------- Durable Object hooks (PersonalTwinAgent instance "companion")
 
