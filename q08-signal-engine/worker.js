@@ -37,7 +37,7 @@
 // Q08-ASCII-SOURCE-1 (2026-10-01): this file is ASCII-only; every typographic character is a \uXXXX escape. The deploy path
 // double-encoded raw UTF-8, so live pages read "... \u00e2 q08" and posts "\u00e2\u0080\u0094". Keep new literals escaped.
 // VERSION-NOTES-MOVED-1: release notes live in the block below
-var VERSION = "0.55.0";
+var VERSION = "0.56.0";
 /* 0.43.0 Q08-TICK-ALLOWANCE-1 (2026-11-04, pillar cost; minor: the engine now decides on its own whether a tick starts an attempt; BUDGET-SOFT-ROUTE-1, attempts slow down and never stop): ai_call_counters showed 119,552, 129,547 and 110,450 neurons on 2026-11-01..03 against the 50,000 target (ops_config q08_daily_neurons) because q08Budget() only steered the first writer model and nothing bounded the attempts a tick starts (40 a day, the attempt cap, at about 2,760 neurons each). Now the :00 cron and the :30 stall retry go through governedGenerate: tick k of 48 starts an attempt only while the day is under the pace line budget x (k + 1) / 48, an essay after a forecast attempt that spent model calls starts only while the day is still under it, and 150 minutes without an attempt starts one whatever the line says (8 a day at least). No row is written for a tick that waits. The writer gate, reader panels, fact-check, final read and accuracy audit are unchanged, and an attempt already started runs all its rounds. ops_config q08_tick_governor = off restores the old behaviour. tick-allowance.test.mjs replays a UTC day. */
 /* 0.42.0 RM-FORECAST-UPDATE-SCORING-1 (#5578; research): score the last valid update before the horizon with the resolved outcome. */
 /* 0.41.6 FORECAST-CALIBRATION-BUCKET-COVERAGE-1 (#5576, charter pillar research; patch): calibration buckets include probabilities across the full [0,1] range, including the tails, rather than silently omitting forecasts below 5% or above 96%. */
@@ -255,6 +255,33 @@ function hoursSince(t, nowMs) {
   var ms = typeof t === "number" ? t : Date.parse(String(t));
   if (!isFinite(ms) || ms > nowMs + 60000) return null;
   return Math.round(Math.max(0, nowMs - ms) / 360000) / 10;
+}
+// Q08-FAMILY-PM-1: the counters the q08 growth product managers read (qnfo-audit product_growth_counters, migrations/2026-11-13-q08-family-pm.sql).
+// Signals and reports come from this worker's own D1; the markets counters come from q08-prediction-markets' public /api/pm through the PM binding.
+async function writeGrowthCounters(env) {
+  if (!env.AUDIT) return 0;
+  var now = nowIso(), n = 0, vals = [];
+  async function one(sql) { try { var r = await env.DB.prepare(sql).first(); return r ? Number(r.n) : null; } catch (e) { console.error(JSON.stringify({ evt: "q08-signal-engine:growthCounters:caught", error: String((e && e.message) || e).slice(0, 160) })); return null; } }
+  var wk = new Date(Date.now() - 7 * 86400000).toISOString(), wk2 = new Date(Date.now() - 14 * 86400000).toISOString();
+  var p1 = await one("SELECT COUNT(*) n FROM published_pieces WHERE published_at >= '" + wk + "'"), p0 = await one("SELECT COUNT(*) n FROM published_pieces WHERE published_at >= '" + wk2 + "' AND published_at < '" + wk + "'");
+  if (p1 != null) vals.push(["q08-signals", "q08_pieces_published_7d", p1, p0]);
+  var s1 = await one("SELECT COUNT(*) n FROM signal_log WHERE created_at >= '" + wk + "'"), s0 = await one("SELECT COUNT(*) n FROM signal_log WHERE created_at >= '" + wk2 + "' AND created_at < '" + wk + "'");
+  if (s1 != null) vals.push(["q08-signals", "q08_signals_read_7d", s1, s0]);
+  if (env.PM && typeof env.PM.fetch === "function") {
+    try {
+      var r = await env.PM.fetch("https://pm.internal/api/pm"), j = r.ok ? await r.json() : null;
+      if (j) {
+        if (typeof j.forecasts_7d === "number") vals.push(["q08-markets", "q08m_forecasts_7d", j.forecasts_7d, null]);
+        if (j.traffic && typeof j.traffic.pageviews_7d === "number") vals.push(["q08-markets", "q08m_pageviews_7d", j.traffic.pageviews_7d, j.traffic.pageviews_prev_7d == null ? null : j.traffic.pageviews_prev_7d]);
+        if (typeof j.disagree === "number") vals.push(["q08-markets", "q08m_calls_with_edge", j.disagree, null]);
+      }
+    } catch (e) { console.error(JSON.stringify({ evt: "q08-signal-engine:growthCounters:pm", error: String((e && e.message) || e).slice(0, 160) })); }
+  }
+  for (var i = 0; i < vals.length; i++) {
+    var w = await env.AUDIT.prepare("INSERT INTO product_growth_counters (product, metric, value, prev, read_at, source) VALUES (?1, ?2, ?3, ?4, ?5, 'q08-signal-engine') ON CONFLICT(product, metric) DO UPDATE SET value = ?3, prev = ?4, read_at = ?5, source = 'q08-signal-engine'").bind(vals[i][0], vals[i][1], vals[i][2], vals[i][3], now).run().catch(function () { return null; });
+    if (w) n++;
+  }
+  return n;
 }
 async function writeOwnMetrics(env) {
   if (!env.AUDIT) return 0;
@@ -5631,6 +5658,25 @@ async function turnstileVerify(env, token, ip, action) {
 // END TURNSTILE-EDGE-1
 var Q08_CSS = '<style>.q08-mark{font:600 1.15rem/1 var(--q-serif);letter-spacing:-.01em;text-decoration:none;color:var(--q-ink);display:flex;align-items:center;min-height:24px;gap:10px}.q08-mark b{color:var(--q-accent);font-weight:600}.q08-mark small{font:400 var(--q-fs-sm)/1 var(--q-sans);color:var(--q-muted)}.q08-hero{padding:56px 0 24px;max-width:760px}.q08-hero h1{font:500 clamp(2rem,4.2vw,3.1rem)/1.08 var(--q-serif);letter-spacing:-.02em;margin:0 0 16px}.q08-feed{max-width:760px}.q08-piece{max-width:var(--q-measure);padding:40px 0 24px}.q08-piece h1.q08-t{font:500 clamp(1.85rem,3.4vw,2.6rem)/1.12 var(--q-serif);letter-spacing:-.015em;margin:0 0 14px;text-wrap:balance}.q08-fb{margin:40px 0 0;padding:20px 0 0;border-top:1px solid var(--q-rule);display:flex;flex-wrap:wrap;gap:10px;align-items:center;font-size:var(--q-fs-sm);color:var(--q-muted)}.q08-fb span{margin-right:6px}.q08-refs{margin:40px 0 0;padding-top:20px;border-top:1px solid var(--q-rule)}.q08-refs h2{font:600 var(--q-fs-sm)/1.3 var(--q-sans);color:var(--q-muted);margin:0 0 12px}.q08-refs ul{margin:0;padding-left:1.2em;font-size:var(--q-fs-sm)}.q08-refs li{margin-bottom:6px}.q08-refs a{color:var(--q-accent)}.q08-msg{padding:72px 0;max-width:620px}.q08-sub form{display:flex;gap:8px;flex-wrap:wrap}.q08-sub .q-input{flex:1;min-width:220px}</style>';
 function q08Attr(s) { return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+// Q08-FAMILY-PM-1: every q08 product, its growth metrics against target, and what its growth product manager has filed, trialled and kept or reverted.
+async function familyData(env) {
+  if (!env.AUDIT) return { products: [], experiments: [] };
+  var rows = ((await env.AUDIT.prepare("SELECT product, role, signal_in, value_out, host, metric, label, target, value, prev, fresh FROM v_q08_family ORDER BY product, metric").all().catch(function () { return { results: [] }; })).results) || [];
+  var ex = ((await env.AUDIT.prepare("SELECT product, metric, kind, title, status, issue_id, baseline, predicted, measured, created_at, decided_at FROM growth_experiments WHERE product IN (SELECT product FROM product_family WHERE family = 'q08') ORDER BY id DESC LIMIT 40").all().catch(function () { return { results: [] }; })).results) || [];
+  var by = {};
+  rows.forEach(function (r) { var o = by[r.product] || (by[r.product] = { product: r.product, role: r.role, signal_in: r.signal_in, value_out: r.value_out, host: r.host, metrics: [] }); if (r.metric) o.metrics.push({ metric: r.metric, label: r.label, target: r.target, value: r.value, prev: r.prev, fresh: r.fresh }); });
+  return { products: Object.keys(by).map(function (k) { return by[k]; }), experiments: ex };
+}
+async function familyPage(env) {
+  var d = await familyData(env), E = q08Attr;
+  var cards = d.products.map(function (p) {
+    return '<section class="ds-card"><h3>' + E(p.role) + ' \u00b7 ' + E(p.product) + '</h3><p class="ds-muted">' + E(p.signal_in) + ' \u2192 ' + E(p.value_out) + '</p>' +
+      (p.metrics.length ? '<ul class="ds-rows">' + p.metrics.map(function (m) { var v = m.value == null ? "\u2013" : Math.round(m.value * 100) / 100; return "<li>" + E(m.label) + ": <b>" + E(v) + "</b> of " + E(m.target) + (m.fresh === 0 ? ' <small class="ds-muted">(counter is stale; the manager files a repair)</small>' : "") + "</li>"; }).join("") + "</ul>" : '<p class="ds-empty">No growth metric yet: the manager files one.</p>') + "</section>";
+  }).join("");
+  var exr = d.experiments.length ? '<div class="ds-more"><table style="width:100%;border-collapse:collapse"><thead><tr><th align=left>Product</th><th align=left>Change the manager asked for</th><th align=left>State</th></tr></thead><tbody>' + d.experiments.map(function (x) { return "<tr><td>" + E(x.product) + "</td><td>" + E(x.title || x.metric) + (x.measured != null ? "<br><small>predicted " + E(x.predicted) + ", measured " + E(x.measured) + "</small>" : "") + "</td><td>" + E(x.status) + "</td></tr>"; }).join("") + "</tbody></table></div>" : '<p class="ds-empty">No change has been filed yet. The growth manager picks each product\u2019s weakest metric every day and files the best-scoring change for the code loop; the first appears here when it does.</p>';
+  var body = '<main class="ds-main"><div class="ds-head"><h1>Who improves q08</h1><p>q08 is one program, signals to value, made of products that each turn a different signal into a different value. Each product has a growth product manager that reads its numbers hourly, picks the weakest metric, files a code change aimed at it with a prediction, and keeps the change only if the number moved. Nothing here is a person\u2019s job.</p></div>' + cards + "<h2>What the managers have asked for</h2>" + exr + '<p class="ds-muted">Live JSON: <a href="/api/managers">/api/managers</a>. Markets also runs its own daily manager: <a href="https://markets.q08.org/improves">how markets improves itself</a>.</p></main>';
+  return q08Page({ title: "Who improves q08 \u00b7 q08", canonical: ORIGIN + "/managers", active: "managers", description: "q08 is a program of signals-to-value products; each has a growth product manager that files, trials and keeps or reverts code changes against its own metrics." }, body);
+}
 function q08Page(o, body) {
   var t = q08Attr(o.title), d = q08Attr(o.description || "Explanatory essays on technology stories: what happened, and the system that made it happen.");
   var canon = o.canonical ? q08Attr(o.canonical) : "";
@@ -5669,7 +5715,7 @@ function q08Short(t, n) { t = String(t || ""); if (t.length <= n) return t; var 
 function q08Lede(md) { return q08Plain(String(md || "").replace(/^#+\s*.+\n?/m, "").replace(/^[ \t]*(?:#{1,6}|[-*]|>|\d+[.)])[ \t]+/gm, "")); }
 // VALUE-PIPELINE-1 (owner 2026-11-12): q08 is a signal-to-value pipeline, signals in, forecasts in the middle, value out, run in the open.
 // The front door shows the live pipeline first (numbers from q08-prediction-markets /api/story through the PM binding); the reports follow as the signals explained.
-var Q08_NAV = [["index", "/", "Pipeline"], ["markets", "https://markets.q08.org/", "Forecasts"], ["track", "https://markets.q08.org/track-record", "Track record"], ["reports", "/#reports", "Signal reports"], ["subscribe", "/subscribe", "Subscribe"]];
+var Q08_NAV = [["index", "/", "Pipeline"], ["markets", "https://markets.q08.org/", "Forecasts"], ["track", "https://markets.q08.org/track-record", "Track record"], ["reports", "/#reports", "Signal reports"], ["managers", "/managers", "Who improves it"], ["subscribe", "/subscribe", "Subscribe"]];
 function q08NavLinks(active) {
   return Q08_NAV.map(function (n) { return '<a href="' + n[1] + '"' + (n[0] === active ? ' aria-current="page"' : "") + ">" + n[2] + "</a>"; }).join("");
 }
@@ -6499,6 +6545,8 @@ async function q08Fetch(req, env, ctx) {
     }
 
     if (path === "/" + INDEXNOW_KEY + ".txt") return new Response(INDEXNOW_KEY, { headers: { "Content-Type": "text/plain; charset=utf-8" } });
+    if (path === "/managers") return new Response(await familyPage(env), { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "public, max-age=300" } });
+    if (path === "/api/managers") return json(await familyData(env));
     if (path === "/subscribe") return await handleSubscribe(req, env, url);
     if (path === "/confirm") { var t0 = url.searchParams.get("t")||""; await env.DB.prepare("UPDATE subscribers SET status='confirmed', confirmed_at=? WHERE token=? AND status!='unsubscribed'").bind(nowIso(), t0).run(); return html("<h2>Subscribed</h2><p>You are subscribed. The daily digest arrives each evening.</p>"); }
     if (path === "/unsubscribe") { var t1 = (url.searchParams.get("t")||"").trim(); if (!t1) return html("<h2>Invalid link</h2><p>No unsubscribe token provided.</p>", 400); var unsub = await env.DB.prepare("UPDATE subscribers SET status='unsubscribed' WHERE token=?").bind(t1).run(); return (unsub && unsub.meta && unsub.meta.changes > 0) ? html("<h2>Unsubscribed</h2><p>You have been removed from the daily digest.</p>") : html("<h2>Not found</h2><p>That unsubscribe link is invalid or already used.</p>", 404); }
@@ -6734,6 +6782,7 @@ async function q08Scheduled(controller, env, ctx) {
       // SIGNALS-ENGINE-2: the :30 tick fetches the next due sources too, so each source is read about hourly at twice the breadth.
       if ((await q08Mode(env)) === "signals") { ctx.waitUntil(signalsOnly(env).then(function () { return true; }, function () { return false; }).then(function (ok) { return q08Heartbeat(env, ok); })); return; }
       ctx.waitUntil(auditPublished(env, 3).catch(function (e) { console.error("q08 auditPublished failed: " + String(e && e.message || e).slice(0, 200)); })
+        .then(function () { return writeGrowthCounters(env).catch(function (e) { console.error("q08 writeGrowthCounters failed: " + String(e && e.message || e).slice(0, 200)); }); })
         .then(function () { return stallRetryDue(env); })
         .then(function (due) { if (due) return governedGenerate(env).then(function () { return stallDetector(env); }).then(function () { return writeOwnMetrics(env); }); })
         .then(function () { return true; }, function (e) { console.error("q08 stall retry failed: " + String(e && e.message || e).slice(0, 200)); return false; })
