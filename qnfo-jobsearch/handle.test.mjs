@@ -46,4 +46,15 @@ ok(p3.json.job && p3.json.job.go === "skip", "a coding-heavy backend role is adv
 let n3 = p3.json.next, g3 = 0;
 while (n3 && n3.type === "ask" && g3++ < 6) { const r = await call("/api/handle/act", { job: p3.json.job.id, act: "skip_questions" }); n3 = r.json.next; }
 ok(n3 && n3.type === "choice" && /skip/i.test(n3.prompt) && n3.options[0].value === "skip", "skip stays the lead option after the questions: " + JSON.stringify(n3));
+// LIVE-RELEASE-1: no live submission before the owner's one-time release
+const p4 = await call("/api/handle", { input: "AI Evaluation Researcher\nAcme Labs\nLocation: Amsterdam\nDesign evaluation methods for autonomous AI systems, AI governance, risk and assurance research.\nhttps://boards.greenhouse.io/acme/jobs/1234567" });
+await call("/api/handle/act", { job: p4.json.job.id, act: "skip_questions" });
+const ap = await call("/api/handle/act", { job: p4.json.job.id, act: "approve" });
+ok(ap.json.next && ap.json.next.options && ap.json.next.options[0] && ap.json.next.options[0].value === "release_live", "release card is offered once: " + JSON.stringify(ap.json.next).slice(0, 200));
+await env.JOBS_DB.prepare("INSERT OR REPLACE INTO jobsearch_meta (k, v, updated_at) VALUES ('autopilot_mode_greenhouse','submit','x')").run();
+const st = await call("/api/autopilot");
+ok(st.json.modes && st.json.modes.greenhouse === "dry", "a stored submit mode is still a dry run before the release: " + JSON.stringify(st.json.modes));
+await call("/api/handle/act", { job: p4.json.job.id, act: "release_live" });
+const st2 = await call("/api/autopilot");
+ok(st2.json.modes.greenhouse === "submit", "after the release the earned mode applies");
 console.log(fail ? fail + " failed" : "handle: all passed"); process.exit(fail ? 1 : 0);
