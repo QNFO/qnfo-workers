@@ -14933,7 +14933,8 @@ __name(slaEscalate, "slaEscalate");
 // Every 10 minutes the owner's own addresses are removed from the account's sending suppression list when the reason is a bounce. A complaint
 // (spam report) is left in place and counted. Nobody else's address is touched, and the opt-out tables in qnfo-audit are not read or written here.
 var OWNER_MAIL_ADDRS = ["rwnquni@outlook.com", "rwnquni@gmail.com", "rowan.quni@qnfo.org", "rwnquni@qnfo.org"];
-var OWNER_MAIL_CLEAR_REASONS = ["soft_bounce", "hard_bounce"];
+// Only a soft bounce (a 24 h deferral) is cleared: a hard bounce means the mailbox may really be dead, and clearing it each tick would hammer the provider.
+var OWNER_MAIL_CLEAR_REASONS = ["soft_bounce"];
 async function ownerMailUnsuppressTick(env, fetchFn) {
   var out = { cleared: [], kept: [], error: null };
   if (!env.CF_API_TOKEN) { out.error = "no CF_API_TOKEN"; return out; }
@@ -14941,10 +14942,16 @@ async function ownerMailUnsuppressTick(env, fetchFn) {
   var base = "https://api.cloudflare.com/client/v4/accounts/" + (env.CF_ACCOUNT_ID || "edb167b78c9fb901ea5bca3ce58ccc4b") + "/email/sending/suppressions";
   var H = { Authorization: "Bearer " + env.CF_API_TOKEN };
   try {
-    var r = await f(base + "?per_page=100", { headers: H, signal: AbortSignal.timeout(8e3) });
-    var j = await r.json();
-    if (!j || !j.success) { out.error = "list: " + String(j && j.errors && j.errors[0] && j.errors[0].message || r.status).slice(0, 120); return out; }
-    for (var row of j.result || []) {
+    var cursor = "", rowsAll = [];
+    for (var page = 0; page < 10; page++) {
+      var r = await f(base + "?per_page=100" + (cursor ? "&cursor=" + encodeURIComponent(cursor) : ""), { headers: H, signal: AbortSignal.timeout(8e3) });
+      var j = await r.json();
+      if (!j || !j.success) { out.error = "list: " + String(j && j.errors && j.errors[0] && j.errors[0].message || r.status).slice(0, 120); return out; }
+      rowsAll = rowsAll.concat(j.result || []);
+      cursor = j.result_info && j.result_info.next_cursor || "";
+      if (!cursor) break;
+    }
+    for (var row of rowsAll) {
       if (OWNER_MAIL_ADDRS.indexOf(String(row.email || "").toLowerCase()) < 0) continue;
       if (OWNER_MAIL_CLEAR_REASONS.indexOf(row.reason) < 0) { out.kept.push(row.reason); continue; }
       var d = await f(base + "/" + row.id, { method: "DELETE", headers: H, signal: AbortSignal.timeout(8e3) });
