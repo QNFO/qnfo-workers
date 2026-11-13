@@ -15,7 +15,7 @@
 //
 // Pure ESM, no imports: personal-companion inlines it (scripts/inline-pipeline-modules.mjs); tests load it directly.
 
-export const FLOW_VERSION = "1.3.0";
+export const FLOW_VERSION = "1.3.1";
 export const DIRECTIVE_ID = "FLOW-DIRECTIVE-1";
 export const DIRECTIVE = "Every workflow, in every product (Ultrastable, the Qniverse, jobs, outreach, resume, personal, research), declares its inflows, " +
   "outflows and bindings, and feeds its outcomes back through the signals engine so results change the next outputs. Each flow is a loop and is accounted for in code.";
@@ -247,6 +247,11 @@ export const FLOWS = [
     inflows: [{ signal: "fleet.heartbeat", via: b("d1", "clock_ticks (every clock must belong to a flow)") }],
     outflows: [{ signal: "fleet.issue", via: b("metric", "flow_open_loops, flow_unmapped_clocks -> analytics_metric_triggers -> agent_issues") }],
     feedback: "an open loop is a metric breach; the fleet closes it and the metric returns to 0" },
+  { id: "jobs-agent-sync", label: "Jobs agent source sync: rwnq8/jobs-agent to jobs.q08.org", scope: "personal", plane: "jobs", repo: "QNFO/qnfo-workers",
+    executor: b("gh-actions", "jobs-agent-sync.yml (push to qnfo-jobsearch/, hourly dispatch by the clock watchdog)"), clock: "jobs-agent-sync",
+    inflows: [{ signal: "fleet.issue", via: b("gh-actions", "rwnq8/jobs-agent worker/ commits (roadmap issues there) and qnfo-jobsearch/ commits from the code loop") }],
+    outflows: [{ signal: "fleet.deploy", via: b("gh-actions", "jobs-agent sync PR -> lane -> canonical-deploy.yml; reverse PRs merged on rwnq8/jobs-agent") }],
+    feedback: "a change on either side reaches the other within the hour; the deploy's /health VERSION and probes.json verify it, and a red run is a CLOCKWORK-jobs-agent-sync issue" },
   { id: "code-loop", label: "Code loop and ops executor", scope: "qniverse", plane: "fleet", worker: "qnfo-code-orchestrator",
     executor: b("workflow", "ops-exec-workflow (qnfo-ops)"), clock: null, clock_reason: "code_task_success_rate_30d and the merge lane are its beats",
     inflows: [{ signal: "fleet.issue", via: b("d1", "agent_issues with code-task lines") }],

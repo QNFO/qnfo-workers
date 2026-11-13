@@ -1,0 +1,43 @@
+name: jobs-agent-sync
+run-name: jobs-agent-sync ${{ github.event_name }}
+# JOBS-AGENT-SYNC-1 (2026-11-13, rwnq8/jobs-agent issue 1): rwnq8/jobs-agent is the source of qnfo-jobsearch (jobs.q08.org). This keeps
+# qnfo-jobsearch/ here, which the canonical deploy reads, equal to jobs-agent worker/ in both directions (scripts/jobs_agent_sync.sh):
+# a change made here is replayed onto jobs-agent, and jobs-agent is mirrored here as a pull request the lane merges and deploys.
+# Clock: qnfo-cloud-ops CLOCKWORK-1 loop jobs-agent-sync dispatches this hourly when it has not run; the daily schedule is the fallback.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'qnfo-jobsearch/**'
+  workflow_dispatch:
+  schedule:
+    - cron: '41 6 * * *'
+permissions:
+  contents: write
+  pull-requests: write
+concurrency:
+  group: jobs-agent-sync
+  cancel-in-progress: false
+jobs:
+  sync:
+    timeout-minutes: 10
+    # RUNNER-PIN-2: pinned to ubuntu-24.04 until an ubuntu-26.04 trial run is green.
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.QNFO_GH_PAT || github.token }}
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: rwnq8/jobs-agent
+          path: _jobs_agent
+          fetch-depth: 0
+          token: ${{ secrets.QNFO_GH_PAT || github.token }}
+      - name: Sync qnfo-jobsearch with rwnq8 jobs-agent
+        env:
+          GH_TOKEN: ${{ secrets.QNFO_GH_PAT || github.token }}
+          JA_TOKEN: ${{ secrets.QNFO_GH_PAT }}
+          BEFORE: ${{ github.event_name == 'push' && github.event.before || '' }}
+          AFTER: ${{ github.event_name == 'push' && github.event.after || '' }}
+        run: bash scripts/jobs_agent_sync.sh _jobs_agent "$BEFORE" "$AFTER"

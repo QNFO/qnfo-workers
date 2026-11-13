@@ -1563,7 +1563,6 @@ async function runPipeline(db, def, id, step, ctx = {}) {
       await db.prepare("UPDATE pipeline_runs SET status = 'done', output_json = ?, state_json = ?, stage = 'done', next_check_at = NULL, updated_at = ?, finished_at = ? WHERE id = ?")
         .bind(JSON.stringify(output).slice(0, 8000), JSON.stringify(state).slice(0, 8000), clock(), clock(), id).run();
       await evidence(db, id, def.name, "finish", true, { output_keys: Object.keys(output || {}) }, clock());
-await db.prepare("UPDATE flow_registry SET closed = 1, updated_at = ? WHERE id = 'research-run'").bind(clock()).run();
       return output;
     }));
     return { ok: true, status: "done", output: out };
@@ -1576,7 +1575,6 @@ await db.prepare("UPDATE flow_registry SET closed = 1, updated_at = ? WHERE id =
     const msg = String(e && e.message || e).slice(0, 500);
     await db.prepare("UPDATE pipeline_runs SET status = 'failed', error = ?, updated_at = ? WHERE id = ?").bind(msg, clock(), id).run();
     await evidence(db, id, def.name, def.stages[Math.min(i, def.stages.length - 1)].key, false, { error: msg }, clock());
-await db.prepare("UPDATE flow_registry SET closed = 1, updated_at = ? WHERE id = 'research-run'").bind(clock()).run();
     return { ok: false, status: "failed", error: msg };
   }
 }
@@ -2373,7 +2371,7 @@ var FR = (() => {
 //
 // Pure ESM, no imports: personal-companion inlines it (scripts/inline-pipeline-modules.mjs); tests load it directly.
 
-const FLOW_VERSION = "1.3.0";
+const FLOW_VERSION = "1.3.1";
 const DIRECTIVE_ID = "FLOW-DIRECTIVE-1";
 const DIRECTIVE = "Every workflow, in every product (Ultrastable, the Qniverse, jobs, outreach, resume, personal, research), declares its inflows, " +
   "outflows and bindings, and feeds its outcomes back through the signals engine so results change the next outputs. Each flow is a loop and is accounted for in code.";
@@ -2595,11 +2593,21 @@ const FLOWS = [
     inflows: [{ signal: "fleet.heartbeat", via: b("d1", "fleet_heartbeat, run tables, GitHub runs") }],
     outflows: [{ signal: "fleet.issue", via: b("d1", "clock_ticks, CLOCKWORK-<loop> agent_issues, repair dispatches") }],
     feedback: "a stopped or inaccurate clock is repaired; three bad ticks file an issue the code loop fixes" },
+  { id: "resource-registry", label: "Cloudflare resource registry", scope: "qniverse", plane: "fleet", worker: "qnfo-cloud-ops",
+    executor: b("cron", "qnfo-cloud-ops jobResourceRegistry hourly"), clock: null, clock_reason: "cloud_ops_events kind resource-registry is its beat (one row an hour)",
+    inflows: [{ signal: "fleet.heartbeat", via: b("external-api", "Cloudflare account, D1 analytics and worker bindings read with the account's own token") }],
+    outflows: [{ signal: "fleet.issue", via: b("d1", "cf_resource_registry, CF-RESOURCE-<verdict>-1 agent_issues; missing R2 buckets are created") }],
+    feedback: "a hot, unused, gone or dangling resource becomes an issue the code loop fixes, and the next hourly read shows the verdict return to ok" },
   { id: "flow-audit", label: "Flow audit (this registry)", scope: "qniverse", plane: "fleet", worker: "personal-companion",
     executor: b("cron", "personal-companion hourly FR.flowsTick"), clock: "companion-tick",
     inflows: [{ signal: "fleet.heartbeat", via: b("d1", "clock_ticks (every clock must belong to a flow)") }],
     outflows: [{ signal: "fleet.issue", via: b("metric", "flow_open_loops, flow_unmapped_clocks -> analytics_metric_triggers -> agent_issues") }],
     feedback: "an open loop is a metric breach; the fleet closes it and the metric returns to 0" },
+  { id: "jobs-agent-sync", label: "Jobs agent source sync: rwnq8/jobs-agent to jobs.q08.org", scope: "personal", plane: "jobs", repo: "QNFO/qnfo-workers",
+    executor: b("gh-actions", "jobs-agent-sync.yml (push to qnfo-jobsearch/, hourly dispatch by the clock watchdog)"), clock: "jobs-agent-sync",
+    inflows: [{ signal: "fleet.issue", via: b("gh-actions", "rwnq8/jobs-agent worker/ commits (roadmap issues there) and qnfo-jobsearch/ commits from the code loop") }],
+    outflows: [{ signal: "fleet.deploy", via: b("gh-actions", "jobs-agent sync PR -> lane -> canonical-deploy.yml; reverse PRs merged on rwnq8/jobs-agent") }],
+    feedback: "a change on either side reaches the other within the hour; the deploy's /health VERSION and probes.json verify it, and a red run is a CLOCKWORK-jobs-agent-sync issue" },
   { id: "code-loop", label: "Code loop and ops executor", scope: "qniverse", plane: "fleet", worker: "qnfo-code-orchestrator",
     executor: b("workflow", "ops-exec-workflow (qnfo-ops)"), clock: null, clock_reason: "code_task_success_rate_30d and the merge lane are its beats",
     inflows: [{ signal: "fleet.issue", via: b("d1", "agent_issues with code-task lines") }],
@@ -5828,7 +5836,7 @@ var __name22 = __name2;
 // line below (VERSION-LINE-NOTES-1, 2026-10-19). Its older trailing notes stay until length-lede.test.mjs stops pinning "LENGTH-LEDE-1" on that line.
 // VERSION-NOTES-MOVED-1: release notes live in the block below
 // W-META-1 (agent_issues 1002316/1002317/1002318): aiRunAttr records in_tok/out_tok/neurons per purpose.
-var VERSION = "1.62.2-codeagent";
+var VERSION = "1.62.3-codeagent";
 // 1.46.0 KERNEL-EVERYWHERE-1 (2026-11-06, owner directive "IMPLEMENT EVERYWHERE ACROSS ALL AI APPS AND SERVICES AND SURFACES", pillar personal): the travel planner CHAT_SYSTEM carries the DOCTRINE-1 kernel 8.2.1 reply recognitions (KERNEL-REPLY-4, scoped to the planner's one designed question): end on the plan or proposal, never a conditional offer or questionnaire; refusals and limits are dispositions with their reason; reversible steps are taken and reported in the same reply. prior 1.45.8-codeagent
 /* 1.44.14 COMPANION-LENGTH-HEADROOM-1 (issue 1000633, pillar personal; patch): repeated length failures alongside exhausted retry budgets expose too little headroom for model output variation. Length-only repairs now target 500 words below the unchanged ceiling while remaining inside each form's normal writer band. */
 /* 1.43.6 BP26-AI-ACT-ART50-1 and BP26-STRUCTURED-DATA-1 (2026-10-26, agent_issues 1000341 and 1000336, pillar core; patch): the visible AI-generated label of every reading.q08.org piece now has its machine-readable half. A piece page carries an Article JSON-LD block (headline, datePublished, url, an Organization as author, never an AI or invented persona, and creditText saying it was written by AI and that no human reviews pieces before they appear) and the index page a Blog block. Measured before: the reading pages carried the visible label and no JSON-LD at all. */

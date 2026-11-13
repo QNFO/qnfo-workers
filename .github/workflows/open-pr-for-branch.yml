@@ -25,5 +25,12 @@ jobs:
         run: |
           n=$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$BRANCH" --state open --json number --jq 'length')
           if [ "$n" = "0" ]; then
-            gh pr create --repo "$GITHUB_REPOSITORY" --head "$BRANCH" --base main --title "$BRANCH" --body "Opened by open-pr-for-branch (COMPANION-PR-1) for a session without a GitHub token. work-claim: unreachable (no fleet network); no other open PR touches this branch."
+            # OPEN-PR-RACE-1 (2026-11-13): a session that has a token opens its own pull request seconds after the push, so the list above can read 0 and the
+            # create then fails with "already exists" (run 43434633251 on #11514 stayed red and the PR merged over it). An existing PR is the goal, not a failure.
+            if ! out=$(gh pr create --repo "$GITHUB_REPOSITORY" --head "$BRANCH" --base main --title "$BRANCH" --body "Opened by open-pr-for-branch (COMPANION-PR-1) for a session without a GitHub token. work-claim: unreachable (no fleet network); no other open PR touches this branch." 2>&1); then
+              echo "$out"
+              if echo "$out" | grep -q 'already exists'; then echo "a pull request already exists for $BRANCH; nothing to do"; else exit 1; fi
+            else
+              echo "$out"
+            fi
           fi
