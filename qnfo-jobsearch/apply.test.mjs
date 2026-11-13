@@ -92,14 +92,14 @@ try {
 } finally { globalThis.fetch = realFetch; }
 
 // 5. both pages' scripts parse (a syntax slip in the template literal breaks the whole page)
-for (const path of ["/", "/cv"]) {
+for (const path of ["/matches", "/cv"]) {
   const body = await (await req(path)).text();
   const scripts = [...body.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1]);
   ok(scripts.length > 0, path + " has a script");
   for (const s of scripts) new vm.Script(s);
   ok(body.includes("function FILL()") || body.includes("async function FILL()"), path + " carries the fill bookmark");
 }
-const home = await (await req("/")).text();
+const home = await (await req("/matches")).text();
 ok(home.includes("Answers") && home.includes("Add a job from anywhere") && home.includes("One-click apply: set up once"), "home page shows the apply controls");
 // the bookmarklet itself parses and is a single line
 const bm = home.match(/async function FILL\(\)\{[\s\S]*?\n\}\nfunction bookmarkHref/);

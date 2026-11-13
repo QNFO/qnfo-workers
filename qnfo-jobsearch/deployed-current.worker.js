@@ -9,7 +9,7 @@
 // JOBSEARCH-CV-1 (1.5.0): the CV is part of this worker (page /cv): a yes/no interview that builds the claim bank, review of unconfirmed claims, roles, achievements and publications edited in D1, a resume per job (summary, roles, selected work, education, skills) and a cover note, history and backup. The search is tied to that bank (evidence the owner can back up weighs more; what the CV lacks is shown as a gap), decided postings (rejected, applied, approved) never come back under another id, rejections carry a reason the search learns from, and a wider net: stretch matches outside the stated preferences, more boards and aggregators.
 // Routes: GET / (web UI) | GET /api | GET /api/matches | GET /api/matches/:id | GET /api/runs | GET /api/ledger | POST /api/run | POST /api/matches/:id/status | GET /health
 // Port of the jobsearch/ Python modules (tests: jobsearch/test_jobsearch.py, qnfo-jobsearch/worker.test.mjs).
-var VERSION = "1.32.0-codeagent";
+var VERSION = "1.33.0-codeagent";
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -2066,6 +2066,7 @@ const ATS_RULES = [
   ["ashby", /^https?:\/\/jobs\.ashbyhq\.com\/[^\/]+\/[0-9a-f-]{20,}/i, (x) => x.replace(/[?#].*$/, "").replace(/\/application\/?$/, "") + "/application", true],
   ["workable", /^https?:\/\/apply\.workable\.com\/[^\/]+\/j\/[A-Z0-9]+/i, (x) => x.replace(/[?#].*$/, "").replace(/\/(apply)?\/?$/, "") + "/apply/", true],
   ["recruitee", /^https?:\/\/[^\/]+\.recruitee\.com\/o\/[^\/?#]+/i, (x) => x.replace(/[?#].*$/, "").replace(/\/c\/new\/?$/, "") + "/c/new", true],
+  ["gem", /^https?:\/\/jobs\.gem\.com\/[^\/]+\/[^\/?#]+/i, (x) => x.replace(/[?#].*$/, ""), false],
   ["smartrecruiters", /^https?:\/\/jobs\.smartrecruiters\.com\//i, (x) => x, false],
   ["workday", /myworkdayjobs\.com\//i, (x) => x, false],
 ];
@@ -3819,6 +3820,194 @@ async function autopilotStatus(env) {
   let cov = {}; try { cov = sourceCoverage(JSON.parse((await getMeta(env, "mission_probe")) || "{}")); } catch (e) { logErr("coverage", e); }
   return { on: env.AUTO_APPLY !== "off", modes: await autopilotModes(env), runner: AUTO_REPO + " .github/workflows/job-apply.yml", last_attempt: last ? last.ts : null, outcomes_30d: by, growth_knobs: knobs, rules: { min_score: AUTO_MIN_SCORE, per_day: AUTO_PER_DAY, one_per_company_days: AUTO_COMPANY_DAYS, promote_after_rehearsals: AUTO_PROMOTE_AFTER }, sources: cov };
 }
+const HANDLE_CSS = ".hd{max-width:720px}.hd-feed{list-style:none;margin:16px 0;padding:0;display:flex;flex-direction:column;gap:12px}.hd-feed li{padding:12px 16px;border-radius:12px;background:var(--ds-surface-2,var(--ds-surface));border:1px solid var(--ds-border)}.hd-feed li p{margin:0 0 8px}.hd-you{align-self:flex-end;max-width:85%;background:var(--ds-accent-soft,var(--ds-surface-2))!important}.hd-go{border-left:4px solid var(--ds-good)!important}.hd-skip{border-left:4px solid var(--ds-bad)!important}.hd-stretch{border-left:4px solid var(--ds-warn)!important}.hd-input{display:flex;flex-direction:column;gap:8px;position:sticky;bottom:0;padding:12px 0;background:var(--ds-bg,var(--ds-surface))}.hd-input textarea{width:100%;font-size:16px}.hd .ds-choices{display:flex;flex-wrap:wrap;gap:8px}.hd-links a{min-height:44px;display:inline-block;line-height:44px}";
+// ------------------------------------------------------------------ HANDLE-1 (1.33.0): paste a job, say "handle it", answer one step at a time
+// Owner 2026-11-13: the page had too many buttons; he finds a role (mostly on LinkedIn), pastes it and wants the agent to own it end to end: read it, say candidly
+// whether it is good for him, position him, tailor the resume, apply where the form can be filled (dry run until the first live submission is released), else hand over the
+// kit and track. The agent asks inline, one question at a time, from prompted recall. The state is the match row and the recall bank, so every step is resumable.
+const gemIds = (u) => { const m = /^https?:\/\/jobs\.gem\.com\/([^\/?#]+)\/([^\/?#]+)/i.exec(String(u || "")); return m ? { board: m[1], ext: m[2] } : null; };
+// Gem job boards are built in the browser; Gem publishes each board as JSON, so the posting is found there (fail-soft: a miss asks for the pasted text)
+async function gemPosting(rawUrl) {
+  const g = gemIds(rawUrl); if (!g) return null;
+  const ac = new AbortController(); const t = setTimeout(() => ac.abort(), 15000);
+  try {
+    const r = await fetch("https://api.gem.com/job_board/v0/" + encodeURIComponent(g.board) + "/job_posts/", { headers: { accept: "application/json" }, signal: ac.signal });
+    if (!r.ok) return null;
+    const list = await r.json(); const rows = Array.isArray(list) ? list : (list.job_posts || list.results || []);
+    const hit = rows.find((x) => String(x.absolute_url || x.url || "").includes(g.ext) || String(x.id || x.ext_id || "") === g.ext);
+    if (!hit) return null;
+    const loc = hit.location && (hit.location.name || hit.location) || (hit.locations && hit.locations[0] && (hit.locations[0].name || hit.locations[0])) || "";
+    return { title: String(hit.title || ""), company: String(hit.company || hit.company_name || g.board), location: String(loc), desc: stripHtml(String(hit.content || hit.description || "")).slice(0, 30000), url: String(rawUrl).replace(/[?#].*$/, "") };
+  } catch (e) { logErr("gem-posting", e); return null; } finally { clearTimeout(t); }
+}
+// the first line of a pasted LinkedIn posting is usually the title, the second the employer; read the posting text for the rest
+function handleRead(body) {
+  const input = String(body.input || body.text || "").trim();
+  const urlOnly = /^https?:\/\/\S+$/.test(input);
+  return { input, urlOnly, li: linkedinJobUrl(input) || linkedinJobUrl(body.url) };
+}
+async function handleLoad(env, body) {
+  const { input, urlOnly, li } = handleRead(body);
+  if (!input) throw Object.assign(new Error("paste a job link or the posting text"), { status: 400 });
+  let p = null;
+  if (urlOnly && !li) {
+    p = await gemPosting(input);
+    if (!p) { try { p = await fetchPosting(input); } catch (e) { return { need_text: true, why: e.message }; } }
+  } else if (urlOnly && li) {
+    if (!body.title) return { need_text: true, why: "LinkedIn does not allow me to read its pages, so paste the job description here (open the posting, select everything, copy)", url: li };
+    p = { title: body.title, company: body.company || "", location: body.location || "", desc: body.title, url: li };
+  } else {
+    const first = await postingFrom(env, { input, title: body.title, company: body.company });
+    p = first; if (li) p.url = li; else { const um = input.match(/https?:\/\/\S+/); if (um && !p.url) p.url = um[0].replace(/[).,]+$/, ""); }
+  }
+  if (body.title) p.title = body.title; if (body.company) p.company = body.company;
+  if (!p.company && !urlOnly) {   // a pasted posting usually reads: title, employer, place
+    const ls = input.split("\n").map((l) => l.trim()).filter(Boolean), c = ls[1] || "";
+    if (c && c.length <= 60 && !/[.!?]$/.test(c) && !/^(location|about|we |the |our )/i.test(c)) p.company = c;
+  }
+  if (!p.company) p.company = "the employer";   // same value intakeJob stores, so the duplicate check matches
+  if (!p.title) return { need_text: true, why: "I could not find the job title; paste the posting from its first line (the title) down" };
+  return { posting: p };
+}
+const handleSay = (text, extra) => ({ role: "agent", text, ...(extra || {}) });
+function handleVerdict(a) {
+  const fit = a.fit_score, j = a.judge && Number.isFinite(+a.judge.fit) ? +a.judge.fit : null, f = j === null ? fit : Math.max(fit, j);
+  const hard = (a.why_not_in_search || []).slice(0, 2);
+  const go = a.would_appear_in_your_search && f >= 45 ? "go" : (f >= 35 && !hard.length ? "stretch" : "skip");
+  return { go, fit: f, hard };
+}
+// Plain sentences, no template filler: each line states one fact about this job and this record.
+function handleDossier(a, v, existing) {
+  const lines = [];
+  const where = a.location && !/^\(not found/.test(a.location) ? " in " + a.location : "";
+  if (v.go === "go") lines.push("This one is worth going for. " + a.title + " at " + a.company + where + " reads as a " + a.verdict + " (" + v.fit + " of 100).");
+  else if (v.go === "stretch") lines.push("This one is a stretch. " + a.title + " at " + a.company + where + " reads as " + a.verdict + " (" + v.fit + " of 100); it can work if the positioning lands.");
+  else lines.push("I would not spend your time on this one. " + a.title + " at " + a.company + where + " reads as " + a.verdict + " (" + v.fit + " of 100)" + (v.hard.length ? ": " + v.hard.join("; ") : "") + ".");
+  if (a.judge && a.judge.summary) lines.push(String(a.judge.summary).slice(0, 400));
+  const st = (a.strengths || []).slice(0, 3).map((s) => s.text.replace(/\.$/, ""));
+  if (st.length) lines.push("What makes you the candidate for it: " + st.join("; ") + ".");
+  const gp = (a.gaps || []).map((g) => String(g).replace(/^named in the posting but not in your ledger \(add to the ledger if you have it\): /, "tools and topics not in your record: ")).slice(0, 3);
+  if (gp.length) lines.push("Gaps I will work around or ask you about: " + gp.join("; ") + ".");
+  if (existing) lines.push("I was already tracking it (" + existing + ").");
+  return lines;
+}
+// HANDLE-LIFEFIT-1: would this job suit the person, not only the CV? One model read of the posting against the owner's own stated preferences and record; it may only use
+// what the record and the survey answers say, and says nothing when it cannot tell.
+async function handleLifeFit(env, a) {
+  try {
+    const prefs = await env.JOBS_DB.prepare("SELECT v FROM jobsearch_prefs WHERE k='survey'").first().then((r) => (r ? String(r.v).slice(0, 1500) : "")).catch(() => "");
+    const sys = "You tell one candidate, candidly, whether a job would suit him as a person: the day-to-day work, pace, travel, on-call, people-versus-code balance, management style signals, employer type and stability. Use ONLY the candidate record and stated preferences given; never invent traits. If the posting gives no signal, say nothing about that. Reply JSON only: {\"suits\":[up to 2 short sentences],\"grates\":[up to 3 short sentences],\"call\":\"suits|mixed|miserable\"}.";
+    const out = await askModel(env, sys, "CANDIDATE:\n" + bankDigest() + "\nSTATED PREFERENCES: " + prefs + "\nPOSTING: " + a.title + " at " + a.company + "\n" + String(a.desc_excerpt || "").slice(0, 6000));
+    const j = jsonLoose(out); if (!j) return null;
+    const arr = (x) => (Array.isArray(x) ? x : []).map((t) => String(t).slice(0, 220)).filter(Boolean);
+    return { suits: arr(j.suits).slice(0, 2), grates: arr(j.grates).slice(0, 3), call: ["suits", "mixed", "miserable"].includes(j.call) ? j.call : "mixed" };
+  } catch (e) { logErr("handle-lifefit", e); return null; }
+}
+async function handleStart(env, body) {
+  await ensure(env);
+  const loaded = await handleLoad(env, body);
+  if (loaded.need_text) return { messages: [handleSay(loaded.why + ".", { kind: "need_text" })], next: { type: "text", prompt: "Paste the posting text", input_for: "job" } };
+  const p = loaded.posting;
+  const a = await analyzeJob(env, { input: p.desc || p.title, title: p.title, company: p.company, location: p.location });
+  const v = handleVerdict(a);
+  const status = v.go === "skip" ? "saved" : "saved";   // tracking never hurts; the owner decides on applying
+  const row = await intakeJob(env, { input: p.desc || p.title, title: p.title, company: p.company, location: p.location, status, source: "handle" });
+  if (p.url) await env.JOBS_DB.prepare("UPDATE jobsearch_matches SET url=?2 WHERE id=?1 AND (url IS NULL OR url='')").bind(row.id, p.url).run();
+  await env.JOBS_DB.prepare("INSERT INTO jobsearch_events (match_id, event, ts, note) VALUES (?1,'note',?2,?3)").bind(row.id, new Date().toISOString(), "handle: " + v.go + " (fit " + v.fit + ")").run().catch((e) => logErr("handle-note", e));
+  const life = await handleLifeFit(env, { ...a, desc_excerpt: p.desc });
+  if (life && life.call === "miserable" && v.go === "go") v.go = "stretch";
+  const lifeLines = life ? [].concat(life.grates.length ? ["Would it suit you? " + (life.call === "miserable" ? "I think you would be miserable in it. " : life.call === "mixed" ? "Mixed. " : "") + "What would wear on you: " + life.grates.join(" ")] : [], life.suits.length ? ["What would suit you: " + life.suits.join(" ")] : []) : [];
+  const messages = [handleSay("Read it. Here is my honest take.", { kind: "verdict", go: v.go })].concat(handleDossier(a, v, row.duplicate ? row.status : "").concat(lifeLines).map((t) => handleSay(t)));
+  const next = await handleNext(env, row.id);
+  return { job: { id: row.id, title: a.title, company: a.company, url: p.url || "", go: v.go, fit: v.fit }, messages, next };
+}
+// one step at a time: open questions that would improve this resume, then the decision, then what happens after it
+async function handleNext(env, id) {
+  const row = await env.JOBS_DB.prepare("SELECT id, title, company, url, status, verified, resume_md, tier, score FROM jobsearch_matches WHERE id=?").bind(id).first();
+  if (!row) throw Object.assign(new Error("unknown job"), { status: 404 });
+  const rq = await recallQueue(env, id, 3).catch((e) => { logErr("handle-recall", e); return { questions: [] }; });
+  const q = (rq.questions || [])[0];
+  const ev = await env.JOBS_DB.prepare("SELECT event FROM jobsearch_events WHERE match_id=? AND event='note' AND note='handle: questions done'").bind(id).first();
+  if (q && !ev) return { type: "ask", job: id, key: q.key, prompt: q.ask, cue: q.cue || "", remaining: (rq.questions || []).length, options: [{ label: "Yes", value: "yes" }, { label: "No", value: "no" }, { label: "Not sure", value: "unsure" }], skip: "Skip the questions" };
+  const ats = atsOf(row.url), auto = AUTO_ATS.includes(ats.ats), links = row.verified ? { pdf: "/api/matches/" + encodeURIComponent(id) + "/resume.pdf", docx: "/api/matches/" + encodeURIComponent(id) + "/resume.docx" } : null;
+  if (["applied", "screening", "replied", "interview", "offer"].includes(row.status)) return { type: "done", job: id, prompt: "Tracked as " + row.status + ". I will watch your mail for the reply.", links };
+  if (row.status === "approved") return { type: "done", job: id, prompt: auto ? "Queued for the application runner. It rehearses the form first and shows you the filled form before anything is sent." : "Approved. Your resume and answers are ready below.", links, kit: auto ? null : "/api/handle/kit?id=" + encodeURIComponent(id), apply_url: ats.apply_url || row.url, apply_link_label: auto ? "" : "Open the application form" };
+  const lean = /handle: skip/.test((await env.JOBS_DB.prepare("SELECT note FROM jobsearch_events WHERE match_id=? AND event='note' ORDER BY id DESC LIMIT 1").bind(id).first() || {}).note || "");
+  if (lean) return { type: "choice", job: id, prompt: "My advice is to skip this one. What do you want to do?", options: [{ label: "Skip it", value: "skip", primary: true }, { label: "Track it anyway", value: "track" }, { label: auto ? "Apply anyway" : "Get it ready anyway", value: "approve" }], links };
+  return { type: "choice", job: id, prompt: auto ? "Shall I apply for you? I fill the form myself; the first live submission waits for your go-ahead, until then it is a dry run." : "Shall I get it ready to send? I will tailor the resume and answers and give you the form link, then track it.", options: [{ label: auto ? "Apply for me" : "Get it ready", value: "approve", primary: true }, { label: "Just track it", value: "track" }, { label: "Skip it", value: "skip" }], links };
+}
+async function handleAct(env, b) {
+  await ensure(env);
+  const id = String(b.job || ""); if (!id) throw Object.assign(new Error("send {job}"), { status: 400 });
+  const say = [];
+  if (b.act === "answer") {
+    const bank = await mutateBank(env, (bk) => recallAnswer(bk, { key: b.key, answer: b.answer, role: b.role, depth: b.depth || "hands" }));
+    const rec = (bank.recall || {})[b.key] || {};
+    if (rec.answer === "yes") say.push(handleSay("Added to your record. It goes on the resume for this job."));
+    // the resume follows the record: rebuild this job's resume from the same generator
+    await handleRetailor(env, id).catch((e) => logErr("handle-retailor", e));
+  } else if (b.act === "skip_questions") {
+    await env.JOBS_DB.prepare("INSERT INTO jobsearch_events (match_id, event, ts, note) VALUES (?1,'note',?2,'handle: questions done')").bind(id, new Date().toISOString()).run();
+  } else if (b.act === "approve") {
+    await setPipeStatus(env, id, "approved", "handle: owner said handle it");
+    const row = await env.JOBS_DB.prepare("SELECT url FROM jobsearch_matches WHERE id=?").bind(id).first();
+    const ats = atsOf(row && row.url);
+    say.push(handleSay(AUTO_ATS.includes(ats.ats) ? "Queued. The runner fills the " + ats.ats + " form as a dry run and stores the result; nothing is submitted until you release live submissions." : "Done. " + (ats.ats === "other" ? "This site's form cannot be filled by my runner" : "I cannot fill " + ats.ats + " forms yet") + ", so I prepared the resume and answers; open the form and paste them."));
+  } else if (b.act === "track") { say.push(handleSay("Tracking it. I will watch your mail and follow up.")); }
+  else if (b.act === "skip") { await setPipeStatus(env, id, "rejected", "handle: owner skipped"); say.push(handleSay("Skipped and remembered, so similar roles rank lower.")); }
+  else if (b.act === "applied") { await setPipeStatus(env, id, "applied", "handle: owner applied"); say.push(handleSay("Marked as applied with the resume exactly as sent.")); }
+  else throw Object.assign(new Error("unknown act"), { status: 400 });
+  return { messages: say, next: b.act === "skip" ? { type: "idle", prompt: "Paste the next job when you have one." } : await handleNext(env, id) };
+}
+async function handleRetailor(env, id) {
+  const r = await env.JOBS_DB.prepare("SELECT id, company, title, location, url, desc_text, status FROM jobsearch_matches WHERE id=?").bind(id).first();
+  if (!r || !r.desc_text) return;
+  const ctx = await loadCtx(env);
+  const job = { id: r.id, source: "handle", company: r.company, title: r.title, location: r.location, url: r.url, desc: r.desc_text };
+  const sc = scoreJob(job, ctx, "analyze"), art = tailoredResume(job, { clusters: sc.clusters, judge: null });
+  if (art.verified) await env.JOBS_DB.prepare("UPDATE jobsearch_matches SET resume_md=?2, note_md=?3, verified=1, blocked_reason=NULL WHERE id=?1").bind(id, art.resume, art.note).run();
+}
+async function handleJobs(env) {
+  await ensure(env);
+  const r = await env.JOBS_DB.prepare("SELECT id, title, company, status, decided_at FROM jobsearch_matches ORDER BY COALESCE(decided_at, first_seen) DESC LIMIT 30").all().catch((e) => { logErr("handle-jobs", e); return { results: [] }; });
+  return { jobs: r.results.filter((x) => PIPE_OPEN.includes(x.status)).slice(0, 8).map((x) => ({ id: x.id, title: x.title, company: x.company, status: x.status })) };
+}
+async function handleKit(env, id) {
+  const row = await env.JOBS_DB.prepare("SELECT id, company, title, location, url, desc_text, resume_md, note_md FROM jobsearch_matches WHERE id=?").bind(id).first();
+  if (!row) throw Object.assign(new Error("unknown job"), { status: 404 });
+  const ctx = await loadCtx(env), job = { id: row.id, source: "handle", company: row.company, title: row.title, location: row.location, url: row.url, desc: row.desc_text || row.title };
+  const sc = scoreJob(job, ctx, "analyze");
+  return applyKit(job, row.resume_md || "", row.note_md || "", sc.flags);
+}
+const handleUi = () => String.raw`<!doctype html><html lang="en"><head>${dsHead("Handle a job", "Paste a job and say handle it. The agent reads it, tells you whether it is worth it, tailors your resume and applies or hands you the kit.", HANDLE_CSS)}</head><body class="ds">
+<header class="ds-top"><div class="ds-top-in"><a class="ds-brand" href="/">Jobs</a><span id="who" class="ds-muted"></span><button class="btn" id="signin" type="button">Sign in</button></div></header>
+<main class="ds-main hd"><a class="me-back" href="https://me.q08.org/">← Back to me</a>
+<div class="ds-head"><h1>Handle a job</h1><p id="status">Paste a job below. I read it, tell you if it is worth it, and do the rest.</p></div>
+<ol id="feed" class="hd-feed" aria-live="polite"></ol>
+<form id="f" class="hd-input"><label class="ds-sr" for="t">Job link or posting text</label><textarea id="t" rows="4" placeholder="Paste the job link or the whole posting"></textarea><button class="btn btn-primary" id="go" type="submit">Handle it</button></form>
+<details class="ds-more"><summary>More</summary><div class="ds-more-body"><a class="btn btn-quiet" href="/matches">All matches</a> <a class="btn btn-quiet" href="/cv">My CV</a> <a class="btn btn-quiet" href="/prep">Interview prep</a></div></details>
+</main>
+<script>
+const $=s=>document.querySelector(s),esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let job=null,needText=false,lastInput='';
+async function api(p,o){const r=await fetch(p,o);const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||r.status);return j}
+const post=(p,b)=>api(p,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(b)});
+async function signIn(){const r=await post('/api/auth/request',{}).catch(e=>({note:e.message}));const code=prompt('Enter the 6-digit code sent to your e-mail'+(r.note?' ('+r.note+')':''));if(!code)return false;await post('/api/auth/verify',{code:code.trim()});$('#signin').hidden=true;return true}
+async function authed(fn){try{return await fn()}catch(e){if(/sign in/.test(e.message)){if(await signIn())return await fn()}throw e}}
+function add(cls,html){const li=document.createElement('li');li.className='hd-'+cls;li.innerHTML=html;$('#feed').appendChild(li);li.scrollIntoView({block:'end',behavior:'smooth'});return li}
+function say(m){add('agent'+(m.go?' hd-'+m.go:''),'<p>'+esc(m.text)+'</p>')}
+function render(res){(res.messages||[]).forEach(say);const n=res.next;if(!n)return;if(n.type==='text'){needText=true;$('#t').placeholder=n.prompt;$('#t').focus();return}
+ needText=false;const li=add('ask','<p><strong>'+esc(n.prompt)+'</strong></p>'+(n.cue?'<p class="ds-muted">'+esc(n.cue)+'</p>':'')+'<div class="ds-choices" role="group"></div>'+(n.links?'<p class="hd-links"><a href="'+n.links.pdf+'">Resume (PDF)</a> · <a href="'+n.links.docx+'">Resume (Word)</a></p>':'')+(n.apply_url?'<p class="hd-links"><a href="'+esc(n.apply_url)+'" target="_blank" rel="noopener">'+esc(n.apply_link_label||'Open')+'</a></p>':''));
+ const box=li.querySelector('.ds-choices');(n.options||[]).forEach(o=>{const b=document.createElement('button');b.type='button';b.className='btn'+(o.primary?' btn-primary':'');b.textContent=o.label;b.onclick=()=>choose(li,n,o);box.appendChild(b)});
+ if(n.skip){const b=document.createElement('button');b.type='button';b.className='btn btn-quiet';b.textContent=n.skip;b.onclick=()=>choose(li,n,{value:'__skip',label:n.skip});box.appendChild(b)}
+ if(n.type==='done'||n.type==='idle'){const x=document.createElement('p');x.textContent='';li.querySelector('.ds-choices').remove()}}
+async function choose(li,n,o){li.querySelectorAll('button').forEach(b=>b.disabled=true);add('you','<p>'+esc(o.label)+'</p>');
+ const body=n.type==='ask'?(o.value==='__skip'?{job:n.job,act:'skip_questions'}:{job:n.job,act:'answer',key:n.key,answer:o.value}):{job:n.job,act:o.value};
+ try{render(await authed(()=>post('/api/handle/act',body)))}catch(e){add('agent','<p>That did not work: '+esc(e.message)+'. Try again.</p>')}}
+$('#f').onsubmit=async e=>{e.preventDefault();const v=$('#t').value.trim();if(!v)return;const input=needText&&lastInput?lastInput+'\n'+v:v;$('#go').disabled=true;add('you','<p>'+esc(v.length>240?v.slice(0,240)+'…':v)+'</p>');$('#t').value='';
+ const w=add('agent','<p class="ds-muted">Reading it…</p>');try{const body=needText&&/^https?:\/\/\S+$/.test(lastInput)?{input:v,url:lastInput}:{input:v};lastInput=v;const r=await authed(()=>post('/api/handle',body));w.remove();render(r)}catch(x){w.remove();add('agent','<p>'+esc(x.message)+'</p>')}$('#go').disabled=false};
+$('#signin').onclick=signIn;api('/api/auth/me').then(m=>{if(m.signed_in)$('#signin').hidden=true}).catch(()=>{});
+</script></body></html>`;
 const handler = {
   async scheduled(event, env, ctx) {
     env = __aiAttrEnv(env, "qnfo-jobsearch", "AI", "JOBS_DB");
@@ -3837,7 +4026,20 @@ const handler = {
     const url = new URL(request.url), p = url.pathname, m = request.method;
     if (m === "OPTIONS") return new Response(null, { status: 204, headers: { "access-control-allow-origin": "*", "access-control-allow-headers": "content-type,x-loop-token", "access-control-allow-methods": "GET,POST,OPTIONS" } });
     if (p === "/health") return J({ ok: true, worker: WORKER, version: VERSION, ledger_verified_on: LEDGER_VERIFIED_ON });
-    if (p === "/" && m === "GET") return new Response(UI, { headers: { "content-type": "text/html; charset=utf-8" } });
+    if (p === "/" && m === "GET") return new Response(handleUi(), { headers: { "content-type": "text/html; charset=utf-8" } });   // HANDLE-1: the front door is one paste box; the old list stays at /matches
+    if (p === "/matches" && m === "GET") return new Response(UI, { headers: { "content-type": "text/html; charset=utf-8" } });
+    if (p.startsWith("/api/handle")) {
+      if (!(await ownerSession(request, env)) && !(await tokenOk(request, env))) return J({ error: "sign in first: POST /api/auth/request, then POST /api/auth/verify" }, 401);
+      try {
+        let b = {}; if (m === "POST") { try { b = await request.json(); } catch (e) { logErr("bad-json-body", e); } }
+        if (p === "/api/handle" && m === "POST") return J(await handleStart(env, b));
+        if (p === "/api/handle/act" && m === "POST") return J(await handleAct(env, b));
+        if (p === "/api/handle/next" && m === "GET") return J({ next: await handleNext(env, url.searchParams.get("job")) });
+        if (p === "/api/handle/jobs" && m === "GET") return J(await handleJobs(env));
+        if (p === "/api/handle/kit" && m === "GET") return J(await handleKit(env, url.searchParams.get("id")));
+      } catch (e) { return J({ error: e.message }, e.status || 422); }
+      return J({ error: "not found", see: "/api" }, 404);
+    }
     if (p === "/api" && m === "GET") return J(INDEX);
     if (p === "/api/ledger" && m === "GET") { await loadBank(env); return J({ person: { ...LEDGER.person, sign_in_email: undefined }, owner_stated: LEDGER.owner_stated, unverified_needs_owner: LEDGER.unverified_needs_owner, facts: LEDGER.facts.filter((f) => ((BANK.facts.find((x) => x.id === f.id) || {}).source === "verified_cv")).map((f) => ({ id: f.id, text: f.text, employer: f.employer, period: f.period })), headlines: LEDGER.headlines }); }   // public: only the verified CV record; what the owner adds in the interview stays private
     if (p === "/api/ops" && m === "GET") { const rep = await opsReportCached(env, url.searchParams.get("fresh") === "1"); return J(rep, rep.status === "ok" ? 200 : 503); }
@@ -4091,7 +4293,7 @@ const handler = {
     return J({ error: "not found", see: "/api" }, 404);
   },
 };
-handler.__test = { isoDate, findEmployerForm, FORM_SLUGS, sameTitle, autoGateOk, resumeElements, resumeOutcomeWeights, outcomeRowsOf, resumeRowsOf, orgKind, resumeSkeleton, canonicalSkeleton, tailoredResume, resumeConsistency, resolveQuestion, autopilotQueue, autopilotResolve, autopilotResult, autopilotStatus, githubOidcOk, parseRss, notifyOwner, followups, missionSources, saveMissionProbes, sourceCoverage, FETCHERS, styleLint, laneGate, fitLine, shortlist, relevanceSweep, intakeJob, setPipeStatus, saveQa, answerLibrary, matchQuestions, pipeline, parseJobMail, applyJobMail, linkedinJobUrl, parseLinkedinAlert, intakeLinkedinAlert, ANSWER_BANK, bankAnswerFor, credentialBacked, dropUnbackedCredentials, ensureCredentialEvidence, refreshRecallFacts, polishProse, polishBank, copyLint, toolCase, vocabulary, TOPIC_LABEL, SOFTWARE, PROSE_CASE, linkedinSearches, LINKEDIN_SEARCHES, codingLoad, CANDIDATE_BOARDS, collectAndRank, cosine, bestSim, semanticLens, scoreJob, exploreOverlap, recordTerms, diversifyRows, recallGaps, recallQuestion, recallAnswer, recallQueue, RECALL_SEED, loadCtx, referralKit, referralList, STAGES, judgeTop, buildResume, verify, headlineVerdict, outcomes, pdfOf, pdfClean, checkAnswer, jsonLoose, PROTECTED_Q, draftAnswers, prepBrief, quizFeedback, judgeJob, calibrate, calibration, followups, atsOf, keywordReport, docxOf, resumeHtml, plainOf, applyKit, matchKit, stripTags, postingTerms, evaluate, rank, buildResume, buildNote, verify, stripHtml, locationGate, has, LEDGER, dedupeKey, feedPrefix, makeCtx, scoreJob, scoreFeatures, featuresFromWhy, applicationSnapshot, parseApplicationSnapshot, outcomeScoreWeights, loadCtx, SURVEY, BOARDS, normKey, applyBank, BANK_SEED, QUESTIONS, TAG_TO_CLUSTERS, clustersOf, cvAnswer, cvFact, cvReview, cvSet, cvImport, mutateBank, loadBank, decidedKeys, FETCHERS, getBank: () => BANK, llmRerank, llmRerankRun, ensureResearchPubs, ensureAutonomyBrand, ensureUltrastableBrand, ultrastableBank, ultrastableSkillsBank, ULTRASTABLE_SKILL_FACTS, ULTRASTABLE_SKILLS, syncSkillAsks, skillAskOptions, cvSkills, ULTRASTABLE_S1, RESEARCH_PUBS, FAMILIES, CLUSTER_KW, headline, pubLine, parseRerank, reasonOk, rerankMessages, artifactsFor, titleCandidate, sitemapUrls, slugTitle, PUBLIC_SECTOR, opsReport };
+handler.__test = { handleStart, handleAct, handleNext, handleVerdict, gemIds, isoDate, findEmployerForm, FORM_SLUGS, sameTitle, autoGateOk, resumeElements, resumeOutcomeWeights, outcomeRowsOf, resumeRowsOf, orgKind, resumeSkeleton, canonicalSkeleton, tailoredResume, resumeConsistency, resolveQuestion, autopilotQueue, autopilotResolve, autopilotResult, autopilotStatus, githubOidcOk, parseRss, notifyOwner, followups, missionSources, saveMissionProbes, sourceCoverage, FETCHERS, styleLint, laneGate, fitLine, shortlist, relevanceSweep, intakeJob, setPipeStatus, saveQa, answerLibrary, matchQuestions, pipeline, parseJobMail, applyJobMail, linkedinJobUrl, parseLinkedinAlert, intakeLinkedinAlert, ANSWER_BANK, bankAnswerFor, credentialBacked, dropUnbackedCredentials, ensureCredentialEvidence, refreshRecallFacts, polishProse, polishBank, copyLint, toolCase, vocabulary, TOPIC_LABEL, SOFTWARE, PROSE_CASE, linkedinSearches, LINKEDIN_SEARCHES, codingLoad, CANDIDATE_BOARDS, collectAndRank, cosine, bestSim, semanticLens, scoreJob, exploreOverlap, recordTerms, diversifyRows, recallGaps, recallQuestion, recallAnswer, recallQueue, RECALL_SEED, loadCtx, referralKit, referralList, STAGES, judgeTop, buildResume, verify, headlineVerdict, outcomes, pdfOf, pdfClean, checkAnswer, jsonLoose, PROTECTED_Q, draftAnswers, prepBrief, quizFeedback, judgeJob, calibrate, calibration, followups, atsOf, keywordReport, docxOf, resumeHtml, plainOf, applyKit, matchKit, stripTags, postingTerms, evaluate, rank, buildResume, buildNote, verify, stripHtml, locationGate, has, LEDGER, dedupeKey, feedPrefix, makeCtx, scoreJob, scoreFeatures, featuresFromWhy, applicationSnapshot, parseApplicationSnapshot, outcomeScoreWeights, loadCtx, SURVEY, BOARDS, normKey, applyBank, BANK_SEED, QUESTIONS, TAG_TO_CLUSTERS, clustersOf, cvAnswer, cvFact, cvReview, cvSet, cvImport, mutateBank, loadBank, decidedKeys, FETCHERS, getBank: () => BANK, llmRerank, llmRerankRun, ensureResearchPubs, ensureAutonomyBrand, ensureUltrastableBrand, ultrastableBank, ultrastableSkillsBank, ULTRASTABLE_SKILL_FACTS, ULTRASTABLE_SKILLS, syncSkillAsks, skillAskOptions, cvSkills, ULTRASTABLE_S1, RESEARCH_PUBS, FAMILIES, CLUSTER_KW, headline, pubLine, parseRerank, reasonOk, rerankMessages, artifactsFor, titleCandidate, sitemapUrls, slugTitle, PUBLIC_SECTOR, opsReport };
 export default handler;
 
 // ------------------------------------------------------------------ client script shared by both pages (JOBSEARCH-APPLY-1): kit handling and the Fill application bookmark

@@ -2,7 +2,7 @@
 // Proves: the verifier rejects tampering, gates hold, a full run over stubbed feeds stores verified drafts, the API and UI answer,
 // approval needs the token, an unverified draft cannot be approved, and the run cooldown holds.
 import { DatabaseSync } from "node:sqlite";
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 const here = dirname(fileURLToPath(import.meta.url));
@@ -142,7 +142,7 @@ globalThis.fetch = async (u) => {
 };
 const call = async (path, init, e = env) => { const r = await w.fetch(new Request("https://x" + path, init), e, ctxStub); return [r.status, await r.json().catch(() => null), r]; };
 {
-  const ui = await w.fetch(new Request("https://x/"), env, ctxStub);
+  const ui = await w.fetch(new Request("https://x/matches"), env, ctxStub);
   const page = await ui.text();
   ok(ui.status === 200 && page.includes('id="signin"') && page.includes("id='signbox'") && page.includes('id="scode"'), "the real UI keeps sign-in and code entry inline");
 }
@@ -182,7 +182,7 @@ ok((await call("/api/run", { method: "POST" }))[0] === 429, "run cooldown");
 // ---------------- JOBSEARCH-OPS-1
 {
   // the verified claims of the original ledger (jobsearch/facts.json) are all still in the CV bank seed, word for word (credentials moved to education and certifications)
-  const file = JSON.parse(readFileSync(join(here, "../jobsearch/facts.json"), "utf8"));
+  const file = JSON.parse(readFileSync(join(here, existsSync(join(here, "../jobsearch/facts.json")) ? "../jobsearch/facts.json" : "../prototype/facts.json"), "utf8"));
   const seedFacts = Object.fromEntries(T.BANK_SEED.facts.map((f) => [f.id, f]));
   const moved = file.facts.filter((f) => !f.cluster.includes("credentials") && f.id !== "F15");
   ok(moved.every((f) => seedFacts[f.id] && seedFacts[f.id].text === T.polishProse(f.text)), "every verified claim of the original ledger is in the CV bank seed (word for word, typography polished: JOBSEARCH-COPY-1)", moved.filter((f) => !seedFacts[f.id] || seedFacts[f.id].text !== T.polishProse(f.text)).map((f) => f.id));
