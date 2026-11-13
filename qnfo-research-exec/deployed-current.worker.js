@@ -496,7 +496,7 @@ var __defProp22222 = Object.defineProperty;
 var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(target, "name", { value, configurable: true }), "__name");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.55.12";
+var VERSION = "0.55.13";
 var __AI_ATTR_RATES = { "@cf/zai-org/glm-5.3": [127273, 4e5], "@cf/zai-org/glm-5.3-flash": [13636, 45455], "@cf/nvidia/nemotron-3-120b-a12b": [45455, 136364], "@cf/moonshotai/kimi-k2.6": [86364, 363636], "@cf/moonshotai/kimi-k2.7-code": [86364, 363636], "@cf/openai/gpt-oss-120b": [31818, 68182], "@cf/openai/gpt-oss-20b": [18182, 27273], "@cf/deepseek-ai/deepseek-v4-pro-0813": [12e4, 36e4], "@cf/deepseek-ai/deepseek-v4-flash-0731": [4e4, 12e4], "@cf/meta/llama-3.3-70b-instruct-fp8-fast": [26668, 204805], "@cf/qwen/qwen3-30b-a3b-fp8": [4625, 30475], "@cf/qwen/qwen3.8-27b": [40909, 290909], "@cf/baai/bge-base-en-v1.5": [6058, 0], "@cf/baai/bge-small-en-v1.5": [1841, 0], "@cf/baai/bge-large-en-v1.5": [18582, 0] };
 function __attrStageSet(env, stage) {
   if (env && env.__aiAttrCtx) env.__aiAttrCtx.stage = String(stage || "");
@@ -8471,6 +8471,7 @@ async function refreshPaperInfluence(env) {
   const out = { published: 0, cited: 0, terminal: 0 };
   try {
     await env.LIVING_PAPER.prepare("CREATE VIEW IF NOT EXISTS v_paper_influence AS SELECT p.slug AS slug, p.status AS status, substr(p.created_at, 1, 10) AS published_day, (SELECT COUNT(*) FROM paper_citations c WHERE c.cited_slug = p.slug AND c.citing_slug <> p.slug) AS inbound, CAST(julianday('now') - julianday(COALESCE(p.created_at, '2026-01-01')) AS INTEGER) AS age_days FROM papers p").run();
+    await env.LIVING_PAPER.prepare("CREATE INDEX IF NOT EXISTS idx_paper_citations_cited ON paper_citations (cited_slug, citing_slug)").run();
     await env.LIVING_PAPER.prepare("CREATE TABLE IF NOT EXISTS corpus_leverage (day TEXT PRIMARY KEY, published INTEGER, cited INTEGER, terminal INTEGER, computed_at TEXT)").run();
     const r = await env.LIVING_PAPER.prepare("SELECT COUNT(*) n, SUM(CASE WHEN inbound > 0 THEN 1 ELSE 0 END) cited, SUM(CASE WHEN inbound = 0 AND age_days >= ?1 THEN 1 ELSE 0 END) terminal FROM v_paper_influence WHERE status = 'published'").bind(CORPUS_TERMINAL_GRACE_DAYS).first();
     out.published = Number(r && r.n) || 0;
