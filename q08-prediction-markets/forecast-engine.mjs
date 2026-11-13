@@ -723,7 +723,7 @@ export function stageScores(d) {
 }
 
 // ---------- 10 the pages: one story, one navigation across q08.org and markets.q08.org ----------
-export const NAV = [["pipeline", Q08_ORIGIN + "/", "Pipeline"], ["forecasts", MARKETS_ORIGIN + "/", "Forecasts"], ["ledger", MARKETS_ORIGIN + "/ledger", "Ledger"], ["track", MARKETS_ORIGIN + "/track-record", "Track record"], ["reports", Q08_ORIGIN + "/#reports", "Signal reports"], ["paper", MARKETS_ORIGIN + "/paper", "Paper desk"]];
+export const NAV = [["pipeline", Q08_ORIGIN + "/", "Pipeline"], ["forecasts", MARKETS_ORIGIN + "/", "Forecasts"], ["ledger", MARKETS_ORIGIN + "/ledger", "Ledger"], ["track", MARKETS_ORIGIN + "/track-record", "Track record"], ["improves", MARKETS_ORIGIN + "/improves", "Self-improving"], ["reports", Q08_ORIGIN + "/#reports", "Signal reports"], ["paper", MARKETS_ORIGIN + "/paper", "Paper desk"]];
 export function siteTop(active) {
   return `<header class="ds-top"><div class="ds-top-in"><a class="ds-brand" href="${Q08_ORIGIN}/">q08 <span class="ds-muted vp-tag">signal to value</span></a><nav class="vp-nav" aria-label="q08">${NAV.map(([k, h, l]) => `<a href="${h}"${k === active ? ' aria-current="page"' : ""}>${l}</a>`).join("")}</nav></div></header>`;
 }
@@ -986,6 +986,59 @@ ${r.awaiting_settlement ? `<p class="ds-note">${e(r.awaiting_settlement)} questi
 <h2>Check it yourself</h2><p class="ds-muted">Each hash is ${e(c.recipe || "")}. Download every entry from <a href="/api/ledger">/api/ledger</a>, recompute, and compare. Each broadcast post carries the first 12 characters of its entry's hash, so a third party holds a timestamped copy.</p>
 ${portfolioHtml()}
 <footer class="fe-foot"><a href="/">Forecasts</a><a href="/track-record">Track record</a><a href="/api/ledger">Ledger (JSON)</a><span>Simulated positions only. Not investment advice.</span></footer>
+</main></body></html>`;
+}
+
+// ---------- the self-improvement record: what the loop changed about itself, and what came of it (Q08-IMPROVES-1) ----------
+// Owner 2026-11-13: q08 is Ultrastable's showcase of a system that keeps improving itself in code toward a target, not one that follows a fixed rule.
+// Every row below is read from a table the loop itself writes (fe_pm, fe_experiment, fe_config, fe_research, pt_decision, pt_control), so the page
+// cannot show a change that did not happen. A section with no rows says so and says what produces the first one.
+export const IMPROVES_LOOP = [
+  ["Measure", "Every forecast is hash-chained before its event and scored against the market price when it settles (Brier score). That score is the target the system optimises."],
+  ["Propose", "Once enough calls have settled, the tuner fits a recalibration and a model-versus-market blend; the daily product manager proposes a change to a knob; the research lane turns a published method into a code task."],
+  ["Trial", "A change runs as one experiment at a time with its own sample. Calibration changes start a new parameter version, so old and new are never mixed."],
+  ["Keep or revert", "The result decides: the winner is written to the config, the loser is reverted, a domain where the model is significantly worse than the market is paused, and every step keeps its reason and its revert statement."],
+  ["Rewrite", "A method that needs new code becomes a code task with a test; the code loop builds it, the deploy probes it, and the next measurement says whether it helped."],
+];
+export async function improvesData(env, nowMs = Date.now()) {
+  const db = env && env.TRADES_DB;
+  if (!db) return { empty: true };
+  await safe(() => ensureSchema(db));
+  const parse = (s) => { try { return JSON.parse(s || "null"); } catch (err) { return null; } };
+  const ctl = {};
+  for (const r of await all(db, "SELECT key, value FROM pt_control WHERE key IN ('params_version','recal_a','recal_b','blend_w','last_tune_at','domains_off')")) ctl[r.key] = r.value;
+  const runs = await all(db, "SELECT ran_at, decisions_json, filed_json FROM fe_pm ORDER BY id DESC LIMIT 60");
+  const cfg = await all(db, "SELECT key, value, updated_at, reason FROM fe_config ORDER BY updated_at DESC LIMIT 40");
+  const exps = await all(db, "SELECT key, arm, started_at, ended_at, score FROM fe_experiment ORDER BY id DESC LIMIT 40");
+  const decs = await all(db, "SELECT ts, actor, action, assumption, evidence, rollback FROM pt_decision ORDER BY id DESC LIMIT 60");
+  const research = await all(db, "SELECT source, title, url, need, score, status, issue_id, seen_at FROM fe_research WHERE issue_id IS NOT NULL ORDER BY seen_at DESC LIMIT 20");
+  const seen = (await all(db, "SELECT count(*) n FROM fe_research"))[0] || { n: 0 };
+  const settled = (await all(db, "SELECT count(*) n FROM fe_forecast WHERE outcome IS NOT NULL"))[0] || { n: 0 };
+  const total = (await all(db, "SELECT count(*) n FROM fe_forecast"))[0] || { n: 0 };
+  const events = [];
+  for (const r of runs) for (const d of parse(r.decisions_json) || []) events.push({ at: r.ts || r.ran_at, kind: "knob", what: `${d.key}: ${d.from} → ${d.to}`, why: d.reason || "", revert: d.revert || "" });
+  for (const r of runs) for (const f of parse(r.filed_json) || []) events.push({ at: r.ran_at, kind: "code task", what: typeof f === "string" ? f : (f.title || f.key || JSON.stringify(f)).slice(0, 140), why: "filed by the product manager for the code loop", revert: "" });
+  for (const x of exps) events.push({ at: x.ended_at || x.started_at, kind: x.ended_at ? "experiment ended" : "experiment running", what: `${x.key}: arm ${x.arm}`, why: x.score == null ? "sample still collecting" : `scored ${(+x.score).toFixed(2)} page views a post`, revert: "" });
+  for (const x of decs) events.push({ at: x.ts, kind: "parameter", what: x.action, why: x.assumption || "", revert: x.rollback || "" });
+  events.sort((a, b) => String(b.at).localeCompare(String(a.at)));
+  return { empty: false, at: new Date(nowMs).toISOString(), params: { version: Number(ctl.params_version) || 1, recal_a: ctl.recal_a == null ? 1 : +ctl.recal_a, recal_b: ctl.recal_b == null ? 0 : +ctl.recal_b, blend_w: ctl.blend_w == null ? 0.5 : +ctl.blend_w, last_tune_at: ctl.last_tune_at || null, domains_off: parse(ctl.domains_off) || {} },
+    settled: settled.n, forecasts: total.n, tune_after: 50, config: cfg, experiments: exps, research, research_seen: seen.n, events: events.slice(0, 60), loop: IMPROVES_LOOP };
+}
+export function renderImproves(d, head) {
+  const p = d.params || {}, ev = d.events || [];
+  const left = Math.max(0, (d.tune_after || 50) - (d.settled || 0));
+  const row = (x) => `<tr><td>${e(String(x.at || "").replace("T", " ").slice(0, 16))}</td><td><span class="ds-pill">${e(x.kind)}</span></td><td>${e(x.what)}${x.why ? `<br><small class="ds-muted">${e(x.why)}</small>` : ""}${x.revert ? `<br><small class="vp-hash">undo: ${e(x.revert)}</small>` : ""}</td></tr>`;
+  return `<!doctype html><html lang="en"><head>${head("How q08 improves itself", "q08 measures its own forecasts, proposes changes to itself, trials them, keeps what scores better and reverts what does not. Every change is listed here with its reason and its undo.", FE_CSS + VP_CSS + GROWTH_CSS)}</head><body class="ds">
+${siteTop("improves")}
+<main class="ds-main"><div class="ds-head"><h1>A system that rewrites itself toward a score</h1><p>q08 is not a fixed rule set. It has a target, the Brier score of its forecasts against the market price, and a loop that changes its own parameters, its own configuration and its own code to move that score, then checks whether it moved. This page lists every change the loop has made, read live from the tables the loop writes.</p></div>
+<section class="ds-stats"><div class="ds-stat"><div class="k">Forecasts pre-registered</div><div class="v">${e(d.forecasts || 0)}</div></div><div class="ds-stat"><div class="k">Settled and scored</div><div class="v">${e(d.settled || 0)}</div></div><div class="ds-stat"><div class="k">Self-changes recorded</div><div class="v">${e(ev.length)}</div></div></section>
+${left ? `<p class="ds-note">Honest status: the calibration tuner needs ${e(d.tune_after)} settled calls before it may refit itself, and ${e(left)} more must settle. Until then it holds the neutral setting and only the product manager's knobs and experiments below are moving.</p>` : `<p class="ds-note">The calibration tuner has enough settled calls to refit itself and re-checks every 7 days.</p>`}
+<h2>The loop</h2><ol class="vp-flow" style="list-style:none;padding:0">${(d.loop || []).map((s, i) => `<li class="vp-step"><div class="k">${i + 1} · ${e(s[0])}</div><p>${e(s[1])}</p></li>`).join("")}</ol>
+<h2>What it is running now</h2><div class="vp-wrap"><table class="vp-tbl"><tbody><tr><th>Parameter version</th><td class="n">${e(p.version)}</td></tr><tr><th>Calibration (slope, shift)</th><td class="n">${e(p.recal_a)} , ${e(p.recal_b)}</td></tr><tr><th>Weight on the model versus the price</th><td class="n">${e(p.blend_w)}</td></tr><tr><th>Domains paused for losing to the market</th><td class="n">${Object.keys(p.domains_off || {}).length ? e(Object.keys(p.domains_off).join(", ")) : "none"}</td></tr></tbody></table></div>
+<h2>Every change it has made</h2>${ev.length ? `<div class="vp-wrap"><table class="vp-tbl"><thead><tr><th>When (UTC)</th><th>Kind</th><th>Change, reason and undo</th></tr></thead><tbody>${ev.map(row).join("")}</tbody></table></div>` : `<p class="ds-empty">No self-change has been recorded yet. The first one is written by the daily product manager run.</p>`}
+<h2>Changes to its own code</h2>${d.research && d.research.length ? `<div class="vp-wrap"><table class="vp-tbl"><thead><tr><th>Found</th><th>Method</th><th>Need</th><th>Code task</th></tr></thead><tbody>${d.research.map((x) => `<tr><td>${e(String(x.seen_at || "").slice(0, 10))}</td><td><a href="${e(x.url)}" rel="noopener">${e(x.title)}</a><br><small class="ds-muted">${e(x.source)}</small></td><td>${e(x.need)}</td><td class="n">#${e(x.issue_id)}</td></tr>`).join("")}</tbody></table></div>` : `<p class="ds-empty">The research lane has read ${e(d.research_seen || 0)} published items and filed no code task yet. It files one when a method matches a named gap and scores above its threshold; the code loop then builds it with a test.</p>`}
+<h2>What it cannot change</h2><p class="ds-muted">Its own scoring rule, the hash chain, the paper-money limit and the rule that every forecast is written before its event. The target is fixed so the system cannot improve by moving the goal. Everything else is open to revision.</p>
+<footer class="fe-foot"><a href="/">Forecasts</a><a href="/ledger">Ledger</a><a href="/api/improves">This page (JSON)</a><span>Simulated positions only. Not investment advice.</span></footer>
 </main></body></html>`;
 }
 
