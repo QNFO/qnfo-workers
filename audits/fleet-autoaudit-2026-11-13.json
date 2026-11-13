@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-11-13 23:08:04",
+  "audited_at": "2026-11-13 23:09:31",
   "d1_write_failures": [],
   "d1_writes_ok": 13,
   "guard": {
@@ -99,7 +99,7 @@
       }
     ]
   },
-  "purge_error": "purge skipped: run classified 13 workers, table held 56; a partial report must not shrink the audit surface",
+  "purge_error": "purge skipped: run classified 13 workers, table held 59; a partial report must not shrink the audit surface",
   "rows": {
     "demo-child-ultrastable": {
       "before": null,
