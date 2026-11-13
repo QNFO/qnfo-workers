@@ -40,4 +40,10 @@ const t = await call("/api/handle/act", { job: p2.json.job.id, act: "track" });
 ok(t.json.next && t.json.next.type === "done", "track ends the flow: " + JSON.stringify(t.json.next));
 const js = await call("/api/handle/jobs");
 ok(js.json.jobs.some((j) => j.id === p2.json.job.id), "tracked job is listed");
+// skip advice survives the question step (review-gate finding)
+const p3 = await call("/api/handle", { input: "Senior Software Engineer, Backend\nStripe\nSan Francisco, CA\nWrite Go and Python services, on-call rotation, distributed systems, 5+ years of coding experience, Kubernetes, Terraform." });
+ok(p3.json.job && p3.json.job.go === "skip", "a coding-heavy backend role is advised skip: " + (p3.json.job && p3.json.job.go));
+let n3 = p3.json.next, g3 = 0;
+while (n3 && n3.type === "ask" && g3++ < 6) { const r = await call("/api/handle/act", { job: p3.json.job.id, act: "skip_questions" }); n3 = r.json.next; }
+ok(n3 && n3.type === "choice" && /skip/i.test(n3.prompt) && n3.options[0].value === "skip", "skip stays the lead option after the questions: " + JSON.stringify(n3));
 console.log(fail ? fail + " failed" : "handle: all passed"); process.exit(fail ? 1 : 0);
