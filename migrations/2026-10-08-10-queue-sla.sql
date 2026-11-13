@@ -198,6 +198,41 @@ BEGIN
   WHERE COALESCE((SELECT value FROM ops_config WHERE key = 'queue_sla_autofix'), 'on') <> 'off'
     AND status IN ('needs-email', 'needs-contact') AND datetime(created_at) < datetime('now', '-180 minutes');
 
+  -- issue-unremediated (retry 3, lever-3059-202611082016): the auto_fix row exists but the tick never ran it,
+  -- so queue_sla_actions had no row and the 20-minute check never applied. Attach a machine-probe contract.
+  INSERT INTO queue_sla_actions (stuck_type, n, note)
+    SELECT 'issue-unremediated', COUNT(*), group_concat(id, ',') FROM agent_issues a
+    WHERE COALESCE((SELECT value FROM ops_config WHERE key = 'queue_sla_autofix'), 'on') <> 'off'
+      AND a.status = 'open' AND a.created_at < (CAST(strftime('%s', 'now') AS INTEGER) - 10800) * 1000
+      AND COALESCE(a.description, '') NOT LIKE '%code-task:%'
+      AND NOT EXISTS (SELECT 1 FROM remediation_contracts c WHERE c.issue_id = a.id AND c.status = 'active' AND c.verify_probe NOT LIKE 'needs%')
+      AND NOT EXISTS (SELECT 1 FROM work_claims w WHERE w.issue_id = a.id AND w.released_at IS NULL
+        AND w.expires_at > strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+    HAVING COUNT(*) > 0;
+  INSERT INTO remediation_contracts (issue_id, class, status, verify_probe, expected_cadence_h, next_due_at)
+    SELECT a.id, 'issue-' || a.id, 'active', 'machine', 1, NULL FROM agent_issues a
+    WHERE COALESCE((SELECT value FROM ops_config WHERE key = 'queue_sla_autofix'), 'on') <> 'off'
+      AND a.status = 'open' AND a.created_at < (CAST(strftime('%s', 'now') AS INTEGER) - 10800) * 1000
+      AND COALESCE(a.description, '') NOT LIKE '%code-task:%'
+      AND NOT EXISTS (SELECT 1 FROM remediation_contracts c WHERE c.issue_id = a.id AND c.status = 'active' AND c.verify_probe NOT LIKE 'needs%')
+      AND NOT EXISTS (SELECT 1 FROM work_claims w WHERE w.issue_id = a.id AND w.released_at IS NULL
+        AND w.expires_at > strftime('%Y-%m-%dT%H:%M:%SZ', 'now'));
+
+  -- code-task-stalled (STUCK-SUMMARY-SUPERSEDED-TERMINAL-1): close superseded tasks terminal.
+  INSERT INTO queue_sla_actions (stuck_type, n, note)
+    SELECT 'code-task-stalled', COUNT(*), group_concat(id, ',') FROM code_tasks
+    WHERE COALESCE((SELECT value FROM ops_config WHERE key = 'queue_sla_autofix'), 'on') <> 'off'
+      AND status NOT IN ('merged', 'closed', 'publish_failed', 'needs_human', 'failed', 'reverted')
+      AND datetime(updated_at) < datetime('now', '-180 minutes')
+      AND superseded_by IS NOT NULL
+    HAVING COUNT(*) > 0;
+  UPDATE code_tasks SET status = 'closed',
+      result = substr('QUEUE-SLA-1 closed superseded task per STUCK-SUMMARY-SUPERSEDED-TERMINAL-1 (superseding task ' || superseded_by || '; revert: prior status): ' || COALESCE(result, ''), 1, 500)
+  WHERE COALESCE((SELECT value FROM ops_config WHERE key = 'queue_sla_autofix'), 'on') <> 'off'
+    AND status NOT IN ('merged', 'closed', 'publish_failed', 'needs_human', 'failed', 'reverted')
+    AND datetime(updated_at) < datetime('now', '-180 minutes')
+    AND superseded_by IS NOT NULL;
+
   -- the two metrics, every 10 minutes.
   UPDATE metric_registry SET last_value = CAST((SELECT research_review_error + research_head_stalled + intents_pending + outreach_waiting + code_tasks_stalled + issues_without_doer_3h FROM v_stuck_summary) AS TEXT),
       last_refreshed = strftime('%Y-%m-%dT%H:%M:%SZ', 'now'), state = 'MEASURED'
