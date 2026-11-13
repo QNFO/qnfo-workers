@@ -296,7 +296,7 @@ function clampMaxTokens(requested, isReason) {
 __name(clampMaxTokens, "clampMaxTokens");
 __name2(clampMaxTokens, "clampMaxTokens");
 __name22(clampMaxTokens, "clampMaxTokens");
-var VERSION = "4.45.4";
+var VERSION = "4.45.5";
 // 4.37.2 KERNEL-PERSONAL-PRIVACY-1: preserve all ten registered reply categories across the content-free telemetry boundary.
 // 4.37.1 KERNEL-PERSONAL-PRIVACY-1: classify twin replies inside the personal plane; AUDIT receives only fixed categories and random event ids, never reply text or excerpts.
 // 4.37.0 KERNEL-EVERYWHERE-1 (2026-11-06, owner directive "IMPLEMENT EVERYWHERE ACROSS ALL AI APPS AND SERVICES AND SURFACES", pillar personal): the twin SYSTEM_PROMPT carries the DOCTRINE-1 kernel 8.2.1 reply recognitions (KERNEL-REPLY-4): end every reply on the answer or result, never on a question, conditional offer or menu; ambiguity gets a stated assumption; a refusal or limit with its reason is a disposition stated declaratively; reversible tool actions are taken and reported in the same reply, and a requested change is made with the tool, not described. Each twin reply is also mirrored to qnfo-audit.personal_replies so the kernel false-stop scan covers this surface. prior 4.36.2
@@ -4329,7 +4329,50 @@ async function processItem(env, deps, row) {
     const k = await addCard(env, { front: c.front || c.title, back: c.back || text, source_id: row.id });
     res.card_id = k.id;
   }
-  await remember(env, deps, row.id, row.kind || "text", text);
+  // OWNER-ASK-2026-11-12-memory-add-tool-failing-with-statement-required-4-
+  // Wrap the memory addition in a safe helper that logs any tool error as an issue
+  // and retries the call with a trimmed statement if the error indicates a length problem.
+  async function safeRemember(env, deps, id, kind, stmt) {
+    try {
+      return await remember(env, deps, id, kind, stmt);
+    } catch (e) {
+      // Log the tool failure as an issue for automatic tracking
+      const title = "Tool error: memory_add failure";
+      const desc = `memory_add failed with error: ${String(e)}\ncode-task: repo=qnfo-workers path=personal-api/companion.js\ncode-probe: {"paths": ["personal-api/companion.js"], "contains": "OWNER-ASK-2026-11-12-memory-add-tool-failing-with-statement-required-4-"}\nAdd the comment OWNER-ASK-2026-11-12-memory-add-tool-failing-with-statement-required-4- where the feature lives.`;
+      const nowMs = Date.now();
+      if (env.AUDIT) {
+        await env.AUDIT.prepare(
+          "INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at, predicate_id) VALUES (?,?,?,?,?,?,?,?,?)"
+        )
+          .bind(title, desc, "session", "reliability", "high", "open", nowMs, nowMs, "OWNER-ASK-2026-11-12-memory-add-tool-failing-with-statement-required-4-")
+          .run();
+      }
+      // If the error is about statement length, retry with a trimmed statement.
+      if (/statement required/.test(String(e))) {
+        const trimmed = String(stmt).slice(0, 800);
+        if (trimmed.length >= 4) {
+          try {
+            return await remember(env, deps, id, kind, trimmed);
+          } catch (e2) {
+            // If the retry also fails, rethrow after logging
+            const title2 = "Tool error: memory_add retry failed";
+            const desc2 = `Retry after trimming also failed: ${String(e2)}\ncode-task: repo=qnfo-workers path=personal-api/companion.js\ncode-probe: {"paths": ["personal-api/companion.js"], "contains": "OWNER-ASK-2026-11-12-memory-add-tool-failing-with-statement-required-4-"}\nAdd the comment OWNER-ASK-2026-11-12-memory-add-tool-failing-with-statement-required-4- where the feature lives.`;
+            const nowMs2 = Date.now();
+            if (env.AUDIT) {
+              await env.AUDIT.prepare(
+                "INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at, predicate_id) VALUES (?,?,?,?,?,?,?,?,?)"
+              )
+                .bind(title2, desc2, "session", "reliability", "high", "open", nowMs2, nowMs2, "OWNER-ASK-2026-11-12-memory-add-tool-failing-with-statement-required-4-")
+                .run();
+            }
+            throw e2;
+          }
+        }
+      }
+      throw e;
+    }
+  }
+  await safeRemember(env, deps, row.id, row.kind || "text", text);
   if (sig.level >= 1) res.crisis_level = sig.level;
   await env.PERSONAL.prepare("UPDATE cmp_inbox SET status = 'processed', processed_at = ?, result_json = ? WHERE id = ?").bind(nowIso(), JSON.stringify(res), row.id).run();
   if (sig.level >= 2) res.crisis = crisisText(await loadCfg(env));
