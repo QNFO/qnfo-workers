@@ -82,7 +82,7 @@ def collect_injection_eval(ctx):
 
 # ---------------------------------------------------------------- 2. outbound_mail_to_non_sender
 OUTBOUND_SQL = (
-    "SELECT s.id AS id, CASE "
+    "SELECT s.id AS id, s.recipient AS recipient, CASE "
     "WHEN %(fleet)s THEN 'fleet-domain' "
     "WHEN lower(s.recipient) IN (%(owner)s) THEN 'owner' "
     "WHEN EXISTS (SELECT 1 FROM emails i WHERE i.status <> 'sent' AND lower(i.sender) = lower(s.recipient) AND datetime(i.received_at) < datetime(s.received_at) "
