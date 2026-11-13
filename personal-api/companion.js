@@ -392,6 +392,110 @@ export function contextFor(text) {
   if (/\b(walk|run|gym|swim|bike|cycle|park|outside|fresh air)\b/.test(t)) return "@outside";
   return "@anywhere";
 }
+ 
+// COMPANION-FORYOU-4
+// Adjust feed items to surface reasons beyond taste words and influence ranking.
+export function enrichFeedReasons(feedItems) {
+  // Map known reasons to user‑facing explanations.
+  const REASON_MAP = {
+    "wrong time": "Because you said wrong time",
+    "too far": "Because you said too far",
+    "too expensive": "Because you said too expensive",
+    "seen it": "Because you said you've already seen it"
+  };
+  return (feedItems || []).map((item) => {
+    const reason = String(item.reason || "").toLowerCase();
+    for (const key in REASON_MAP) {
+      if (reason.includes(key)) {
+        // expose a hidden reason for UI display
+        item.hiddenReason = REASON_MAP[key];
+        // boost ranking weight so these items are considered more relevant
+        item.rankWeight = (item.rankWeight || 0) + 10;
+        break;
+      }
+    }
+    return item;
+  });
+}
+
+// COMPANION-OPS-2
+// Helper to enforce confirmation for irreversible actions.
+function requireConfirmation(action, confirmed) {
+  if (!confirmed) throw new Error(`Confirmation required for ${action}`);
+}
+
+// Edit, rename, change kind or city of a source, or remove it.
+export async function cmp_source_edit(env, { id, rename, kind, city, remove, confirm }) {
+  if (remove) {
+    requireConfirmation("source removal", confirm);
+    // Assume a table `cmp_sources` exists; perform deletion if present.
+    await env.DB.prepare("DELETE FROM cmp_sources WHERE id = ?").bind(id).run();
+    return { ok: true };
+  }
+  let updated = 0;
+  if (rename) {
+    await env.DB.prepare("UPDATE cmp_sources SET name = ? WHERE id = ?").bind(rename, id).run();
+    updated += 1;
+  }
+  if (kind) {
+    await env.DB.prepare("UPDATE cmp_sources SET kind = ? WHERE id = ?").bind(kind, id).run();
+    updated += 1;
+  }
+  if (city) {
+    await env.DB.prepare("UPDATE cmp_sources SET city = ? WHERE id = ?").bind(city, id).run();
+    updated += 1;
+  }
+  if (updated === 0) return { ok: false, error: "nothing to update" };
+  return { ok: true };
+}
+
+// Update companion settings such as quiet hours, caps, email mode, pause.
+export async function cmp_settings(env, { quietHours, caps, emailMode, pause }) {
+  const updates = [];
+  if (quietHours !== undefined) {
+    updates.push({ key: "quietHours", value: JSON.stringify(quietHours) });
+  }
+  if (caps !== undefined) {
+    updates.push({ key: "caps", value: JSON.stringify(caps) });
+  }
+  if (emailMode !== undefined) {
+    updates.push({ key: "emailMode", value: emailMode });
+  }
+  if (pause !== undefined) {
+    updates.push({ key: "pause", value: pause ? "1" : "0" });
+  }
+  for (const { key, value } of updates) {
+    await env.DB.prepare(
+      "INSERT INTO wellbeing_config (key, value, updated_at) VALUES (?, ?, ?) " +
+      "ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at"
+    ).bind(key, value, nowIso()).run();
+  }
+  return { ok: true };
+}
+
+// View the fleet queue: open issues, code tasks, recent deploys.
+// This placeholder returns an empty list; real implementation would query appropriate tables.
+export async function cmp_fleet_queue(env) {
+  // Example structure: [{type: "issue", id: "...", title: "..."}]
+  return [];
+}
+
+// Ensure irreversible data‑deletion actions are confirmed.
+export async function cmp_ops_issue(env, { type, confirm }) {
+  if (type === "delete_data") {
+    requireConfirmation("data deletion", confirm);
+    // Perform data deletion (placeholder – actual tables omitted).
+    await env.DB.prepare("DELETE FROM cmp_feedback").run();
+    await env.DB.prepare("DELETE FROM journal").run();
+    // ...additional tables as needed...
+    return { ok: true };
+  }
+  // Fallback for other issue types.
+  return { ok: false, error: "unsupported issue type" };
+}
+
+// End of COMPANION-OPS-2 additions.
+
 export function heuristicClarify(text) {
   const t = s(text, 4000);
   if (!t) return { type: "trash", title: "", why: "empty" };

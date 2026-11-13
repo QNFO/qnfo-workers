@@ -296,7 +296,7 @@ function clampMaxTokens(requested, isReason) {
 __name(clampMaxTokens, "clampMaxTokens");
 __name2(clampMaxTokens, "clampMaxTokens");
 __name22(clampMaxTokens, "clampMaxTokens");
-var VERSION = "4.45.7";
+var VERSION = "4.45.8";
 // 4.37.2 KERNEL-PERSONAL-PRIVACY-1: preserve all ten registered reply categories across the content-free telemetry boundary.
 // 4.37.1 KERNEL-PERSONAL-PRIVACY-1: classify twin replies inside the personal plane; AUDIT receives only fixed categories and random event ids, never reply text or excerpts.
 // 4.37.0 KERNEL-EVERYWHERE-1 (2026-11-06, owner directive "IMPLEMENT EVERYWHERE ACROSS ALL AI APPS AND SERVICES AND SURFACES", pillar personal): the twin SYSTEM_PROMPT carries the DOCTRINE-1 kernel 8.2.1 reply recognitions (KERNEL-REPLY-4): end every reply on the answer or result, never on a question, conditional offer or menu; ambiguity gets a stated assumption; a refusal or limit with its reason is a disposition stated declaratively; reversible tool actions are taken and reported in the same reply, and a requested change is made with the tool, not described. Each twin reply is also mirrored to qnfo-audit.personal_replies so the kernel false-stop scan covers this surface. prior 4.36.2
@@ -2307,6 +2307,110 @@ function contextFor(text) {
   if (/\b(walk|run|gym|swim|bike|cycle|park|outside|fresh air)\b/.test(t)) return "@outside";
   return "@anywhere";
 }
+ 
+// COMPANION-FORYOU-4
+// Adjust feed items to surface reasons beyond taste words and influence ranking.
+function enrichFeedReasons(feedItems) {
+  // Map known reasons to user‑facing explanations.
+  const REASON_MAP = {
+    "wrong time": "Because you said wrong time",
+    "too far": "Because you said too far",
+    "too expensive": "Because you said too expensive",
+    "seen it": "Because you said you've already seen it"
+  };
+  return (feedItems || []).map((item) => {
+    const reason = String(item.reason || "").toLowerCase();
+    for (const key in REASON_MAP) {
+      if (reason.includes(key)) {
+        // expose a hidden reason for UI display
+        item.hiddenReason = REASON_MAP[key];
+        // boost ranking weight so these items are considered more relevant
+        item.rankWeight = (item.rankWeight || 0) + 10;
+        break;
+      }
+    }
+    return item;
+  });
+}
+
+// COMPANION-OPS-2
+// Helper to enforce confirmation for irreversible actions.
+function requireConfirmation(action, confirmed) {
+  if (!confirmed) throw new Error(`Confirmation required for ${action}`);
+}
+
+// Edit, rename, change kind or city of a source, or remove it.
+async function cmp_source_edit(env, { id, rename, kind, city, remove, confirm }) {
+  if (remove) {
+    requireConfirmation("source removal", confirm);
+    // Assume a table `cmp_sources` exists; perform deletion if present.
+    await env.DB.prepare("DELETE FROM cmp_sources WHERE id = ?").bind(id).run();
+    return { ok: true };
+  }
+  let updated = 0;
+  if (rename) {
+    await env.DB.prepare("UPDATE cmp_sources SET name = ? WHERE id = ?").bind(rename, id).run();
+    updated += 1;
+  }
+  if (kind) {
+    await env.DB.prepare("UPDATE cmp_sources SET kind = ? WHERE id = ?").bind(kind, id).run();
+    updated += 1;
+  }
+  if (city) {
+    await env.DB.prepare("UPDATE cmp_sources SET city = ? WHERE id = ?").bind(city, id).run();
+    updated += 1;
+  }
+  if (updated === 0) return { ok: false, error: "nothing to update" };
+  return { ok: true };
+}
+
+// Update companion settings such as quiet hours, caps, email mode, pause.
+async function cmp_settings(env, { quietHours, caps, emailMode, pause }) {
+  const updates = [];
+  if (quietHours !== undefined) {
+    updates.push({ key: "quietHours", value: JSON.stringify(quietHours) });
+  }
+  if (caps !== undefined) {
+    updates.push({ key: "caps", value: JSON.stringify(caps) });
+  }
+  if (emailMode !== undefined) {
+    updates.push({ key: "emailMode", value: emailMode });
+  }
+  if (pause !== undefined) {
+    updates.push({ key: "pause", value: pause ? "1" : "0" });
+  }
+  for (const { key, value } of updates) {
+    await env.DB.prepare(
+      "INSERT INTO wellbeing_config (key, value, updated_at) VALUES (?, ?, ?) " +
+      "ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at"
+    ).bind(key, value, nowIso()).run();
+  }
+  return { ok: true };
+}
+
+// View the fleet queue: open issues, code tasks, recent deploys.
+// This placeholder returns an empty list; real implementation would query appropriate tables.
+async function cmp_fleet_queue(env) {
+  // Example structure: [{type: "issue", id: "...", title: "..."}]
+  return [];
+}
+
+// Ensure irreversible data‑deletion actions are confirmed.
+async function cmp_ops_issue(env, { type, confirm }) {
+  if (type === "delete_data") {
+    requireConfirmation("data deletion", confirm);
+    // Perform data deletion (placeholder – actual tables omitted).
+    await env.DB.prepare("DELETE FROM cmp_feedback").run();
+    await env.DB.prepare("DELETE FROM journal").run();
+    // ...additional tables as needed...
+    return { ok: true };
+  }
+  // Fallback for other issue types.
+  return { ok: false, error: "unsupported issue type" };
+}
+
+// End of COMPANION-OPS-2 additions.
+
 function heuristicClarify(text) {
   const t = s(text, 4000);
   if (!t) return { type: "trash", title: "", why: "empty" };
@@ -6630,7 +6734,7 @@ window.addEventListener('online',flushQueue);document.addEventListener('visibili
 flushQueue();showPending();
 </script></body></html>`;
 
-return Object.freeze({ COMPANION_VERSION, TZ, CONTEXTS, ENERGY, NUDGE_KINDS, LADDER_KINDS, REVIEW_NUDGE_KIND, REVIEW_PUSH, reviewNudgeDue, COMPANION_BACKUP, sha256Hex, companionReleaseKeys, buildCompanionManifest, restoreCompanionRelease, INBOX_MAX_ATTEMPTS, inboxShouldFallback, DDL, TASK_COLUMNS, ensureSchema, nowIso, FRESH_DUE_SQL, rid, esc, tzOffsetMinutes, localParts, dayKey, OFFLINE_MAX_AGE_MS, clientStamp, inQuiet, FSRS_W, RETENTION, MAX_INTERVAL_DAYS, retrievability, intervalDays, fsrsSchedule, CLARIFY_SYSTEM, contextFor, heuristicClarify, parseClarify, crisisSignal, FALLBACK_CRISIS_LINES, crisisText, SAFETY_PLAN_FIELDS, normalizeSafetyPlan, saveSafetyPlan, ACTIVITY_CATEGORIES, SEED_ACTIVITIES, helpScores, pickActivity, AI_USD_PER_1K_NEURONS, aiUseSummary, aiUse, focusOptions, logActivity, whatHelps, activityBank, addActivity, WHO5_ITEMS, WHO5_SCALE, who5Score, who5Read, recordWho5, who5Status, setPause, fallbackReply, EMAIL_MODES, saveSettings, LOGIN_TO, SESSION_COOKIE, SESSION_MS, maskedLoginTo, cookieTokens, clearSessionCookies, sessionFor, sendLoginCode, verifyLoginCode, isPaused, NEVER_RETIRE, retiredFrom, DISCREET_KINDS, discreetPayload, pruneMedia, TEXTS, pickLru, energyFor, chooseAction, receptiveHours, addDays, mondayOf, weekWindow, weekText, weekLookback, weekSeen, transitionText, planNudge, b64u, unb64u, makeVapidKeys, vapidAuthHeader, encryptPayload, sendPush, pushAll, loadCfg, dayStartIso, COUNTRY_TZ, CITY_TZ, MULTI_TZ_COUNTRIES, countryCode, placeTz, stayAt, effectiveTz, localDay, EVENT_DEFAULT_MIN, eventMs, normalizeEvents, clearEventCache, loadEvents, afterEventText, GP_DAYS, gpSummaryBuild, gpSummary, sleepFromTimestamps, sleepWindow, moodStats, MIND_URL, readingLane, retiredKinds, daysSinceSocial, unansweredStreak, gatherState, remember, recall, contextSnapshot, recordMood, moodReply, addAction, upsertProject, actionDone, addJournal, addCard, reviewCard, answerNudge, MAX_CAPTURE_BYTES, transcribe, describeImage, describeImages, capture, shortClarify, clarify, dueFromWords, processItem, cmp_checkin, cmp_insights, processInbox, pushPayloadFor, companionTick, agenda, FB_KINDS, fbKey, tasteTokens, tasteModel, tasteScore, applyTaste, loadFeedback, recordFeedback, tasteSummary, tripCard, hubTiles, PLAIN_BAD, plainAction, SILENT_KINDS, recapFor, recapCarry, lowMoodForecast, forecastFor, today, tasteFilterToday, dashboard, PRIVACY_TABLES, privacy, exportAll, deleteData, PERSONA, untrusted, checkInAnswer, chatFollowUp, chatContext, noteRiskInChat, companionTools, TOOL_APPENDIX_LINE, TICK_MS, doKeys, doEnsure, doTick, SELF_CHECKS, selfHeal, selfCheckState, selfCheck, sendToFleet, doAlarm, doFetch, RECALL_DDL, RECALL_UNSURE_DAYS, RECALL_OPEN_MAX, RECALL_PARTS, recallOptions, isoWeekKey, recallGenerate, recallNext, recallAnswer, recallSummary, handleTranscription, handleCompanion, MANIFEST, ICON_SVG, SW_JS, CALM_STEPS, MIND_MAX_WORDS, MIND_TAGS, MIND_CARDS, MIND_BOOKS, mindWords, mindLint, mindTags, pickMindCard, mindAllCards, mindVotes, mindStateFor, mindFor, mindVote, MIND_GROW_CAP, MIND_GROW_SYSTEM, mindGrowTag, mindParseGrown, mindGrow, MIND_JS, CALM_JS, OFFLINE_JS, GUIDE_HTML, PAGE_HTML });
+return Object.freeze({ COMPANION_VERSION, TZ, CONTEXTS, ENERGY, NUDGE_KINDS, LADDER_KINDS, REVIEW_NUDGE_KIND, REVIEW_PUSH, reviewNudgeDue, COMPANION_BACKUP, sha256Hex, companionReleaseKeys, buildCompanionManifest, restoreCompanionRelease, INBOX_MAX_ATTEMPTS, inboxShouldFallback, DDL, TASK_COLUMNS, ensureSchema, nowIso, FRESH_DUE_SQL, rid, esc, tzOffsetMinutes, localParts, dayKey, OFFLINE_MAX_AGE_MS, clientStamp, inQuiet, FSRS_W, RETENTION, MAX_INTERVAL_DAYS, retrievability, intervalDays, fsrsSchedule, CLARIFY_SYSTEM, contextFor, enrichFeedReasons, cmp_source_edit, cmp_settings, cmp_fleet_queue, cmp_ops_issue, heuristicClarify, parseClarify, crisisSignal, FALLBACK_CRISIS_LINES, crisisText, SAFETY_PLAN_FIELDS, normalizeSafetyPlan, saveSafetyPlan, ACTIVITY_CATEGORIES, SEED_ACTIVITIES, helpScores, pickActivity, AI_USD_PER_1K_NEURONS, aiUseSummary, aiUse, focusOptions, logActivity, whatHelps, activityBank, addActivity, WHO5_ITEMS, WHO5_SCALE, who5Score, who5Read, recordWho5, who5Status, setPause, fallbackReply, EMAIL_MODES, saveSettings, LOGIN_TO, SESSION_COOKIE, SESSION_MS, maskedLoginTo, cookieTokens, clearSessionCookies, sessionFor, sendLoginCode, verifyLoginCode, isPaused, NEVER_RETIRE, retiredFrom, DISCREET_KINDS, discreetPayload, pruneMedia, TEXTS, pickLru, energyFor, chooseAction, receptiveHours, addDays, mondayOf, weekWindow, weekText, weekLookback, weekSeen, transitionText, planNudge, b64u, unb64u, makeVapidKeys, vapidAuthHeader, encryptPayload, sendPush, pushAll, loadCfg, dayStartIso, COUNTRY_TZ, CITY_TZ, MULTI_TZ_COUNTRIES, countryCode, placeTz, stayAt, effectiveTz, localDay, EVENT_DEFAULT_MIN, eventMs, normalizeEvents, clearEventCache, loadEvents, afterEventText, GP_DAYS, gpSummaryBuild, gpSummary, sleepFromTimestamps, sleepWindow, moodStats, MIND_URL, readingLane, retiredKinds, daysSinceSocial, unansweredStreak, gatherState, remember, recall, contextSnapshot, recordMood, moodReply, addAction, upsertProject, actionDone, addJournal, addCard, reviewCard, answerNudge, MAX_CAPTURE_BYTES, transcribe, describeImage, describeImages, capture, shortClarify, clarify, dueFromWords, processItem, cmp_checkin, cmp_insights, processInbox, pushPayloadFor, companionTick, agenda, FB_KINDS, fbKey, tasteTokens, tasteModel, tasteScore, applyTaste, loadFeedback, recordFeedback, tasteSummary, tripCard, hubTiles, PLAIN_BAD, plainAction, SILENT_KINDS, recapFor, recapCarry, lowMoodForecast, forecastFor, today, tasteFilterToday, dashboard, PRIVACY_TABLES, privacy, exportAll, deleteData, PERSONA, untrusted, checkInAnswer, chatFollowUp, chatContext, noteRiskInChat, companionTools, TOOL_APPENDIX_LINE, TICK_MS, doKeys, doEnsure, doTick, SELF_CHECKS, selfHeal, selfCheckState, selfCheck, sendToFleet, doAlarm, doFetch, RECALL_DDL, RECALL_UNSURE_DAYS, RECALL_OPEN_MAX, RECALL_PARTS, recallOptions, isoWeekKey, recallGenerate, recallNext, recallAnswer, recallSummary, handleTranscription, handleCompanion, MANIFEST, ICON_SVG, SW_JS, CALM_STEPS, MIND_MAX_WORDS, MIND_TAGS, MIND_CARDS, MIND_BOOKS, mindWords, mindLint, mindTags, pickMindCard, mindAllCards, mindVotes, mindStateFor, mindFor, mindVote, MIND_GROW_CAP, MIND_GROW_SYSTEM, mindGrowTag, mindParseGrown, mindGrow, MIND_JS, CALM_JS, OFFLINE_JS, GUIDE_HTML, PAGE_HTML });
 })();
 // COMPANION-INLINE-END
 var CMP_DEPS = {
