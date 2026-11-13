@@ -25,7 +25,7 @@ sq.exec(`CREATE TABLE analytics_metric_triggers (id INTEGER PRIMARY KEY, metric_
 CREATE TABLE metric_registry (metric TEXT PRIMARY KEY, last_value TEXT, refresh_cadence TEXT);
 CREATE TABLE analytics_dash_records (metric TEXT, value TEXT); CREATE TABLE analytics_dash_meta (key TEXT, value TEXT);
 CREATE TABLE agent_issues (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, description TEXT, source TEXT, category TEXT, priority TEXT, status TEXT, created_at INTEGER, updated_at INTEGER, close_channel TEXT);
-CREATE VIEW v_issue_age_ladder AS SELECT id, title, CASE WHEN status = 'open' THEN 1 ELSE 0 END AS breach FROM agent_issues;
+CREATE VIEW v_issue_age_ladder AS SELECT id, title, CASE WHEN status = 'open' THEN 1 ELSE 0 END AS breach, CASE WHEN status = 'open' THEN 999 ELSE 0 END AS age_h FROM agent_issues;
 CREATE TABLE issue_triage (issue_id INTEGER PRIMARY KEY, rc TEXT, triage_state TEXT, owner TEXT, sla_due_at TEXT, close_evidence TEXT);
 CREATE TABLE remediation_contracts (issue_id INTEGER, status TEXT, last_verdict TEXT);
 CREATE TABLE analytics_action_log (id INTEGER PRIMARY KEY AUTOINCREMENT, trigger_id INTEGER, fired_at TEXT, metric_value REAL, action TEXT, queue_target TEXT, status TEXT, notes TEXT);
