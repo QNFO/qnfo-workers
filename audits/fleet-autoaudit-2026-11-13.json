@@ -1,7 +1,7 @@
 {
-  "audited_at": "2026-11-13 20:33:45",
+  "audited_at": "2026-11-13 23:08:04",
   "d1_write_failures": [],
-  "d1_writes_ok": 8,
+  "d1_writes_ok": 13,
   "guard": {
     "_guard_rc": 0,
     "ahead": [],
@@ -40,6 +40,11 @@
       {
         "http": 200,
         "version": null,
+        "worker": "ps-llm"
+      },
+      {
+        "http": 200,
+        "version": null,
         "worker": "ps-practical-solutions"
       },
       {
@@ -71,10 +76,30 @@
         "http": 200,
         "version": null,
         "worker": "ultrastable-ultrastable"
+      },
+      {
+        "http": 200,
+        "version": null,
+        "worker": "us-idea-16438b610e"
+      },
+      {
+        "http": 200,
+        "version": null,
+        "worker": "us-idea-4bc6af0cea"
+      },
+      {
+        "http": 200,
+        "version": null,
+        "worker": "us-idea-7f16de273d"
+      },
+      {
+        "http": 200,
+        "version": null,
+        "worker": "us-idea-b7adf8fd63"
       }
     ]
   },
-  "purge_error": "purge skipped: run classified 8 workers, table held 54; a partial report must not shrink the audit surface",
+  "purge_error": "purge skipped: run classified 13 workers, table held 56; a partial report must not shrink the audit surface",
   "rows": {
     "demo-child-ultrastable": {
       "before": null,
@@ -83,6 +108,14 @@
       "match": 0,
       "note": "UNMANAGED_OK",
       "worker": "demo-child-ultrastable"
+    },
+    "ps-llm": {
+      "before": null,
+      "http": 200,
+      "live": null,
+      "match": 0,
+      "note": "UNMANAGED_OK",
+      "worker": "ps-llm"
     },
     "ps-practical-solutions": {
       "before": null,
@@ -139,6 +172,38 @@
       "match": 0,
       "note": "UNMANAGED_OK",
       "worker": "ultrastable-ultrastable"
+    },
+    "us-idea-16438b610e": {
+      "before": null,
+      "http": 200,
+      "live": null,
+      "match": 0,
+      "note": "UNMANAGED_OK",
+      "worker": "us-idea-16438b610e"
+    },
+    "us-idea-4bc6af0cea": {
+      "before": null,
+      "http": 200,
+      "live": null,
+      "match": 0,
+      "note": "UNMANAGED_OK",
+      "worker": "us-idea-4bc6af0cea"
+    },
+    "us-idea-7f16de273d": {
+      "before": null,
+      "http": 200,
+      "live": null,
+      "match": 0,
+      "note": "UNMANAGED_OK",
+      "worker": "us-idea-7f16de273d"
+    },
+    "us-idea-b7adf8fd63": {
+      "before": null,
+      "http": 200,
+      "live": null,
+      "match": 0,
+      "note": "UNMANAGED_OK",
+      "worker": "us-idea-b7adf8fd63"
     }
   },
   "stale_rows_purged": null
