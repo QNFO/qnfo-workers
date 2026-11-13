@@ -1,6 +1,6 @@
 // q08-prediction-markets: the paper-trading proving ground for q08's information edge (PM-CHARTER-1).
 // Paper money only. No wallet, no exchange key, no order ever leaves this worker: the only executor in this file writes D1 rows.
-var VERSION = "1.14.2-codeagent";
+var VERSION = "1.14.3-codeagent";
 
 // ---------- charter (the machine-readable form; GET /api/charter serves it with the live evidence) ----------
 export const CHARTER = {
@@ -676,6 +676,11 @@ async function review(env, db, nowMs) {
   const writes = [];
   const locked = ctl.last_tune_at && nowMs - Date.parse(ctl.last_tune_at) < CFG.TUNE_DAYS * 86400000;
   let bump = null; // any change to the pipeline's parameters starts a new evaluation sample
+  if (isPaused(ctl, nowMs) && ctx.drawdown_pct < 15 && ev.brier_gain >= 0) {
+    writes.push(db.prepare("DELETE FROM pt_control WHERE key IN ('paused_until','paused_reason')"),
+      logDecision(db, now, "resume new signal entries", "breaker conditions recovered: the drawdown is back under 15% and the model is no longer worse than the market price", { n: ev.n, brier_gain: ev.brier_gain, drawdown_pct: ctx.drawdown_pct }, "none: the pause keys were removed by this change"));
+    ctl = { ...ctl, paused_until: null, paused_reason: null };
+  }
   for (const a of reviewActions(ev, ctx)) {
     if (a.kind === "pause" && !isPaused(ctl, nowMs)) {
       const until = new Date(nowMs + CFG.PAUSE_H * 3600000).toISOString();
