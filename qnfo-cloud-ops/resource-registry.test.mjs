@@ -21,3 +21,9 @@ test("VERSION is at least 1.52.0", () => {
   const [a, b] = /var VERSION = "(\d+)\.(\d+)/.exec(src).slice(1).map(Number);
   assert.ok(a > 1 || b >= 52);
 });
+test("CF-RESOURCE-ACTIONS-1: creates only R2 buckets, never deletes, files deduped issues", () => {
+  assert.match(job, /\/r2\/buckets", \{ method: "POST"/);
+  assert.ok(!/method: "DELETE"/.test(job));
+  assert.match(job, /status = 'open' LIMIT 1/);
+  assert.match(job, /closing probe:/);
+});
