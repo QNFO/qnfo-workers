@@ -1,0 +1,12 @@
+{
+  "product": "Personal Companion (me.q08.org)",
+  "_note": "PERSONAL-PLANE-OWNERSHIP-1: one owner per capability and per D1 table family in the personal plane. Read by scripts/personal-plane-ownership.test.mjs.",
+  "workers": {
+    "personal-api": { "role": "the product: app UI at /companion, chat and tools (OpenAI-compatible /v1), Today brief, For you, check-ins and moments, capture, calendar, push nudges", "owns": ["cmp_*", "live_*"] },
+    "personal-companion": { "role": "background services: reading feed and writing pipeline, travel planner, wellbeing e-mail ladder (/wb/*), vault indexer, job-application and research workflows", "owns": ["companion_*", "travel_*", "wb_*"] },
+    "personal-watch": { "role": "independent product: watch.q08.org curated video queue (stateless, no shared store)", "owns": [] },
+    "qnfo-companion-guard": { "role": "guard: probes me.q08.org every 15 minutes and rolls personal-api back after two failed probes", "owns": [] }
+  },
+  "duplicate_tables_shrink_only": ["cmp_asks", "companion_nudges", "wellbeing_checkins", "wellbeing_config"],
+  "refactor_issue": "PERSONAL-PLANE-DEDUP-1: fold the wellbeing ladder and nudges into one owner; delete the allowlisted duplicate DDL"
+}
