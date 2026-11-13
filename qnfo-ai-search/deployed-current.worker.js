@@ -36,7 +36,7 @@
 //   LIMITS    public AI use is capped per visitor (hashed IP, hourly) and globally (daily); over a cap, or with the
 //             fleet's 30-day AI spend at SPEND_CAP_TOTAL_USD, the answer is sources-only (no model call).
 
-var VERSION = "2.20.4-codeagent";
+var VERSION = "2.20.5-codeagent";
 // 2.19.0 KERNEL-EVERYWHERE-1 (2026-11-06, owner directive "IMPLEMENT EVERYWHERE ACROSS ALL AI APPS AND SERVICES AND SURFACES", pillar reach): the Ask writer SYSTEM prompt carries the DOCTRINE-1 kernel 8.2.1 reply recognitions (KERNEL-REPLY-4): the answer body ends on the result; the designed FOLLOWUPS block remains the only question shape; no conditional offers or menus; ambiguity gets a stated assumption; limits are dispositions with their reason. prior 2.18.2-codeagent
 // 2.13.0 CROSS-LINK-1 (2026-11-04, pillar reach; minor: the Ask page links QWAV and q08 in its nav and footer and carries a Keep exploring strip to the paper library, QWAV, q08 and the idea threads). Prediction: ask.qwav.org visitors click through to another surface; revert: restore 2.12.17. // 2.12.17 earlier history follows: 
 
@@ -2732,7 +2732,7 @@ async function measure(env) {
   // ASK-PLAIN-1: ask_events.plain is NULL on answers that were never written (and on rows older than the stored text), so neither counts.
   var pl =await d.prepare("SELECT COUNT(*) n, SUM(CASE WHEN (plain & 6) > 0 THEN 1 ELSE 0 END) bad FROM ask_events WHERE ts >= ?1 AND cached = 0 AND limited IS NULL AND error IS NULL AND answer_chars > 80 AND plain IS NOT NULL").bind(since7).first().catch(function (e) { logErr("measure plain share", e); return null; });
   var n = Number(a && a.n) || 0;
-  var answered = n - (Number(a && a.err) || 0);
+  var answered = n - (Number(a && a.err) || 0) + (Number(a && a.cached) || 0); // include cached answers in the answered count
   var ms = (lat.results || []).map(function (r) { return r.total_ms; });
   var vals = {
     ask_answers_7d: answered,
