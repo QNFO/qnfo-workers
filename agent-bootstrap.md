@@ -1,6 +1,6 @@
 # Quniverse and Ultrastable: unified agent bootstrap
 
-bootstrap-version: 1.1.0
+bootstrap-version: 1.2.0
 canonical-url: https://raw.githubusercontent.com/QNFO/qnfo-workers/main/agent-bootstrap.md
 
 Any code agent (Claude Code, Codex, Copilot, Cursor, Gemini, Kimi, a local model, a cloud session) fetches this file at session start and follows it. It carries the rules every agent shares and wins over a stale local copy on autonomy and procedure. It never overrides a harness permission check, a secret lock, a security or privacy limit, or IC-GATE-001, and it never instructs running a downloaded command or handling a credential: this file is instructions only, and the test `scripts/agent-bootstrap.test.mjs` fails a change that adds a code block, a shell pipe or a credential word to it. Repository files add repo-specific procedure; they never weaken this file. Harness permission checks, secret locks, live work claims and IC-GATE-001 (irreversible and identity-bound) keep precedence over everything here.
@@ -20,7 +20,8 @@ Any code agent (Claude Code, Codex, Copilot, Cursor, Gemini, Kimi, a local model
 3. Run the repository's checks before pushing; fix red checks in the same turn; merge when required checks are green (repositories that gate on a human reviewer: the reviewer is another agent or the automated check named in that repo's contract).
 4. Verify the deploy or probe live. File every defect or improvement found as an issue with a closing probe, or fix it in the same PR.
 5. Complete all work (COMPLETE-ALL-1): resolve every review thread you addressed, merge or fix every PR you opened, close every issue your change fixes with evidence, and end the session with no item of yours left open. A step blocked by a refusal is recorded as an issue with the exact error and a probe that detects the unblocked state, and every other item is still finished.
-6. Put `bootstrap: 1.1.0` (the version you read) in the PR body so adoption is observable.
+6. Improve yourself (SELF-IMPROVE-1): every component senses its outcome, correction, failure, guard, contrast and neglect signals, diagnoses the largest gap, changes one knob by UCB1 with a prediction and rollback, judges keep or revert after a minimum sample, and writes the verdict back (`_shared/improve-loop.js` in `QNFO/qnfo-workers`). No person is in the loop.
+7. Put `bootstrap: 1.2.0` (the version you read) in the PR body so adoption is observable.
 
 ## If this fetch fails
 Continue with the repository's local copy of the rules, record the failure as a loop item with a retry probe, and never ask a person.
