@@ -4360,17 +4360,20 @@ __name2222222(handlePapersRobots, "handlePapersRobots");
 __name22222222(handlePapersRobots, "handlePapersRobots");
 __name222222222(handlePapersRobots, "handlePapersRobots");
 __name2222222222(handlePapersRobots, "handlePapersRobots");
+var ENGAGED_READERS_7D_CACHE = { at: 0, value: null };
 async function engagedReaders7d(env) {
   // REACH-FOCUS-1.5 (#1001834): the readership figure is read live from the reader_yield_daily ledger,
   // never hand-typed. Outside-the-fleet engaged sessions is the honest number; all sources is the ceiling.
+  // Cached for 10 minutes so every /about or llms.txt request does not re-run the ledger query.
+  if (ENGAGED_READERS_7D_CACHE.value && Date.now() - ENGAGED_READERS_7D_CACHE.at < 600000) return ENGAGED_READERS_7D_CACHE.value;
   try {
     const r = await env.LIVING_PAPER.prepare("SELECT COALESCE(SUM(CASE WHEN fleet = 0 THEN engaged END), 0) AS outside, COALESCE(SUM(engaged), 0) AS all_sources FROM reader_yield_daily WHERE day >= date('now', '-6 days')").first();
-    if (r) return { outside: Number(r.outside || 0), all_sources: Number(r.all_sources || 0) };
+    if (r) { const v = { outside: Number(r.outside || 0), all_sources: Number(r.all_sources || 0) }; ENGAGED_READERS_7D_CACHE = { at: Date.now(), value: v }; return v; }
   } catch (e) { console.error(JSON.stringify({ worker: "qnfo-gateway", where: "engagedReaders7d.d1", reach_focus: "1.5", error: String(e && e.message || e) })); }
   try {
     const ga = await env.PDF_SVC.fetch("https://qnfo-pdf/api/ga4-overview");
     const j = await ga.json();
-    if (j && Number.isFinite(Number(j.engaged_outside_7d))) return { outside: Number(j.engaged_outside_7d), all_sources: Number(j.engaged_all_7d || 0) };
+    if (j && Number.isFinite(Number(j.engaged_outside_7d))) { const v = { outside: Number(j.engaged_outside_7d), all_sources: Number(j.engaged_all_7d || 0) }; ENGAGED_READERS_7D_CACHE = { at: Date.now(), value: v }; return v; }
   } catch (e) { console.error(JSON.stringify({ worker: "qnfo-gateway", where: "engagedReaders7d.ga4", reach_focus: "1.5", error: String(e && e.message || e) })); }
   return null;
 }

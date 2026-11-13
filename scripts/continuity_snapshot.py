@@ -48,7 +48,7 @@ import retention_sweep as RSW  # noqa: E402
 
 BUCKET = "qnfo-backups"
 PAGE = 500
-MAX_PAGES = 60
+MAX_PAGES = 5000
 STATE_TABLES = ["agent_issues", "issue_triage", "issue_lifecycle", "agent_issues_tombstone", "remediation_contracts",
                 "decision_log", "decision_outcomes", "belief_registry", "spof_registry", "control_registry", "failure_modes",
                 "capability_ledger", "blocker_redteam", "metric_registry", "analytics_metric_triggers", "queue_sla",

@@ -269,5 +269,21 @@ const cookieOf = (r) => { const c = r.headers.get("Set-Cookie") || ""; const m =
   ok(db.prepare("SELECT COUNT(*) n FROM q08_editor_notes WHERE active = 1").get().n === 0, "Q14 style off all retires every direction");
   ok(!/[^\x00-\x7f]/.test(await (await callW(env, "/health")).text()), "Q15 /health stays ASCII");
 }
+// CODE-MAIL-SECOND-PATH-1: the first owner address is suppressed (Cloudflare soft bounce, 2026-11-12); the code still arrives on the second.
+{
+  const sent = [];
+  const SEND_EMAIL = { async send(m) { if (m.to === "rwnquni@outlook.com") throw new Error("Cannot send emails to this recipient. This email address has been suppressed"); sent.push(m); return {}; } };
+  const { env, db } = mk({ env: { SEND_EMAIL } });
+  const r = await postW(env, "/api/cmd/code", {}); const j = await r.json();
+  ok(r.status === 200 && j.sent && sent.length === 1 && sent[0].to === "rwnquni@gmail.com", "S1 a suppressed first address falls through to the second owner address");
+  ok(db.prepare("SELECT sent_ok FROM owner_codes").get().sent_ok === 1, "S2 the code row is marked sent so it can verify");
+  ok(!JSON.stringify(j).includes("rwnquni@gmail.com"), "S3 the page never shows a full address");
+  const r2 = await postW(env, "/api/cmd/verify", { code: codeOf(sent[0]) });
+  ok(r2.status === 200 && cookieOf(r2), "S4 the code mailed to the second address signs in");
+  const bad = { async send() { throw new Error("suppressed"); } };
+  const b = mk({ env: { SEND_EMAIL: bad } });
+  const rb = await postW(b.env, "/api/cmd/code", {}); const jb = await rb.json();
+  ok(rb.status === 502 && /10 minutes/.test(jb.error), "S5 when both fail the page says what happens next");
+}
 console.log(pass + " passed, " + fail + " failed");
 if (fail) process.exit(1);
