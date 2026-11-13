@@ -2316,7 +2316,8 @@ async function fyFeed(env, deps) {
   const today = await localDay(env, nowIso());
   const qk = await one(env.PERSONAL, "SELECT v FROM cmp_feed_meta WHERE k = 'quick'").catch(() => null);
   const quickFresh = !!(qk && qk.v && Date.now() - Date.parse(qk.v) < 3 * 3600 * 1000);
-  if (!quickFresh && await fyDue(env)) { try { await Promise.race([fyBuild(env, deps, { days: 2 }), new Promise((res) => setTimeout(res, 25000))]); } catch (e) { /* the morning build fills the rest */ } }
+  /* OWNER-ASK-2026-11-12-voice-input-mic-failing-duplicate-mic-icons-in-sea */
+if (!quickFresh && await fyDue(env)) { try { await Promise.race([fyBuild(env, deps, { days: 2 }), new Promise((res) => setTimeout(res, 25000))]); } catch (e) { /* the morning build fills the rest */ } }
   const rows = await all(env.PERSONAL, "SELECT id, date, time, title, venue, kind, url, why, score, state FROM cmp_feed WHERE date >= ? AND state IN ('new','liked') ORDER BY score DESC, date, COALESCE(time, '99') LIMIT 60", today);
   const per = {}, items = [];
   for (const r of rows) { per[r.venue] = (per[r.venue] || 0) + 1; if (per[r.venue] > 2) continue; items.push(r); if (items.length >= 8) break; }
@@ -2418,6 +2419,21 @@ export async function processItem(env, deps, row) {
   await env.PERSONAL.prepare("UPDATE cmp_inbox SET status = 'processed', processed_at = ?, result_json = ? WHERE id = ?").bind(nowIso(), JSON.stringify(res), row.id).run();
   if (sig.level >= 2) res.crisis = crisisText(await loadCfg(env));
   return Object.assign({ ok: true }, res);
+}
+export async function cmp_checkin(env, deps, { text }) {
+  if (!text || typeof text !== "string") throw new Error("checkin text required");
+  const id = "chk-" + Date.now();
+  // Insert a check‑in row; venue placeholder null.
+  await env.PERSONAL.prepare(
+    "INSERT INTO cmp_feed (id, title, venue, kind, day, state) VALUES (?,?,?,?,?,?)"
+  )
+    .bind(id, text.slice(0, 120), null, "cmp-checkin", nowIso().slice(0, 10), "saved")
+    .run();
+  return { ok: true, id };
+}
+export async function cmp_insights(env, deps, { limit = 10 } = {}) {
+  const rows = await all(env.PERSONAL, "SELECT * FROM cmp_insights ORDER BY ts DESC LIMIT ?", limit);
+  return { ok: true, insights: rows };
 }
 export async function processInbox(env, deps, limit) {
   const rows = await all(env.PERSONAL, "SELECT * FROM cmp_inbox WHERE status = 'unprocessed' AND raw_text IS NOT NULL AND COALESCE(attempts, 0) < 3 ORDER BY ts LIMIT ?", limit || 5);
