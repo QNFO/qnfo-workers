@@ -107,7 +107,9 @@ export const NUDGE_KINDS = ["cmp-agenda", "cmp-deadline", "cmp-discovery", "cmp-
 // The e-mail ladder's asks are pushed to the phone too, so the two senders read as one companion.
 export const LADDER_KINDS = ["checkin", "micro", "body", "contact", "care", "presence"];
 
-// COMPANION-NUDGE-2 (issue #1002302): the evening Daily review nudge is its own kind, not the cmp-reflect journal
+ // COMPANION-NUDGE-2 (issue #1002302): the evening Daily review nudge is its own kind, not the cmp-reflect journal
+// COMPANION-AIDISCLOSE-1
+export const AI_DISCLOSURE = "This companion uses AI to help you, but the AI is only used for suggestions when you ask; otherwise it's plain logic.";
 // prompt. One push between 19:30 and 21:45 when no Daily review exists yet for today, deep-linking straight to the
 // review card on /companion; once a review lands, no more nudges that day.
 export const REVIEW_NUDGE_KIND = "cmp-review-daily";
