@@ -1,6 +1,6 @@
 -- D1-ROWS-READ-BUDGET-1 (2026-11-13, charter pillar: cost; owner: "billions of D1 rows read, nothing in the Quniverse needs that").
 -- The hourly cost ledger already writes cost_usage_daily (product d1, metric rows_read); nothing read it against a budget. 2026-11-12 read 1.71 B rows.
---   1. fm-d1-rows-read-over-budget: expected 0. observed is yesterday's rows read when it exceeds the budget in ops_config d1_rows_read_daily_budget (default 150 M, about 90 percent under the 2026-11-06..12 mean of 1.4 B), else 0.
+--   1. fm-d1-rows-read-over-budget: expected 0. observed is yesterday's rows read when it exceeds the budget in ops_config d1_rows_read_daily_budget (default 150 M, about 90 percent under the 2026-11-06..12 mean of 1.4 B), else 0; a missing ledger row for yesterday reads as 'missing', a miss.
 --      A miss files through the failure-mode path (remediation_contracts, escalate_to qnfo-fleet-control), the same path as fm-open-loops-unclosed.
 --   2. An expression index on agent_issues(CAST(id AS TEXT)): the roadmap_implementation verify UPDATE (item LIKE 'AI-%' ... CAST(a.id AS TEXT) = substr(item, 4)) scanned all of agent_issues per roadmap row, 59 M rows in 18 calls.
 -- APPLY-BY: ci
@@ -24,5 +24,5 @@ VALUES ('d1-rows-read-over-budget', 'D1 rows read per day exceeds the budget: a 
 
 INSERT OR IGNORE INTO remediation_contracts (class, issue_id, precondition, action, verify_probe, verify_transport, max_attempts, escalate_to, expected_cadence_h, status, module, next_due_at)
 VALUES ('fm-d1-rows-read-over-budget', NULL, 'D1-ROWS-READ-BUDGET-1', 'failure-mode detector',
-  'SELECT ''0'' AS expected, CAST(COALESCE((SELECT CASE WHEN quantity > COALESCE((SELECT CAST(value AS REAL) FROM ops_config WHERE key = ''d1_rows_read_daily_budget''), 150000000) THEN CAST(quantity AS INTEGER) ELSE 0 END FROM cost_usage_daily WHERE vendor = (SELECT vendor FROM cost_usage_daily WHERE product = ''d1'' AND metric = ''rows_read'' ORDER BY date DESC LIMIT 1) AND product = ''d1'' AND metric = ''rows_read'' AND date = date(''now'', ''-1 day'')), 0) AS TEXT) AS observed',
+  'SELECT ''0'' AS expected, COALESCE((SELECT CASE WHEN SUM(quantity) > COALESCE((SELECT CAST(value AS REAL) FROM ops_config WHERE key = ''d1_rows_read_daily_budget''), 150000000) THEN CAST(CAST(SUM(quantity) AS INTEGER) AS TEXT) ELSE ''0'' END FROM cost_usage_daily WHERE product = ''d1'' AND metric = ''rows_read'' AND date = date(''now'', ''-1 day'') HAVING COUNT(*) > 0), ''missing'') AS observed',
   'd1-query', 3, 'qnfo-fleet-control', 1, 'active', 'failure-mode', datetime('now'));
