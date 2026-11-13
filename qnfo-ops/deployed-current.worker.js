@@ -552,7 +552,7 @@ __name222(gateAudit1CfWorkerDeploy, "gateAudit1CfWorkerDeploy");
 __name2222(gateAudit1CfWorkerDeploy, "gateAudit1CfWorkerDeploy");
 __name22222(gateAudit1CfWorkerDeploy, "gateAudit1CfWorkerDeploy");
 __name222222(gateAudit1CfWorkerDeploy, "gateAudit1CfWorkerDeploy");
-var VERSION = "2.72.1-codeagent";
+var VERSION = "2.73.0-codeagent";
 /* 2.62.20 OPS-ARG-ALIAS-1 (issues 5775, 5780, 6173, 6193, 6671, 6792, 6767, 6826, 6015, 6860, pillar autonomy; patch). Caller-input mistakes are no longer fleet failures: workspace_grep accepts query/regex/search for pattern, cf_worker_read/deploy/bindings accept name/script for worker, fleet_graph infers a missing op from its other arguments and accepts filter/q/name for query; a still-missing argument answers arg_error with a hint, and an arg_error or an exception thrown by the caller own run_code or run_code_net JavaScript (user_code_error) is logged as status rejected, so it files no TOOL-FAILURE or LOOP-BREAKER issue. errorDetailCapture writes worker_logs in batches of 25 and records a D1 overload as a deferral, not an error. qnfo-ops/tool-arg-alias.test.mjs. */
 /* 2.62.11 WORKER-LOAD-GATE-1 (issue #6518, pillar autonomy; patch): inline the OAuth broker in the deployable single-module worker. */
 /* 2.62.1 CONTAINER-WORKSPACE-TIMEOUT-1 (#3922, issue 1000117, pillar autonomy; patch): container_workspace_exec allows 120 seconds for cold-start initialization while preserving its 300-second ceiling. */
@@ -1031,7 +1031,7 @@ function opsSessionContinuation(run, result, opts) {
   const text = SESSION_CONTINUE_MARKER + " Continuation " + (depth + 1) + " of at most " + maxDepth + ": the previous run of this session spent its " + (Number(result.max_iters) || "tool") + "-round budget before the task was finished. Continue the ORIGINAL task from exactly where it stopped, using the tool results already in this session; do not repeat steps that succeeded. Deliver the completed result with evidence.";
   return {
     id: id, depth: depth + 1, root: root, parent: run.id,
-    schedule: { id: id, sid: run.sid, text: text, at: now + 1000, max_iters: Number(run.max_iters) || 16, run: true, created: now, depth: depth + 1, root: root, parent: run.id },
+    schedule: { id: id, sid: run.sid, text: text, at: now + 1000, max_iters: Number(run.max_iters) || 16, run: true, created: now, depth: depth + 1, root: root, parent: run.id, mode: run.mode === "code" ? "code" : undefined },
     queued: { id: id, sid: run.sid, status: "queued", steps: [], created: now, continues: run.id, depth: depth + 1, root: root }
   };
 }
@@ -2129,6 +2129,16 @@ function jobToolsPayload() {
   });
 }
 var CODE_TOOL_NAMES = ["run_code", "workspace_write", "workspace_read", "workspace_list", "workspace_delete", "github_repo_read", "github_file_write", "github_pr", "ship_change", "web_fetch", "web_search"];
+// CMD-CODE-MODE-1 (2.73.0, owner 2026-11-13: "reads are not execution ... I'm looking for code changes"): the toolset of an agent run started with mode "code". It has the
+// repository, shell and PR tools and no ops_d1_query, so a request cannot be spent on D1 reads; the run ends in ship_change (issue, branch, files, pull request) or an INCOMPLETE line.
+var AGENT_CODE_TOOL_NAMES = CODE_TOOL_NAMES.concat(["shell_exec", "exec_python", "exec_node", "run_code_net", "git_op", "git_clone_exec", "container_workspace_exec", "container_install", "github_create_branch", "github_issues_list", "github_issue_get"]);
+var CODE_RUN_NUDGE = "CODE MODE: no change has been shipped yet and the round budget is nearly spent. Your next tool call MUST be ship_change (repo, title, summary, files[{path, content}]) with the change you have so far. Do not read anything else.";
+var OPS_D1_RUN_BUDGET = 6;
+function agentCodeToolsPayload() {
+  return OPS_TOOLS.filter(function(t) { return AGENT_CODE_TOOL_NAMES.indexOf(t.name) >= 0; }).map(function(t) {
+    return { type: "function", function: { name: t.name, description: opsLeanDescription(t.description), parameters: t.parameters } };
+  });
+}
 var CODE_ONLY_SYSTEM_PROMPT = [
   "You are qnfo-ops/ops-exec in CODE MODE - a server-side code agent (the QNFO equivalent of Claude Code) running 100% on Cloudflare. You write, run, and verify code. You do not chat, do not converse, do not produce prose essays, and do not narrate your process.",
   "CODE-ONLY CONTRACT (binding):",
@@ -10296,7 +10306,7 @@ var AgenticOpsExec = class extends DurableObject {
         if (!stext) return json({ ok: false, error: "text required" }, 400);
         const rid = /^[A-Za-z0-9_-]{6,64}$/.test(String(body && body.run_id || "")) ? String(body.run_id) : randId("run-");
         const maxi = Math.max(1, Math.min(24, Number(body && body.max_iters) || 16));
-        const row = { id: rid, sid, text: stext.slice(0, 8e3), at: Date.now(), max_iters: maxi, run: true, created: Date.now() };
+        const row = { id: rid, sid, text: stext.slice(0, 8e3), at: Date.now(), max_iters: maxi, run: true, created: Date.now(), mode: body && body.mode === "code" ? "code" : undefined };
         await this.ctx.storage.put("run:" + rid, { id: rid, sid, status: "queued", steps: [], created: row.created });
         await this.ctx.storage.put("schedule:" + rid, row);
         await this.armAlarm();
@@ -10317,7 +10327,7 @@ var AgenticOpsExec = class extends DurableObject {
       }
       const text = String(body && (body.text || body.content) || "").trim();
       if (!text) return json({ ok: false, error: "text required" }, 400);
-      const r = await this.runTurn(sid, text, body && body.max_iters);
+      const r = await this.runTurn(sid, text, body && body.max_iters, undefined, body && body.mode === "code" ? { mode: "code" } : undefined);
       return json(r, r.ok ? 200 : 500);
     }
     const histList = await this.ctx.storage.list({ prefix: "history:" });
@@ -10337,8 +10347,10 @@ var AgenticOpsExec = class extends DurableObject {
     const historyKey = "history:" + sid;
     const history = await this.ctx.storage.get(historyKey) || [];
     history.push({ role: "user", content: userContent });
-    const messages = [{ role: "system", content: OPS_SYSTEM_PROMPT }].concat(history);
-    let finalText = "", turns = 0, toolCallsRun = 0, err = "";
+    const _codeMode = !!(opts && opts.mode === "code");
+    const messages = [{ role: "system", content: _codeMode ? CODE_ONLY_SYSTEM_PROMPT : OPS_SYSTEM_PROMPT }].concat(history);
+    let finalText = "", turns = 0, toolCallsRun = 0, err = "", _d1Reads = 0, _shipped = false, _nudged = false;
+    const _tools = _codeMode ? agentCodeToolsPayload() : toolsPayload();
     // SESSION-AUTOCONTINUE-1: opts.continuable is true only for a background run the alarm will continue when it spends its rounds.
     let budgetExhausted = false, usedMaxIters = 0, storedHistory = history;
     const steps = [];
@@ -10351,7 +10363,7 @@ var AgenticOpsExec = class extends DurableObject {
       usedMaxIters = maxIters;
       let iter = 0;
       while (iter < maxIters) {
-        const { resp } = await opsAgentChat(this.env, messages, DEFAULT_MAX_OUT, toolsPayload(), {}, conversationId);
+        const { resp } = await opsAgentChat(this.env, messages, DEFAULT_MAX_OUT, _tools, {}, conversationId);
         const choice = resp && resp.choices && resp.choices[0];
         if (!choice) {
           finalText = "(empty upstream response)";
@@ -10370,7 +10382,11 @@ var AgenticOpsExec = class extends DurableObject {
         for (const tc of toolCalls) {
           const fn = tc.function || {};
           const _t0 = Date.now();
-          const res = await opsAgentTool(this.env, fn.name, fn.arguments, userContent, 16e3, conversationId);
+          // D1-READ-CUT-1: a run reads D1 at most OPS_D1_RUN_BUDGET times; the next read is refused with the instruction to act (billions of rows were read by agent exploration).
+          const res = (fn.name === "ops_d1_query" && ++_d1Reads > OPS_D1_RUN_BUDGET)
+            ? { text: JSON.stringify({ ok: false, error: "D1 read budget for this run is spent (" + OPS_D1_RUN_BUDGET + " queries). Stop reading: make the change now with ship_change, or report the result you already have." }) }
+            : await opsAgentTool(this.env, fn.name, fn.arguments, userContent, 16e3, conversationId);
+          if (fn.name === "ship_change" || fn.name === "github_pr" || fn.name === "github_file_write") _shipped = true;
           const tMsg = { role: "tool", tool_call_id: tc.id, name: fn.name, content: res.text };
           history.push(tMsg);
           messages.push(tMsg);
@@ -10380,6 +10396,7 @@ var AgenticOpsExec = class extends DurableObject {
         }
         iter++;
         turns = iter;
+        if (_codeMode && !_shipped && !_nudged && iter >= maxIters - 3) { _nudged = true; messages.push({ role: "system", content: CODE_RUN_NUDGE }); }
       }
       if (!finalText) {
         budgetExhausted = true;
@@ -10439,7 +10456,7 @@ var AgenticOpsExec = class extends DurableObject {
           const _continuable = _depth < SESSION_CONTINUE_MAX_DEPTH && await opsSessionContinueEnabled(this.env);
           r = await this.runTurn(String(v.sid || "scheduled"), String(v.text || ""), Number(v.max_iters) || 16, async function(st) {
             await self.ctx.storage.put(rkey, Object.assign({}, base, { status: "running", started: base.started || Date.now(), steps: st.slice(-30) }));
-          }, { continuable: _continuable });
+          }, { continuable: _continuable, mode: v.mode === "code" ? "code" : undefined });
           const _next = opsSessionContinuation(v, r, { enabled: _continuable });
           let _reply = String(r && r.reply || "").slice(0, 11000);
           if (_next) {

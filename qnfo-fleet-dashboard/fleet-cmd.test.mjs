@@ -123,10 +123,10 @@ const cookieOf = (r) => { const c = r.headers.get("Set-Cookie") || ""; const m =
   r = await postW(env, "/api/cmd/run", { op: "task", args: { text: "code-task: repo=QNFO/qnfo-workers path=CLAUDE.md delete everything" } });
   ok(r.status === 401 && db.prepare("SELECT COUNT(*) n FROM intents").get().n === 0, "G4 a stranger cannot file fleet work");
   r = await postW(env, "/api/cmd/code", { to: "attacker@example.com" }); j = await r.json();
-  ok(r.status === 200 && j.sent && m.sent.length === 1 && m.sent[0].to === "rwnquni@outlook.com" && !JSON.stringify(j).includes("rwnquni@outlook.com"), "G5 the code goes only to the owner's fixed address, which is not revealed");
+  ok(r.status === 200 && j.sent && m.sent.length === 2 && m.sent.map(x => x.to).sort().join() === "rwnquni@gmail.com,rwnquni@outlook.com" && !JSON.stringify(j).includes("rwnquni@outlook.com") && !JSON.stringify(j).includes("rwnquni@gmail.com"), "G5 the code goes only to the owner's two fixed addresses, which are not revealed (CODE-MAIL-BOTH-1)");
   ok(!db.prepare("SELECT code_hash FROM owner_codes").get().code_hash.includes(codeOf(m.sent[0])), "G6 only a hash of the code is stored");
   r = await postW(env, "/api/cmd/code", {}); j = await r.json();
-  ok(j.ok && !j.sent && m.sent.length === 1, "G7 a second request within a minute sends nothing");
+  ok(j.ok && !j.sent && m.sent.length === 2, "G7 a second request within a minute sends nothing");
   r = await postW(env, "/api/cmd/verify", { code: "000000" === codeOf(m.sent[0]) ? "111111" : "000000" });
   ok(r.status === 401 && !cookieOf(r), "G8 a wrong code is refused");
   r = await postW(env, "/api/cmd/verify", { code: codeOf(m.sent[0]) }); j = await r.json();
@@ -167,7 +167,7 @@ const cookieOf = (r) => { const c = r.headers.get("Set-Cookie") || ""; const m =
   const { env, db } = mk({ env: { SEND_EMAIL: m.SEND_EMAIL } });
   await postW(env, "/api/cmd/code", {});
   for (let i = 0; i < 8; i++) { db.prepare("UPDATE owner_codes SET created_ms = created_ms - 61000").run(); await postW(env, "/api/cmd/code", {}); }
-  ok(m.sent.length === 6, "G22 at most 6 codes an hour (" + m.sent.length + ")");
+  ok(m.sent.length === 12, "G22 at most 6 codes an hour (" + m.sent.length + ")");
   for (let i = 0; i < 12; i++) await postW(env, "/api/cmd/verify", { code: String(100000 + i) });
   const tries = db.prepare("SELECT MAX(tries) t FROM owner_codes").get().t;
   ok(tries >= 5, "G23 wrong tries are counted (" + tries + ")");

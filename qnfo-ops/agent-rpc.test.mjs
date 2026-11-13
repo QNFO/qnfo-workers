@@ -19,13 +19,13 @@ ok(ctor.indexOf("super(ctx, env)") < ctor.indexOf("this.ctx = ctx"), "super() pr
 const body = cls.slice(cls.indexOf("async fetch(request)"), cls.indexOf("async webSocketClose"));
 ok(/request\.method === "POST"/.test(body), "DO fetch handles POST (HTTP RPC)");
 ok(/op === "history"/.test(body) && /op === "reset"/.test(body) && /op === "run"|const op = String/.test(body), "HTTP RPC ops: run / history / reset");
-ok(/this\.runTurn\(sid, text, body && body\.max_iters\)/.test(body), "HTTP RPC runs a real agent turn with the caller cap");
+ok(/this\.runTurn\(sid, text, body && body\.max_iters/.test(body), "HTTP RPC runs a real agent turn with the caller cap");
 
 ok(/async runTurn\(sid, userContent, cap(?:, onStep)?(?:, opts)?\)/.test(cls), "runTurn is the shared agent loop");
 ok(/webSocketMessage[\s\S]{0,900}await this\.runTurn\(sid, userContent\)/.test(cls), "the WebSocket path delegates to runTurn (no duplicated loop)");
 ok((cls.match(/opsAgentChat\(this\.env/g) || []).length === 2, "exactly two model calls in runTurn (loop + final no-tools round)");
 ok(/opsAgentSpan\("invoke_agent", conversationId/.test(cls), "each durable runTurn emits one invoke_agent span");
-ok(/opsAgentChat\(this\.env, messages, DEFAULT_MAX_OUT, toolsPayload\(\), \{\}, conversationId\)/.test(cls), "model rounds are nested chat spans");
+ok(/opsAgentChat\(this\.env, messages, DEFAULT_MAX_OUT, _tools, \{\}, conversationId\)/.test(cls) && /_codeMode \? agentCodeToolsPayload\(\) : toolsPayload\(\)/.test(cls), "model rounds are nested chat spans");
 ok(/opsAgentTool\(this\.env, fn\.name, fn\.arguments, userContent, 16e3, conversationId\)/.test(cls), "tool rounds are nested execute_tool spans");
 const traceHelpers = src.slice(src.indexOf("async function opsTraceConversationId"), src.indexOf("var AgenticOpsExec"));
 ok(/crypto\.subtle\.digest\("SHA-256"/.test(traceHelpers) && /gen_ai\.conversation\.id/.test(traceHelpers), "trace conversation identity is an opaque stable hash");
@@ -52,7 +52,7 @@ ok(agentWhen("nonsense") === 0 && agentWhen("") === 0 && agentWhen(null) === 0, 
 
 ok(/async runTurn\(sid, userContent, cap(?:, onStep)?(?:, opts)?\)/.test(src), "runTurn takes a caller cap");
 ok(/Math\.min\(_envMax, Math\.floor\(_capN\)\)/.test(src), "the cap is clamped to the worker ceiling, never raised");
-ok(/this\.runTurn\(sid, text, body && body\.max_iters\)/.test(src), "the HTTP run passes body.max_iters");
+ok(/this\.runTurn\(sid, text, body && body\.max_iters/.test(src), "the HTTP run passes body.max_iters");
 ok(/op === "schedule"/.test(src) && /op === "schedules"/.test(src) && /op === "cancel"/.test(src) && /op === "receipts"/.test(src), "schedule / schedules / cancel / receipts ops");
 ok(/async alarm\(\) \{/.test(src), "alarm() runs due schedules");
 ok(/storage\.setAlarm\(min\)/.test(src) && /deleteAlarm/.test(src), "the alarm is re-armed from storage, and cleared when empty");

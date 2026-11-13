@@ -11,7 +11,7 @@ var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target,
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
 // 1.77.2 ERRATA-CHAIN-DISPATCH-1 (pillar research): wake the folded errata consumer and retry its legacy parked receipts.
 // VERSION-LINE-SPLIT-1 (agent_issues 100220): the release notes sit one per line below this statement, newest first, so a VERSION bump is a one-line patch; add a new note as the first line under it.
-var VERSION = "1.109.2";
+var VERSION = "1.110.0";
 // 1.89.0 NOW-NORTH-1 and HOME-MORE-1 (pillar core; minor): the Now screen opens with four numbers tied to the owner goals (readers, fleet cost, owner load, reliability) and drops the count of metrics off target (95 of 297; nothing can be done with it); a quiet footer on the home links the full dashboard, changelog, data index and managers.
 // 1.89.0 (cont.) MONEY-FIX-1 (pillar cost; patch): the Money card subtracted the subscription figure from a pace that never included it (fleet scope of v_cost_forecast), so it showed the fleet at 701 instead of 1151 a month; it now shows the fleet line, the subscriptions line and both together.
 // 1.85.0 (cont.) NOW-REVIEW-1: independent review fixes: Snooze and Not needed hide the card; a tap removes the card at once and reloads fresh, and the hand-back claims the card before filing (no duplicate tickets); strangers get no card keys or raw error text; only the signed-in owner (not the loop token) can run commands or hand work back; bound cards are read first; an unrefreshed metric reads n/a, not 0; one refresh in flight at a time and a failed refresh retries in 10 s; the Code poll says when the executor does not answer.
@@ -3845,7 +3845,7 @@ async function v3CodeStart(env, b) {
   if (text.length < 1 || text.length > 8e3) return v3Json({ ok: false, error: "type 1-8000 characters" }, 400);
   const id = "cmd-" + cmdRandHex(10);
   const sid = /^[A-Za-z0-9_.:-]{4,80}$/.test(String(b && b.sid || "")) ? String(b.sid) : "code-" + new Date().toISOString().slice(0, 10);
-  const st = await cmdOpsFetch(env, "/agents/ops-exec", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ op: "start", text: text, sid: sid, run_id: id, max_iters: 24 }) });
+  const st = await cmdOpsFetch(env, "/agents/ops-exec", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ op: "start", mode: "code", text: text, sid: sid, run_id: id, max_iters: 24 }) });
   if (!(st.json && st.json.ok)) return v3Json({ ok: false, error: "executor did not start: " + String(st.error || st.json && st.json.error || "http " + st.http).slice(0, 200) }, 502);
   try { await env.AUDIT.prepare("INSERT INTO cmd_log (id, text, kind, status, owner, model) VALUES (?1, ?2, 'agent', 'running', 1, 'ops-agent')").bind(id, text.slice(0, 2e3)).run(); } catch (e) {}
   return v3Json({ ok: true, id: id, sid: sid }, 202);
@@ -13040,20 +13040,23 @@ async function cmdSendCode(env, request) {
   await env.AUDIT.prepare("UPDATE owner_codes SET code_hash = ?1 WHERE id = ?2").bind(await sha256hex(code + "|" + id + "|" + cmdCodeSalt(env)), id).run();
   let sentOk = false, err = null, via = null;
   const msg = { from: CMD_FROM, subject: "Fleet code " + code, text: "Your fleet.qnfo.org code is " + code + ".\n\nIt is valid for 10 minutes and opens the fleet's controls in the browser that asked for it for 12 hours.\nIf you did not ask for it, ignore this email: nothing changes without the code.\n\nqnfo-fleet-dashboard FLEET-CMD-1" };
-  for (const to of [OWNER_CODE_TO, OWNER_CODE_TO_2]) {
+  // CODE-MAIL-BOTH-1 (2026-11-13): a send Cloudflare accepts is not a delivery (the Outlook address bounced softly and was suppressed), so the code goes to both owner
+  // addresses, Gmail first; the code works from whichever inbox shows it.
+  const sent = [];
+  for (const to of [OWNER_CODE_TO_2, OWNER_CODE_TO]) {
     try {
       await env.SEND_EMAIL.send(Object.assign({ to }, msg));
       sentOk = true;
-      via = to;
-      break;
+      sent.push(to);
     } catch (e) {
       err = (err ? err + " | " : "") + String(e && e.message || e).slice(0, 120);
     }
   }
+  via = sent.length ? sent[0] : null;
   if (err) console.error(JSON.stringify({ evt: "fleet-dashboard:code-mail", sent: sentOk, via: via && maskAddr(via), error: err.slice(0, 300) }));
   await env.AUDIT.prepare("UPDATE owner_codes SET sent_ok = ?1 WHERE id = ?2").bind(sentOk ? 1 : 0, id).run();
   if (!sentOk) return { ok: false, status: 502, error: "The code email could not be sent to either owner address (" + err + "). The fleet clears mail suppressions every 10 minutes; tap Email me a code again shortly." };
-  return { ok: true, sent: true, note: "Code sent to " + maskAddr(via) + ". It is valid for 10 minutes." };
+  return { ok: true, sent: true, note: "Code sent to " + sent.map(maskAddr).join(" and ") + ". It is valid for 10 minutes." };
 }
 function maskAddr(a) {
   const p = String(a).split("@");
@@ -14929,7 +14932,7 @@ async function cmdRoutes(request, env, ctx, path, owner) {
     if (!holder) return ownerJson({ ok: false, need: "code", error: "The agent needs your email code. Type login." }, 401);
     const text = String(b && b.text || "").trim();
     if (text.length < 1 || text.length > 8e3) return ownerJson({ ok: false, error: "type 1-8000 characters" }, 400);
-    const r = await cmdOpsFetch(env, "/agents/ops-exec", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ op: "run", text: text, sid: String(b && b.sid || "dashboard").slice(0, 80), max_iters: 8 }) });
+    const r = await cmdOpsFetch(env, "/agents/ops-exec", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ op: "run", mode: "code", text: text, sid: String(b && b.sid || "dashboard").slice(0, 80), max_iters: 8 }) });
     const j = r.json || {};
     return ownerJson({ ok: !!j.ok, http: r.http, ms: r.ms, reply: j.reply || null, turns: j.turns || 0, sid: j.sid || null, error: r.error || j.error || null }, j.ok ? 200 : 502);
   }
@@ -15008,7 +15011,7 @@ async function cmdRoutes(request, env, ctx, path, owner) {
   const am = /^agent:\s*([\s\S]+)$/i.exec(text.trim());
   if (am) {
     if (!holder) return ownerJson({ ok: false, kind: "answer", need: "code", error: "The agent needs your email code. Type login." }, 401);
-    const ar = await cmdOpsFetch(env, "/agents/ops-exec", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ op: "run", text: am[1].trim(), sid: "console", max_iters: 8 }) });
+    const ar = await cmdOpsFetch(env, "/agents/ops-exec", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ op: "run", mode: "code", text: am[1].trim(), sid: "console", max_iters: 8 }) });
     const aj = ar.json || {};
     return ownerJson({ ok: !!aj.ok, kind: "answer", text: aj.ok ? String(aj.reply || "(empty reply)") + "\n\n\u00b7 " + (aj.turns || 0) + " tool rounds \u00b7 " + (ar.ms || 0) + "ms" : "agent failed: " + (ar.error || aj.error || ("http " + ar.http)), holder }, aj.ok ? 200 : 502);
   }
@@ -15108,7 +15111,7 @@ async function cmdRoutes(request, env, ctx, path, owner) {
     await cmdLogHandoff(env, "code-session start", "http " + (session.http || 0) + " " + String(session.error || "").slice(0, 160));
     // Keep the existing qnfo-ops run as an independent fallback if CodeSession is unavailable.
     const aid = "cmd-" + cmdRandHex(10);
-    const st = await cmdOpsFetch(env, "/agents/ops-exec", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ op: "start", text: text, sid: "console-" + new Date().toISOString().slice(0, 10), run_id: aid, max_iters: 16 }) });
+    const st = await cmdOpsFetch(env, "/agents/ops-exec", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ op: "start", mode: "code", text: text, sid: "console-" + new Date().toISOString().slice(0, 10), run_id: aid, max_iters: 16 }) });
     if (st.json && st.json.ok) {
       await env.AUDIT.prepare("INSERT INTO cmd_log (id, text, from_url, kind, status, owner, model) VALUES (?1, ?2, ?3, 'agent', 'running', 1, 'ops-agent')").bind(aid, text, from || null).run();
       return ownerJson({ ok: true, kind: "pending", id: aid, agent: true, holder }, 202);
