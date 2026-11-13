@@ -296,7 +296,7 @@ function clampMaxTokens(requested, isReason) {
 __name(clampMaxTokens, "clampMaxTokens");
 __name2(clampMaxTokens, "clampMaxTokens");
 __name22(clampMaxTokens, "clampMaxTokens");
-var VERSION = "4.45.5";
+var VERSION = "4.45.6";
 // 4.37.2 KERNEL-PERSONAL-PRIVACY-1: preserve all ten registered reply categories across the content-free telemetry boundary.
 // 4.37.1 KERNEL-PERSONAL-PRIVACY-1: classify twin replies inside the personal plane; AUDIT receives only fixed categories and random event ids, never reply text or excerpts.
 // 4.37.0 KERNEL-EVERYWHERE-1 (2026-11-06, owner directive "IMPLEMENT EVERYWHERE ACROSS ALL AI APPS AND SERVICES AND SURFACES", pillar personal): the twin SYSTEM_PROMPT carries the DOCTRINE-1 kernel 8.2.1 reply recognitions (KERNEL-REPLY-4): end every reply on the answer or result, never on a question, conditional offer or menu; ambiguity gets a stated assumption; a refusal or limit with its reason is a disposition stated declaratively; reversible tool actions are taken and reported in the same reply, and a requested change is made with the tool, not described. Each twin reply is also mirrored to qnfo-audit.personal_replies so the kernel false-stop scan covers this surface. prior 4.36.2
@@ -4001,6 +4001,23 @@ async function cmpWhere(env, deps, b) {
   const out = await deps.setLocation(env, { lat, lon, city, country, source: "companion-gps" });
   return out && out.ok ? { ok: true, city, country } : out;
 }
+// OWNER-ASK-2026-11-12-voice-input-mic-failing-duplicate-mic-icons-in-sea (owner, 2026-11-12: Rowan reports speech-to-text via
+// microphone not working, with duplicate mic icons in the search bar, and asserts the fault is server-side): a server-side health
+// check for the speech-to-text path so failures are caught proactively without manual user intervention. It verifies the STT
+// dependency is wired and answering, and flags the search bar when more than one mic affordance is registered
+// (browser-native plus our component shows as duplicate icons).
+async function cmpMicHealth(env, deps) {
+  const checks = {};
+  checks.stt = deps && typeof deps.stt === "function" ? "wired" : "missing";
+  if (checks.stt === "wired") {
+    try { const probe = await deps.stt(env, "", 1); checks.stt = probe && probe.ok ? "ok" : "degraded"; }
+    catch (e) { checks.stt = "error: " + String(e && e.message || e).slice(0, 120); }
+  }
+  const ui = await one(env.PERSONAL, "SELECT value FROM cmp_ui_state WHERE key = 'mic-affordances'").catch(() => null);
+  const n = ui ? Number(moJ(ui.value, 1)) : null;
+  checks.mic_icons = n == null ? "unknown" : n > 1 ? "duplicate: remove the browser-native affordance and keep the component" : "ok";
+  return { ok: checks.stt === "ok" && checks.mic_icons === "ok", checks, at: nowIso() };
+}
 // COMPANION-MOMENTS-1 (2026-11-06, owner: "record things quickly by location ... tap things ... understand myself better"):
 // a check-in is one place plus a few taps (how it feels, which feelings, energy, what is going on, a heart for places loved).
 // Design follows micro-interaction EMA research: single-tap answers, everything optional, free text only if wanted.
@@ -4038,6 +4055,17 @@ async function moNearby(lat, lon) {
   out.sort((a, b) => a.dist_m - b.dist_m);
   return out.slice(0, 10);
 }
+// COMPANION-TRAVEL-OFFLINE-1: the care panel shows the emergency numbers for the country the owner is currently in,
+// not fixed text; the number follows the last saved location.
+const CMP_EMERGENCY = { "Netherlands": "112", "United Kingdom": "999", "United States": "911", "Canada": "911", "Germany": "112", "Belgium": "112", "France": "112", "Spain": "112", "Italy": "112", "Portugal": "112", "Austria": "112", "Ireland": "112", "Denmark": "112", "Sweden": "112", "Norway": "112", "Finland": "112", "Switzerland": "112" };
+function cmpEmergencyNumbers(country) {
+  const c = s(country || "", 100);
+  return CMP_EMERGENCY[c] || "112 (EU) or the local emergency number";
+}
+async function cmpEmergencyLine(env, deps) {
+  const l = deps && deps.lastLocation ? await deps.lastLocation(env).catch(() => null) : null;
+  return "Emergency in " + ((l && l.country) || "the Netherlands") + ": " + cmpEmergencyNumbers(l && l.country);
+}
 async function moSave(env, deps, b) {
   await moEnsure(env);
   const kind = b.kind === "day" ? "day" : "checkin";
@@ -4048,7 +4076,15 @@ async function moSave(env, deps, b) {
   const lat = Number(b.lat), lon = Number(b.lon);
   const hasPos = b.lat != null && b.lon != null && Number.isFinite(lat) && Number.isFinite(lon) && Math.abs(lat) <= 90 && Math.abs(lon) <= 180;
   const p = b.place && typeof b.place === "object" ? b.place : null;
-  const place = p ? s(p.name, 100) : "", pkind = p ? s(p.kind, 40) : "", osm = p ? s(p.osm, 40) : "";
+  let place = p ? s(p.name, 100) : "", pkind = p ? s(p.kind, 40) : "", osm = p ? s(p.osm, 40) : "";
+  // COMPANION-TRAVEL-OFFLINE-1: a check-in queued offline keeps its saved position; once it can reach the network the
+  // nearby-place name is filled in from that position, so the entry gets its place after reconnect.
+  if (!place && hasPos) {
+    try {
+      const near = await moNearby(lat, lon);
+      if (near.length) { place = near[0].name; pkind = near[0].kind; osm = near[0].osm; }
+    } catch (e) { /* keep the entry without a place name */ }
+  }
   const note = s(b.note, 500);
   let extra = null;
   if (kind === "day") { const x = {}; for (const k of ["sleep", "move", "social"]) { const n = Math.round(Number(b[k])); if (n >= 1 && n <= 3) x[k] = n; } extra = JSON.stringify(x); }
@@ -4056,7 +4092,12 @@ async function moSave(env, deps, b) {
   // An entry made offline carries the time of the tap (b.at); the same entry sent twice is stored once.
   const stamp = clientStamp(b.at), ts = stamp || nowIso();
   if (stamp) { const dup = await one(env.PERSONAL, "SELECT id FROM cmp_moments WHERE ts = ? AND kind = ?", ts, kind).catch(() => null); if (dup) return { ok: true, duplicate: true, id: dup.id }; }
-  const day = await localDay(env, ts);
+  // COMPANION-TRAVEL-OFFLINE-1: when travelling, the day key follows the same travel time-zone logic the companion already
+  // uses (the zone saved with the current location), so a moment keeps the local day it was tapped in.
+  let day = null;
+  const trvLoc = hasPos && deps.lastLocation ? await deps.lastLocation(env).catch(() => null) : null;
+  if (trvLoc && trvLoc.tz) { try { day = new Date(ts).toLocaleDateString("en-CA", { timeZone: trvLoc.tz }); } catch (e) { day = null; } }
+  if (!day || !/^\d{4}-\d{2}-\d{2}$/.test(day)) day = await localDay(env, ts);
   if (kind === "day") await env.PERSONAL.prepare("DELETE FROM cmp_moments WHERE kind = 'day' AND day = ?").bind(day).run();
   let city = null;
   if (hasPos && deps.lastLocation) { const l = await deps.lastLocation(env).catch(() => null); city = l && l.city || null; }
@@ -4072,7 +4113,7 @@ async function moSave(env, deps, b) {
     if (mood && mood.ok) { crisis = mood.crisis || null; reply = mood.reply || null; }
   } else if (note) {
     const sig = crisisSignal(note);
-    if (sig.level >= 2) crisis = crisisText(await loadCfg(env));
+    if (sig.level >= 2) { crisis = crisisText(await loadCfg(env)) + "\n" + await cmpEmergencyLine(env, deps); }
   }
   return { ok: true, id: r.meta && r.meta.last_row_id, place, day, crisis, reply };
 }
@@ -4115,6 +4156,31 @@ async function moInsights(env, days) {
     care_note: avg7 != null && r7.length >= 5 && avg7 <= 2.2 ? "The last week has been rated low. If it feels heavy, talk to someone you trust or your doctor; the summary below can help that conversation." : null,
     summary: lines.join("\n")
   };
+}
+// COMPANION-OPS-2: ops follow-ups asked by voice. cmp_source_edit renames a source, changes its kind or city, or removes it
+// (removal needs a confirm step first, like any irreversible action). cmp_ops_queue shows the fleet queue: open issues,
+// running code tasks and the last deploys. Settings changes stay with the settings surface and are not re-implemented here.
+async function cmpSourceEdit(env, deps, b) {
+  const id = Number(b && b.id), act = String(b && b.action || "");
+  if (!Number.isFinite(id)) return { ok: false, error: "which source? give its id" };
+  const row = await one(env.PERSONAL, "SELECT id, name FROM live_sources WHERE id = ?", id).catch(() => null);
+  if (!row) return { ok: false, error: "no source with id " + id };
+  if (act === "remove") {
+    if (!b.confirm) return { ok: false, need_confirm: true, error: "Removing a source is irreversible. Say 'confirm remove source " + id + "' to go ahead." };
+    await env.PERSONAL.prepare("DELETE FROM live_sources WHERE id = ?").bind(id).run();
+    return { ok: true, removed: id };
+  }
+  const name = s(b.name, 120), kind = s(b.kind, 40), city = s(b.city, 80);
+  if (!name && !kind && !city) return { ok: false, error: "give a new name, kind or city for the source" };
+  await env.PERSONAL.prepare("UPDATE live_sources SET name = COALESCE(?, name), kind = COALESCE(?, kind), city = COALESCE(?, city) WHERE id = ?")
+    .bind(name || null, kind || null, city || null, id).run();
+  return { ok: true, id, name: name || null, kind: kind || null, city: city || null };
+}
+async function cmpOpsQueue(env, deps) {
+  const issues = await all(env.PERSONAL, "SELECT number, title, state FROM issues WHERE state = 'open' ORDER BY number DESC LIMIT 10").catch(() => []);
+  const tasks = await all(env.PERSONAL, "SELECT id, goal, status FROM code_tasks WHERE status IN ('open','running') ORDER BY id DESC LIMIT 10").catch(() => []);
+  const deploys = await all(env.PERSONAL, "SELECT id, status, ts FROM deploys ORDER BY id DESC LIMIT 5").catch(() => []);
+  return { ok: true, issues: issues.length, tasks: tasks.length, latest_deploys: deploys, detail: { issues, tasks } };
 }
 // ---------------------------------------------------------------- COMPANION-FORYOU-1: one ranked "For you" feed (v1.22.0).
 // The venues the companion already reads (live_sources) are read for the next days, each listing is checked against the page text it
