@@ -1,0 +1,132 @@
+{
+  "audited_at": "2026-11-13 00:04:21",
+  "d1_write_failures": [],
+  "d1_writes_ok": 7,
+  "guard": {
+    "_guard_rc": 0,
+    "ahead": [],
+    "cf_script_list": true,
+    "content_checked": true,
+    "content_drift": [],
+    "cron_only": [],
+    "cron_only_count": 0,
+    "drift": [],
+    "live_err": [],
+    "multi_version": [],
+    "multi_version_count": 0,
+    "name_resolution": true,
+    "no_health_route": [],
+    "no_live_version": [],
+    "no_repo_version": [],
+    "not_a_worker": [],
+    "not_a_worker_count": 0,
+    "not_deployed_dirs": [],
+    "not_deployed_notdrift": 0,
+    "not_deployed_workers": [],
+    "retired_present": [],
+    "retired_present_count": 0,
+    "scope": "all",
+    "sync": 0,
+    "sync_workers": [],
+    "unmanaged_route_drift": [],
+    "unmanaged_tombstones": 0,
+    "unmanaged_truncated": false,
+    "unmanaged_workers": [
+      {
+        "http": 200,
+        "version": null,
+        "worker": "demo-child-ultrastable"
+      },
+      {
+        "http": 200,
+        "version": null,
+        "worker": "qnfo-workers"
+      },
+      {
+        "http": 200,
+        "version": "1.0.0",
+        "worker": "ultrastable-agents"
+      },
+      {
+        "http": 200,
+        "version": "0.2.0",
+        "worker": "ultrastable-dashboard"
+      },
+      {
+        "http": 404,
+        "version": null,
+        "worker": "ultrastable-site"
+      },
+      {
+        "http": 404,
+        "version": null,
+        "worker": "ultrastable-tick"
+      },
+      {
+        "http": 200,
+        "version": null,
+        "worker": "ultrastable-ultrastable"
+      }
+    ]
+  },
+  "purge_error": "purge skipped: run classified 7 workers, table held 53; a partial report must not shrink the audit surface",
+  "rows": {
+    "demo-child-ultrastable": {
+      "before": null,
+      "http": 200,
+      "live": null,
+      "match": 0,
+      "note": "UNMANAGED_OK",
+      "worker": "demo-child-ultrastable"
+    },
+    "qnfo-workers": {
+      "before": null,
+      "http": 200,
+      "live": null,
+      "match": 0,
+      "note": "UNMANAGED_OK",
+      "worker": "qnfo-workers"
+    },
+    "ultrastable-agents": {
+      "before": null,
+      "http": 200,
+      "live": "1.0.0",
+      "match": 0,
+      "note": "UNMANAGED_OK",
+      "worker": "ultrastable-agents"
+    },
+    "ultrastable-dashboard": {
+      "before": null,
+      "http": 200,
+      "live": "0.2.0",
+      "match": 0,
+      "note": "UNMANAGED_OK",
+      "worker": "ultrastable-dashboard"
+    },
+    "ultrastable-site": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "UNMANAGED_NO_HEALTH",
+      "worker": "ultrastable-site"
+    },
+    "ultrastable-tick": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "UNMANAGED_NO_HEALTH",
+      "worker": "ultrastable-tick"
+    },
+    "ultrastable-ultrastable": {
+      "before": null,
+      "http": 200,
+      "live": null,
+      "match": 0,
+      "note": "UNMANAGED_OK",
+      "worker": "ultrastable-ultrastable"
+    }
+  },
+  "stale_rows_purged": null
+}
