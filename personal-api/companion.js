@@ -3078,6 +3078,63 @@ export function companionTools(deps) {
       if (days) await env.PERSONAL.prepare("DELETE FROM cmp_feed_meta WHERE k IN ('built','quick')").run().catch(() => null);
       return { ok: true, id: add.id, name: add.name, url: add.url, status, days_with_listings: days, active: days > 0, note: days ? "It joins the For you feed the next time Today opens." : "Switched off because the page could not be read or shows no dated listings; tell Rowan and ask for a better page." };
     }),
+    // COMPANION-OPS-2: the owner can edit and remove sources by voice, change their settings, and see the fleet's queue. Only removal is irreversible, so only it needs a confirm step.
+    cmp_source_edit: T("Companion ops: rename a venue/calendar source, change its kind or city, or remove it. Removing is permanent: ask Rowan and call again with confirm=true.", { id: { type: "string", required: true }, name: { type: "string", required: false }, kind: { type: "string", required: false }, city: { type: "string", required: false }, remove: { type: "boolean", required: false }, confirm: { type: "boolean", required: false } }, async (env, a) => {
+      if (!a || !a.id) return { ok: false, error: "id is required" };
+      const row = await one(env.PERSONAL, "SELECT id, name, kind FROM live_sources WHERE id = ?", a.id).catch(() => null);
+      if (!row) return { ok: false, error: "no source with id " + a.id };
+      if (a.remove === true) {
+        if (a.confirm !== true) return { ok: false, needs_confirm: true, error: "removing a source is permanent; ask Rowan first, then call again with confirm=true" };
+        await env.PERSONAL.prepare("DELETE FROM live_sources WHERE id = ?", a.id).run();
+        await env.PERSONAL.prepare("DELETE FROM cmp_feed_meta WHERE k IN ('built','quick')").run().catch(() => null);
+        return { ok: true, removed: row.name };
+      }
+      const name = a.name ? s(a.name, 120) : null, kind = a.kind ? s(a.kind, 40) : null, city = a.city ? s(a.city, 80) : null;
+      if (!name && !kind && !city) return { ok: false, error: "nothing to change: give name, kind, city or remove" };
+      const upd = async () => env.PERSONAL.prepare("UPDATE live_sources SET name = COALESCE(?, name), kind = COALESCE(?, kind), city = COALESCE(?, city), updated_at = ? WHERE id = ?").bind(name, kind, city, nowIso(), a.id).run();
+      try { await upd(); } catch (e) {
+        if (!/no such column/i.test(String(e && e.message || e))) throw e;
+        await env.PERSONAL.prepare("ALTER TABLE live_sources ADD COLUMN city TEXT").run().catch(() => null);
+        await upd();
+      }
+      await env.PERSONAL.prepare("DELETE FROM cmp_feed_meta WHERE k IN ('built','quick')").run().catch(() => null);
+      return { ok: true, id: a.id, name: name || row.name, kind: kind || row.kind || null, city: city || null };
+    }),
+    cmp_settings: T("Companion ops: change Rowan's settings by voice: quiet hours (HH:MM each end), the daily nudge cap (0-10), email mode (true = email instead of push) and pause reach-outs until a date (YYYY-MM-DD). Pass only what changes; call with no arguments to read them.", { quiet_start: { type: "string", required: false }, quiet_end: { type: "string", required: false }, daily_cap: { type: "number", required: false }, email_mode: { type: "boolean", required: false }, pause_until: { type: "string", required: false } }, async (env, a) => {
+      await ensureSchema(env.PERSONAL);
+      const set = (k, v) => env.PERSONAL.prepare("INSERT INTO wellbeing_config (key, value, updated_at) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at").bind(k, JSON.stringify(v), nowIso()).run();
+      const hhmm = (v) => /^\d{1,2}:\d{2}$/.test(String(v || "")) ? String(v) : null;
+      if (a && a.quiet_start !== undefined) { const v = hhmm(a.quiet_start); if (!v) return { ok: false, error: "quiet_start must be HH:MM" }; await set("quiet_start", v); }
+      if (a && a.quiet_end !== undefined) { const v = hhmm(a.quiet_end); if (!v) return { ok: false, error: "quiet_end must be HH:MM" }; await set("quiet_end", v); }
+      if (a && a.daily_cap !== undefined) await set("daily_cap", Math.min(Math.max(Number(a.daily_cap) || 0, 0), 10));
+      if (a && a.email_mode !== undefined) await set("email_mode", a.email_mode === true);
+      if (a && a.pause_until !== undefined) { if (!/^\d{4}-\d{2}-\d{2}$/.test(String(a.pause_until))) return { ok: false, error: "pause_until must be YYYY-MM-DD" }; await set("pause_until", String(a.pause_until)); }
+      const out = await loadCfg(env);
+      return { ok: true, settings: { quiet_hours: out.quiet_start && out.quiet_end ? out.quiet_start + "-" + out.quiet_end : null, daily_cap: out.daily_cap, email_mode: out.email_mode, pause_until: out.pause_until } };
+    }),
+    cmp_fleet_queue: T("Companion ops: the fleet's queue right now - open issues, active code tasks and the last deploys.", {}, async (env) => {
+      if (!env.AUDIT) return { ok: false, error: "the fleet is not reachable from here" };
+      const issues = await env.AUDIT.prepare("SELECT id, title, priority, status, updated_at FROM agent_issues WHERE status = 'open' ORDER BY updated_at DESC LIMIT 20").all().then((r) => r.results).catch(() => []);
+      const tasks = await env.AUDIT.prepare("SELECT id, title, status, updated_at FROM agent_tasks WHERE status IN ('new','running','failed') ORDER BY updated_at DESC LIMIT 20").all().then((r) => r.results).catch(() => []);
+      const deploys = await env.AUDIT.prepare("SELECT id, note, ts FROM agent_deploys ORDER BY ts DESC LIMIT 5").all().then((r) => r.results).catch(() => []);
+      return { ok: true, open_issues: issues, code_tasks: tasks, last_deploys: deploys };
+    }),
+    // COMPANION-ASK-TOOLS-1: a spoken sentence like "I am at a jazz club and love it" becomes a check-in with the place; questions read the insights directly. Same validation and crisis handling as the check-in route.
+    cmp_checkin: T("Companion: log a check-in by voice or text - where Rowan is (venue, place, neighbourhood), how they feel (score 1-5) and an optional note. Use when Rowan says where they are and how it is.", { place: { type: "string", required: false }, score: { type: "number", required: false }, note: { type: "string", required: false } }, async (env, a) => {
+      await ensureSchema(env.PERSONAL);
+      const score = Number(a && a.score);
+      const okScore = score >= 1 && score <= 5;
+      const r = await recordMood(env, deps, { score: okScore ? score : undefined, note: (a && (a.note || a.place)) || undefined, tags: "check-in" }).catch(() => null);
+      if (!r || r.ok === false) return r || { ok: false, error: "not saved" };
+      return { ok: true, saved: true, place: a && a.place ? s(a.place, 120) : null, score: okScore ? score : null };
+    }),
+    cmp_insights: T("Companion: read the insights directly - weekly mood averages, actions by context, what has helped, their likes and dislikes, and how nudges landed. Use for questions about how Rowan has been.", {}, async (env) => {
+      await ensureSchema(env.PERSONAL);
+      const d = await dashboard(env);
+      let taste = null;
+      try { const tt = await tasteSummary(env); taste = { liked: (tt.liked || []).map((r) => r.label), disliked: (tt.disliked || []).map((r) => r.label) }; } catch (e) { /* the dashboard still answers */ }
+      return { ok: true, insights: d, likes_and_dislikes: taste };
+    }),
     cmp_feed_refresh: T("Companion ops: read the venues again now and rebuild the For you feed (1 to 7 days ahead)", { days: { type: "number", required: false } }, async (env, a) => fyBuild(env, deps, { days: Math.min(Math.max(Number(a && a.days) || 5, 1), 7) })),
     // COMPANION-FORYOU-6: the Ask answers "what should I do" from the same ranked feed the Today card shows, with the reason for each.
     cmp_foryou: T("What is on for Rowan, ranked: the For you feed with date, time, venue and why each fits Rowan. Use for what should I do tonight or this weekend.", {}, async (env) => {
@@ -3132,7 +3189,7 @@ export function companionTools(deps) {
     cmp_helps: T("Companion: what has helped Rowan before, from their own activity ratings, plus their activity bank", {}, async (env) => { await ensureSchema(env.PERSONAL); return Object.assign(await whatHelps(env, 90), { bank: await activityBank(env) }); })
   };
 }
-export const TOOL_APPENDIX_LINE = " cmp_foryou {}; cmp_capture {text}; cmp_mood {score,energy?,tags?,note?}; cmp_next {energy?}; cmp_action_add {title,context?,energy?,minutes?,project?,due?}; cmp_action_done {id}; cmp_card_add {front,back}; cmp_cards_due {}; cmp_card_review {id,rating}; cmp_today {}; cmp_dashboard {}; cmp_activity {title,pleasure?,mastery?,category?}; cmp_helps {}; cmp_interest {topic,like?}; cmp_source_add {name,url,kind?}; cmp_feed_refresh {days?}; cmp_ops_status {}; cmp_ops_issue {title,detail,priority?,path?}.";
+export const TOOL_APPENDIX_LINE = " cmp_foryou {}; cmp_capture {text}; cmp_mood {score,energy?,tags?,note?}; cmp_next {energy?}; cmp_action_add {title,context?,energy?,minutes?,project?,due?}; cmp_action_done {id}; cmp_card_add {front,back}; cmp_cards_due {}; cmp_card_review {id,rating}; cmp_today {}; cmp_dashboard {}; cmp_activity {title,pleasure?,mastery?,category?}; cmp_helps {}; cmp_interest {topic,like?}; cmp_source_add {name,url,kind?}; cmp_source_edit {id,name?,kind?,city?,remove?,confirm?}; cmp_settings {quiet_start?,quiet_end?,daily_cap?,email_mode?,pause_until?}; cmp_fleet_queue {}; cmp_checkin {place?,score?,note?}; cmp_insights {}; cmp_feed_refresh {days?}; cmp_ops_status {}; cmp_ops_issue {title,detail,priority?,path?}.";
 
 // ---------------------------------------------------------------- Durable Object hooks (PersonalTwinAgent instance "companion")
 
