@@ -3627,6 +3627,19 @@ async function autopilotAuthed(request, env) { return (await githubOidcOk(reques
 async function autopilotModes(env) {
   const out = {};
   for (const a of AUTO_ATS) out[a] = (await getMeta(env, "autopilot_mode_" + a)) || "dry";
+  const hist = (await env.JOBS_DB.prepare("SELECT match_id, outcome, COUNT(*) AS n FROM jobsearch_auto GROUP BY match_id, outcome").all().catch(() => ({ results: [] }))).results || [];
+  const urls = new Map(((await env.JOBS_DB.prepare("SELECT id, url FROM jobsearch_matches").all().catch(() => ({ results: [] }))).results || []).map((r) => [r.id, r.url]));
+  const clean = {}, bad = {};
+  for (const h of hist) {
+    const a = atsOf(urls.get(h.match_id) || "").ats;
+    if (!AUTO_ATS.includes(a)) continue;
+    if (h.outcome === "dry_ready") clean[a] = (clean[a] || 0) + h.n;
+    else if (h.outcome === "unconfirmed") bad[a] = (bad[a] || 0) + h.n;
+  }
+  for (const a of AUTO_ATS) {
+    const want = (clean[a] || 0) >= AUTO_PROMOTE_AFTER + (bad[a] || 0) ? "submit" : (bad[a] || 0) >= AUTO_DEMOTE_AFTER ? "dry" : out[a];
+    if (want !== out[a]) { out[a] = want; await setMeta(env, "autopilot_mode_" + a, want).catch((e) => logErr("autopilot-mode", e)); }
+  }
   return out;
 }
 // APPROVED-AUTO-1 (issue 11175): the owner's own approval is the gate for an approved match; the relevance gate's score bar applies only to matches nobody decided on.
