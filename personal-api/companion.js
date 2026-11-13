@@ -2422,8 +2422,10 @@ async function fyAct(env, deps, b) {
     return { ok: true, reply: "Noted. More like this." };
   }
   if (act === "down") {
+    // COMPANION-FORYOU-4: learn from the why (wrong time, too far, too expensive, seen it) not only from taste words
     const reason = FY_REASONS.indexOf(s(b.reason, 30)) >= 0 ? s(b.reason, 30) : "not my taste";
-    if (reason === "not my taste") await recordFeedback(env, { kind: "event", label: row.title, vote: -1 });
+    // Record negative feedback for any explicit reason, not just 'not my taste'
+    await recordFeedback(env, { kind: "event", label: row.title, vote: -1 });
     await env.PERSONAL.prepare("UPDATE cmp_feed SET state = 'hidden', reason = ? WHERE id = ?").bind(reason, row.id).run();
     return { ok: true, reply: reason === "not my taste" ? "Hidden. Fewer like this." : "Hidden (" + reason + ")." };
   }
