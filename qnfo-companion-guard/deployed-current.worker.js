@@ -1,4 +1,4 @@
-var VERSION = "1.1.7-codeagent";
+var VERSION = "1.1.8-codeagent";
 // WORKER-SOURCE-IN-REPO-1 (issue 9663): tracked copy of the deployed script, plus /health.
 const URLS=["https://me.q08.org/"];
 const ACCOUNT="edb167b78c9fb901ea5bca3ce58ccc4b", SERVED_BY="personal-api";
@@ -17,6 +17,20 @@ async function rollback(env){
   if(!vs.length) return "rollback unavailable: previous deployment lists no versions";
   const r=await globalThis.fetch(base,{method:"POST",headers:h,body:JSON.stringify({strategy:"percentage",versions:vs,annotations:{"workers/message":"COMPANION-GUARD-ROLLBACK-1: probe failed twice"}})});
   return r.ok?"rolled back "+SERVED_BY+" to deployment "+prev.id:"rollback failed: HTTP "+r.status;
+}
+async function redeploy(env){
+  const tok=env.CF_API_TOKEN||env.CLOUDFLARE_API_TOKEN;
+  if(!tok) return "redeploy unavailable: no API token bound to the guard";
+  const base="https://api.cloudflare.com/client/v4/accounts/"+ACCOUNT+"/workers/scripts/"+SERVED_BY+"/deployments";
+  const h={Authorization:"Bearer "+tok,"content-type":"application/json"};
+  const j=await (await globalThis.fetch(base,{headers:h})).json();
+  const dl=(j.result&&j.result.deployments)||[];
+  if(dl.length<1) return "redeploy unavailable: no deployments";
+  const latest=dl[0];
+  const vs=(latest.versions||[]).map(v=>({version_id:v.version_id,percentage:v.percentage}));
+  if(!vs.length) return "redeploy unavailable: latest deployment lists no versions";
+  const r=await globalThis.fetch(base,{method:"POST",headers:h,body:JSON.stringify({strategy:"percentage",versions:vs,annotations:{"workers/message":"COMPANION-GUARD-REDEPLOY-1: probe succeeded after rollback"}})});
+  return r.ok?"redeployed "+SERVED_BY+" to deployment "+latest.id:"redeploy failed: HTTP "+r.status;
 }
 async function q(env,sql,params){
   for(let t=0;t<3;t++){
@@ -82,6 +96,19 @@ async function probe(env){
       if(!ex.length) await q(env,"INSERT INTO agent_issues (title,description,source,category,priority,status,created_at,updated_at,predicate_id) VALUES (?1,?2,'companion-guard','code-change','high','open',?3,?3,?4)",[pid+": "+url+" failed the regression probe","COMPANION-REGRESSION-GATE-1 (qnfo-companion-guard): "+reasons.join("; ")+". Compare companion_probe_runs and companion_baseline in qnfo-audit D1, restore the previous worker version if the UI regressed, then ship a fix with a test that covers it.",Date.now(),pid]);
     }
     res.push({url:url,status:status,len:html.length,ok:ok,reasons:reasons});
+    if(ok===1){
+      const recentRollback = await q(env,
+        "SELECT reason FROM companion_probe_runs WHERE url=?1 AND reason LIKE 'ROLLBACK:%' AND ts>?2 ORDER BY id DESC LIMIT 1",
+        [url, new Date(Date.now()-3600000).toISOString()]);
+      if(recentRollback.length){
+        let note;
+        try{ note=await redeploy(env); }catch(e){ note="redeploy error: "+String(e).slice(0,100); }
+        await q(env,
+          "INSERT INTO companion_probe_runs (ts,url,status,len,title,ids_total,ids_missing,ok,reason) VALUES (?1,?2,0,0,'',0,0,0,?3)",
+          [new Date().toISOString(),url,"REDEPLOY: "+note]);
+        reasons.push(note);
+      }
+    }
   }
   return res;
 }
