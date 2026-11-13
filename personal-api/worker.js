@@ -8239,12 +8239,12 @@ var api_default = {
       // COMPANION-ASK-LATENCY-1: the slow, independent reads (Google Calendar, live venue pages, vector memory, thread memory, companion state)
       // start together here instead of one after another; each site below still awaits its own result inside its own try/catch.
       const settle = (p) => p.then((v) => ({ v }), (e) => ({ e }));
-      const unwrap = (r) => { if (r.e) throw r.e; return r.v; };
+      const unwrap = (r) => { if ("e" in r) throw r.e; return r.v; };
       const pre = {
         cal: settle(calList(env, isoDateNow(), isoDatePlus(14), 40)),
         live: q && isWhatsOnQuery(q) ? settle(liveWhatsOn(env, { day: liveDayFor(q, Date.now()), fresh: wantsFresh(q) })) : null,
         retr: q ? settle(retrieve(env, q, 8)) : null,
-        mem: settle(loadThreadMemory(env, thread, messages)),
+        mem: settle(factSaved.then(() => loadThreadMemory(env, thread, messages))),
         cmp: settle(CMP.chatContext(env, CMP_DEPS, q, !!(body && body.companion)))
       };
       let webContext = null;
