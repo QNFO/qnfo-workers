@@ -1,8 +1,8 @@
 {
  "ok": false,
+ "error": "no parseable consumer output: Extra data: line 2 column 1 (char 443)",
  "marker": "REMEDIATION-CONSUMER-1",
- "error": "HTTP 429 from https://api.cloudflare.com/client/v4/accounts/edb167b78c9fb901ea5bca3ce58ccc4b/d1/database/35e2e573-92f3-46ac-83c6-22f6429fc5e5/query: {\"messages\":[],\"result\":null,\"success\":false,\"errors\":[{\"code\":7429,\"message\":\"D1 DB exceeded its CPU time limit and was reset.\"}]}",
- "head": "c7497be3ed9edd08bea46403a2f6fbd7ac2fcfcd",
+ "head": "37557c1a7653fb8609a7d947ed4de58d74c73ba8",
  "job_status": "success",
- "ts": "2026-11-13T12:01:53Z"
+ "ts": "2026-11-13T14:38:08Z"
 }
