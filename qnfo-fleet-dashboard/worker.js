@@ -11,7 +11,7 @@ var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target,
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
 // 1.77.2 ERRATA-CHAIN-DISPATCH-1 (pillar research): wake the folded errata consumer and retry its legacy parked receipts.
 // VERSION-LINE-SPLIT-1 (agent_issues 100220): the release notes sit one per line below this statement, newest first, so a VERSION bump is a one-line patch; add a new note as the first line under it.
-var VERSION = "1.109.1";
+var VERSION = "1.109.2";
 // 1.89.0 NOW-NORTH-1 and HOME-MORE-1 (pillar core; minor): the Now screen opens with four numbers tied to the owner goals (readers, fleet cost, owner load, reliability) and drops the count of metrics off target (95 of 297; nothing can be done with it); a quiet footer on the home links the full dashboard, changelog, data index and managers.
 // 1.89.0 (cont.) MONEY-FIX-1 (pillar cost; patch): the Money card subtracted the subscription figure from a pace that never included it (fleet scope of v_cost_forecast), so it showed the fleet at 701 instead of 1151 a month; it now shows the fleet line, the subscriptions line and both together.
 // 1.85.0 (cont.) NOW-REVIEW-1: independent review fixes: Snooze and Not needed hide the card; a tap removes the card at once and reloads fresh, and the hand-back claims the card before filing (no duplicate tickets); strangers get no card keys or raw error text; only the signed-in owner (not the loop token) can run commands or hand work back; bound cards are read first; an unrefreshed metric reads n/a, not 0; one refresh in flight at a time and a failed refresh retries in 10 s; the Code poll says when the executor does not answer.
@@ -12979,6 +12979,9 @@ var CMD_CODE_MIN_GAP_MS = 60 * 1e3;
 var CMD_CODE_MAX_PER_HOUR = 6;
 var CMD_VERIFY_FAILS_PER_HOUR = 20;
 var OWNER_CODE_TO = "rwnquni@outlook.com";
+// CODE-MAIL-SECOND-PATH-1 (2026-11-13): Cloudflare Email Sending suppressed the first address after one soft bounce (it was listed 2026-11-12 19:46)
+// and no code could go out. The second fixed owner address (also in qnfo-email OWNER_NOTIFY) is tried when the first send is refused.
+var OWNER_CODE_TO_2 = "rwnquni@gmail.com";
 var CMD_FROM = { email: "qnfo@qnfo.org", name: "QNFO fleet" };
 var CMD_AI_TIMEOUT_MS = 13e3;
 var CMD_AI_BUDGET_MS = 24e3;
@@ -13035,20 +13038,29 @@ async function cmdSendCode(env, request) {
   const ins = await env.AUDIT.prepare("INSERT INTO owner_codes (code_hash, created_ms, expires_ms, visitor) VALUES ('pending', ?1, ?2, ?3)").bind(now, now + CMD_CODE_TTL_MS, await askVisitor(request)).run();
   const id = ins && ins.meta && ins.meta.last_row_id != null ? Number(ins.meta.last_row_id) : Number((await d1all(env.AUDIT, "SELECT MAX(id) AS id FROM owner_codes"))[0].id);
   await env.AUDIT.prepare("UPDATE owner_codes SET code_hash = ?1 WHERE id = ?2").bind(await sha256hex(code + "|" + id + "|" + cmdCodeSalt(env)), id).run();
-  let sentOk = false, err = null;
-  try {
-    await env.SEND_EMAIL.send({ to: OWNER_CODE_TO, from: CMD_FROM, subject: "Fleet code " + code, text: "Your fleet.qnfo.org code is " + code + ".\n\nIt is valid for 10 minutes and opens the fleet's controls in the browser that asked for it for 12 hours.\nIf you did not ask for it, ignore this email: nothing changes without the code.\n\nqnfo-fleet-dashboard FLEET-CMD-1" });
-    sentOk = true;
-  } catch (e) {
-    err = String(e && e.message || e).slice(0, 160);
+  let sentOk = false, err = null, via = null;
+  const msg = { from: CMD_FROM, subject: "Fleet code " + code, text: "Your fleet.qnfo.org code is " + code + ".\n\nIt is valid for 10 minutes and opens the fleet's controls in the browser that asked for it for 12 hours.\nIf you did not ask for it, ignore this email: nothing changes without the code.\n\nqnfo-fleet-dashboard FLEET-CMD-1" };
+  for (const to of [OWNER_CODE_TO, OWNER_CODE_TO_2]) {
+    try {
+      await env.SEND_EMAIL.send(Object.assign({ to }, msg));
+      sentOk = true;
+      via = to;
+      break;
+    } catch (e) {
+      err = (err ? err + " | " : "") + String(e && e.message || e).slice(0, 120);
+    }
   }
+  if (err) console.error(JSON.stringify({ evt: "fleet-dashboard:code-mail", sent: sentOk, via: via && maskAddr(via), error: err.slice(0, 300) }));
   await env.AUDIT.prepare("UPDATE owner_codes SET sent_ok = ?1 WHERE id = ?2").bind(sentOk ? 1 : 0, id).run();
-  if (!sentOk) return { ok: false, status: 502, error: "The code email could not be sent: " + err };
-  return { ok: true, sent: true, note: "Code sent to " + cmdMaskedTo() + ". It is valid for 10 minutes." };
+  if (!sentOk) return { ok: false, status: 502, error: "The code email could not be sent to either owner address (" + err + "). The fleet clears mail suppressions every 10 minutes; tap Email me a code again shortly." };
+  return { ok: true, sent: true, note: "Code sent to " + maskAddr(via) + ". It is valid for 10 minutes." };
+}
+function maskAddr(a) {
+  const p = String(a).split("@");
+  return p[0].slice(0, 2) + "\u2026@" + p[1];
 }
 function cmdMaskedTo() {
-  const p = OWNER_CODE_TO.split("@");
-  return p[0].slice(0, 2) + "\u2026@" + p[1];
+  return maskAddr(OWNER_CODE_TO) + " or " + maskAddr(OWNER_CODE_TO_2);
 }
 async function cmdVerify(env, request, codeIn) {
   await cmdEnsure(env);
