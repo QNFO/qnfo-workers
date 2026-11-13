@@ -87,6 +87,8 @@ ok(q.items[0].resume_pdf.includes("/resume.pdf") && q.items[0].fields.email, "an
 const res = await (await req("/api/autopilot/resolve", { method: "POST", headers: H, body: JSON.stringify({ id: "ab:org1:1", questions: [{ label: "Name", type: "text", required: true }, { label: "Phone", type: "tel", required: true }] }) })).json();
 ok(!res.ready && res.unresolved[0].reason.includes("phone"), "a required phone makes the job not ready");
 for (const id of ["ab:org1:1", "ab:org2:1"]) await req("/api/autopilot/result", { method: "POST", headers: H, body: JSON.stringify({ id, mode: "dry", outcome: "dry_ready" }) });
+ok((await (await req("/api/autopilot")).json()).modes.ashby === "dry", "LIVE-RELEASE-1: before the owner's release the form type stays a rehearsal");
+await env.JOBS_DB.prepare("INSERT OR REPLACE INTO jobsearch_meta (k, v, updated_at) VALUES ('autopilot_live_release','yes','t')").run();
 ok((await (await req("/api/autopilot")).json()).modes.ashby === "submit", "two clean rehearsals promote the form type to submission");
 q = await (await req("/api/autopilot/queue", { headers: H })).json();
 ok(q.items.some((x) => x.id === "ab:org1:1" && x.mode === "submit"), "a rehearsed job comes back for the real submission");
