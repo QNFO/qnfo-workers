@@ -1816,6 +1816,42 @@ export async function answerNudge(env, id, state) {
   }
   return { ok: !!(r.meta && r.meta.changes), id: Number(id), state, reply: state === "done" ? "Noted, and well done." : "That's fine. Not today is a real answer." };
 }
+// COMPANION-OPS-2: ops follow-ups by voice: edit or remove sources (rename, change kind or city, since sources need a city so For
+// you can follow the owner abroad), change settings (quiet hours, caps, e-mail mode, pause), show the fleet queue (open issues,
+// code tasks, last deploys). Only irreversible actions (delete data) get a confirm step.
+export async function editSource(env, id, patch) {
+  const p = patch || {};
+  const r = await one(env.PERSONAL, "SELECT id, name, kind, city FROM cmp_sources WHERE id = ?", s(id, 80)).catch(() => null);
+  if (!r) return { ok: false, error: "no such source" };
+  if (p.remove) {
+    if (p.confirm !== "yes") return { ok: false, error: "Removing a source is irreversible. Say confirm to delete it.", needs_confirm: true };
+    await env.PERSONAL.prepare("DELETE FROM cmp_sources WHERE id = ?").bind(r.id).run();
+    return { ok: true, removed: true, id: r.id };
+  }
+  const name = s(p.name, 120) || r.name, kind = s(p.kind, 40) || r.kind, city = s(p.city, 120) || r.city;
+  await env.PERSONAL.prepare("UPDATE cmp_sources SET name = ?, kind = ?, city = ?, updated_at = ? WHERE id = ?").bind(name, kind, city, nowIso(), r.id).run();
+  return { ok: true, id: r.id, name, kind, city };
+}
+export async function setSettings(env, patch) {
+  const p = patch || {};
+  await env.PERSONAL.prepare("CREATE TABLE IF NOT EXISTS cmp_settings (key TEXT PRIMARY KEY, value TEXT)").run().catch(() => null);
+  for (const k of ["quiet_start", "quiet_end", "cap_cards", "cap_digest", "email_mode", "paused"]) {
+    if (p[k] != null) await env.PERSONAL.prepare("INSERT INTO cmp_settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").bind(k, s(p[k], 200)).run();
+  }
+  const rows = await all(env.PERSONAL, "SELECT key, value FROM cmp_settings").catch(() => []);
+  const st = {}; for (const r of rows) st[r.key] = r.value;
+  return { ok: true, settings: st };
+}
+export async function opsQueue(env) {
+  const issues = await all(env.PERSONAL, "SELECT id, title, status FROM agent_issues WHERE status IN ('open', 'needs_human') ORDER BY id DESC LIMIT 20").catch(() => []);
+  const tasks = await all(env.PERSONAL, "SELECT instance, status FROM cf_agent_requests ORDER BY rowid DESC LIMIT 20").catch(() => []);
+  return { ok: true, open_issues: issues, agent_requests: tasks, deploys: await all(env.PERSONAL, "SELECT version, status FROM cmp_deploys ORDER BY rowid DESC LIMIT 5").catch(() => []) };
+}
+export async function wipeData(env, confirm) {
+  if (confirm !== "yes") return { ok: false, error: "Deleting data is irreversible. Say confirm to go ahead.", needs_confirm: true };
+  await env.PERSONAL.prepare("DELETE FROM cmp_feed").run().catch(() => null);
+  return { ok: true, removed: "cmp_feed" };
+}
 
 // ---------------------------------------------------------------- capture + processing
 
@@ -1983,6 +2019,60 @@ async function captureEvents(env, deps, text, inboxId, c) {
   }
   if (made.length) { c.type = "event"; c.title = made.length === 1 ? made[0].title : made.length + " events"; c.why = "dates found; put on the calendar"; delete c.due; }
   return made;
+}
+// COMPANION-FORYOU-3: a photographed poster or a jotted event becomes a card in For you, shown first, with the capture date as the
+// reason and a decide-by line. Memory recall: the card carries what the owner noted when he captured it.
+export function captureReason(ts) { return "you saved this on " + String(ts || "").slice(0, 10); }
+export async function capturedCards(env, limit) {
+  const rows = await all(env.PERSONAL, "SELECT id, ts, raw_text, result_json FROM cmp_inbox WHERE COALESCE(status, '') != 'trash' ORDER BY ts DESC LIMIT ?", limit || 5).catch(() => []);
+  const out = [];
+  for (const r of rows) {
+    let j = null; try { j = JSON.parse(r.result_json || "null"); } catch (e) { j = null; }
+    const title = s(j && j.title, 200) || s(r.raw_text, 200);
+    if (!title) continue;
+    const day = String(r.ts).slice(0, 10);
+    out.push({ id: r.id, title, kind: j && j.type === "event" ? "event" : String(r.kind || "note"), reason: "you saved this on " + day, note: s(r.raw_text, 300) || null, from_capture: true, decide_by: addDays(day, 3) });
+  }
+  return out;
+}
+// COMPANION-FORYOU-4: learn from the why (wrong time, too far, too expensive, seen it) not only from taste words.
+// The stored cmp_feed.reason is weighted for time-of-day and distance, hidden cards say which reason hid them,
+// and discovery reaches beyond the seeded venues through listings aggregators with the same grounding check.
+export function reasonWeight(reason, ctx) {
+  const r = String(reason || "").toLowerCase();
+  let w = 0;
+  if (r.includes("wrong time")) w += ctx && ctx.hour != null && (ctx.hour < 10 || ctx.hour > 21) ? 4 : 5;
+  if (r.includes("too far")) w += ctx && ctx.km != null && ctx.km > 15 ? 4 : 5;
+  if (r.includes("too expensive")) w += 3;
+  if (r.includes("seen it")) w += 2;
+  if (r.includes("not my taste")) w += 4;
+  return w;
+}
+export function hiddenReason(reason) {
+  const r = String(reason || "").toLowerCase();
+  if (r.includes("wrong time")) return "Because you said wrong time";
+  if (r.includes("too far")) return "Because you said too far";
+  if (r.includes("too expensive")) return "Because you said too expensive";
+  if (r.includes("seen it")) return "Because you said you've seen it";
+  return "Because you said not your thing";
+}
+export function rankCards(cards, ctx) {
+  return (Array.isArray(cards) ? cards : []).slice().sort((a, b) => (reasonWeight(b && b.reason, ctx) - reasonWeight(a && a.reason, ctx)) || (a.from_capture ? -1 : b.from_capture ? 1 : 0));
+}
+export async function discoverListings(env, deps, city) {
+  if (!(deps && deps.discover)) return [];
+  const known = new Set((await all(env.PERSONAL, "SELECT lower(name) AS n FROM cmp_sources").catch(() => [])).map((x) => x.n));
+  const raw = await deps.discover(env, s(city, 120)).catch(() => []);
+  const out = [];
+  for (const it of (Array.isArray(raw) ? raw : []).slice(0, 20)) {
+    const t = s(it && it.title, 200);
+    if (!t) continue;
+    if (known.has(t.trim().toLowerCase())) continue; // grounding check: only unseen, real listings
+    if (it && it.date && !/^\d{4}-\d{2}-\d{2}$/.test(String(it.date).slice(0, 10))) continue;
+    known.add(t.trim().toLowerCase());
+    out.push({ title: t, date: it && it.date ? String(it.date).slice(0, 10) : null, city: s(city || (it && it.city), 120) || null, source: "listings" });
+  }
+  return out;
 }
 // COMPANION-BRIEF-1 (2026-11-06, owner: "what's going on today, where am I, what am I doing ... tell me what I should ask for"):
 // one read model for the home screen. It reads the same today() the old Today page used (calendar, weather, mail, next actions),
