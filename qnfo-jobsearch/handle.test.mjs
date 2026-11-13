@@ -34,4 +34,10 @@ const dup = await call("/api/handle", { input: posting });
 ok(dup.json.job && dup.json.job.id === a.json.job.id, "same job is not tracked twice");
 const li = await call("/api/handle", { input: "https://www.linkedin.com/jobs/view/4012345678/" });
 ok(li.json.next && li.json.next.type === "text", "LinkedIn link asks for the pasted text, never fetched");
+// review-gate findings: track ends the flow, skip advice survives the question step, open jobs are listed
+const p2 = await call("/api/handle", { input: "Backend Engineer\nBigCo\nWe need Go, Kubernetes, Terraform, on-call, 6+ years of coding experience building distributed systems." });
+const t = await call("/api/handle/act", { job: p2.json.job.id, act: "track" });
+ok(t.json.next && t.json.next.type === "done", "track ends the flow: " + JSON.stringify(t.json.next));
+const js = await call("/api/handle/jobs");
+ok(js.json.jobs.some((j) => j.id === p2.json.job.id), "tracked job is listed");
 console.log(fail ? fail + " failed" : "handle: all passed"); process.exit(fail ? 1 : 0);

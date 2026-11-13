@@ -9,7 +9,7 @@
 // JOBSEARCH-CV-1 (1.5.0): the CV is part of this worker (page /cv): a yes/no interview that builds the claim bank, review of unconfirmed claims, roles, achievements and publications edited in D1, a resume per job (summary, roles, selected work, education, skills) and a cover note, history and backup. The search is tied to that bank (evidence the owner can back up weighs more; what the CV lacks is shown as a gap), decided postings (rejected, applied, approved) never come back under another id, rejections carry a reason the search learns from, and a wider net: stretch matches outside the stated preferences, more boards and aggregators.
 // Routes: GET / (web UI) | GET /api | GET /api/matches | GET /api/matches/:id | GET /api/runs | GET /api/ledger | POST /api/run | POST /api/matches/:id/status | GET /health
 // Port of the jobsearch/ Python modules (tests: jobsearch/test_jobsearch.py, qnfo-jobsearch/worker.test.mjs).
-var VERSION = "1.33.0-codeagent";
+var VERSION = "1.33.1-codeagent";
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -3854,8 +3854,8 @@ async function handleLoad(env, body) {
     p = await gemPosting(input);
     if (!p) { try { p = await fetchPosting(input); } catch (e) { return { need_text: true, why: e.message }; } }
   } else if (urlOnly && li) {
-    if (!body.title) return { need_text: true, why: "LinkedIn does not allow me to read its pages, so paste the job description here (open the posting, select everything, copy)", url: li };
-    p = { title: body.title, company: body.company || "", location: body.location || "", desc: body.title, url: li };
+    // a title alone would give a confident verdict from a few words; the posting text is needed
+    return { need_text: true, why: "LinkedIn does not allow me to read its pages, so paste the job description here (open the posting, select everything, copy)", url: li };
   } else {
     const first = await postingFrom(env, { input, title: body.title, company: body.company });
     p = first; if (li) p.url = li; else { const um = input.match(/https?:\/\/\S+/); if (um && !p.url) p.url = um[0].replace(/[).,]+$/, ""); }
@@ -3931,8 +3931,9 @@ async function handleNext(env, id) {
   if (q && !ev) return { type: "ask", job: id, key: q.key, prompt: q.ask, cue: q.cue || "", remaining: (rq.questions || []).length, options: [{ label: "Yes", value: "yes" }, { label: "No", value: "no" }, { label: "Not sure", value: "unsure" }], skip: "Skip the questions" };
   const ats = atsOf(row.url), auto = AUTO_ATS.includes(ats.ats), links = row.verified ? { pdf: "/api/matches/" + encodeURIComponent(id) + "/resume.pdf", docx: "/api/matches/" + encodeURIComponent(id) + "/resume.docx" } : null;
   if (["applied", "screening", "replied", "interview", "offer"].includes(row.status)) return { type: "done", job: id, prompt: "Tracked as " + row.status + ". I will watch your mail for the reply.", links };
+  if (await env.JOBS_DB.prepare("SELECT 1 AS x FROM jobsearch_events WHERE match_id=? AND event='note' AND note='handle: tracked' LIMIT 1").bind(id).first()) return { type: "done", job: id, prompt: "Tracked. I will watch your mail and follow up; paste the next job whenever you have one.", links };
   if (row.status === "approved") return { type: "done", job: id, prompt: auto ? "Queued for the application runner. It rehearses the form first and shows you the filled form before anything is sent." : "Approved. Your resume and answers are ready below.", links, kit: auto ? null : "/api/handle/kit?id=" + encodeURIComponent(id), apply_url: ats.apply_url || row.url, apply_link_label: auto ? "" : "Open the application form" };
-  const lean = /handle: skip/.test((await env.JOBS_DB.prepare("SELECT note FROM jobsearch_events WHERE match_id=? AND event='note' ORDER BY id DESC LIMIT 1").bind(id).first() || {}).note || "");
+  const lean = !!(await env.JOBS_DB.prepare("SELECT 1 AS x FROM jobsearch_events WHERE match_id=? AND event='note' AND note LIKE 'handle: skip%' LIMIT 1").bind(id).first());
   if (lean) return { type: "choice", job: id, prompt: "My advice is to skip this one. What do you want to do?", options: [{ label: "Skip it", value: "skip", primary: true }, { label: "Track it anyway", value: "track" }, { label: auto ? "Apply anyway" : "Get it ready anyway", value: "approve" }], links };
   return { type: "choice", job: id, prompt: auto ? "Shall I apply for you? I fill the form myself; the first live submission waits for your go-ahead, until then it is a dry run." : "Shall I get it ready to send? I will tailor the resume and answers and give you the form link, then track it.", options: [{ label: auto ? "Apply for me" : "Get it ready", value: "approve", primary: true }, { label: "Just track it", value: "track" }, { label: "Skip it", value: "skip" }], links };
 }
@@ -3953,7 +3954,7 @@ async function handleAct(env, b) {
     const row = await env.JOBS_DB.prepare("SELECT url FROM jobsearch_matches WHERE id=?").bind(id).first();
     const ats = atsOf(row && row.url);
     say.push(handleSay(AUTO_ATS.includes(ats.ats) ? "Queued. The runner fills the " + ats.ats + " form as a dry run and stores the result; nothing is submitted until you release live submissions." : "Done. " + (ats.ats === "other" ? "This site's form cannot be filled by my runner" : "I cannot fill " + ats.ats + " forms yet") + ", so I prepared the resume and answers; open the form and paste them."));
-  } else if (b.act === "track") { say.push(handleSay("Tracking it. I will watch your mail and follow up.")); }
+  } else if (b.act === "track") { await env.JOBS_DB.prepare("INSERT INTO jobsearch_events (match_id, event, ts, note) VALUES (?1,'note',?2,'handle: tracked')").bind(id, new Date().toISOString()).run(); say.push(handleSay("Tracking it. I will watch your mail and follow up.")); }
   else if (b.act === "skip") { await setPipeStatus(env, id, "rejected", "handle: owner skipped"); say.push(handleSay("Skipped and remembered, so similar roles rank lower.")); }
   else if (b.act === "applied") { await setPipeStatus(env, id, "applied", "handle: owner applied"); say.push(handleSay("Marked as applied with the resume exactly as sent.")); }
   else throw Object.assign(new Error("unknown act"), { status: 400 });
@@ -3969,7 +3970,7 @@ async function handleRetailor(env, id) {
 }
 async function handleJobs(env) {
   await ensure(env);
-  const r = await env.JOBS_DB.prepare("SELECT id, title, company, status, decided_at FROM jobsearch_matches ORDER BY COALESCE(decided_at, first_seen) DESC LIMIT 30").all().catch((e) => { logErr("handle-jobs", e); return { results: [] }; });
+  const r = await env.JOBS_DB.prepare("SELECT id, title, company, status, decided_at FROM jobsearch_matches WHERE status IN (" + PIPE_OPEN.map((x) => "'" + x + "'").join(",") + ") ORDER BY COALESCE(decided_at, first_seen) DESC LIMIT 8").all().catch((e) => { logErr("handle-jobs", e); return { results: [] }; });
   return { jobs: r.results.filter((x) => PIPE_OPEN.includes(x.status)).slice(0, 8).map((x) => ({ id: x.id, title: x.title, company: x.company, status: x.status })) };
 }
 async function handleKit(env, id) {
