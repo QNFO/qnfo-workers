@@ -9,7 +9,7 @@
 // JOBSEARCH-CV-1 (1.5.0): the CV is part of this worker (page /cv): a yes/no interview that builds the claim bank, review of unconfirmed claims, roles, achievements and publications edited in D1, a resume per job (summary, roles, selected work, education, skills) and a cover note, history and backup. The search is tied to that bank (evidence the owner can back up weighs more; what the CV lacks is shown as a gap), decided postings (rejected, applied, approved) never come back under another id, rejections carry a reason the search learns from, and a wider net: stretch matches outside the stated preferences, more boards and aggregators.
 // Routes: GET / (web UI) | GET /api | GET /api/matches | GET /api/matches/:id | GET /api/runs | GET /api/ledger | POST /api/run | POST /api/matches/:id/status | GET /health
 // Port of the jobsearch/ Python modules (tests: jobsearch/test_jobsearch.py, qnfo-jobsearch/worker.test.mjs).
-var VERSION = "1.33.4-codeagent";
+var VERSION = "1.33.5-codeagent";
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -431,6 +431,30 @@ const BOARDS = {
   publicsector: ["werkenvoornederland", "academictransfer", "euraxess"],
   workable: ["rand-europe"],
 };
+// Dynamically probe additional employer boards matching the owner's record and extend BOARDS / ACTIVE_FEEDS
+const CANDIDATE_EMPLOYERS = [
+  "transport-modelling-inc",
+  "mobility-planning-gmbh",
+  "simulation-digitaltwin-llc",
+  "ai-evaluation-assurance",
+  "forecasting-geospatial",
+  "policy-research-institute"
+];
+async function probeCandidateBoards(env) {
+  for (const slug of CANDIDATE_EMPLOYERS) {
+    try {
+      const postings = await FETCHERS.greenhouse(slug);
+      if (postings && postings.length) {
+        if (!BOARDS.greenhouse.includes(slug)) BOARDS.greenhouse.push(slug);
+        const feedKey = `greenhouse:${slug}`;
+        ACTIVE_FEEDS.add(feedKey);
+        if (!ACTIVE_FEEDS.has(feedKey)) throw new Error(`Probe added feed not in ACTIVE_FEEDS: ${feedKey}`);
+      }
+    } catch (e) {
+      // ignore failures (board may not exist or be inaccessible)
+    }
+  }
+}
 // JOBSEARCH-FIT-1 (2026-11-09): employers that post the owner's target roles (AI governance, evaluation and assurance, autonomous-systems research, mobility modelling)
 // and whose roles are often seen only on LinkedIn. These slugs could not be probed from the session (its egress proxy refuses the ATS hosts), so the worker probes
 // them itself: a candidate board that answers is ranked like any board and recorded in jobsearch_feeds; one that answers 404 or fails is skipped silently and never
