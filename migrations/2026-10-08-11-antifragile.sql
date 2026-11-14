@@ -80,7 +80,7 @@ WHERE h.status = 'open' AND datetime(h.created_at) < datetime('now', '-60 minute
 
 INSERT OR IGNORE INTO metric_registry (metric, layer, kind, formula, source_of_truth, baseline, target, owner, disposition_actor, refresh_cadence, warning_band, kill_band, last_value, last_refreshed, state, refresh_class) VALUES
  ('unverified_blocker_claims', 'operational', 'guard',
-  'COUNT of v_blocker_claims: open issues asserting a blocker and open owner cards, older than 60 minutes, with no blocker_redteam verdict in 24 hours (ANTIFRAGILE-1).',
+  'COUNT of v_blocker_claims: open issues asserting a blocker and open owner cards, older than 60 minutes, with no blocker_redteam verdict in 24 hours and whose latest verdict is not confirmed-with-evidence or workaround-built (ANTIFRAGILE-1).',
   'qnfo-audit.v_blocker_claims (migrations/2026-10-08-11-antifragile.sql), refreshed every 10 minutes by trigger antifragile_tick_10m',
   '39 on 2026-10-08 (33 issues, 6 owner cards)', '0', 'qnfo-ops',
   'trigger gt 0 -> one METRIC-TRIGGER issue asking for the adversarial attempt on each claim', '10m', '> 0', '> 20',
@@ -91,6 +91,11 @@ INSERT OR IGNORE INTO metric_registry (metric, layer, kind, formula, source_of_t
   '97 of 136 on 2026-10-08', '0', 'qnfo-fleet-control',
   'trigger gt 0 -> one METRIC-TRIGGER issue', '10m', '> 0', '> 50',
   NULL, NULL, 'MEASURED', 'computed');
+
+-- Repair the stored formula of rows created before the view suppressed verdicts permanently (lever-3061-202610261137): INSERT OR IGNORE cannot update them.
+UPDATE metric_registry SET formula =
+  'COUNT of v_blocker_claims: open issues asserting a blocker and open owner cards, older than 60 minutes, with no blocker_redteam verdict in 24 hours and whose latest verdict is not confirmed-with-evidence or workaround-built (ANTIFRAGILE-1).'
+ WHERE metric = 'unverified_blocker_claims';
 
 CREATE TRIGGER IF NOT EXISTS antifragile_tick_10m AFTER INSERT ON fleet_tick
 BEGIN

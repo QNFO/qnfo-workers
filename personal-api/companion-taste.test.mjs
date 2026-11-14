@@ -65,7 +65,7 @@ ok("a risk note still gets the fixed lines in the same reply, before sorting", c
 console.log("[page]");
 const html = C.PAGE_HTML;
 ok("quick-add bar with voice and photo sits above Today", /id="composer"[\s\S]*id="qc-mic"[\s\S]*id="qc-img"[\s\S]*id="v-today"/.test(html));
-ok("on-device speech recognition with a local-processing request", html.includes("SpeechRecognition") && html.includes("processLocally"));
+ok("one recorder: server-written speech, browser recognition only as the last resort (COMPANION-VOICE-2)", html.includes("function micStart(") && html.includes("function micSpeech(") && html.includes("/companion/api/dictate"));
 ok("thumbs on events, to-dos, suggestions, mail and nudges", ["'event'", "'radar'", "'todo'", "'mail'", "'nudge'"].every((k) => html.includes("thumbs(" + k) || html.includes("kind||" + k) || html.includes("'" + k.slice(1, -1) + "'")) && html.includes("/companion/api/feedback"));
 ok("More keeps secondary tabs behind one button", html.includes('id="nav-more"') && /class="sec"/.test(html));
 ok("taste pane on the Data tab", html.includes('id="taste"') && html.includes("Take back"));
