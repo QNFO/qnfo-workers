@@ -911,13 +911,29 @@ function nudgeMail(n, c, tok) {
 async function briefCheckinLines(env, nowIso) {
   const c = await cfg(env);
   if (c.wellbeing_prompts !== true) return [];
-  const day = WB.dayKey(nowIso || new Date().toISOString(), c.tz);
+  const now = nowIso || new Date().toISOString();
+  const day = WB.dayKey(now, c.tz);
   const seen = await env.PERSONAL.prepare(
     "SELECT 1 AS x FROM companion_nudges WHERE day = ? AND kind = 'checkin' LIMIT 1"
   ).bind(day).first();
-  if (seen) return [];
+  // GROWTH-1 (companion-today #34): the morning check-in also names the open loops of the last 7 days --
+  // asks that were sent but neither answered nor closed. Mirrors what Mem does: the brief names the
+  // specific items from your own notes that need attention today, then follows up on them.
+  let loops = [];
+  try {
+    const r = await env.PERSONAL.prepare(
+      "SELECT DISTINCT ask, kind FROM companion_nudges WHERE state IN ('queued','sent') AND kind IN ('micro','body','contact','care') AND ts >= ? ORDER BY ts DESC LIMIT 5"
+    ).bind(new Date(Date.parse(now) - 7 * 864e5).toISOString()).all();
+    loops = (r && r.results) || [];
+  } catch { loops = []; }
+  const loopLines = [];
+  if (loops.length) {
+    loopLines.push("", "Open loops from the last 7 days:");
+    for (const l of loops) loopLines.push("- " + String(l.ask || l.kind || "").replace(/\s+/g, " ").trim());
+  }
+  if (seen) return loopLines;
   const t = env.WELLBEING_TOKEN ? "?t=" + encodeURIComponent(env.WELLBEING_TOKEN) : "";
-  return ["", "How's it landing? Two taps: mood and energy, 1 low to 5 high, nothing to type:", BASE + "/wb/checkin" + t];
+  return loopLines.concat(["", "How's it landing? Two taps: mood and energy, 1 low to 5 high, nothing to type:", BASE + "/wb/checkin" + t]);
 }
 
 async function noteCheckinInBrief(env, nowIso) {
@@ -5833,7 +5849,7 @@ var __name22 = __name2;
 // line below (VERSION-LINE-NOTES-1, 2026-10-19). Its older trailing notes stay until length-lede.test.mjs stops pinning "LENGTH-LEDE-1" on that line.
 // VERSION-NOTES-MOVED-1: release notes live in the block below
 // W-META-1 (agent_issues 1002316/1002317/1002318): aiRunAttr records in_tok/out_tok/neurons per purpose.
-var VERSION = "1.62.5-codeagent";
+var VERSION = "1.62.6-codeagent";
 // 1.46.0 KERNEL-EVERYWHERE-1 (2026-11-06, owner directive "IMPLEMENT EVERYWHERE ACROSS ALL AI APPS AND SERVICES AND SURFACES", pillar personal): the travel planner CHAT_SYSTEM carries the DOCTRINE-1 kernel 8.2.1 reply recognitions (KERNEL-REPLY-4, scoped to the planner's one designed question): end on the plan or proposal, never a conditional offer or questionnaire; refusals and limits are dispositions with their reason; reversible steps are taken and reported in the same reply. prior 1.45.8-codeagent
 /* 1.44.14 COMPANION-LENGTH-HEADROOM-1 (issue 1000633, pillar personal; patch): repeated length failures alongside exhausted retry budgets expose too little headroom for model output variation. Length-only repairs now target 500 words below the unchanged ceiling while remaining inside each form's normal writer band. */
 /* 1.43.6 BP26-AI-ACT-ART50-1 and BP26-STRUCTURED-DATA-1 (2026-10-26, agent_issues 1000341 and 1000336, pillar core; patch): the visible AI-generated label of every reading.q08.org piece now has its machine-readable half. A piece page carries an Article JSON-LD block (headline, datePublished, url, an Organization as author, never an AI or invented persona, and creditText saying it was written by AI and that no human reviews pieces before they appear) and the index page a Blog block. Measured before: the reading pages carried the visible label and no JSON-LD at all. */
