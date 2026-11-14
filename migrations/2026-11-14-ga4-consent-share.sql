@@ -13,4 +13,4 @@ INSERT OR REPLACE INTO fleet_tasks (id, name, type, definition, timeout_ms, retr
 VALUES ('ga4-consent-share', 'GA4-CONSENT-SHARE-1: refresh the GA4 share of cookie-free page views (SQL only)', 'workflow', '{"steps": [{"type": "sql", "name": "refresh", "db": "AUDIT", "sql": "UPDATE metric_registry SET last_value = printf(''%.4f'', COALESCE((SELECT SUM(value) FROM reach_signals WHERE source = ''ga4'' AND entity_type = ''host'' AND metric = ''screenPageViews'' AND date >= date(''now'',''-7 days'')), 0) * 1.0 / NULLIF((SELECT SUM(value) FROM reach_signals WHERE source = ''cf-rum-human'' AND entity_type = ''host'' AND metric = ''pageviews'' AND date >= date(''now'',''-7 days'')), 0)), last_refreshed = datetime(''now'') WHERE metric = ''ga4_consent_share_7d''"}]}', 30000, 1, 1, 1, strftime('%Y-%m-%dT%H:%M:%SZ','now'));
 
 INSERT OR REPLACE INTO fleet_crons (name, cron_expr, task_id, enabled, timezone, updated_at)
-VALUES ('ga4-consent-share-hourly', '47 * * * *', 'ga4-consent-share', 1, 'UTC', strftime('%Y-%m-%dT%H:%M:%SZ','now'));
+VALUES ('ga4-consent-share-hourly', '45 * * * *', 'ga4-consent-share', 1, 'UTC', strftime('%Y-%m-%dT%H:%M:%SZ','now'));
