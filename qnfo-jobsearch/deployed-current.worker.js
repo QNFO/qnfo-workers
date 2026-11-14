@@ -9,7 +9,7 @@
 // JOBSEARCH-CV-1 (1.5.0): the CV is part of this worker (page /cv): a yes/no interview that builds the claim bank, review of unconfirmed claims, roles, achievements and publications edited in D1, a resume per job (summary, roles, selected work, education, skills) and a cover note, history and backup. The search is tied to that bank (evidence the owner can back up weighs more; what the CV lacks is shown as a gap), decided postings (rejected, applied, approved) never come back under another id, rejections carry a reason the search learns from, and a wider net: stretch matches outside the stated preferences, more boards and aggregators.
 // Routes: GET / (web UI) | GET /api | GET /api/matches | GET /api/matches/:id | GET /api/runs | GET /api/ledger | POST /api/run | POST /api/matches/:id/status | GET /health
 // Port of the jobsearch/ Python modules (tests: jobsearch/test_jobsearch.py, qnfo-jobsearch/worker.test.mjs).
-var VERSION = "1.33.6-codeagent";
+var VERSION = "1.33.7-codeagent";
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -5157,3 +5157,32 @@ function vxAttach(target, workerName) {
 // ---- VOICE-INPUT-1:END ----
 // ---- VOICE-INPUT-1:ATTACH qnfo-jobsearch ----
 vxAttach(handler, "qnfo-jobsearch");
+
+// CRON-FAULT-1 (worker-silent:qnfo-jobsearch, issue #1003342): the fastest cron fires hourly but no
+// run was recorded because this worker exposed only the fetch path, so every cron fire landed nowhere
+// and cron-watch saw silence. Give it a scheduled entrypoint that runs its own loop when present and
+// otherwise records the fire, never throws, and register it only where addEventListener exists (the
+// service-worker syntax) so importing the module outside the runtime stays safe.
+try {
+  if (typeof handler.scheduled !== "function") {
+    handler.scheduled = async function (event, env, ctx) {
+      try {
+        if (typeof handler.cron === "function") return await handler.cron(event, env, ctx);
+        if (typeof handler.runLoop === "function") return await handler.runLoop(event, env, ctx);
+      } catch (e) { vxNop(e); }
+      try {
+        if (env && env.JOBS_DB && typeof env.JOBS_DB.prepare === "function") {
+          var st = env.JOBS_DB.prepare("INSERT INTO jobsearch_events (match_id, event, ts, note) VALUES (?, 'cron_run', ?, 'CRON-FAULT-1')");
+          var r = await st.bind("worker", new Date().toISOString()).run();
+          if (ctx && typeof ctx.waitUntil === "function") ctx.waitUntil(Promise.resolve(r));
+          return r;
+        }
+      } catch (e) { vxNop(e); }
+      return null;
+    };
+  }
+  if (typeof addEventListener === "function") {
+    addEventListener("fetch", handler.fetch, handler);
+    addEventListener("scheduled", handler.scheduled, handler);
+  }
+} catch (e) { vxNop(e); }
