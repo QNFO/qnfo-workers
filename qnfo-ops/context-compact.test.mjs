@@ -328,5 +328,14 @@ const l6 = await d1.d1LiveColumns(db, "SELECT a FROM not_a_table", "D1_ERROR: no
 ok(l6 === null, "an unknown table yields nothing, so the index fallback runs");
 ok(/let _live = null;\n\s+if \(\/no such column\/i\.test\(msg\)\) \{\n\s+try \{ _live = await d1LiveColumns\(env\[bind\], sqlEff, msg\);/.test(src) && /if \(!_live && \/no such \(column\|table\)\/i\.test\(msg\) && env\.QNFO_AUDIT\)/.test(src), "d1Query asks the live columns first and keeps the index as the fallback");
 
+// TASK-PIN-FIRST-1: the first user message (the task) survives truncation of a long auto-continued chain whose last user message is a continuation notice.
+{
+  const msgs = [{ role: "system", content: "sys" }, { role: "user", content: "TASK: fix the analytics tag" }];
+  for (let i = 0; i < 400; i++) { msgs.push({ role: "assistant", content: "step " + i + " " + "x".repeat(900), tool_calls: [{ id: "c" + i, type: "function", function: { name: "workspace_list", arguments: "{}" } }] }); msgs.push({ role: "tool", tool_call_id: "c" + i, content: "listing " + i + " " + "y".repeat(900) }); }
+  msgs.push({ role: "user", content: "[SESSION-AUTOCONTINUE-1] continue" });
+  const out = lib.truncateToContext(msgs, 12000);
+  ok(out.some((m) => m.role === "user" && /TASK: fix the analytics tag/.test(String(m.content))), "the original task is kept after heavy truncation", out.length);
+  ok(out.length < msgs.length, "the chain was actually truncated", [out.length, msgs.length]);
+}
 console.log(pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);

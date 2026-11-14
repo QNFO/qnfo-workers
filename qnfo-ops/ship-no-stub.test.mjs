@@ -1,10 +1,10 @@
-// SHIP-NO-STUB-1: a docs-only change is refused; the focus nudge exists.
+// SHIP-NO-STUB-2 / CODE-FOCUS-NUDGE-1 / TASK-PIN-FIRST-1: source-level wiring; behaviour is in ship-change.test.mjs.
 import { readFileSync } from "node:fs";
 import assert from "node:assert";
 const src = readFileSync(new URL("./worker.js", import.meta.url), "utf8");
-assert.ok(src.includes("SHIP-NO-STUB-1: every file is documentation"), "stub guard present in shipChange");
-assert.ok(/var CODE_FOCUS_NUDGE = /.test(src) && src.includes("iter === 3) messages.push({ role: \"system\", content: CODE_FOCUS_NUDGE"), "focus nudge wired at round 3");
-const guard = src.indexOf("SHIP-NO-STUB-1: every file");
-assert.ok(src.includes("allow_docs === true") && !src.includes("Analytics tasks live in"), "opt-out present, nudge generic");
-assert.ok(guard > src.indexOf("async function shipChange") && guard < src.indexOf("opsFileCodeIssue(env, title, summary || title, \"ship_change\")"), "guard runs before the issue is filed");
+assert.ok(src.includes("SHIP-NO-STUB-2: the change is a handoff note"), "stub guard present");
+assert.ok(!src.includes("allow_docs"), "no self-service opt-out");
+assert.ok(!src.includes("Analytics tasks live in"), "focus nudge is generic");
+assert.ok(src.includes("iter === 3) messages.push({ role: \"system\", content: CODE_FOCUS_NUDGE"), "focus nudge wired at round 3");
+assert.ok(src.includes("TASK-PIN-FIRST-1") && src.includes("[original task, kept when older history was dropped]"), "first user message is pinned through truncation");
 console.log("ship-no-stub ok");
