@@ -18,11 +18,24 @@ runs it on every stop; about ten sessions looping 8 rounds spent a large share o
 merge. Reads now go through a disk cache shared by all sessions on the machine: an entry younger than CACHE_TTL_S (default 300) is used with no call, an older one is
 revalidated with If-None-Match (a 304 does not count against the limit), and on any error, 403 rate limit included, the stale entry is used instead of failing.
 DRAIN_CACHE_TTL_S=0 restores a call per read.
+CODE-AGENT-SOP-1 (owner directive 2026-11-14: "these are all procedures that need to get handed off server side. You should not be
+babysitting things from your local code agent ... This is owned by UltraStable completely"): a local session is re-prompted only for items
+that have NO server-side owner, because that is the one thing a local agent still owes (give the item a doer, then stop). An issue is
+server-owned when it mirrors a qnfo-audit agent_issues row (title starts "[#<id>]": the loops, contracts and code loop work and close it),
+carries a `code-task:` line (the code loop is its doer), or an open PR cites it (the lanes merge it). Audit drift rows are owned by the
+canonical deploy's drift redeploy (DEPLOY-ALL-MERGES-1). DRAIN_MODE=legacy restores the old count of every open item.
 Fails open: any error -> exit 0.
 """
 import glob, hashlib, json, os, re, sys, time, urllib.error, urllib.request
 
 MAX_ROUNDS = int(os.environ.get("DRAIN_MAX_ROUNDS", "8"))
+HANDOFF = os.environ.get("DRAIN_MODE", "handoff") != "legacy"
+SERVER_TITLE = re.compile(r"^\[#\d+\]")
+
+
+def server_owned(title, body):
+    """CODE-AGENT-SOP-1: True when a server-side loop already owns the issue, so a local session has nothing to do for it."""
+    return bool(SERVER_TITLE.match(title or "")) or "code-task:" in (body or "")
 REPO = os.environ.get("DRAIN_REPO", "QNFO/qnfo-workers")
 REPORT_LABELS = {"fleet-autoaudit", "fleet-drain-routine"}
 BAD = ("DRIFT", "CONTENT_DRIFT", "LIVE_ERR", "NO_REPO_VERSION", "NO_LIVE_VERSION")
@@ -112,6 +125,8 @@ def issues():
             continue
         if {l["name"] for l in i.get("labels", [])} & REPORT_LABELS:
             continue
+        if HANDOFF and server_owned(i.get("title"), i.get("body")):
+            continue
         if fixed_by_open_pr(issue_number=i["number"]):
             continue
         out.append(f"#{i['number']} {i['title']}")
@@ -161,9 +176,17 @@ def audit():
     rows = json.load(open(fs[-1])).get("rows", {})
     return [f"{k}: {v.get('note')}" for k, v in rows.items() if str(v.get("note", "")).startswith(BAD)]
 
+if sys.argv[1:] == ["--selftest"]:
+    assert server_owned("[#1003554] CF-RESOURCE-USAGE-HONEST-1: x", "")
+    assert server_owned("ANALYTICS-NULL-2: y", "fix\ncode-task: repo=qnfo-workers path=a/worker.js")
+    assert not server_owned("ANALYTICS-NULL-2: y", "prose only")
+    assert not server_owned("[ci-watchdog] unknown: deploy-code-orchestrator", "")
+    print("drain-reprompt selftest ok")
+    sys.exit(0)
+
 try:
     items = []
-    for f in (issues, audit):
+    for f in ((issues,) if HANDOFF else (issues, audit)):
         try:
             items += f()
         except Exception:
@@ -177,8 +200,13 @@ try:
         os.remove(counter)
         sys.exit(0)
     open(counter, "w").write(str(n + 1))
-    sys.stderr.write(f"{len(items)} open item(s) remain (round {n+1}/{MAX_ROUNDS}); continue remediating, commit and push:\n"
-                     + "\n".join(items[:20]) + "\n")
+    if HANDOFF:
+        sys.stderr.write(f"{len(items)} open item(s) have no server-side owner (round {n+1}/{MAX_ROUNDS}). CODE-AGENT-SOP-1: give each a doer "
+                         "(a code-task: line, a qnfo-audit agent_issues row with a closing probe, or an open PR), then stop; do not babysit:\n"
+                         + "\n".join(items[:20]) + "\n")
+    else:
+        sys.stderr.write(f"{len(items)} open item(s) remain (round {n+1}/{MAX_ROUNDS}); continue remediating, commit and push:\n"
+                         + "\n".join(items[:20]) + "\n")
     sys.exit(2)
 except SystemExit:
     raise
