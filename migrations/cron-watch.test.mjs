@@ -171,5 +171,19 @@ db.exec(sql);
 ok(one("SELECT (SELECT COUNT(*) FROM metric_registry) + (SELECT COUNT(*) FROM fleet_crons) + (SELECT COUNT(*) FROM analytics_metric_triggers) AS n").n === n0, "re-applying the file adds no rows");
 ok(one("SELECT COUNT(*) AS n FROM spof_registry").n === 2, "both new paths are in spof_registry with their second path");
 ok(one("SELECT COUNT(*) AS n FROM fleet_crons WHERE task_id = 'cron-watch' AND cron_expr = '*/5 * * * *'").n === 1, "cron-watch runs every 5 minutes");
+// CRON-WATCH-OWN-RUNS-1 (#11873): qnfo-waste-agent ran hourly (waste_runs) while its heartbeat row was stale, and the view never read waste_runs,
+// so cron-watch filed worker-silent. After migrations/2026-11-14-cron-activity-waste-runs.sql its own run record counts.
+db.exec("CREATE TABLE IF NOT EXISTS waste_runs (ts TEXT PRIMARY KEY, error TEXT)");
+db.prepare("INSERT OR REPLACE INTO worker_schedules VALUES ('qnfo-waste-agent', ?, ?)").run(JSON.stringify(["5 * * * *"]), iso(10));
+db.prepare("INSERT OR REPLACE INTO fleet_heartbeat VALUES ('qnfo-waste-agent', '1.0.1', ?, 1)").run(iso(180));
+db.prepare("INSERT INTO waste_runs (ts) VALUES (?)").run(new Date(Date.now() - 5 * 6e4).toISOString());
+const wasteBefore = one("SELECT own_ms, last_ms FROM v_cron_activity WHERE worker = 'qnfo-waste-agent'");
+ok(wasteBefore && wasteBefore.own_ms === null && Date.now() - wasteBefore.last_ms > 120 * 6e4, "before: the view reads only the stale heartbeat for qnfo-waste-agent", wasteBefore);
+db.exec(readFileSync(new URL("./2026-11-14-cron-activity-waste-runs.sql", import.meta.url), "utf8"));
+const wasteAfter = one("SELECT own_ms, last_ms FROM v_cron_activity WHERE worker = 'qnfo-waste-agent'");
+ok(wasteAfter && wasteAfter.own_ms && Date.now() - wasteAfter.last_ms < 10 * 6e4, "after: its latest waste_runs row is its last run", wasteAfter);
+ok(!db.prepare("SELECT 1 FROM v_cron_faults WHERE fault_key = 'worker-silent:qnfo-waste-agent'").get(), "and cron-watch sees no worker-silent fault for it");
+ok(one("SELECT own_ms FROM v_cron_activity WHERE worker = 'fleet-exec'").own_ms !== null, "the fleet-exec run table still counts");
+ok(one("SELECT COUNT(*) AS n FROM bak_view_defs_20261114_cron_activity").n === 1, "the previous view definition is kept for rollback");
 console.log(`cron-watch: ${pass} pass, ${fail} fail`);
 if (fail) process.exit(1);
