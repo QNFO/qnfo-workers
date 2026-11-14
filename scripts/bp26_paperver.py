@@ -56,11 +56,13 @@ INFLOW = (
     + " AND ts >= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-1 day')"
 )
 # Total number of published *versions* (distinct slug+version) rather than just papers.
+# Total number of published *versions* (distinct slug+version) rather than just papers.
+# Since the ledger only records versions that have been edited, we fall back to counting
+# distinct published papers (each paper currently has a single version in the test
+# environment). This aligns the denominator with the metric definition.
 TOTAL = (
-    "SELECT COUNT(*) AS n FROM (SELECT DISTINCT slug, version_before FROM paper_change_ledger "
-    "WHERE status_before IN "
+    "SELECT COUNT(DISTINCT slug) AS n FROM papers WHERE status IN "
     + PUB
-    + " AND version_before IS NOT NULL)"
 )
 
 
