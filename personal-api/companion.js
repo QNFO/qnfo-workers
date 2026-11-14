@@ -4831,7 +4831,29 @@ function inbox(){api('/companion/api/inbox').then(function(r){var b=$('inbox');b
 var hist=[];try{hist=JSON.parse(sessionStorage.getItem('cmp-hist')||'[]')}catch(e){warn(e)}
 function drawChat(){var b=$('msgs');b.innerHTML='';hist.forEach(function(m){b.appendChild(el('div',{cls:'msg '+(m.role==='user'?'me':'it'),text:m.content}))});window.scrollTo(0,document.body.scrollHeight)}
 function sendChat(){var t=$('chat-in').value.trim();if(!t)return;hist.push({role:'user',content:t});$('chat-in').value='';drawChat();$('chat-send').disabled=true;
- api('/companion/api/chat',{json:{thread_id:'companion-'+new Date().toISOString().slice(0,10),messages:hist.slice(-16)}}).then(function(r){var c=r.reply||r.error||'(no answer)';if(r.crisis)c=c+'\\n\\n'+r.crisis;hist.push({role:'assistant',content:c});try{sessionStorage.setItem('cmp-hist',JSON.stringify(hist.slice(-30)))}catch(e){warn(e)}drawChat()}).catch(function(e){hist.push({role:'assistant',content:'I could not answer just now: '+e.message});drawChat()}).then(function(){$('chat-send').disabled=false})}
+ api('/companion/api/chat',{json:{thread_id:'companion-'+new Date().toISOString().slice(0,10),messages:hist.slice(-16)},timeout:60000}).then(function handle(r){
+  if(r.pending){
+    var start=Date.now();
+    function poll(){
+      return api('/companion/api/chat/latest').then(function(p){
+        if(p.reply||p.error) return p;
+        if(Date.now()-start<60000) return new Promise(function(res){ setTimeout(function(){ poll().then(res);},1000);});
+        return {error:'Chat timed out, try again'};
+      });
+    }
+    return poll();
+  }
+  return r;
+}).then(function(r){
+  var c=r.reply||r.error||'(no answer)';
+  if(r.crisis) c=c+'\\n\\n'+r.crisis;
+  hist.push({role:'assistant',content:c});
+  try{sessionStorage.setItem('cmp-hist',JSON.stringify(hist.slice(-30)))}catch(e){warn(e)}
+  drawChat();
+}).catch(function(e){
+  hist.push({role:'assistant',content:'I could not answer just now: '+e.message});
+  drawChat();
+}).then(function(){ $('chat-send').disabled=false; })}
 function clearChat(){hist=[];try{sessionStorage.removeItem('cmp-hist')}catch(e){warn(e)}drawChat()}
 // COMPANION-FOCUS-2: everything below is buttons over existing APIs and browser-local state. No free-text control or AI call.
 var FOCUS_STEPS=['Make the smallest possible start','Stop when the timer ends','Tap Done — a partial try counts'];
