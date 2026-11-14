@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """BP26-PAPER-PIDS-1 collector (2026-10-28, charter pillar research; agent_issues 1000338; breach issue 1000672).
 
-paper_version_immutability: 1 - (published paper versions whose body changed in place) / (published papers), from the living-paper
+paper_version_immutability: (published versions whose stored content hash still matches the served body) / (all published versions), from the living-paper paper_change_ledger
 paper_change_ledger. A violation is a live (backfilled = 0) ledger row of the last 30 days where the paper was published, distributed or
 external_preprint before the change, version_before = version_after, and body_fp_before differs from body_fp_after: the body changed and
 the version did not, so a citation to that version now points at different text. Counted per distinct (slug, version).
