@@ -107,7 +107,7 @@ const ts = readFileSync(here("./src/index.ts"), "utf8");
 const toml = readFileSync(here("./wrangler.toml"), "utf8");
 ok(/gate\.check\(name, args\)/.test(ts) && /opsCallRaw\(env, name, args\)/.test(ts) && /gate && out && out\.ok/.test(ts), "every ops tool a gated session calls passes the gate before and after (opsCall)");
 ok(/opsCall\(c\.env, c\.scope, i\.name, i\.arguments \|\| \{\}, undefined, c\.gate\)/.test(ts) && /opsCall\(c\.env, c\.scope, o\.name, args, undefined, c\.gate\)/.test(ts), "ops_call and the Code Mode ops functions both carry the gate");
-ok(/t\.propose_plan = tool\(/.test(ts) && /private gate\(turn: number\): SandboxGate \| undefined[\s\S]{0,200}session\.scope !== "write"/.test(ts), "propose_plan and the gate exist only for a write-scope session");
+ok(/t\.propose_plan = tool\(/.test(ts) && /private gate\(turn: number\): SandboxGate \| undefined[\s\S]{0,200}this\.turnScope\(turn\) !== "write"/.test(ts), "propose_plan and the gate exist only for a turn that is write in the session and in its own request (TURN-SCOPE-1)");
 ok(/async decidePlan\(approved: boolean, caller = ""\)/.test(ts) && /scope !== "write"\) return json\(\{ ok: false, error: "approving a plan/.test(ts), "approving a plan needs the write scope, i.e. a fresh code");
 ok(/GUARD\.fetch\("https:\/\/qnfo-deploy-guard\/work-lock\/acquire"/.test(ts) && /\[\[services\]\]\s*\nbinding = "GUARD"\s*\nservice = "qnfo-deploy-guard"/.test(toml), "work claims go through a qnfo-deploy-guard service binding");
 ok(/unreachable\("GUARD service binding missing"\)/.test(ts) && /CLAIM-UNREACHABLE-FALLBACK-1/.test(ts), "an unreachable claim service is recorded, not silently skipped");
