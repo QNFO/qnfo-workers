@@ -14,14 +14,14 @@ async function jobOrgOutreach(env) {
   } catch (e) {
     return { status: "error", reason: "ops_config unreadable: " + String(e && e.message || e).slice(0, 160), notes: out };
   }
-  let killOn = false;
+  let sendsEnabled = false; // external_sends_enabled = "1" means external sends are allowed (the same reading as jobOutreach); anything else stops live sends
   try {
-    const kill = await env.OUTREACH.prepare("SELECT value FROM pipeline_state WHERE key = 'external_sends_enabled'").first();
-    killOn = !!(kill && kill.value === "1") && Date.now() >= OUTREACH_ACTIVATION_AT;
+    const sw = await env.OUTREACH.prepare("SELECT value FROM pipeline_state WHERE key = 'external_sends_enabled'").first();
+    sendsEnabled = !!(sw && sw.value === "1") && Date.now() >= OUTREACH_ACTIVATION_AT;
   } catch (e) {
-    killOn = false; // an unreadable switch fails closed: the lane drafts
+    sendsEnabled = false; // an unreadable switch fails closed: the lane drafts
   }
-  const mode = ORG.effectiveMode(cfg, killOn);
+  const mode = ORG.effectiveMode(cfg, sendsEnabled);
   out.mode = mode;
   if (mode === "off") return { status: "gated", notes: out };
   if (mode === "live" && !env.SEND_EMAIL) return { status: "error", notes: Object.assign(out, { errors: ["SEND_EMAIL binding missing"] }) };

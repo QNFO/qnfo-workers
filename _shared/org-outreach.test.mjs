@@ -70,6 +70,14 @@ ok(classifyReply("Please unsubscribe me") === "stop", "stop");
 ok(classifyReply("Thanks, not interested at this time") === "decline", "decline");
 ok(classifyReply("Interesting. Let's schedule a call next week") === "interested", "interested");
 ok(classifyReply("Who are you?") === "other", "other");
+// review-gate findings on 745edd2: stop and interest are intents, not words
+ok(classifyReply("stop") === "stop" && classifyReply("Stop.\n\nOn Fri, Rowan wrote: ...") === "stop", "the bare reply our opt-out line asks for is a stop");
+ok(classifyReply("Happy to chat — let's stop with the formalities and schedule a call") === "interested", "stop as an ordinary word is not an opt-out");
+ok(classifyReply("There is a bus stop near our office, come by") !== "stop", "a bus stop is not an opt-out");
+ok(classifyReply("Please stop emailing me") === "stop" && classifyReply("remove me from your list") === "stop", "explicit stop phrases still suppress");
+ok(classifyReply("Please don't call me") === "decline", "a negated call is a refusal");
+ok(classifyReply("There is no need to schedule anything") === "decline", "no need to schedule is a refusal");
+ok(effectiveMode({ mode: "live", postal_address: "x" }, "1") === "draft", "only a boolean true enables live (a truthy string does not)");
 ok(outcomeFor("stop").suppress === true && outcomeFor("interested").positive === 1 && outcomeFor("auto").status === null, "outcomes write back correctly");
 ok(Object.keys(SEGMENTS).length === 5, "five segments");
 
