@@ -107,7 +107,7 @@ const ts = readFileSync(here("./src/index.ts"), "utf8");
 const toml = readFileSync(here("./wrangler.toml"), "utf8");
 ok(/gate\.check\(name, args\)/.test(ts) && /opsCallRaw\(env, name, args\)/.test(ts) && /gate && out && out\.ok/.test(ts), "every ops tool a gated session calls passes the gate before and after (opsCall)");
 ok(/opsCall\(c\.env, c\.scope, i\.name, i\.arguments \|\| \{\}, undefined, c\.gate\)/.test(ts) && /opsCall\(c\.env, c\.scope, o\.name, args, undefined, c\.gate\)/.test(ts), "ops_call and the Code Mode ops functions both carry the gate");
-ok(/t\.propose_plan = tool\(/.test(ts) && /private gate\(turn: number\): SandboxGate \| undefined[\s\S]{0,200}session\.scope !== "write"/.test(ts), "propose_plan and the gate exist only for a write-scope session");
+ok(/t\.propose_plan = tool\(/.test(ts) && /private gate\(turn: number\): SandboxGate \| undefined[\s\S]{0,200}this\.turnScope\(turn\) !== "write"/.test(ts), "propose_plan and the gate exist only for a turn that is write in the session and in its own request (TURN-SCOPE-1)");
 ok(/async decidePlan\(approved: boolean, caller = ""\)/.test(ts) && /scope !== "write"\) return json\(\{ ok: false, error: "approving a plan/.test(ts), "approving a plan needs the write scope, i.e. a fresh code");
 ok(/GUARD\.fetch\("https:\/\/qnfo-deploy-guard\/work-lock\/acquire"/.test(ts) && /\[\[services\]\]\s*\nbinding = "GUARD"\s*\nservice = "qnfo-deploy-guard"/.test(toml), "work claims go through a qnfo-deploy-guard service binding");
 ok(/unreachable\("GUARD service binding missing"\)/.test(ts) && /CLAIM-UNREACHABLE-FALLBACK-1/.test(ts), "an unreachable claim service is recorded, not silently skipped");
@@ -205,6 +205,18 @@ console.log("qnfo-agents code-session.test: " + pass + " passed, " + fail + " fa
   ok(ts.indexOf("fallbackAnswer(stepsDone") < ts.indexOf("UPDATE code_session_turns SET status = 'done', answer ="), "the answer is made before the turn row is written");
   ok(/cf-rum-human/.test(ts) && /v_analytics_paper_trend/.test(ts) && /Always finish with a plain-text answer/.test(ts), "the system prompt points analytics questions at Cloudflare RUM and demands a text answer");
   console.log("ok never-empty answer");
+}
+// TURN-SCOPE-1: a resumed write session is read-only for a turn whose own request is not write.
+{
+  const { effectiveTurnScope } = await import("./src/session.js");
+  ok(effectiveTurnScope("write", "write") === "write", "a write turn of a write session is write");
+  ok(effectiveTurnScope("write", "read") === "read" && effectiveTurnScope("write", "") === "read" && effectiveTurnScope("write", undefined) === "read", "a write session resumed without a write request, or with no recorded scope, is read-only for that turn");
+  ok(effectiveTurnScope("read", "write") === "read", "a request never widens a read session");
+  ok(effectiveTurnScope("loop", "write") === "loop", "a loop session keeps its own scope");
+  ok(/ADD COLUMN turn_scope TEXT/.test(ts) && /INSERT INTO code_session_turns \(turn, prompt, status, escalate, turn_scope, created_ms\)/.test(ts), "the turn row records the scope of its own request");
+  ok(/startTurn\(text, caller, \{ escalate: b\.escalate === true, scope \}\)/.test(ts) && /startTurn\(text, input\.caller, \{ scope \}\)/.test(ts), "the turns route and the session start both pass the request scope");
+  ok(/this\.turnScope\(turn\) !== "write"\) return undefined/.test(ts) && /scope: this\.turnScope\(turn\), caller: session\.caller/.test(ts) && !/scope: session\.scope, caller: session\.caller/.test(ts), "the sandbox gate and the tools use the turn's scope, never the session's alone");
+  console.log("ok turn scope");
 }
 process.exit(fail ? 1 : 0);
 

@@ -39,7 +39,7 @@ import { z } from "zod";
 import { hooksFor, hookBlock, sweepEmpty, wantsSystemMap, systemMapUrl, systemMapNote, cfSkillFor, cfSkillUrl, cfSkillNote, filedMismatch, MAINTAIN_REQUESTER, MAINTAIN_PROMPT, maintainDue, verifyGithubSignature, githubEventRoute, githubEventPrompt, stepUsages, stepUsageStatements, trimCells, LEAN_CELL_CHARS, compactMessages, callerOf, clip, scopeOf, codeTaskText, opsToolAllowed, readOnlySql, repoPathOk, runId, safeToolName, scheduleWhen, sliceLines, DRAIN_PER_TICK, agentDrainPlan, agentNeurons, AGENT_DAILY_NEURONS_DEFAULT, AGENT_RUN_NEURONS_EST_DEFAULT, AGENT_SHED_MIN, loopInstance, validateRequest, EMPTY_TEXT, FINAL_ANSWER_ASK, pickAnswer, fallbackAnswer, stripToolMarkup, toolTranscript, codeSessionNeurons, codeSessionCost, isDynamicRoute, leanCaller, leanConfigOn, capResult, LEAN_MAX_STEPS, LEAN_RESULT_CHARS, approvalPayload, pendingApprovalMatches, stagedActionArgs, APPROVAL_SUFFIX, approvalNext, searchSkills, approvalCardSpec, approvalExpired, APPROVAL_EXPIRY_MS, APPROVAL_EXPIRY_NOTE, redactSecrets, shareToken, shareTokenOk, renderShareHtml } from "./lib.js";
 import { approvalModules, approvalSource } from "./approval.js";
 import { FLEET_SKILLS, skillSearch, skillGet, tasksFromPlan, taskUpdate, taskSummary } from "./skills.js";
-import { withLifecycle, sessionBudgetStep, sessionTurnRoute, shouldEscalateUnanswered, CODE_SESSION_ROUTE_ESCALATE, sessionBudgetFrom, sandboxGate, sandboxPlan, sandboxPrRef, CODE_SESSION_BUDGET_DEFAULT, CODE_SESSION_REPLAY_REQUESTER, CODE_SESSION_REPLAY_BUDGET, CODE_SESSION_REPLAY_TURNS, sessionLaneStep, codeSessionDailyCap, codeSessionLaneAllowed, CODE_SESSION_LANE_CHEAP, APPROVAL_SELFTEST_REQUESTER, approvalSelftestSeed } from "./session.js";
+import { withLifecycle, sessionBudgetStep, sessionTurnRoute, shouldEscalateUnanswered, effectiveTurnScope, CODE_SESSION_ROUTE_ESCALATE, sessionBudgetFrom, sandboxGate, sandboxPlan, sandboxPrRef, CODE_SESSION_BUDGET_DEFAULT, CODE_SESSION_REPLAY_REQUESTER, CODE_SESSION_REPLAY_BUDGET, CODE_SESSION_REPLAY_TURNS, sessionLaneStep, codeSessionDailyCap, codeSessionLaneAllowed, CODE_SESSION_LANE_CHEAP, APPROVAL_SELFTEST_REQUESTER, approvalSelftestSeed } from "./session.js";
 
 // VERSION is the first line of the bundle (build.mjs writes `var VERSION = "<package.json version>"` there for the fleet guards).
 declare var VERSION: string;
@@ -919,6 +919,8 @@ export class CodeSession extends Agent<Env, State> {
     this.sql`CREATE TABLE IF NOT EXISTS code_session_tasks (id INTEGER PRIMARY KEY, title TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'todo', updated_ms INTEGER NOT NULL)`;
     // RM-CODE-SESSION-1: a turn may ask for the premium route; the column is added once to a table that predates it.
     try { this.sql`ALTER TABLE code_session_turns ADD COLUMN escalate INTEGER NOT NULL DEFAULT 0`; } catch (e) { /* already there */ }
+    // TURN-SCOPE-1 (Codex review of QNFO/qnfo-workers#11826, P1): a turn runs with the scope of ITS OWN request, narrowed by the session's, so a write session resumed after the owner's step-up expired is read-only for that turn.
+    try { this.sql`ALTER TABLE code_session_turns ADD COLUMN turn_scope TEXT NOT NULL DEFAULT ''`; } catch (e) { /* already there */ }
     // 0.8.2: a session started by a fleet loop runs in the cheap lane (dynamic/value, lean step cap); the column is added once to a table that predates it.
     try { this.sql`ALTER TABLE code_session ADD COLUMN lane TEXT NOT NULL DEFAULT ''`; } catch (e) { /* already there */ }
   }
@@ -951,7 +953,7 @@ export class CodeSession extends Agent<Env, State> {
     const lane = input.lane === CODE_SESSION_LANE_CHEAP ? CODE_SESSION_LANE_CHEAP : "";
     this.sql`INSERT INTO code_session (id, caller, scope, status, neuron_budget, lane, created_ms) VALUES (${this.name}, ${input.caller}, ${scope}, 'idle', ${sessionBudgetFrom(input.budget)}, ${lane}, ${now})`;
     this.event("status", { status: "queued", turn: 1 });
-    return this.startTurn(text, input.caller);
+    return this.startTurn(text, input.caller, { scope });
   }
 
   // CMDLINE-FORK-SHARE-1 (issue 8256): the done turns of a session (prompt and answer) up to a turn, for a fork or an export. Only the session's own caller reads it.
@@ -975,7 +977,15 @@ export class CodeSession extends Agent<Env, State> {
     return { ok: true, session_id: this.name, forked_from: input.from, turns: turns.length, status: "idle" };
   }
 
-  async startTurn(text: string, caller = "", opts: { escalate?: boolean } = {}) {
+  // The effective scope of a turn: the session's scope only when this turn's own request carried it too; a turn with no recorded scope (an older row, a recovered fiber) is read-only.
+  private turnScope(turn: number): Scope { // standards-ok: a method definition with a return type, not a call
+    const session = this.sessionRow();
+    if (!session) return "read";
+    const r: any = this.sql`SELECT turn_scope FROM code_session_turns WHERE turn = ${turn}`;
+    return effectiveTurnScope(session.scope, r && r[0] ? r[0].turn_scope : "") as Scope;
+  }
+
+  async startTurn(text: string, caller = "", opts: { escalate?: boolean; scope?: string } = {}) {
     const session = this.sessionRow();
     if (!session || session.caller !== caller) return { ok: false, error: "no such code session" };
     if (session.status === "running" || (session.status === "queued" && Number(session.current_turn) > 0)) return { ok: false, error: "this code session is already running" };
@@ -983,7 +993,7 @@ export class CodeSession extends Agent<Env, State> {
     if (!prompt) return { ok: false, error: "empty request" };
     const turn = Number(session.current_turn || 0) + 1;
     const now = Date.now();
-    this.sql`INSERT INTO code_session_turns (turn, prompt, status, escalate, created_ms) VALUES (${turn}, ${prompt}, 'queued', ${opts.escalate ? 1 : 0}, ${now})`;
+    this.sql`INSERT INTO code_session_turns (turn, prompt, status, escalate, turn_scope, created_ms) VALUES (${turn}, ${prompt}, 'queued', ${opts.escalate ? 1 : 0}, ${opts.scope === "write" ? "write" : "read"}, ${now})`;
     this.sql`UPDATE code_session SET status = 'queued', current_turn = ${turn}, error = NULL, finished_ms = NULL WHERE id = ${this.name}`;
     if (turn > 1) this.event("status", { status: "queued", turn });
     void this.runFiber("code-session:" + turn, async (fctx: any) => {
@@ -1024,7 +1034,7 @@ export class CodeSession extends Agent<Env, State> {
   // ---- RM-CODE-SANDBOX-1: the plan gate, the work claim and the ledger of a write-scope session.
   private gate(turn: number): SandboxGate | undefined {
     const session = this.sessionRow();
-    if (!session || session.scope !== "write") return undefined;
+    if (!session || this.turnScope(turn) !== "write") return undefined;
     return {
       check: (name, args) => this.gateCheck(turn, name, args),
       after: (name, args, res) => this.gateAfter(turn, name, args, res),
@@ -1170,13 +1180,13 @@ export class CodeSession extends Agent<Env, State> {
       const history = (turns || []).slice().reverse().map((x: any) => "User: " + clip(x.prompt, 1200) + "\nAssistant: " + clip(x.answer || "", 1800)).join("\n\n");
       const gate = this.gate(turn);
       const plan = gate ? this.planRow() : null;
-      const prompt = (history ? "Conversation so far:\n" + history + "\n\n" : "") + "Scope: " + session.scope + (gate ? "\nPlan status: " + (plan ? plan.status + " (" + plan.title + ")" : "none") : "") + "\nCurrent request:\n" + row.prompt;
+      const prompt = (history ? "Conversation so far:\n" + history + "\n\n" : "") + "Scope: " + this.turnScope(turn) + (gate ? "\nPlan status: " + (plan ? plan.status + " (" + plan.title + ")" : "none") : "") + "\nCurrent request:\n" + row.prompt;
       const routed = await modelFor(this.env, "code-session", this.name + "-t" + turn, sessionTurnRoute(step, Number(row.escalate) === 1, null));
       routeId = routed.id;
       modelId = routeId;
       const model = routed.model;
       this.event("budget", { turn, state: step.state, neurons_used: Number(session.neurons_used) || 0, neuron_budget: Number(session.neuron_budget) || 0, route: routeId, max_steps: step.maxSteps, escalated: Number(row.escalate) === 1 && routeId !== DEFAULT_MODEL });
-      const tools = await allTools({ env: this.env, scope: session.scope, caller: session.caller, agent: null, proposals: [], gate });
+      const tools = await allTools({ env: this.env, scope: this.turnScope(turn), caller: session.caller, agent: null, proposals: [], gate });
       const runStream = async (m: any) => {
         answer = "";
         const out: any = streamText({
@@ -1688,7 +1698,7 @@ export default {
         if (sessionMatch[2] === "turns" && request.method === "POST") {
           const text = String(b.text || "").trim();
           if (text.length < 1 || text.length > 8000) return json({ ok: false, error: "text must contain 1 to 8000 characters" }, 400);
-          const result = await session.startTurn(text, caller, { escalate: b.escalate === true });
+          const result = await session.startTurn(text, caller, { escalate: b.escalate === true, scope });
           return json(result, result.ok ? 202 : 409);
         }
         if (sessionMatch[2] === "plan") {
