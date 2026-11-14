@@ -4,8 +4,7 @@
 -- PRIORITY-SPACE-1 (owner directive 2026-11-14): 529 of 732 open issues are labelled critical, so v_issue_queue orders by id in practice.
 -- v_issue_value_queue ranks by value per unit cost with family leverage (one root fix closes many siblings), the SQL twin of
 -- _shared/priority-space.js (D1 has no ln(), so leverage uses log2 buckets). fam_rank = 1 marks the family representative to take first.
-DROP VIEW IF EXISTS v_issue_value_queue;
-CREATE VIEW v_issue_value_queue AS
+CREATE VIEW IF NOT EXISTS v_issue_value_queue AS
 WITH b AS (
   SELECT a.id, a.title, a.priority, a.linked_session, a.created_at,
          CASE WHEN instr(a.title, ':') > 0 THEN substr(a.title, 1, min(instr(a.title, ':') - 1, 40)) ELSE substr(a.title, 1, 30) END AS family,
