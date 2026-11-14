@@ -3878,6 +3878,7 @@ async function planIssues(env, opts) {
       : "COALESCE(a.description, '') NOT LIKE '%code-task:%'";
     const sel = "SELECT a.id, a.title, a.description, a.category, a.priority, a.source, a.created_at FROM agent_issues a LEFT JOIN issue_plans p ON p.issue_id = a.id ";
     const selV2 = sel + "LEFT JOIN v_issue_queue_v2 q ON q.id = a.id ";
+    const selVQ = sel + "LEFT JOIN v_issue_queue_v2 q ON q.id = a.id LEFT JOIN v_issue_value_queue vq ON vq.id = a.id "; // PRIORITY-SPACE-1.1
     const where = "WHERE a.status = 'open' AND " + handoffFilter + " AND (p.issue_id IS NULL OR (p.outcome <> 'queued' AND p.planned_at < ?)) AND ";
     // An age-repair notice should inherit the urgency of the issue whose 24h no-doer action it is meant to resolve.
     const ageActionFirst = ageActions
@@ -3885,8 +3886,14 @@ async function planIssues(env, opts) {
       : "";
     const ord = " ORDER BY " + ageActionFirst + "CASE a.priority WHEN 'critical' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END, (p.issue_id IS NULL) DESC, a.id LIMIT ";
     const ordV2 = " ORDER BY " + ageActionFirst + "CASE a.priority WHEN 'critical' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END, q.aged DESC, (p.issue_id IS NULL) DESC, q.score DESC, a.id LIMIT ";
+    const ordVQ = " ORDER BY " + ageActionFirst + "(vq.pos IS NULL), vq.pos, (p.issue_id IS NULL) DESC, a.id LIMIT ";
     let trusted, untrusted;
     try {
+      // PRIORITY-SPACE-1.1: value per cost with family leverage first; v_issue_queue_v2 order when the view is missing.
+      trusted = (await env.AUDIT_DB.prepare(selVQ + where + tp.sql + ordVQ + PLAN_WINDOW).bind(recheck, ...tp.args).all()).results || [];
+      untrusted = (await env.AUDIT_DB.prepare(selVQ + where + "NOT " + tp.sql + ordVQ + PLAN_CHEAP_PER_TICK).bind(recheck, ...tp.args).all()).results || [];
+    } catch (eVQ) { trusted = null; }
+    if (trusted === null) try {
       trusted = (await env.AUDIT_DB.prepare(selV2 + where + tp.sql + ordV2 + PLAN_WINDOW).bind(recheck, ...tp.args).all()).results || [];
       untrusted = (await env.AUDIT_DB.prepare(selV2 + where + "NOT " + tp.sql + ordV2 + PLAN_CHEAP_PER_TICK).bind(recheck, ...tp.args).all()).results || [];
     } catch (e) {
