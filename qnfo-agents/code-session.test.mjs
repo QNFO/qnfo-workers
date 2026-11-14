@@ -206,5 +206,17 @@ console.log("qnfo-agents code-session.test: " + pass + " passed, " + fail + " fa
   ok(/cf-rum-human/.test(ts) && /v_analytics_paper_trend/.test(ts) && /Always finish with a plain-text answer/.test(ts), "the system prompt points analytics questions at Cloudflare RUM and demands a text answer");
   console.log("ok never-empty answer");
 }
+// TURN-SCOPE-1: a resumed write session is read-only for a turn whose own request is not write.
+{
+  const { effectiveTurnScope } = await import("./src/session.js");
+  ok(effectiveTurnScope("write", "write") === "write", "a write turn of a write session is write");
+  ok(effectiveTurnScope("write", "read") === "read" && effectiveTurnScope("write", "") === "read" && effectiveTurnScope("write", undefined) === "read", "a write session resumed without a write request, or with no recorded scope, is read-only for that turn");
+  ok(effectiveTurnScope("read", "write") === "read", "a request never widens a read session");
+  ok(effectiveTurnScope("loop", "write") === "loop", "a loop session keeps its own scope");
+  ok(/ADD COLUMN turn_scope TEXT/.test(ts) && /INSERT INTO code_session_turns \(turn, prompt, status, escalate, turn_scope, created_ms\)/.test(ts), "the turn row records the scope of its own request");
+  ok(/startTurn\(text, caller, \{ escalate: b\.escalate === true, scope \}\)/.test(ts) && /startTurn\(text, input\.caller, \{ scope \}\)/.test(ts), "the turns route and the session start both pass the request scope");
+  ok(/this\.turnScope\(turn\) !== "write"\) return undefined/.test(ts) && /scope: this\.turnScope\(turn\), caller: session\.caller/.test(ts) && !/scope: session\.scope, caller: session\.caller/.test(ts), "the sandbox gate and the tools use the turn's scope, never the session's alone");
+  console.log("ok turn scope");
+}
 process.exit(fail ? 1 : 0);
 

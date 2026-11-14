@@ -30,6 +30,12 @@ export function sessionTurnRoute(step, escalate, fallback) {
 export function shouldEscalateUnanswered(answered, alreadyEscalated, step) {
   return !answered && !alreadyEscalated && !!step && step.canEscalate === true;
 }
+// TURN-SCOPE-1: a turn runs with the scope of its own request narrowed by the session's. A write session resumed by a request that is not write (the owner's step-up expired) is read-only for that turn,
+// and a turn with no recorded scope (an older row, a recovered fiber) is read-only too. A session that is not write is never widened by a request.
+export function effectiveTurnScope(sessionScope, turnScope) {
+  if (sessionScope !== "write") return sessionScope;
+  return turnScope === "write" ? "write" : "read";
+}
 export function sessionBudgetFrom(value) {
   const n = Number(value);
   return Number.isFinite(n) && n >= 1000 && n <= 1000000 ? Math.round(n) : CODE_SESSION_BUDGET_DEFAULT;

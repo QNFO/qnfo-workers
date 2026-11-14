@@ -18,6 +18,8 @@ CREATE TABLE fleet_tasks (id TEXT PRIMARY KEY, name TEXT, type TEXT, definition 
 CREATE TABLE fleet_crons (name TEXT PRIMARY KEY, cron_expr TEXT, task_id TEXT, enabled INTEGER, timezone TEXT, updated_at TEXT);
 `);
 db.exec(readFileSync(new URL("./2026-11-14-analytics-loop.sql", import.meta.url), "utf8"));
+db.exec(readFileSync(new URL("./2026-11-14-ga4-consent-share.sql", import.meta.url), "utf8"));
+db.exec(readFileSync(new URL("./2026-11-14-analytics-null-1.sql", import.meta.url), "utf8")); // ANALYTICS-NULL-1 replaces both tasks: the steps below are the latest
 
 const task = db.prepare("SELECT definition, enabled FROM fleet_tasks WHERE id = 'analytics-loop'").get();
 const steps = JSON.parse(task.definition).steps;
@@ -25,6 +27,23 @@ ok(task.enabled === 1 && steps.length === 9 && steps.every((s) => s.type === "sq
 const cron = db.prepare("SELECT cron_expr FROM fleet_crons WHERE name = 'analytics-loop-hourly'").get();
 ok(cron && Number(cron.cron_expr.split(" ")[0]) % 5 === 0 && /^\d+ \* \* \* \*$/.test(cron.cron_expr), "the cron is hourly on the 5-minute grid", cron);
 const run = () => { for (const s of steps) db.exec(s.sql); };
+const metric = (m) => db.prepare("SELECT last_value v FROM metric_registry WHERE metric = ?").get(m).v;
+
+// ANALYTICS-NULL-1: nothing to measure reads NULL, never a measured-looking zero.
+{
+  const g = JSON.parse(db.prepare("SELECT definition d FROM fleet_tasks WHERE id = 'ga4-consent-share'").get().d).steps;
+  const runG = () => { for (const x of g) db.exec(x.sql); };
+  db.exec("INSERT INTO reach_signals VALUES (date('now','-1 days'), 'ga4', '', 'host', 'h', 'screenPageViews', 5, 'human')");
+  runG();
+  ok(metric("ga4_consent_share_7d") === null, "no cookie-free rows: the GA4 share is NULL, not 0.0000", metric("ga4_consent_share_7d"));
+  db.exec("INSERT INTO reach_signals VALUES (date('now','-1 days'), 'cf-rum-human', '', 'host', 'h', 'pageviews', 1000, 'human')");
+  runG();
+  ok(metric("ga4_consent_share_7d") === "0.0050", "5 GA4 views over 1000 cookie-free views read 0.0050", metric("ga4_consent_share_7d"));
+  db.exec("DELETE FROM reach_signals");
+  run();
+  ok(metric("analytics_trend_precision_28d") === null, "no settled finding: the precision is NULL, not 0.00", metric("analytics_trend_precision_28d"));
+}
+
 
 const day = (n) => `date('now','-${n} days')`;
 const put = (slug, metric, daysAgo, value) => db.exec(`INSERT INTO reach_signals VALUES (${day(daysAgo)}, 'cf-rum-human', '', 'paper', '${slug}', '${metric}', ${value}, 'human')`);
