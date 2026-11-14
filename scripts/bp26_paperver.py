@@ -61,7 +61,7 @@ INFLOW = (
 # distinct published papers (each paper currently has a single version in the test
 # environment). This aligns the denominator with the metric definition.
 TOTAL = (
-    "SELECT COUNT(DISTINCT slug) AS n FROM papers WHERE status IN "
+    "SELECT COUNT(DISTINCT slug || ':' || version) AS n FROM papers WHERE status IN "
     + PUB
 )
 
