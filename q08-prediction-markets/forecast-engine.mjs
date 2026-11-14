@@ -812,6 +812,15 @@ function spark(curve) {
   const pts = v.map((y, i) => `${((i / (v.length - 1)) * w).toFixed(1)},${(h - 4 - ((y - lo) / k) * (h - 8)).toFixed(1)}`).join(" ");
   return `<svg class="vp-spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" role="img" aria-label="Paper desk equity from ${e(usd(v[0]))} to ${e(usd(v[v.length - 1]))}"><polyline fill="none" stroke="currentColor" stroke-width="2" vector-effect="non-scaling-stroke" points="${pts}"/></svg>`;
 }
+export function leaderboardRows(d) {
+  const es = d.estimator || {}, va = d.value_added || {};
+  const rows = [
+    { name: "q08 engine (signals)", n: va.n || 0, brier: va.brier_engine },
+    { name: "Pilot estimator", n: es.n || 0, brier: es.brier_model },
+    { name: "The crowd (market price)", n: va.n || es.n || 0, brier: va.n ? va.brier_prior : es.brier_market },
+  ].filter((x) => x.n && x.brier != null).sort((a, b) => a.brier - b.brier);
+  return rows.length ? rows.map((x, i) => `<tr><td class="n">${i + 1}</td><td>${e(x.name)}</td><td class="n">${e(x.n)}</td><td class="n">${e(x.brier)}</td><td class="n">${i === 0 ? "leader" : e(+(x.brier - rows[0].brier).toFixed(4))}</td></tr>`).join("") : `<tr><td colspan="5">No resolved questions yet; the first settlement puts every forecaster on the board.</td></tr>`;
+}
 export function renderTrackRecord(d, head) {
   const bk = d.book || { positions: [], totals: {} }, t = bk.totals || {}, pl = d.pilot, es = d.estimator || {}, va = d.value_added || {};
   const prow = (p) => `<tr><td><a href="/f/${e(p.slug)}">${e(p.title)}</a><br><small>${e(String(p.opened_at).slice(0, 10))} · forecast ${e(pct(p.forecast_at_entry))} vs crowd ${e(pct(p.crowd_at_entry))}</small></td><td>${e(p.side)} @ ${e(Math.round(p.entry * 100))}¢</td><td class="n">${e(Math.round(p.mark * 100))}¢${p.settled ? " settled" : ""}</td><td class="n ${tone(p.pnl)}">${e(signed(p.pnl))}</td></tr>`;
@@ -826,6 +835,8 @@ ${siteTop("track")}
 ${bk.positions && bk.positions.length ? table(bk.positions, prow) : `<div class="ds-empty"><b>No position yet</b>The first one opens the hour a forecast moves away from the market price.</div>`}
 <h2>Paper desk</h2>${pl ? `<p class="ds-muted">The earlier pilot: ${e(usd(pl.start))} of simulated money traded by a price-blind estimator. Equity now ${e(usd(pl.equity))} (${e(pl.return_pct)}%), realized ${e(signed(pl.realized))} on ${e(pl.closed)} closed trades (${e(pl.wins)} won, ${e(pl.losses)} lost), ${e(pl.open)} open.</p>${spark(pl.curve)}${pl.trades.length ? table(pl.trades.slice(0, 20), trow) : ""}` : `<div class="ds-empty"><b>No paper desk data</b>The pilot's account appears after its first tick.</div>`}
 <h2>Accuracy against the crowd</h2><p class="ds-muted">${es.n ? `The pilot's estimator, scored on ${e(es.n)} resolved questions: Brier ${e(es.brier_model)} against ${e(es.brier_market)} for the market price (lower is better). ${es.brier_model > es.brier_market ? "The market was more accurate, so the estimator was switched off and the current engine starts from the market price and moves only on cited signals." : "The estimator beat the market price."}` : "No resolved estimates yet."} ${va.n ? `Current engine on ${e(va.n)} settled: Brier ${e(va.brier_engine)} vs crowd ${e(va.brier_prior)}.` : "The current engine has no settled forecast yet; its score appears here when the first market resolves."}</p>
+<h2>Leaderboard</h2><p class="ds-muted">Every forecaster that plays these questions — the q08 engine, the pilot's estimator and the crowd's market price — ranked against each other on the resolved questions they share (Brier score, lower is better). The crowd is a competitor here, not a benchmark: it holds the row it holds because it earned it.</p>
+<div class="vp-wrap"><table class="vp-tbl"><thead><tr><th>#</th><th>Forecaster</th><th>Settled</th><th>Brier</th><th>vs crowd</th></tr></thead><tbody>${leaderboardRows(d)}</tbody></table></div>
 ${clockHtml(d.clock)}
 ${pmHtml(d.pm)}
 ${portfolioHtml()}
