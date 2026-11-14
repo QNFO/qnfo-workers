@@ -18,7 +18,7 @@ const seeds = seedRows([
   { company: "Acme Plumbing", title: "Plumber", url: "https://acme.example/jobs" },
 ]);
 ok(seeds.length === 2, "one row per organisation, unclassifiable and tiny names dropped", seeds);
-ok(seeds.find((s) => s.org === "Example Institute").website === null, "an ATS host is never an organisation's site");
+ok(!/greenhouse/.test(String(seeds.find((s) => s.org === "Example Institute").website)), "an ATS host is never an organisation's site");
 ok(seeds.find((s) => s.org === "Beta Labs").website === "https://beta.org", "an own-host posting gives the origin");
 ok(candidateSites("Example Institute")[0] === "https://exampleinstitute.org" && candidateSites("AB").length === 0, "candidate origins");
 
@@ -37,8 +37,16 @@ const note = extractFitNote(page);
 ok(note && note.startsWith("its own site describes its work as “") && note.includes("autonomous systems"), "the note quotes the organisation's own description", note);
 ok(extractFitNote("<p>short</p>") === null, "no quotable description gives no note");
 ok(scoreFit("independent research and policy evaluation, evidence", "research-institute") >= 0.5 && scoreFit("we sell shoes", "research-institute") < 0.5, "fit rises with segment terms only");
-ok(!robotsAllows("User-agent: *\nDisallow: /") && robotsAllows("User-agent: *\nDisallow: /private") && robotsAllows("") && robotsAllows("User-agent: bot\nDisallow: /"), "robots wildcard disallow-all is honoured");
+ok(!robotsAllows("User-agent: *\nDisallow: /") && robotsAllows("User-agent: *\nDisallow: /private") && robotsAllows("") && robotsAllows("User-agent: googlebot\nDisallow: /"), "robots wildcard disallow-all is honoured");
 ok(siteHost("https://www.Example.org/x") === "example.org", "site host");
+// review-gate findings on e536772
+ok(!robotsAllows("User-agent: QNFO-research-bot\nDisallow: /"), "a group that names this bot is honoured with no wildcard group");
+ok(!robotsAllows("User-agent: *\nDisallow:\n\nUser-agent: qnfo-research-bot\nDisallow: /"), "a bot-specific disallow overrides a permissive wildcard group");
+ok(robotsAllows("User-agent: *\nDisallow: /\n\nUser-agent: qnfo-research-bot\nDisallow: /private"), "a bot-specific group that allows overrides a wildcard disallow-all");
+ok(!robotsAllows("User-agent: googlebot\nUser-agent: *\nDisallow: /"), "stacked user-agent lines share one group");
+ok(robotsAllows("User-agent: googlebot\nDisallow: /"), "another bot's disallow does not apply to us");
+const two = seedRows([{ company: "Example Institute", title: "Analyst", url: "https://boards.greenhouse.io/x/1" }, { company: "Example Institute", title: "Analyst 2", url: "https://exampleinstitute.org/jobs/2" }]);
+ok(two.length === 1 && two[0].website === "https://exampleinstitute.org", "a later posting on the organisation's own host fills in the site", two);
 
 const a = assess("Example Institute", "research-institute", "https://exampleinstitute.org", [{ url: "https://exampleinstitute.org/", html: page }]);
 ok(a.email === "info@exampleinstitute.org" && a.fit >= 0.5 && a.source_url === "https://exampleinstitute.org/", "assess yields a complete row", a);
