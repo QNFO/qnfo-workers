@@ -45,6 +45,8 @@ ok(!robotsAllows("User-agent: *\nDisallow:\n\nUser-agent: qnfo-research-bot\nDis
 ok(robotsAllows("User-agent: *\nDisallow: /\n\nUser-agent: qnfo-research-bot\nDisallow: /private"), "a bot-specific group that allows overrides a wildcard disallow-all");
 ok(!robotsAllows("User-agent: googlebot\nUser-agent: *\nDisallow: /"), "stacked user-agent lines share one group");
 ok(robotsAllows("User-agent: googlebot\nDisallow: /"), "another bot's disallow does not apply to us");
+ok(!robotsAllows("User-agent: qnfo-research\nDisallow:\n\nUser-agent: *\nDisallow: /") && !robotsAllows("User-agent: bot\nDisallow:\n\nUser-agent: *\nDisallow: /"), "a fragment of our name is another crawler: the wildcard group still applies");
+ok(seedRows([null, undefined, { company: "Beta Labs", title: "ML Engineer", url: "https://beta.org/x" }]).length === 1, "a null posting is skipped");
 const two = seedRows([{ company: "Example Institute", title: "Analyst", url: "https://boards.greenhouse.io/x/1" }, { company: "Example Institute", title: "Analyst 2", url: "https://exampleinstitute.org/jobs/2" }]);
 ok(two.length === 1 && two[0].website === "https://exampleinstitute.org", "a later posting on the organisation's own host fills in the site", two);
 
