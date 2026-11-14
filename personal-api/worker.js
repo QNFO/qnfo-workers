@@ -296,7 +296,7 @@ function clampMaxTokens(requested, isReason) {
 __name(clampMaxTokens, "clampMaxTokens");
 __name2(clampMaxTokens, "clampMaxTokens");
 __name22(clampMaxTokens, "clampMaxTokens");
-var VERSION = "4.48.0";
+var VERSION = "4.49.0";
 // 4.37.2 KERNEL-PERSONAL-PRIVACY-1: preserve all ten registered reply categories across the content-free telemetry boundary.
 // 4.37.1 KERNEL-PERSONAL-PRIVACY-1: classify twin replies inside the personal plane; AUDIT receives only fixed categories and random event ids, never reply text or excerpts.
 // 4.37.0 KERNEL-EVERYWHERE-1 (2026-11-06, owner directive "IMPLEMENT EVERYWHERE ACROSS ALL AI APPS AND SERVICES AND SURFACES", pillar personal): the twin SYSTEM_PROMPT carries the DOCTRINE-1 kernel 8.2.1 reply recognitions (KERNEL-REPLY-4): end every reply on the answer or result, never on a question, conditional offer or menu; ambiguity gets a stated assumption; a refusal or limit with its reason is a disposition stated declaratively; reversible tool actions are taken and reported in the same reply, and a requested change is made with the tool, not described. Each twin reply is also mirrored to qnfo-audit.personal_replies so the kernel false-stop scan covers this surface. prior 4.36.2
@@ -2084,6 +2084,8 @@ function inboxShouldFallback(note) {
 // ---------------------------------------------------------------- schema (personal-life D1, idempotent)
 
 const DDL = [
+  `CREATE TABLE IF NOT EXISTS cmp_meta (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL, source TEXT, channel TEXT, sentiment INTEGER DEFAULT 0, flags TEXT, themes TEXT, words INTEGER DEFAULT 0, outcome TEXT, ref TEXT)`,
+  `CREATE INDEX IF NOT EXISTS cmp_meta_ts ON cmp_meta(ts)`,
   `CREATE TABLE IF NOT EXISTS cmp_inbox (
      id TEXT PRIMARY KEY, ts TEXT NOT NULL, kind TEXT NOT NULL DEFAULT 'text', raw_text TEXT,
      media_key TEXT, mime TEXT, status TEXT NOT NULL DEFAULT 'unprocessed', processed_at TEXT,
@@ -2176,6 +2178,69 @@ async function ensureSchema(db, force) {
 // ---------------------------------------------------------------- small helpers
 
 const nowIso = () => new Date().toISOString();
+
+// COMPANION-META-1 (owner 2026-11-14: "all calls are recorded and monitored ... there is the content and then the meta content"):
+// everything the owner says or taps through the microphone, dictation or the typed box is also read as a signal about the SYSTEM.
+// Deterministic (no model call, no cost); stores no words (only counts, flags and theme keys), so personal text never leaves the plane.
+// The daily metaLoop turns a repeated friction theme into one agent_issues row with a code-task and a closing probe.
+const META_NEG = /\b(frustrat\w*|annoy\w*|again|still (not|broken|doesn'?t|isn'?t)|not working|doesn'?t work|broken|keeps? (failing|breaking)|failed|fails|useless|stupid|hate|wrong|confus\w*|slow|why (is|does|can'?t|won'?t)|can'?t|won'?t|sucks?|terrible|awful|ridiculous|waste)\b/i;
+const META_POS = /\b(great|love|perfect|thanks|thank you|nice|works|good|awesome|brilliant|helpful)\b/i;
+const META_URGENT = /\b(now|immediately|asap|urgent|always|never|every time|keep telling)\b/i;
+const META_REQUEST = /\b(i want|i need|should (be|have)|make (it|sure)|add|could you|can you|please|would be (nice|good)|wish)\b/i;
+const META_THEMES = [
+  ["voice-input", /\b(mic|microphone|dictat\w*|voice|speech|transcri\w*|recording)\b/i],
+  ["calendar", /\b(calendar|event|reminder|schedule|appointment)\b/i],
+  ["notes-capture", /\b(note|capture|inbox|journal|photo)\b/i],
+  ["search-memory", /\b(search|find|remember|recall|memory)\b/i],
+  ["speed", /\b(slow|lag|waiting|loading|timeout)\b/i],
+  ["ui", /\b(button|screen|icon|page|layout|scroll|tap|menu|phone)\b/i],
+  ["notifications", /\b(notif\w*|nudge|push|alert)\b/i],
+];
+function metaSignals(text) {
+  const t = String(text || ""), words = (t.match(/\S+/g) || []).length;
+  const neg = (t.match(new RegExp(META_NEG.source, "gi")) || []).length, pos = (t.match(new RegExp(META_POS.source, "gi")) || []).length;
+  const sentiment = Math.max(-2, Math.min(2, pos - neg));
+  const flags = [];
+  if (neg >= 2 || (neg >= 1 && META_URGENT.test(t))) flags.push("frustration");
+  if (META_REQUEST.test(t)) flags.push("request");
+  if (/\b(again|still|keep telling|every time|as i said|i already)\b/i.test(t)) flags.push("repeat");
+  if (pos && !neg) flags.push("praise");
+  const themes = META_THEMES.filter(([, re]) => re.test(t)).map(([k]) => k);
+  return { sentiment, flags, themes, words };
+}
+async function recordMeta(env, o) {
+  try {
+    const sg = o && o.text !== undefined ? metaSignals(o.text) : { sentiment: 0, flags: [], themes: [], words: 0 };
+    const flags = (o.flags || []).concat(sg.flags), themes = (o.themes || []).concat(sg.themes);
+    const failed = !!(o.outcome && o.outcome !== "ok");
+    if (failed) flags.push("tool-failure");
+    if (o.channel === "voice" || o.channel === "dictate" || o.channel === "mic") themes.push("voice-input");
+    await env.PERSONAL.prepare("INSERT INTO cmp_meta (ts, source, channel, sentiment, flags, themes, words, outcome, ref) VALUES (?,?,?,?,?,?,?,?,?)")
+      .bind(nowIso(), s(o.source, 40), s(o.channel, 16), failed ? Math.min(sg.sentiment, -1) : sg.sentiment, [...new Set(flags)].join(","), [...new Set(themes)].join(","), o.words !== undefined ? o.words : sg.words, s(o.outcome, 24), s(o.ref, 80)).run();
+  } catch (e) { /* the meta loop must never break a capture */ }
+}
+// Friction theme: at least 3 negative, repeated or failed signals in 7 days. One open issue per theme, counts only.
+async function metaLoop(env, now) {
+  const out = { filed: [], themes: {} };
+  if (!env.AUDIT) return out;
+  const since = new Date(Date.parse(now || nowIso()) - 7 * 864e5).toISOString();
+  const rows = await all(env.PERSONAL, "SELECT channel, sentiment, flags, themes, outcome FROM cmp_meta WHERE ts >= ? LIMIT 5000", since).catch(() => []);
+  for (const r of rows) {
+    const bad = r.sentiment < 0 || /frustration|tool-failure|repeat/.test(r.flags || "");
+    if (!bad) continue;
+    for (const th of String(r.themes || "").split(",").filter(Boolean)) { const c = out.themes[th] || (out.themes[th] = { bad: 0, failed: 0 }); c.bad++; if (r.outcome && r.outcome !== "ok") c.failed++; }
+  }
+  const stamp = (now || nowIso()).replace("T", " ").slice(0, 19);
+  for (const [th, c] of Object.entries(out.themes)) {
+    if (c.bad < 3) continue;
+    const title = "COMPANION-META-1:" + th;
+    const open = await one(env.AUDIT, "SELECT id FROM agent_issues WHERE title = ? AND status = 'open'", title).catch(() => null);
+    if (open) continue;
+    const desc = "The companion's meta loop (COMPANION-META-1) read the owner's own captures, dictation and microphone events for 7 days: " + c.bad + " friction signals (frustration, repeat, tool failure or negative sentiment), " + c.failed + " of them failed tool outcomes, on theme '" + th + "'. No words are stored; counts only. Find the cause in the " + th + " path of the companion and fix it at the root.\ncode-task: repo=qnfo-workers path=personal-api/companion.js\ncode-anchor: export async function metaLoop(env, now) {\ncode-probe: {\"paths\": [\"personal-api/companion.js\"], \"contains\": \"COMPANION-META-1\"}";
+    await env.AUDIT.prepare("INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at) VALUES (?, ?, 'personal-api:meta-loop', 'owner-friction', 'high', 'open', ?, ?)").bind(title, desc, stamp, stamp).run().then(() => out.filed.push(th)).catch(() => null);
+  }
+  return out;
+}
 // COMPANION-STALE-1: a reminder more than three days past its date ("Buy tickets", due 2026-09-10) is no longer offered as the
 // one thing to do next or nudged; Today counts it once and the Do tab still lists it to mark done or drop.
 const FRESH_DUE_SQL = "(due IS NULL OR due = '' OR substr(due, 1, 10) >= date('now', '-3 days'))";
@@ -3817,6 +3882,7 @@ async function capture(env, deps, input) {
   }
   await env.PERSONAL.prepare("INSERT INTO cmp_inbox (id, ts, kind, raw_text, media_key, mime, status, source, result_json) VALUES (?,?,?,?,?,?, 'unprocessed', ?, ?)")
     .bind(id, now, kind, text || null, mediaKey, mime, s(input && input.source, 40) || "companion", note ? JSON.stringify({ note }) : null).run();
+  await recordMeta(env, { source: s(input && input.source, 40) || "companion", channel: kind, text: text, outcome: note ? "transcription_failed" : "ok", ref: id });
   let processed = null;
   if (text && !(input && input.defer)) {
     try { processed = await processItem(env, deps, { id, raw_text: text, kind, media_key: mediaKey }); } catch (e) { processed = { ok: false, error: String(e && e.message || e).slice(0, 200) }; }
@@ -4744,6 +4810,7 @@ async function companionTick(env, deps, opts) {
   // Once a day, before dawn: raw voice notes past their retention go (rule 15).
   const lh = localParts(now, cfg0.tz).hour;
   const lhHere = localParts(now, (await effectiveTz(env, now, cfg0)).tz).hour;
+  if (o.prune || (lh >= 4 && lh < 4.25)) { try { out.meta = await metaLoop(env, now); await env.PERSONAL.prepare("DELETE FROM cmp_meta WHERE ts < ?").bind(new Date(Date.parse(now) - 60 * 864e5).toISOString()).run(); } catch (e) { out.meta = { error: String(e && e.message || e).slice(0, 160) }; } }
   if (o.prune || (lh >= 4 && lh < 4.25)) { try { out.pruned = await pruneMedia(env, cfg0.media_retention_days, now); } catch (e) { out.pruned = { error: String(e && e.message || e).slice(0, 160) }; } }
   // 1. The e-mail ladder's fresh asks also reach the phone, once each (not while he has paused reach-outs).
   // RED-TEAM-1: and never inside quiet hours; a ladder row sent at night waits, and the 45-minute window drops it.
@@ -5860,6 +5927,7 @@ async function handleCompanion(request, env, ctx, deps) {
       const b = await body();
       await env.PERSONAL.prepare("CREATE TABLE IF NOT EXISTS cmp_mic_events (ts TEXT NOT NULL, outcome TEXT NOT NULL, path TEXT, detail TEXT, ua TEXT)").run();
       await env.PERSONAL.prepare("INSERT INTO cmp_mic_events (ts, outcome, path, detail, ua) VALUES (?,?,?,?,?)").bind(nowIso(), s(b.outcome, 24) || "unknown", s(b.path, 16), s(b.detail, 120), s(request.headers.get("User-Agent"), 120)).run();
+      await recordMeta(env, { source: "mic-event", channel: "mic", text: "", outcome: s(b.outcome, 24) || "unknown", words: 0 });
       await env.PERSONAL.prepare("DELETE FROM cmp_mic_events WHERE ts < ?").bind(new Date(Date.now() - 30 * 864e5).toISOString()).run().catch(() => null);
       return J({ ok: true });
     }
@@ -5867,6 +5935,7 @@ async function handleCompanion(request, env, ctx, deps) {
       const bytes = new Uint8Array(await request.arrayBuffer());
       if (!bytes.length || bytes.length > 8000000) return J({ ok: false, error: "That recording was empty or too long. Try a shorter one." }, 400);
       const tr = await transcribe(env, bytes);
+      await recordMeta(env, { source: "dictate", channel: "dictate", text: tr.ok ? tr.text : "", outcome: tr.ok ? (tr.text ? "ok" : "no_speech") : "server_failed", words: tr.ok ? undefined : 0 });
       return tr.ok ? J({ ok: true, text: tr.text }) : J({ ok: false, error: "I could not make out the words. Try once more." }, 502);
     }
     if (r === "week" && m === "GET") return J(await weekLookback(env, undefined, url.searchParams.get("week")));
@@ -6821,7 +6890,7 @@ window.addEventListener('online',flushQueue);document.addEventListener('visibili
 flushQueue();showPending();
 </script></body></html>`;
 
-return Object.freeze({ COMPANION_VERSION, TZ, CONTEXTS, ENERGY, NUDGE_KINDS, LADDER_KINDS, AI_DISCLOSURE, REVIEW_NUDGE_KIND, REVIEW_PUSH, reviewNudgeDue, COMPANION_BACKUP, sha256Hex, companionReleaseKeys, buildCompanionManifest, restoreCompanionRelease, INBOX_MAX_ATTEMPTS, inboxShouldFallback, DDL, TASK_COLUMNS, ensureSchema, nowIso, FRESH_DUE_SQL, rid, esc, tzOffsetMinutes, localParts, dayKey, OFFLINE_MAX_AGE_MS, clientStamp, inQuiet, FSRS_W, RETENTION, MAX_INTERVAL_DAYS, retrievability, intervalDays, fsrsSchedule, CLARIFY_SYSTEM, contextFor, heuristicClarify, parseClarify, crisisSignal, FALLBACK_CRISIS_LINES, crisisText, SAFETY_PLAN_FIELDS, normalizeSafetyPlan, saveSafetyPlan, ACTIVITY_CATEGORIES, SEED_ACTIVITIES, helpScores, pickActivity, AI_USD_PER_1K_NEURONS, aiUseSummary, aiUse, focusOptions, logActivity, whatHelps, activityBank, addActivity, WHO5_ITEMS, WHO5_SCALE, who5Score, who5Read, recordWho5, who5Status, setPause, fallbackReply, EMAIL_MODES, saveSettings, LOGIN_TO, SESSION_COOKIE, SESSION_MS, maskedLoginTo, cookieTokens, clearSessionCookies, sessionFor, sendLoginCode, verifyLoginCode, isPaused, NEVER_RETIRE, retiredFrom, DISCREET_KINDS, discreetPayload, pruneMedia, TEXTS, pickLru, energyFor, chooseAction, receptiveHours, addDays, mondayOf, weekWindow, weekText, weekLookback, weekSeen, transitionText, planNudge, b64u, unb64u, makeVapidKeys, vapidAuthHeader, encryptPayload, sendPush, pushAll, loadCfg, dayStartIso, COUNTRY_TZ, CITY_TZ, MULTI_TZ_COUNTRIES, countryCode, placeTz, stayAt, effectiveTz, localDay, EVENT_DEFAULT_MIN, eventMs, normalizeEvents, clearEventCache, loadEvents, afterEventText, GP_DAYS, gpSummaryBuild, gpSummary, sleepFromTimestamps, sleepWindow, moodStats, MIND_URL, readingLane, retiredKinds, daysSinceSocial, unansweredStreak, gatherState, remember, recall, contextSnapshot, recordMood, moodReply, addAction, upsertProject, actionDone, addJournal, addCard, reviewCard, answerNudge, MAX_CAPTURE_BYTES, transcribe, describeImage, describeImages, capture, shortClarify, clarify, dueFromWords, followAdd, followIntent, followRun, processItem, cmp_checkin, cmp_insights, processInbox, pushPayloadFor, companionTick, agenda, FB_KINDS, fbKey, tasteTokens, tasteModel, tasteScore, applyTaste, loadFeedback, recordFeedback, tasteSummary, tripCard, hubTiles, PLAIN_BAD, plainAction, SILENT_KINDS, recapFor, recapCarry, lowMoodForecast, forecastFor, today, tasteFilterToday, dashboard, PRIVACY_TABLES, privacy, exportAll, deleteData, PERSONA, untrusted, checkInAnswer, chatFollowUp, chatContext, noteRiskInChat, companionTools, TOOL_APPENDIX_LINE, TICK_MS, doKeys, doEnsure, doTick, SELF_CHECKS, selfHeal, selfCheckState, selfCheck, sendToFleet, doAlarm, doFetch, RECALL_DDL, RECALL_UNSURE_DAYS, RECALL_OPEN_MAX, RECALL_PARTS, recallOptions, isoWeekKey, recallGenerate, recallNext, recallAnswer, recallSummary, handleTranscription, ASK_FAST_RE, ASK_LIVE_CHIP, askFastWhen, askFast, ASK_WAIT_MS, handleCompanion, MANIFEST, ICON_SVG, SW_JS, CALM_STEPS, MIND_MAX_WORDS, MIND_TAGS, MIND_CARDS, MIND_BOOKS, mindWords, mindLint, mindTags, pickMindCard, mindAllCards, mindVotes, mindStateFor, mindFor, mindVote, MIND_GROW_CAP, MIND_GROW_SYSTEM, mindGrowTag, mindParseGrown, mindGrow, MIND_JS, CALM_JS, OFFLINE_JS, GUIDE_HTML, PAGE_HTML });
+return Object.freeze({ COMPANION_VERSION, TZ, CONTEXTS, ENERGY, NUDGE_KINDS, LADDER_KINDS, AI_DISCLOSURE, REVIEW_NUDGE_KIND, REVIEW_PUSH, reviewNudgeDue, COMPANION_BACKUP, sha256Hex, companionReleaseKeys, buildCompanionManifest, restoreCompanionRelease, INBOX_MAX_ATTEMPTS, inboxShouldFallback, DDL, TASK_COLUMNS, ensureSchema, nowIso, metaSignals, recordMeta, metaLoop, FRESH_DUE_SQL, rid, esc, tzOffsetMinutes, localParts, dayKey, OFFLINE_MAX_AGE_MS, clientStamp, inQuiet, FSRS_W, RETENTION, MAX_INTERVAL_DAYS, retrievability, intervalDays, fsrsSchedule, CLARIFY_SYSTEM, contextFor, heuristicClarify, parseClarify, crisisSignal, FALLBACK_CRISIS_LINES, crisisText, SAFETY_PLAN_FIELDS, normalizeSafetyPlan, saveSafetyPlan, ACTIVITY_CATEGORIES, SEED_ACTIVITIES, helpScores, pickActivity, AI_USD_PER_1K_NEURONS, aiUseSummary, aiUse, focusOptions, logActivity, whatHelps, activityBank, addActivity, WHO5_ITEMS, WHO5_SCALE, who5Score, who5Read, recordWho5, who5Status, setPause, fallbackReply, EMAIL_MODES, saveSettings, LOGIN_TO, SESSION_COOKIE, SESSION_MS, maskedLoginTo, cookieTokens, clearSessionCookies, sessionFor, sendLoginCode, verifyLoginCode, isPaused, NEVER_RETIRE, retiredFrom, DISCREET_KINDS, discreetPayload, pruneMedia, TEXTS, pickLru, energyFor, chooseAction, receptiveHours, addDays, mondayOf, weekWindow, weekText, weekLookback, weekSeen, transitionText, planNudge, b64u, unb64u, makeVapidKeys, vapidAuthHeader, encryptPayload, sendPush, pushAll, loadCfg, dayStartIso, COUNTRY_TZ, CITY_TZ, MULTI_TZ_COUNTRIES, countryCode, placeTz, stayAt, effectiveTz, localDay, EVENT_DEFAULT_MIN, eventMs, normalizeEvents, clearEventCache, loadEvents, afterEventText, GP_DAYS, gpSummaryBuild, gpSummary, sleepFromTimestamps, sleepWindow, moodStats, MIND_URL, readingLane, retiredKinds, daysSinceSocial, unansweredStreak, gatherState, remember, recall, contextSnapshot, recordMood, moodReply, addAction, upsertProject, actionDone, addJournal, addCard, reviewCard, answerNudge, MAX_CAPTURE_BYTES, transcribe, describeImage, describeImages, capture, shortClarify, clarify, dueFromWords, followAdd, followIntent, followRun, processItem, cmp_checkin, cmp_insights, processInbox, pushPayloadFor, companionTick, agenda, FB_KINDS, fbKey, tasteTokens, tasteModel, tasteScore, applyTaste, loadFeedback, recordFeedback, tasteSummary, tripCard, hubTiles, PLAIN_BAD, plainAction, SILENT_KINDS, recapFor, recapCarry, lowMoodForecast, forecastFor, today, tasteFilterToday, dashboard, PRIVACY_TABLES, privacy, exportAll, deleteData, PERSONA, untrusted, checkInAnswer, chatFollowUp, chatContext, noteRiskInChat, companionTools, TOOL_APPENDIX_LINE, TICK_MS, doKeys, doEnsure, doTick, SELF_CHECKS, selfHeal, selfCheckState, selfCheck, sendToFleet, doAlarm, doFetch, RECALL_DDL, RECALL_UNSURE_DAYS, RECALL_OPEN_MAX, RECALL_PARTS, recallOptions, isoWeekKey, recallGenerate, recallNext, recallAnswer, recallSummary, handleTranscription, ASK_FAST_RE, ASK_LIVE_CHIP, askFastWhen, askFast, ASK_WAIT_MS, handleCompanion, MANIFEST, ICON_SVG, SW_JS, CALM_STEPS, MIND_MAX_WORDS, MIND_TAGS, MIND_CARDS, MIND_BOOKS, mindWords, mindLint, mindTags, pickMindCard, mindAllCards, mindVotes, mindStateFor, mindFor, mindVote, MIND_GROW_CAP, MIND_GROW_SYSTEM, mindGrowTag, mindParseGrown, mindGrow, MIND_JS, CALM_JS, OFFLINE_JS, GUIDE_HTML, PAGE_HTML });
 })();
 // COMPANION-INLINE-END
 var CMP_DEPS = {
