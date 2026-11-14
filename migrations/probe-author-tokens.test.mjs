@@ -59,5 +59,15 @@ tokens("issue-1002946", "15% errors", "err-pct:15.0");
 db.exec(`UPDATE ai_call_counters SET errors = 4`);
 tokens("issue-1002946", "2% errors", "pass");
 
+// Second pass (#11929): issue-1002458, found by the consumer's free-text guard (PR 11904) on its first run.
+db.exec(`CREATE TABLE oq (surface TEXT, worse INTEGER, verdict TEXT); CREATE VIEW v_output_quality_by_surface AS SELECT surface, worse, verdict FROM oq;
+INSERT INTO remediation_contracts VALUES ('issue-1002458', 'probe-author-1', 'old', 2, 'probe-error', NULL, 'active');`);
+db.exec(readFileSync(new URL("./2026-11-14-probe-author-tokens-2.sql", import.meta.url), "utf8"));
+tokens("issue-1002458", "no surfaces", "worse:0:unmeasured:0");
+db.exec("INSERT INTO oq VALUES ('papers', 2, 'worse'), ('posts', 0, 'unmeasured'), ('code', 1, 'worse'), ('shorts', 0, 'better')");
+tokens("issue-1002458", "two worse, one unmeasured", "worse:2:unmeasured:1");
+ok(db.prepare("SELECT attempts, last_verdict FROM remediation_contracts WHERE class = 'issue-1002458'").get().attempts === 0, "issue-1002458 is re-armed");
+ok(db.prepare("SELECT verify_probe FROM bak_20261114_probe_author_tokens_2 WHERE class = 'issue-1002458'").get().verify_probe === "old", "its old probe is kept in the backup table");
+
 console.log(pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);
