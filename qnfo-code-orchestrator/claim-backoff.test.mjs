@@ -77,12 +77,15 @@ let enqueueAcquires = 0;
 const startClaim = async (id, p) => {
   const r = await (await guardFetch(GUARD + "/work-lock/acquire", { body: JSON.stringify({ key: "file:" + p, owner: "qnfo-code-orchestrator:" + id, ttl_sec: 7200 }) })).json();
   db.prepare("UPDATE code_tasks SET ctx = json_set(COALESCE(ctx, '{}'), '$.claim', json(?)) WHERE id = ?").run(JSON.stringify({ key: "file:" + p, token: r.token, expires_at: r.expires_at, since: new Date().toISOString(), renewals: 0 }), id);
+  return r.token;
 };
 const addTask = async (p, goal) => {
   const n0 = guard.calls.length;
   const r = await (await worker.fetch(new Request("https://x/v1/tasks", { method: "POST", headers: hdr, body: JSON.stringify({ repo: "qnfo-workers", path: p, goal }) }), env)).json();
   enqueueAcquires += guard.calls.length - n0;
-  if (r.ok) await startClaim(r.id, p);
+  // ORCH-SUITES-RED-1 (#11923): enqueue now takes a 900 s reservation (ENQUEUE-CLAIM-RESERVATION-1, #2168). These fixtures stand for tasks that already
+  // started, so the reservation gives way to the started claim: the fixture guard drops it first, and the started claim's token is kept on r.tok.
+  if (r.ok) { delete guard.lease["file:" + p]; r.tok = await startClaim(r.id, p); }
   return r;
 };
 const row = (id) => db.prepare("SELECT * FROM code_tasks WHERE id = ?").get(id);
@@ -94,14 +97,14 @@ const setClaim = (id, patch) => db.prepare("UPDATE code_tasks SET ctx = json_set
 // 1. a task that enters a SELF-REPAIR-1 backoff releases its claim
 const KA = "file:fx-a/worker.js";
 const A = await addTask("fx-a/worker.js", "claim-backoff fixture A: a task that fails its round");
-ok(A.ok && enqueueAcquires === 0 && ctxOf(A.id).claim && ctxOf(A.id).claim.token === "tok1" && guard.lease[KA], "1a the started task holds its claim (enqueue itself sent no acquire)", ctxOf(A.id));
+ok(A.ok && enqueueAcquires === 1 && ctxOf(A.id).claim && ctxOf(A.id).claim.token === A.tok && guard.lease[KA], "1a the started task holds its claim (enqueue sent its one reservation)", ctxOf(A.id));
 db.prepare("UPDATE code_tasks SET attempts = 2 WHERE id = ?").run(A.id);
 guard.calls.length = 0;
 let t = await tick();
 let ra = row(A.id), ca = ctxOf(A.id).claim;
 ok(t.done.length === 1 && t.done[0].id === A.id && ra.status === "queued" && ra.attempts === 3 && Date.parse(ra.lease_until) - Date.now() > 3 * 60e3 && /SELF-REPAIR-1: round 1 of 3 failed/.test(ra.last_error), "1b the third failed attempt ends the round: queued, 5-minute backoff", { done: t.done, ra });
 const relA = callsFor("/work-lock/release", KA);
-ok(relA.length === 1 && relA[0].body.token === "tok1" && relA[0].body.outcome === "backoff" && !("pr" in relA[0].body), "1c the backoff releases the claim with its token, outcome backoff (FAIL-SIGNATURE-STOP-1)", relA);
+ok(relA.length === 1 && relA[0].body.token === A.tok && relA[0].body.outcome === "backoff" && !("pr" in relA[0].body), "1c the backoff releases the claim with its token, outcome backoff (FAIL-SIGNATURE-STOP-1)", relA);
 ok(ca.released_at && ca.release_status === 200 && ca.outcome === "backoff" && ca.backoff_until === ra.lease_until && !guard.lease[KA], "1d released_at and backoff_until are recorded on the task and the guard lease is gone", ca);
 ok(callsFor("/work-lock/acquire", KA).length === 0 && t.claims.parked === 0 && t.claims.taken === 0 && t.claims.renewed === 0, "1e the sweep in the same tick neither re-takes nor renews the parked task", { calls: guard.calls, claims: t.claims });
 ok(db.prepare("SELECT COUNT(*) AS n FROM cloud_ops_events WHERE kind = 'code-task.claim-parked' AND text LIKE ?").get(A.id + "%").n === 1, "1f the release is audited (code-task.claim-parked)");
@@ -164,7 +167,7 @@ const t0 = new Date(Date.now() - 1000).toISOString();
 guard.calls.length = 0;
 t = await tick();
 ca = ctxOf(A.id).claim;
-ok(t.done.length === 1 && t.done[0].id === A.id && !t.done[0].deferred && ca.token && ca.token !== "tok1" && !ca.released_at && ca.since >= t0 && !ca.renewals && guard.lease[KA] && guard.lease[KA].token === ca.token, "4e once the file is free the task takes a new claim (new token, new since, no renewals) and steps", { done: t.done, ca });
+ok(t.done.length === 1 && t.done[0].id === A.id && !t.done[0].deferred && ca.token && ca.token !== A.tok && !ca.released_at && ca.since >= t0 && !ca.renewals && guard.lease[KA] && guard.lease[KA].token === ca.token, "4e once the file is free the task takes a new claim (new token, new since, no renewals) and steps", { done: t.done, ca });
 ok(row(A.id).status === "queued" && row(A.id).attempts === 4, "4f the step ran: the second round's first attempt", row(A.id));
 
 // 5. a release the guard never answered is not recorded as released; the next sweep releases it
