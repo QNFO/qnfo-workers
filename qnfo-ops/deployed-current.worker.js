@@ -552,7 +552,7 @@ __name222(gateAudit1CfWorkerDeploy, "gateAudit1CfWorkerDeploy");
 __name2222(gateAudit1CfWorkerDeploy, "gateAudit1CfWorkerDeploy");
 __name22222(gateAudit1CfWorkerDeploy, "gateAudit1CfWorkerDeploy");
 __name222222(gateAudit1CfWorkerDeploy, "gateAudit1CfWorkerDeploy");
-var VERSION = "2.73.2-codeagent";
+var VERSION = "2.73.3-codeagent";
 /* 2.62.20 OPS-ARG-ALIAS-1 (issues 5775, 5780, 6173, 6193, 6671, 6792, 6767, 6826, 6015, 6860, pillar autonomy; patch). Caller-input mistakes are no longer fleet failures: workspace_grep accepts query/regex/search for pattern, cf_worker_read/deploy/bindings accept name/script for worker, fleet_graph infers a missing op from its other arguments and accepts filter/q/name for query; a still-missing argument answers arg_error with a hint, and an arg_error or an exception thrown by the caller own run_code or run_code_net JavaScript (user_code_error) is logged as status rejected, so it files no TOOL-FAILURE or LOOP-BREAKER issue. errorDetailCapture writes worker_logs in batches of 25 and records a D1 overload as a deferral, not an error. qnfo-ops/tool-arg-alias.test.mjs. */
 /* 2.62.11 WORKER-LOAD-GATE-1 (issue #6518, pillar autonomy; patch): inline the OAuth broker in the deployable single-module worker. */
 /* 2.62.1 CONTAINER-WORKSPACE-TIMEOUT-1 (#3922, issue 1000117, pillar autonomy; patch): container_workspace_exec allows 120 seconds for cold-start initialization while preserving its 300-second ceiling. */
@@ -1685,6 +1685,15 @@ function truncateToContext(msgs, budgetTokens, opts) {
   keepIdx.sort(function(a, b) { return a - b; });
   const out = [];
   for (const i of keepIdx) for (const m of rounds[i]) out.push(m);
+  // TASK-PIN-FIRST-1 (2026-11-14, PR 11792 run: "8414 messages of context were dropped" and the task's diff could not be rebuilt): the pin above holds the LAST user message, which in an
+  // auto-continued chain is the continuation notice, so the original task went first. The first user message is always kept (capped), ahead of what the budget kept.
+  if (rounds.length > 1 && out.length) {
+    const fr = rounds[0];
+    const fm = fr && fr[0];
+    if (fm && fm.role === "user" && typeof fm.content === "string" && out.indexOf(fm) < 0) {
+      out.unshift(Object.assign({}, fm, { content: "[original task, kept when older history was dropped] " + (fm.content.length > 4000 ? fm.content.slice(0, 4000) + " ...[task text shortened]" : fm.content) }));
+    }
+  }
   if (!out.length) {
     const lastRound = rounds[rounds.length - 1] || [];
     const perMsg = Math.max(Math.floor(budget / Math.max(lastRound.length, 1)), 256);
@@ -4022,7 +4031,8 @@ async function shipChange(env, args) {
   for (const f of files) if (!f || !String(f.path || "").trim() || typeof f.content !== "string") return { ok: false, error: "every file needs path and content (string)" };
   // SHIP-NO-STUB-1 (2026-11-14, PR 11792: a round that spent its budget on workspace listings shipped docs/ops/round-handoff.md as its deliverable): a change whose files are all
   // documentation or handoff notes is refused (CODE-CHANGE-REQUIRED-1), so the run goes back to the code instead of closing on a stub.
-  if (!(args && args.allow_docs === true) && files.every(function(f) { return /^docs\//i.test(String(f.path).trim()) || /\.(md|txt)$/i.test(String(f.path).trim()); })) return { ok: false, stage: "validate", error: "SHIP-NO-STUB-1: every file is documentation (docs/ or .md/.txt); a handoff note is not a deliverable (a real documentation task passes allow_docs: true). Read the one function the task names (worker_outline --find or github_repo_read) and ship the code change; the closing line is INCOMPLETE only after a real attempt." };
+  // SHIP-NO-STUB-2: no self-service opt-out (a nudged run could resend the stub with a flag); a stub is a docs/ file with a handoff-style name, or any docs/ file under a handoff-style title.
+  if (files.every(function(f) { const p = String(f.path).trim(); return /^docs\//i.test(p) && (/handoff|round-|stub|wip|continu|incomplete/i.test(p) || /handoff|stub|incomplete|round budget/i.test(title)); })) return { ok: false, stage: "validate", error: "SHIP-NO-STUB-2: the change is a handoff note, not a deliverable. Read the one function the task names and ship the code change; the closing line is INCOMPLETE only after a real attempt." };
   let issueId = args && args.issue_id != null ? Number(args.issue_id) : null;
   if (!Number.isInteger(issueId) || issueId <= 0) {
     const filed = await opsFileCodeIssue(env, title, summary || title, "ship_change");

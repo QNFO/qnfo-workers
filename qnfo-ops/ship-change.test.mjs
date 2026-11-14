@@ -89,6 +89,16 @@ function build(opts) {
   t = build();
   r = await t.fn.shipChange(t.env, { title: "x", files: [{ path: "a" }] });
   ok(!r.ok && /path and content/.test(r.error), "a file without content is refused", r);
+  // SHIP-NO-STUB-2: a handoff stub is refused before an issue exists and has no flag to bypass; a code-text deliverable and a real docs change pass.
+  t = build();
+  r = await t.fn.shipChange(t.env, { title: "ops: round handoff stub", allow_docs: true, files: [{ path: "docs/ops/round-handoff.md", content: "x" }] });
+  ok(!r.ok && /SHIP-NO-STUB-2/.test(r.error) && !/allow_docs/.test(r.error) && t.log.issues.length === 0, "a docs handoff stub is refused with no opt-out, before an issue", r);
+  t = build();
+  r = await t.fn.shipChange(t.env, { title: "Prompt template for the agent", files: [{ path: "prompts/agent.txt", content: "x" }] });
+  ok(r.ok === true, "a .txt code artifact outside docs/ is shipped", r);
+  t = build();
+  r = await t.fn.shipChange(t.env, { title: "Document the deploy path", files: [{ path: "docs/deploy.md", content: "x" }] });
+  ok(r.ok === true, "a real documentation change passes", r);
   t = build({ branchFail: true });
   r = await t.fn.shipChange(t.env, { title: "x", files: [{ path: "a", content: "b" }] });
   ok(!r.ok && r.stage === "branch" && r.issue_id === 4242 && t.log.writes.length === 0, "branch failure stops at the branch stage and keeps the issue id", r);
