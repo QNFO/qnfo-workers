@@ -9,7 +9,7 @@
 // JOBSEARCH-CV-1 (1.5.0): the CV is part of this worker (page /cv): a yes/no interview that builds the claim bank, review of unconfirmed claims, roles, achievements and publications edited in D1, a resume per job (summary, roles, selected work, education, skills) and a cover note, history and backup. The search is tied to that bank (evidence the owner can back up weighs more; what the CV lacks is shown as a gap), decided postings (rejected, applied, approved) never come back under another id, rejections carry a reason the search learns from, and a wider net: stretch matches outside the stated preferences, more boards and aggregators.
 // Routes: GET / (web UI) | GET /api | GET /api/matches | GET /api/matches/:id | GET /api/runs | GET /api/ledger | POST /api/run | POST /api/matches/:id/status | GET /health
 // Port of the jobsearch/ Python modules (tests: jobsearch/test_jobsearch.py, qnfo-jobsearch/worker.test.mjs).
-var VERSION = "1.33.3-codeagent";
+var VERSION = "1.33.4-codeagent";
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -4731,6 +4731,30 @@ async function load(){
   const card = x=>cardHtml(x);
   const core=m.matches.filter(x=>x.tier!=='C'), stretch=m.matches.filter(x=>x.tier==='C');
   $('#list').innerHTML=(core.map(card).join('')||'<p class="mute">No matches yet.</p>')+(stretch.length?'<details id="stretch"><summary>'+stretch.length+' stretch matches (C): outside your stated preferences, kept so you can decide</summary>'+stretch.map(card).join('')+'</details>':'');
+// JOBS-PAY-1: show pay range on each match when the posting provides it
+// JOBS-DEADLINE-1: show closing dates, nearest first, with a heads‑up before they pass
+(function(){
+  const all = core.concat(stretch);
+  all.forEach(m=>{
+    const el = document.getElementById('c-'+m.id);
+    if(!el) return;
+    const target = el.querySelector('.art')||el;
+    let html = '';
+    if(m.pay_range){
+      html += '<div class="pay">Pay: '+esc(m.pay_range)+'</div>';
+    }
+    if(m.deadline){
+      const d = new Date(m.deadline);
+      const now = new Date();
+      const diff = Math.ceil((d - now)/86400000);
+      const note = diff<0 ? ' (passed)' : diff===0 ? ' (today)' : ' in '+diff+' days';
+      html += '<div class="deadline">Closing: '+esc(d.toLocaleDateString())+note+'</div>';
+    }
+    if(html){
+      target.innerHTML += html;
+    }
+  });
+})();
 }
 async function show(id){const el=document.getElementById('c-'+id).querySelector('.art');if(el.innerHTML){el.innerHTML='';return}
   const d=await api('/api/matches/'+encodeURIComponent(id));if(!d.verified){el.innerHTML='<pre>Blocked: '+esc(d.blocked_reason)+'</pre>';return}
