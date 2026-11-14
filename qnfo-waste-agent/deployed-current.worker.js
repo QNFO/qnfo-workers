@@ -1,8 +1,12 @@
-
 var VERSION = "1.0.1";
 // spof-review: AUDIT is the existing telemetry store; a failed sweep logs its
 // failure and the next hourly run retries. Authenticated /run is the alternate.
-import { timingSafeEqual } from "node:crypto";
+function timingSafeEqual(a, b) {
+  if (a.length !== b.length) return false;
+  let result = 0;
+  for (let i = 0; i < a.length; i++) result |= a[i] ^ b[i];
+  return result === 0;
+}
 function validRunKey(value, expected) {
   if (!value || !expected) return false;
   const a = new TextEncoder().encode(value), b = new TextEncoder().encode(expected);
