@@ -42,7 +42,10 @@ const G = vm.runInContext(block + ";({ utmClickRow, utmRecord, utmClean, get cou
 const graph = new DatabaseSync(":memory:");
 const env = { DB: shim(graph) };
 const NOW = Date.parse("2026-10-06T09:00:00Z");
-const req = (url, ua, extra) => ({ method: (extra && extra.method) || "GET", url, cf: { country: "nl" }, headers: { get: (k) => (k === "User-Agent" ? ua : null) } });
+const req = (url, ua, extra) => {
+  const h = Object.assign({ "Sec-Fetch-Mode": "navigate", "Accept-Language": "en" }, (extra && extra.headers) || {});
+  return { method: (extra && extra.method) || "GET", url, cf: { country: "nl" }, headers: { get: (k) => (k === "User-Agent" ? ua : (k in h ? h[k] : null)) } };
+};
 const res = (status, ct) => ({ status, headers: { get: (k) => (k === "Content-Type" ? ct : null) } });
 const html = res(200, "text/html; charset=utf-8");
 const HUMAN = "Mozilla/5.0 (Macintosh) AppleWebKit Safari", BOT = "Mozilla/5.0 (compatible; Bluesky Cardyb/1.1)";
@@ -51,6 +54,11 @@ const r1 = G.utmClickRow(req("https://papers.qnfo.org/papers/p-adic-x/?utm_sourc
 ok(r1 && r1.day === "2026-10-06" && r1.host === "papers.qnfo.org" && r1.path === "/papers/p-adic-x" && r1.utm_source === "bluesky" && r1.utm_medium === "social" && r1.utm_campaign === "p-adic-x" && r1.ua_class === "human" && r1.country === "NL", "a tagged human page load becomes one row", r1);
 ok(!("ip" in r1) && !Object.values(r1).some((v) => /Mozilla/.test(String(v))), "the row holds no IP and no user-agent string");
 ok(G.utmClickRow(req("https://qnfo.org/?utm_source=bluesky", BOT), html, NOW).ua_class === "bot", "a link-preview fetcher is classed bot");
+// UTM-READER-CLASS-1 (issue 1001719): agents that read as human under the old crawler-name rule.
+ok(G.utmClickRow(req("https://qnfo.org/?utm_source=bluesky", "python-requests/2.31.0"), html, NOW).ua_class === "bot" && G.utmClickRow(req("https://qnfo.org/?utm_source=bluesky", "curl/8.5.0"), html, NOW).ua_class === "bot", "an HTTP library client is classed bot even though it names no crawler");
+ok(G.utmClickRow(req("https://qnfo.org/?utm_source=bluesky", "Mozilla/5.0 (qnfo-social link-probe)"), html, NOW).ua_class === "bot", "a Mozilla string that names no browser is classed bot");
+ok(G.utmClickRow(req("https://qnfo.org/?utm_source=bluesky", HUMAN, { headers: { "Sec-Fetch-Mode": null, "Accept-Language": null } }), html, NOW).ua_class === "bot", "a user agent that claims a browser but sends neither Sec-Fetch-Mode nor Accept-Language is classed bot");
+ok(G.utmClickRow(req("https://qnfo.org/?utm_source=bluesky", HUMAN, { headers: { "Accept-Language": null } }), html, NOW).ua_class === "human", "Sec-Fetch-Mode alone keeps a real browser human (older in-app browsers omit it)");
 ok(G.utmClickRow(req("https://qnfo.org/papers", HUMAN), html, NOW) === null, "an untagged load records nothing");
 ok(G.utmClickRow(req("https://qnfo.org/?utm_source=x", HUMAN, { method: "POST" }), html, NOW) === null, "only GET is counted");
 ok(G.utmClickRow(req("https://qnfo.org/missing?utm_source=x", HUMAN), res(404, "text/html"), NOW) === null, "a 404 is not counted");
