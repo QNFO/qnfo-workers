@@ -165,7 +165,7 @@ function formatPaper(source, record) {
 }
 // PAPER-FORMAT-2:END
 // 3.48.7 PAPER-REVISION-QUALITY-1 (2026-11-03, pillar reach): recover split revision titles and record abstracts at public rendering, and reject cached refusals from both summary surfaces.
-var VERSION="3.69.14-codeagent";
+var VERSION="3.69.15-codeagent";
 /* 3.54.2 SEO-404-PATHS-1 follow-up: the paper page script no longer requests /api/paper-context/undefined when the page data block is missing (first path recorded in seo_404_paths). */ /* 3.54.0 SEO-404-PATHS-1 and INDEXNOW-BACKOFF-1 (merged): see the two notes below. GET /api/seo/crawl also returns notFound, the top 50 crawler 404 paths of the window, so the dashboard UX auditor reads them from the open route. INDEXNOW-BACKOFF-1: an IndexNow endpoint that failed its last 6 logged runs is tried once per 3 hours and a 429 is not retried. */ /* SEO-404-PATHS-1 (2026-11-04, pillar reach): a crawler request that answers 404 records its path in living-paper seo_404_paths (day, host, path, n; 500 paths a day, 14 days kept). seo_crawl_log counted 1,875 crawler 404s on 2026-11-02 (qnfo.org, every bot, kind other) and kept no path to fix. */ // 3.52.0 QWAV-DEMOS-1 (2026-11-04, pillar reach; minor: the QWAV page lists the ten interactive demos that only the retired Pages site linked, with a Demos nav item, a hero action and a footer link; the page is now the whole of qwav.org through a qwav.org/* route, so unknown paths redirect home instead of answering 200). Revert: restore 3.51.0. // 3.51.0 earlier history follows: // 3.51.0 CROSS-LINK-1 (2026-11-04, pillar reach; minor: every QDS page gains a family bar linking QNFO, QWAV and q08, a Keep exploring module (newest and random papers from the open API, the three family sites, topic chips) and a family line in the footer; QDS 1.1.0; visible ask links use ask.qwav.org per DOMAIN-PLANE-1). Prediction: pages per session on qwav.org and qnfo.org rise and clicks between the three sites become non-zero. Revert: restore 3.50.0. // 3.50.0 earlier history follows: // 3.50.0 PAPER-CITATION-ALIASES-1 (#5577, pillar research; minor): expose the documented /papers/<slug>/cite.* routes alongside the existing API exports. /* main 3.53.1 */ // 3.53.1 PAPER-TTFB-1 (2026-11-04, pillar reach; patch): a paper page whose plain summary kept failing the readability gate ran two model generations inside every request (17 to 44 s to first byte for a-minimal-generative-grammar-of-coordination..., 1.2 s for its neighbours); the fill now runs after the response and once per PLAIN_RETRY_MS per paper per colo. Revert: restore 3.53.0. // 3.53.0 earlier history follows: // 3.53.0 CROSS-LINK-2 (2026-11-04, pillar reach; minor: papers.qnfo.org index and paper pages, rendered by lpDoc, gain the family bar and a Keep exploring strip linking QWAV, Ask, ideas and q08, so the pages a search lands on lead to the rest of the family). Revert: restore 3.52.0. // 3.52.0 earlier history follows: // 3.52.0 QWAV-DEMOS-1 (2026-11-04, pillar reach; minor: the QWAV page lists the ten interactive demos that only the retired Pages site linked, with a Demos nav item, a hero action and a footer link; the page is now the whole of qwav.org through a qwav.org/* route, so unknown paths redirect home instead of answering 200). Revert: restore 3.51.0. // 3.51.0 earlier history follows: // 3.51.0 CROSS-LINK-1 (2026-11-04, pillar reach; minor: every QDS page gains a family bar linking QNFO, QWAV and q08, a Keep exploring module (newest and random papers from the open API, the three family sites, topic chips) and a family line in the footer; QDS 1.1.0; visible ask links use ask.qwav.org per DOMAIN-PLANE-1). Prediction: pages per session on qwav.org and qnfo.org rise and clicks between the three sites become non-zero. Revert: restore 3.50.0. // 3.50.0 earlier history follows: // 3.50.0 PAPER-CITATION-ALIASES-1 (#5577, pillar research; minor): expose the documented /papers/<slug>/cite.* routes alongside the existing API exports.
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
@@ -8071,6 +8071,24 @@ function reachOgImage() {
 // isolate records at most UTM_ISOLATE_CAP clicks so a flood of invented tags cannot grow the table without bound.
 // qnfo-fleet-dashboard's daily reach ingest reads the rows into qnfo-audit.reach_signals (source utm).
 var UTM_BOT_RE = /bot|crawler|spider|preview|facebookexternalhit|slackbot|twitterbot|linkedinbot|mastodon|bluesky|cardyb|headless|discordbot|telegrambot|whatsapp|pinterest|embedly|bitly|mail\.ru|bingpreview|yandex|applebot|googlebot|bingbot|baiduspider|slurp/i;
+// UTM-READER-CLASS-1 (REACH READER-YIELD-1.1, issue 1001719): tagged outreach loads arrive from link-preview fetchers and
+// HTTP libraries that name no crawler, so the old ua_class read them as human and outreach_human_clicks_7d overcounted
+// readers while engaged sessions stayed flat. A load is now bot unless the user agent claims a real browser (starts with
+// Mozilla/5.0 and names Chrome, Safari, Firefox or Edge) and sends at least one of Sec-Fetch-Mode or Accept-Language
+// (older iOS in-app browsers omit Sec-Fetch-Mode, so one of the two is enough); a user agent that names a library client
+// is bot whatever it claims. The 64-character campaign values and the counter are unchanged.
+var UTM_FETCHER_RE = /python-requests|curl|wget|node-fetch|undici|axios|go-http-client|okhttp|java\/|libwww|embedly|whatsapp|discord|telegram|pinterest|mastodon|http\.rb/i;
+function utmBrowserName(ua) {
+  return /^Mozilla\/5\.0/.test(ua) && /chrome|safari|firefox|edge/i.test(ua);
+}
+function utmReaderClass(request) {
+  var ua = request.headers.get("User-Agent") || "";
+  if (UTM_BOT_RE.test(ua)) return "bot";
+  if (UTM_FETCHER_RE.test(ua)) return "bot";
+  if (!utmBrowserName(ua)) return "bot";
+  if (!request.headers.get("Sec-Fetch-Mode") && !request.headers.get("Accept-Language")) return "bot";
+  return "human";
+}
 var UTM_ISOLATE_CAP = 5000;
 var utmIsolateCount = 0;
 var utmTableReady = false;
@@ -8130,7 +8148,7 @@ function utmClickRow(request, res, nowMs) {
       utm_source: src,
       utm_medium: utmClean(u.searchParams.get("utm_medium")),
       utm_campaign: utmClean(u.searchParams.get("utm_campaign")),
-      ua_class: UTM_BOT_RE.test(request.headers.get("User-Agent") || "") ? "bot" : "human",
+      ua_class: utmReaderClass(request),
       country: typeof cf.country === "string" ? cf.country.slice(0, 2).toUpperCase() : ""
     };
   } catch (e) {
