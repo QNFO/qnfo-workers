@@ -17,6 +17,8 @@ for (const [id, p] of Object.entries(L.products)) {
   ok(DS.dsLint("<meta name=\"viewport\" content=\"width=device-width\"><body class=\"ds\">DESIGN-SYSTEM-1 v<style>" + L.css[id] + "</style></body>").length === 0, id + ": the override passes dsLint");
 }
 for (const [id, c] of Object.entries(L.css)) for (const v of ["accent", "accent-hover", "on-accent", "accent-soft", "accent-soft-ink", "focus"]) ok(c.split("--ds-" + v + ":").length === 3, id + ": the css sets --ds-" + v + " once for light and once for dark");
+ok(/^#[0-9a-f]{6}$/i.test(L.portfolio.seed) && L.portfolio.hue_range_deg > 0 && L.portfolio.hue_range_deg <= 90, "the portfolio seed is a hex colour and its hue range is between 1 and 90 degrees");
+for (const [id, p] of Object.entries(L.products)) ok(/^#[0-9a-f]{6}$/i.test(p.accent_seed), id + ": the accent seed is a six-digit hex colour");
 // Any seed yields a passing theme: a tenant or a product never needs a hand-tuned colour.
 let seedBad = 0; for (let i = 0; i < 300; i++) { const s = "#" + ((i * 2654435761) >>> 8 & 0xffffff).toString(16).padStart(6, "0"); if (prove(deriveAccent(s)).length) seedBad++; }
 ok(seedBad === 0, "300 arbitrary seeds all derive passing themes", seedBad);
