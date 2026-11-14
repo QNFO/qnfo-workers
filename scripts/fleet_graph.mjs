@@ -344,6 +344,7 @@ export function addWorkerCode(g, worker, src, path, ctx) {
   const envReads = new Map(); // NAME -> first line
   // OPTIONAL-ENV-1: a name is optional only when EVERY recorded read of it supplies its own fallback. noteRead counts each read and
   // each defaulted read; a single bare read (env.X alone, env.X && f(), typeof env.X, an assignment) keeps the name a real finding.
+  // A ternary whose alternate is a fallback (`env.X ? env.X : d`) also counts as a defaulted read of the tested name.
   const envReadCount = new Map(), envDefaultedCount = new Map();
   const noteRead = (name, line, defaulted) => {
     if (!envReads.has(name)) envReads.set(name, line);
@@ -390,6 +391,7 @@ export function addWorkerCode(g, worker, src, path, ctx) {
     const isFallback = (x) => {
       if (!x) return false;
       if (isLogical(x)) return isFallback(x.right);
+      if (x.type === "ConditionalExpression") return isFallback(x.alternate);
       if (envLike(x)) return false;
       return !(x.type === "Identifier" && x.name === "undefined");
     };
@@ -399,6 +401,7 @@ export function addWorkerCode(g, worker, src, path, ctx) {
       defaulted.add(x);
       if (x.type === "ChainExpression") defaulted.add(x.expression);
       if (isLogical(x)) { markDefaulted(x.left); markDefaulted(x.right); }
+      if (x.type === "ConditionalExpression") { markDefaulted(x.test); markDefaulted(x.alternate); }
       if (x.type === "CallExpression") for (const a of x.arguments) markDefaulted(a);
       if (x.type === "UnaryExpression" && x.operator !== "delete") markDefaulted(x.argument);
     };
