@@ -236,3 +236,37 @@ BEGIN
   UPDATE metric_registry SET last_value = CAST((SELECT published_per_day_7d FROM v_ai_waste_headline) AS TEXT), last_refreshed = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
     WHERE metric = 'research_published_per_day_7d' AND COALESCE(last_refreshed, '') < strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-10 minutes');
 END;
+
+-- Index for reach_signals to improve reads
+CREATE INDEX IF NOT EXISTS idx_reach_signals_src_date_ent_metric
+ON reach_signals(source, date, entity_type, entity_id, metric);
+
+-- Cache hourly materialization of v_content_stage_summary
+CREATE TABLE IF NOT EXISTS cache_content_stage_summary AS
+  SELECT * FROM v_content_stage_summary WHERE 0;
+
+DROP TRIGGER IF EXISTS cache_content_stage_summary_tick;
+CREATE TRIGGER cache_content_stage_summary_tick
+AFTER INSERT ON fleet_tick
+WHEN strftime('%M', 'now') < '10'
+BEGIN
+  DELETE FROM cache_content_stage_summary;
+  INSERT INTO cache_content_stage_summary SELECT * FROM v_content_stage_summary;
+END;
+
+-- Metric for rows read per day (d1_rows_read_per_day_qnfo_audit)
+DROP TRIGGER IF EXISTS d1_rows_read_per_day_tick;
+CREATE TRIGGER d1_rows_read_per_day_tick
+AFTER INSERT ON fleet_tick
+WHEN strftime('%M', 'now') < '10'
+BEGIN
+  UPDATE metric_registry
+  SET last_value = CAST((
+        SELECT
+          (SELECT COUNT(*) FROM reach_signals WHERE date >= date('now','-1 day')) +
+          (SELECT COUNT(*) FROM cache_content_stage_summary)
+        ) AS TEXT),
+      last_refreshed = strftime('%Y-%m-%dT%H:%M:%SZ', 'now'),
+      state = 'MEASURED'
+  WHERE metric = 'd1_rows_read_per_day_qnfo_audit';
+END;
