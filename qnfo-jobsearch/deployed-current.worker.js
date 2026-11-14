@@ -9,7 +9,7 @@
 // JOBSEARCH-CV-1 (1.5.0): the CV is part of this worker (page /cv): a yes/no interview that builds the claim bank, review of unconfirmed claims, roles, achievements and publications edited in D1, a resume per job (summary, roles, selected work, education, skills) and a cover note, history and backup. The search is tied to that bank (evidence the owner can back up weighs more; what the CV lacks is shown as a gap), decided postings (rejected, applied, approved) never come back under another id, rejections carry a reason the search learns from, and a wider net: stretch matches outside the stated preferences, more boards and aggregators.
 // Routes: GET / (web UI) | GET /api | GET /api/matches | GET /api/matches/:id | GET /api/runs | GET /api/ledger | POST /api/run | POST /api/matches/:id/status | GET /health
 // Port of the jobsearch/ Python modules (tests: jobsearch/test_jobsearch.py, qnfo-jobsearch/worker.test.mjs).
-var VERSION = "1.33.5-codeagent";
+var VERSION = "1.33.6-codeagent";
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -367,7 +367,7 @@ async function ensure(env) {
   for (const [t, c] of [["jobsearch_matches", "desc_text TEXT"], ["jobsearch_matches", "resume_rev TEXT"], ["jobsearch_matches", "posted_at TEXT"], ["jobsearch_apps", "contact_email TEXT"]]) {   // RESUME-ONE-TEMPLATE-1, FOLLOWUP-ONLY-INTERVIEW-1
     try { await env.JOBS_DB.prepare(`ALTER TABLE ${t} ADD COLUMN ${c}`).run(); } catch (e) { if (!/duplicate column/i.test(String((e && e.message) || e))) throw e; } // standards-ok: table and column names are fixed constants of the DDL list, never input
   }
-  ensured = true; try { await generateWeeklyDossier(env); } catch (e) { logErr("dossier", e); }   // JOBSEARCH-DOSSIER-SOFT-1: a side job never takes a request down (the Monday query on a missing column returned 1101 on 2026-11-09)
+  ensured = true; await probeCandidateBoards(env); try { await generateWeeklyDossier(env); } catch (e) { logErr("dossier", e); }   // JOBSEARCH-DOSSIER-SOFT-1: a side job never takes a request down (the Monday query on a missing column returned 1101 on 2026-11-09)
 }
 // REACH-FOCUS-1.7: weekly dossier of five named people/organizations
 async function generateWeeklyDossier(env) {
