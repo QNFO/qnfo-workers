@@ -1,7 +1,7 @@
 {
-  "audited_at": "2026-11-14 15:53:01",
+  "audited_at": "2026-11-14 18:08:21",
   "d1_write_failures": [],
-  "d1_writes_ok": 17,
+  "d1_writes_ok": 18,
   "guard": {
     "_guard_rc": 0,
     "ahead": [],
@@ -46,6 +46,11 @@
         "http": 200,
         "version": null,
         "worker": "ps-practical-solutions"
+      },
+      {
+        "http": 200,
+        "version": null,
+        "worker": "qnfo-profile-loop"
       },
       {
         "http": 200,
@@ -119,7 +124,7 @@
       }
     ]
   },
-  "purge_error": "purge skipped: run classified 17 workers, table held 63; a partial report must not shrink the audit surface",
+  "purge_error": "purge skipped: run classified 18 workers, table held 64; a partial report must not shrink the audit surface",
   "rows": {
     "demo-child-ultrastable": {
       "before": null,
@@ -144,6 +149,14 @@
       "match": 0,
       "note": "UNMANAGED_OK",
       "worker": "ps-practical-solutions"
+    },
+    "qnfo-profile-loop": {
+      "before": null,
+      "http": 200,
+      "live": null,
+      "match": 0,
+      "note": "UNMANAGED_OK",
+      "worker": "qnfo-profile-loop"
     },
     "qnfo-workers": {
       "before": null,
