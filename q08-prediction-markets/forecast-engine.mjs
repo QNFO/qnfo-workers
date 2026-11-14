@@ -423,6 +423,8 @@ const SCHEMA = [
   "CREATE TABLE IF NOT EXISTS fe_settle (slug TEXT PRIMARY KEY, checked_at TEXT NOT NULL, state TEXT)",
   "CREATE TABLE IF NOT EXISTS fe_research (id TEXT PRIMARY KEY, source TEXT, title TEXT, url TEXT, summary TEXT, seen_at TEXT, need TEXT, score REAL, status TEXT DEFAULT 'new', issue_id INTEGER, settled_at TEXT)",
   "CREATE TABLE IF NOT EXISTS fe_pm (id INTEGER PRIMARY KEY AUTOINCREMENT, ran_at TEXT NOT NULL, metrics_json TEXT, decisions_json TEXT, filed_json TEXT)",
+  // Q08-EMBED-1: one row per day, question and embedding site; the product manager reads embed_views_7d and embed_hosts_7d from it.
+  "CREATE TABLE IF NOT EXISTS fe_embed_view (day TEXT NOT NULL, slug TEXT NOT NULL, host TEXT NOT NULL, n INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (day, slug, host))",
 ];
 export async function ensureSchema(db) { for (const s of SCHEMA) await db.prepare(s).run(); }
 
@@ -549,7 +551,7 @@ ${cards || `<div class="ds-empty"><b>No forecasts yet</b>The engine runs hourly 
 <footer class="fe-foot"><a href="/paper">Paper-trading pilot</a><a href="/whitepaper">White paper</a><a href="/api/forecasts">Data (JSON)</a><span>Not investment advice. Paper money only.</span></footer>
 </main></body></html>`;
 }
-export const FE_CSS = ".fe-top{display:flex;gap:12px;justify-content:space-between;align-items:flex-start}.fe-p{font-size:28px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--ds-accent)}.fe-why{margin:10px 0 6px}.fe-foot{display:flex;flex-wrap:wrap;gap:8px 16px;margin-top:24px;font-size:14px;color:var(--ds-ink-2)}.fe-foot a{display:inline-flex;align-items:center;min-height:44px}";
+export const FE_CSS = ".fe-embed-code{white-space:pre-wrap;word-break:break-all;font-size:14px;font-family:var(--ds-mono)}.fe-top{display:flex;gap:12px;justify-content:space-between;align-items:flex-start}.fe-p{font-size:28px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--ds-accent)}.fe-why{margin:10px 0 6px}.fe-foot{display:flex;flex-wrap:wrap;gap:8px 16px;margin-top:24px;font-size:14px;color:var(--ds-ink-2)}.fe-foot a{display:inline-flex;align-items:center;min-height:44px}";
 
 export async function latestRows(env) {
   await ensureSchema(env.TRADES_DB);
@@ -935,6 +937,34 @@ function sensLine(px) {
   const base = px.now == null ? `${e(px.name)} (data loading)` : `${e(px.name)} ${e(px.now)}${e(px.unit === "%" ? "%" : px.unit ? " " + px.unit : "")} on ${e(px.now_date)}`;
   return `<p><b>Financial market:</b> ${base}.${s ? ` Typical daily move ${e(s.daily_sd)} ${e(s.unit)}; since this forecast was pre-registered it moved ${s.move >= 0 ? "+" : ""}${e(s.move)} ${e(s.unit)} over ${e(s.days)} trading day${s.days === 1 ? "" : "s"}, ${e(s.z == null ? "–" : Math.abs(s.z))} typical moves ${s.z >= 0 ? "up" : "down"}.` : ""} Context for how the same question is priced outside prediction markets, not a position.</p>`;
 }
+// Q08-EMBED-1 (2026-11-14, #11874): 2 of 6 competitors (polymarket, good-judgment-open) offer an embeddable forecast widget and q08 did not. /embed/<slug> is a
+// small card made to sit in a frame on another site: the question, q08's number against the market, the settle date and a link back to the full page. Each load
+// counts one row in fe_embed_view (day, question, embedding site from the Referer host), so the product manager reads whether embeds travel (embed_views_7d, embed_hosts_7d).
+export const EMBED_ORIGIN = "https://markets.q08.org";
+const isoDay = (ms) => new Date(ms).toISOString().slice(0, 10);
+export function embedSnippet(slug, title) {
+  return `<iframe src="${EMBED_ORIGIN}/embed/${slug}" title="${String(title || "q08 forecast").replace(/"/g, "&quot;").slice(0, 120)}" width="100%" height="190" style="border:0;max-width:520px" loading="lazy"></iframe>`;
+}
+export function embedHost(referer) {
+  try { const h = new URL(String(referer || "")).hostname.toLowerCase(); return h && h !== "markets.q08.org" ? h.slice(0, 120) : "direct"; } catch (err) { return "direct"; }
+}
+export async function recordEmbedView(db, slug, referer, nowMs = Date.now()) {
+  if (!db) return false;
+  await safe(() => ensureSchema(db));
+  return safe(async () => { await db.prepare("INSERT INTO fe_embed_view (day, slug, host, n) VALUES (?, ?, ?, 1) ON CONFLICT(day, slug, host) DO UPDATE SET n = n + 1").bind(isoDay(nowMs), String(slug).slice(0, 200), embedHost(referer)).run(); return true; }, false);
+}
+async function embedStats(db, nowMs) {
+  const r = await safe(() => db.prepare("SELECT COALESCE(sum(n), 0) v, count(DISTINCT CASE WHEN host <> 'direct' THEN host END) h FROM fe_embed_view WHERE day > ?").bind(isoDay(nowMs - 7 * 86400000)).first(), null);
+  return { embed_views_7d: r ? Number(r.v) || 0 : null, embed_hosts_7d: r ? Number(r.h) || 0 : null };
+}
+export const EMBED_CSS = "body.ds{margin:0;background:transparent}.fe-embed{display:block;max-width:520px;padding:16px;border:1px solid var(--ds-line);border-radius:var(--ds-r-m);background:var(--ds-surface);color:var(--ds-ink);text-decoration:none}.fe-embed h1{font-size:16px;line-height:1.35;margin:0 0 10px}.fe-embed .n{display:flex;gap:20px}.fe-embed .n b{display:block;font-size:24px;font-variant-numeric:tabular-nums;color:var(--ds-accent)}.fe-embed .n span{font-size:14px;color:var(--ds-ink-2)}.fe-embed small{display:block;margin-top:10px;font-size:14px;color:var(--ds-ink-2)}.fe-embed-code{white-space:pre-wrap;word-break:break-all;font-size:14px}";
+export function renderEmbed(d, head) {
+  const c = d.call;
+  const status = c ? "Settled: " + verdictText(c) : "Settles by " + d.deadline;
+  return `<!doctype html><html lang="en"><head>${head(d.title + " · q08 forecast", "q08 " + pct(d.forecast) + " vs market " + pct(d.crowd) + ".", EMBED_CSS)}<base target="_blank"></head><body class="ds">
+<a class="fe-embed" href="${EMBED_ORIGIN}/f/${e(d.slug)}" rel="noopener"><h1>${e(d.title)}</h1><div class="n"><div><b>${e(pct(d.forecast))}</b><span>q08</span></div><div><b>${e(pct(d.crowd))}</b><span>the market</span></div></div><small>${e(status)}. Pre-registered and scored in public on q08.org.</small></a>
+</body></html>`;
+}
 export function renderForecast(d, head) {
   const c = d.call, pos = d.position, last = d.entries[d.entries.length - 1], first = d.entries[0];
   const steps = [
@@ -959,6 +989,7 @@ ${d.related_markets.length ? `<h2>Markets that reprice with it</h2><div class="v
 ${d.related_reports.length ? `<h2>Signal reports on q08.org</h2><ul>${d.related_reports.map((r) => `<li><a href="${e(r.url)}">${e(r.title)}</a> <small>${e(r.date)}</small></li>`).join("")}</ul>` : ""}
 <details class="ds-more"><summary>Evidence (${d.evidence.length}) and the models' verdicts</summary><div class="ds-more-body"><ul>${ev}</ul><ul>${d.verdicts.map((v) => `<li><small>${e(v.model)}: ${v.ok ? "shift " + e(v.shift) + " citing " + e(v.cites.join(", ") || "none") : "set aside"}</small></li>`).join("")}</ul></div></details>
 <details class="ds-more"><summary>Every pre-registered entry (${d.entries.length})</summary><div class="ds-more-body"><div class="vp-wrap"><table class="vp-tbl"><thead><tr><th>When (UTC)</th><th>q08</th><th>Market</th><th>Hash</th></tr></thead><tbody>${[...d.entries].reverse().map((x) => `<tr><td>${e(String(x.at).replace("T", " ").slice(0, 16))}<br><small>${e(x.trigger || "")}</small></td><td class="n">${e(pct(x.forecast))}</td><td class="n">${e(pct(x.crowd))}</td><td class="vp-hash">${e(String(x.hash).slice(0, 12))}</td></tr>`).join("")}</tbody></table></div></div></details>
+<details class="ds-more"><summary>Embed this forecast</summary><div class="ds-more-body"><p class="ds-muted">Paste this where you want the live number. It updates with each pre-registered entry and links back here.</p><pre class="fe-embed-code">${e(embedSnippet(d.slug, d.title))}</pre></div></details>
 ${portfolioHtml()}
 <footer class="fe-foot"><a href="/">All forecasts</a><a href="/ledger">Ledger</a><a href="/track-record">Track record</a><a href="/api/f/${e(d.slug)}">Data (JSON)</a><span>Simulated positions only. Not investment advice.</span></footer>
 </main></body></html>`;
@@ -1148,7 +1179,7 @@ export async function pmMetrics(env, nowMs) {
     right_side: settled.filter((r) => callOf(r).right_side).length, value_added: va.n ? va.value_added : null, halted: !!sp.halted,
     coverage: cov, tokens_per_forecast_7d: wk.length ? Math.round(wk.reduce((a, r) => a + (r.tokens || 0), 0) / wk.length) : null,
     mean_consequence_open: open.length ? +(open.reduce((a, r) => a + consequenceScore(r), 0) / open.length).toFixed(3) : null,
-    broadcasts_7d: (b7 && b7.n) || 0, posts, traffic, portfolio_clicks_7d: portfolio,
+    broadcasts_7d: (b7 && b7.n) || 0, posts, traffic, portfolio_clicks_7d: portfolio, ...(await embedStats(db, nowMs)),
     calibration: reliabilityBins(last), shift_scale: shiftScaleFit(rows) };
 }
 // Code levers: when a metric says the product is short, the PM files one issue a run for the fleet's code loop, with the file, an anchor and a
@@ -1353,7 +1384,7 @@ export const FEATURES = [
   { key: "leaderboard", terms: ["leaderboard", "ranking", "top forecasters"], have: false, need: "track-record", what: "a leaderboard that ranks forecasters or models against each other and the crowd" },
   { key: "api", terms: ["api", "developers", "data export", "download data"], have: true, need: "distribution", what: "an open API" },
   { key: "alerts", terms: ["alerts", "notifications", "notify me", "subscribe"], have: false, need: "distribution", what: "alerts when a forecast moves or settles" },
-  { key: "embed", terms: ["embed", "widget"], have: false, need: "distribution", what: "an embeddable forecast widget" },
+  { key: "embed", terms: ["embed", "widget"], have: true, need: "distribution", what: "an embeddable forecast widget" },
   { key: "newsletter", terms: ["newsletter", "weekly digest"], have: false, need: "distribution", what: "a weekly digest of calls and settlements" },
   { key: "comments", terms: ["comments", "discussion", "rationale"], have: false, need: "search", what: "published reasoning beside each forecast" },
   { key: "mobile", terms: ["ios", "android", "app store"], have: false, need: "distribution", what: "a mobile app or installable page" },
