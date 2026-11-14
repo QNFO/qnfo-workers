@@ -9,7 +9,7 @@
 // JOBSEARCH-CV-1 (1.5.0): the CV is part of this worker (page /cv): a yes/no interview that builds the claim bank, review of unconfirmed claims, roles, achievements and publications edited in D1, a resume per job (summary, roles, selected work, education, skills) and a cover note, history and backup. The search is tied to that bank (evidence the owner can back up weighs more; what the CV lacks is shown as a gap), decided postings (rejected, applied, approved) never come back under another id, rejections carry a reason the search learns from, and a wider net: stretch matches outside the stated preferences, more boards and aggregators.
 // Routes: GET / (web UI) | GET /api | GET /api/matches | GET /api/matches/:id | GET /api/runs | GET /api/ledger | POST /api/run | POST /api/matches/:id/status | GET /health
 // Port of the jobsearch/ Python modules (tests: jobsearch/test_jobsearch.py, qnfo-jobsearch/worker.test.mjs).
-var VERSION = "1.33.7-codeagent";
+var VERSION = "1.33.8-codeagent";
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -3154,7 +3154,20 @@ function fitLine(row) {
 async function shortlist(env, n = SHORTLIST_SIZE) {
   await ensure(env);
   const rows = (await env.JOBS_DB.prepare("SELECT id, first_seen, company, title, location, url, tier, score, why_json, flags_json, verified, status FROM jobsearch_matches WHERE status='pending_owner_approval' AND verified=1 ORDER BY score DESC, last_seen DESC LIMIT 400").all()).results.map(parseRow);
-  const items = rows.filter((r) => laneGate(r).pass).slice(0, n).map((r) => ({ id: r.id, title: r.title, company: r.company, location: r.location, url: r.url, score: r.score, tier: r.tier, why_it_fits: fitLine(r), checks: r.flags }));
+  const items = rows.filter((r) => laneGate(r).pass).slice(0, n).map((r) => ({
+    id: r.id,
+    title: r.title,
+    company: r.company,
+    location: r.location,
+    url: r.url,
+    score: r.score,
+    tier: r.tier,
+    why_it_fits: fitLine(r),
+    checks: r.flags,
+    // per‑job keyword match info: true/false and any missing keywords (gaps)
+    keyword_match: r.flags?.keyword_match ?? null,
+    keyword_gaps: r.flags?.keyword_gaps ?? [],
+  }));
   return { size: items.length, max: n, bar: "score " + SHORTLIST_MIN + " or more, not a stretch, in a lane, no hands-on coding or sales titles", items };
 }
 // EMPLOYER-FORM-1 (CLOCKWORK-1 follow-up, issue 11175, owner 2026-11-12): job boards (Himalayas, Jobicy, RemoteOK, Arbeitnow) hide the employer's form
