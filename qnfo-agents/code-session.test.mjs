@@ -188,5 +188,23 @@ console.log("qnfo-agents code-session.test: " + pass + " passed, " + fail + " fa
   assert.ok(P.includes("Code is the only output") && P.includes("Audit your own work"), "self-audit and code-is-output rules present");
   console.log("ok sdlc lifecycle wired");
 }
+// CODE-SESSION-NEVER-EMPTY-1: a turn that ended on tool calls never stores an empty answer.
+{
+  const { digestSteps, fallbackAnswer } = await import("./src/lib.js");
+  const steps = [
+    { toolResults: [{ toolName: "fleet_sql", output: { ok: true, rows: [{ slug: "paper-a", pv: 51 }, { slug: "paper-b", pv: 49 }] } }] },
+    { toolResults: [{ toolName: "fleet_sql", output: "x".repeat(2000) }] }
+  ];
+  const d = digestSteps(steps);
+  ok(d.length === 2 && /paper-a/.test(d[0]) && d[1].length < 760, "the digest names the tool and its rows and clips a long result");
+  const f = fallbackAnswer(steps, "the model ended the turn on tool calls");
+  ok(/could not write a conclusion/.test(f) && /paper-a/.test(f) && f.trim().length > 40, "the fallback answer carries the gathered results, not a placeholder");
+  const none = fallbackAnswer([], "timeout");
+  ok(/could not answer this turn: timeout/.test(none) && !/\(the code session returned no text\)/.test(none), "with no result the fallback says why, in words");
+  ok(/CODE-SESSION-NEVER-EMPTY-1/.test(ts) && /if \(!answer\.trim\(\)\) \{[\s\S]{0,400}generateText\(/.test(ts) && /answer = fallbackAnswer\(stepsDone/.test(ts), "executeTurn synthesizes, then falls back, before the answer is stored");
+  ok(ts.indexOf("fallbackAnswer(stepsDone") < ts.indexOf("UPDATE code_session_turns SET status = 'done', answer ="), "the answer is made before the turn row is written");
+  ok(/cf-rum-human/.test(ts) && /v_analytics_paper_trend/.test(ts) && /Always finish with a plain-text answer/.test(ts), "the system prompt points analytics questions at Cloudflare RUM and demands a text answer");
+  console.log("ok never-empty answer");
+}
 process.exit(fail ? 1 : 0);
 

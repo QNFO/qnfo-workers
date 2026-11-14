@@ -36,7 +36,7 @@ import { Workspace, unsafeToRepeat } from "@cloudflare/computer";
 import { WorkerJavaScriptBackend } from "@cloudflare/computer/backends/worker-javascript";
 import { generateText, jsonSchema, stepCountIs, streamText, tool } from "ai";
 import { z } from "zod";
-import { hooksFor, hookBlock, sweepEmpty, wantsSystemMap, systemMapUrl, systemMapNote, cfSkillFor, cfSkillUrl, cfSkillNote, filedMismatch, MAINTAIN_REQUESTER, MAINTAIN_PROMPT, maintainDue, verifyGithubSignature, githubEventRoute, githubEventPrompt, stepUsages, stepUsageStatements, trimCells, LEAN_CELL_CHARS, compactMessages, callerOf, clip, scopeOf, codeTaskText, opsToolAllowed, readOnlySql, repoPathOk, runId, safeToolName, scheduleWhen, sliceLines, DRAIN_PER_TICK, agentDrainPlan, agentNeurons, AGENT_DAILY_NEURONS_DEFAULT, AGENT_RUN_NEURONS_EST_DEFAULT, AGENT_SHED_MIN, loopInstance, validateRequest, EMPTY_TEXT, FINAL_ANSWER_ASK, pickAnswer, stripToolMarkup, toolTranscript, codeSessionNeurons, codeSessionCost, isDynamicRoute, leanCaller, leanConfigOn, capResult, LEAN_MAX_STEPS, LEAN_RESULT_CHARS, approvalPayload, pendingApprovalMatches, stagedActionArgs, APPROVAL_SUFFIX, approvalNext, searchSkills, approvalCardSpec, approvalExpired, APPROVAL_EXPIRY_MS, APPROVAL_EXPIRY_NOTE, redactSecrets, shareToken, shareTokenOk, renderShareHtml } from "./lib.js";
+import { hooksFor, hookBlock, sweepEmpty, wantsSystemMap, systemMapUrl, systemMapNote, cfSkillFor, cfSkillUrl, cfSkillNote, filedMismatch, MAINTAIN_REQUESTER, MAINTAIN_PROMPT, maintainDue, verifyGithubSignature, githubEventRoute, githubEventPrompt, stepUsages, stepUsageStatements, trimCells, LEAN_CELL_CHARS, compactMessages, callerOf, clip, scopeOf, codeTaskText, opsToolAllowed, readOnlySql, repoPathOk, runId, safeToolName, scheduleWhen, sliceLines, DRAIN_PER_TICK, agentDrainPlan, agentNeurons, AGENT_DAILY_NEURONS_DEFAULT, AGENT_RUN_NEURONS_EST_DEFAULT, AGENT_SHED_MIN, loopInstance, validateRequest, EMPTY_TEXT, FINAL_ANSWER_ASK, pickAnswer, fallbackAnswer, stripToolMarkup, toolTranscript, codeSessionNeurons, codeSessionCost, isDynamicRoute, leanCaller, leanConfigOn, capResult, LEAN_MAX_STEPS, LEAN_RESULT_CHARS, approvalPayload, pendingApprovalMatches, stagedActionArgs, APPROVAL_SUFFIX, approvalNext, searchSkills, approvalCardSpec, approvalExpired, APPROVAL_EXPIRY_MS, APPROVAL_EXPIRY_NOTE, redactSecrets, shareToken, shareTokenOk, renderShareHtml } from "./lib.js";
 import { approvalModules, approvalSource } from "./approval.js";
 import { FLEET_SKILLS, skillSearch, skillGet, tasksFromPlan, taskUpdate, taskSummary } from "./skills.js";
 import { withLifecycle, sessionBudgetStep, sessionTurnRoute, shouldEscalateUnanswered, CODE_SESSION_ROUTE_ESCALATE, sessionBudgetFrom, sandboxGate, sandboxPlan, sandboxPrRef, CODE_SESSION_BUDGET_DEFAULT, CODE_SESSION_REPLAY_REQUESTER, CODE_SESSION_REPLAY_BUDGET, CODE_SESSION_REPLAY_TURNS, sessionLaneStep, codeSessionDailyCap, codeSessionLaneAllowed, CODE_SESSION_LANE_CHEAP, APPROVAL_SELFTEST_REQUESTER, approvalSelftestSeed } from "./session.js";
@@ -396,6 +396,8 @@ const SYSTEM = [
   "Use codemode when a task needs several tool calls, loops or computation. A tool that refuses (scope, guard, permission) is reported plainly with its reason; never retry it under another name.",
   "send_email is the single identity-bound action gated by a durable approval: use codemode.ops_send_email, and never bypass it through ops_call.",
   "CODE-ONLY-OUTPUT-1: the answer to a request is deployed code: an issue, a pull request, a merge, a deploy and a live check. A reply is informative only and is never the action or the record. Do the work with tools in this turn instead of describing it, and file what you cannot finish as an issue with a code-task line and a closing probe.",
+  "Reader and analytics questions (popular or trending papers, referrers, who reads what) are answered from Cloudflare RUM in D1 with fleet_sql: reach_signals WHERE source = 'cf-rum-human' AND entity_type = 'paper' AND metric = 'pageviews' (entity_id is the paper slug, date the day; outside readers are metric 'external_pageviews', referrers entity_type 'referrer'), the 7-day trend is the view v_analytics_paper_trend and what the analytics loop found is the table analytics_findings. Do not use GA4 for these: it counts only visitors who opted in.",
+  "Always finish with a plain-text answer. When the tool results are enough, stop calling tools and write what you found (a ranked list, a number, a verdict) before anything else.",
   "Never print a secret, token or key. Keep the final answer short: what you found, what you did, what is proposed, and what is open."
 ].join("\n");
 
@@ -1197,6 +1199,7 @@ export class CodeSession extends Agent<Env, State> {
         }
         return out;
       };
+      let activeModel: any = model;
       let out: any = await runStream(model);
       // ROADMAP-1 code-session-escalate (issue 7976): a turn that ends unanswered escalates once to the premium route while the budget is ok.
       if (shouldEscalateUnanswered(pickAnswer(answer, await out.steps).answered, Number(row.escalate) === 1, step)) {
@@ -1206,14 +1209,40 @@ export class CodeSession extends Agent<Env, State> {
           const r2 = await modelFor(this.env, "code-session", this.name + "-t" + turn + "-esc", CODE_SESSION_ROUTE_ESCALATE);
           this.event("escalate", { turn, reason: "unanswered", from: routeId, to: r2.id });
           routeId = r2.id; modelId = routeId;
+          activeModel = r2.model;
           out = await runStream(r2.model);
         } catch (e) { logErr("escalate-unanswered", e); }
+      }
+      // CODE-SESSION-NEVER-EMPTY-1: a turn that ended on tool calls streamed no text. One tool-less pass writes the answer from what the tools already returned; if that also gives
+      // nothing, a digest of the last tool results is the answer. An empty answer is never stored.
+      let extraIn = 0, extraOut = 0;
+      if (!answer.trim()) {
+        const stepsDone: any = await out.steps;
+        try {
+          const resp: any = await out.response;
+          const gen: any = await generateText({
+            model: activeModel, system: CODE_SESSION_SYSTEM,
+            messages: compactMessages([{ role: "user", content: prompt }, ...(Array.isArray(resp && resp.messages) ? resp.messages : []),
+              { role: "user", content: "Answer the request now in plain text from the tool results above. Do not call tools. If the results do not contain the answer, say what is missing and what you tried." }], step.stubChars),
+            timeout: { totalMs: 60000 }
+          } as any);
+          extraIn = Number(gen && gen.usage && gen.usage.inputTokens) || 0;
+          extraOut = Number(gen && gen.usage && gen.usage.outputTokens) || 0;
+          answer = String(gen && gen.text || "").trim();
+          if (answer) this.event("text", { turn, delta: answer });
+          this.event("synthesize", { turn, ok: !!answer, input_tokens: extraIn, output_tokens: extraOut });
+        } catch (e) { logErr("synthesize-empty", e); }
+        if (!answer.trim()) {
+          answer = fallbackAnswer(stepsDone, "the model ended the turn on tool calls");
+          this.event("text", { turn, delta: answer });
+          this.event("synthesize", { turn, ok: false, fallback: true });
+        }
       }
       const usage = await out.totalUsage;
       // RM-DSH-CACHE-1: per-step cache telemetry for a CodeSession too (cf_agent_step_usage, keyed by session and turn).
       try { await meterSteps(this.env, this.name + "-t" + turn, routeId, { steps: await out.steps }); } catch (e) { logErr("meter-steps-session", e); }
-      inputTokens = Number(usage && usage.inputTokens) || 0;
-      outputTokens = Number(usage && usage.outputTokens) || 0;
+      inputTokens = (Number(usage && usage.inputTokens) || 0) + extraIn;
+      outputTokens = (Number(usage && usage.outputTokens) || 0) + extraOut;
       const response = await out.response;
       modelId = String(response && response.modelId || routeId);
       // AI-METER-1: a CodeSession's tokens belong in ai_spend_ledger too, or the daily neuron budget of the loop drain (agentPlan) never sees them.
