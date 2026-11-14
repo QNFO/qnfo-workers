@@ -296,7 +296,7 @@ function clampMaxTokens(requested, isReason) {
 __name(clampMaxTokens, "clampMaxTokens");
 __name2(clampMaxTokens, "clampMaxTokens");
 __name22(clampMaxTokens, "clampMaxTokens");
-var VERSION = "4.49.0";
+var VERSION = "4.49.1";
 // 4.37.2 KERNEL-PERSONAL-PRIVACY-1: preserve all ten registered reply categories across the content-free telemetry boundary.
 // 4.37.1 KERNEL-PERSONAL-PRIVACY-1: classify twin replies inside the personal plane; AUDIT receives only fixed categories and random event ids, never reply text or excerpts.
 // 4.37.0 KERNEL-EVERYWHERE-1 (2026-11-06, owner directive "IMPLEMENT EVERYWHERE ACROSS ALL AI APPS AND SERVICES AND SURFACES", pillar personal): the twin SYSTEM_PROMPT carries the DOCTRINE-1 kernel 8.2.1 reply recognitions (KERNEL-REPLY-4): end every reply on the answer or result, never on a question, conditional offer or menu; ambiguity gets a stated assumption; a refusal or limit with its reason is a disposition stated declaratively; reversible tool actions are taken and reported in the same reply, and a requested change is made with the tool, not described. Each twin reply is also mirrored to qnfo-audit.personal_replies so the kernel false-stop scan covers this surface. prior 4.36.2
@@ -6746,7 +6746,29 @@ function inbox(){api('/companion/api/inbox').then(function(r){var b=$('inbox');b
 var hist=[];try{hist=JSON.parse(sessionStorage.getItem('cmp-hist')||'[]')}catch(e){warn(e)}
 function drawChat(){var b=$('msgs');b.innerHTML='';hist.forEach(function(m){b.appendChild(el('div',{cls:'msg '+(m.role==='user'?'me':'it'),text:m.content}))});window.scrollTo(0,document.body.scrollHeight)}
 function sendChat(){var t=$('chat-in').value.trim();if(!t)return;hist.push({role:'user',content:t});$('chat-in').value='';drawChat();$('chat-send').disabled=true;
- api('/companion/api/chat',{json:{thread_id:'companion-'+new Date().toISOString().slice(0,10),messages:hist.slice(-16)}}).then(function(r){var c=r.reply||r.error||'(no answer)';if(r.crisis)c=c+'\\n\\n'+r.crisis;hist.push({role:'assistant',content:c});try{sessionStorage.setItem('cmp-hist',JSON.stringify(hist.slice(-30)))}catch(e){warn(e)}drawChat()}).catch(function(e){hist.push({role:'assistant',content:'I could not answer just now: '+e.message});drawChat()}).then(function(){$('chat-send').disabled=false})}
+ api('/companion/api/chat',{json:{thread_id:'companion-'+new Date().toISOString().slice(0,10),messages:hist.slice(-16)},timeout:60000}).then(function handle(r){
+  if(r.pending){
+    var start=Date.now();
+    function poll(){
+      return api('/companion/api/chat/latest').then(function(p){
+        if(p.reply||p.error) return p;
+        if(Date.now()-start<60000) return new Promise(function(res){ setTimeout(function(){ poll().then(res);},1000);});
+        return {error:'Chat timed out, try again'};
+      });
+    }
+    return poll();
+  }
+  return r;
+}).then(function(r){
+  var c=r.reply||r.error||'(no answer)';
+  if(r.crisis) c=c+'\\n\\n'+r.crisis;
+  hist.push({role:'assistant',content:c});
+  try{sessionStorage.setItem('cmp-hist',JSON.stringify(hist.slice(-30)))}catch(e){warn(e)}
+  drawChat();
+}).catch(function(e){
+  hist.push({role:'assistant',content:'I could not answer just now: '+e.message});
+  drawChat();
+}).then(function(){ $('chat-send').disabled=false; })}
 function clearChat(){hist=[];try{sessionStorage.removeItem('cmp-hist')}catch(e){warn(e)}drawChat()}
 // COMPANION-FOCUS-2: everything below is buttons over existing APIs and browser-local state. No free-text control or AI call.
 var FOCUS_STEPS=['Make the smallest possible start','Stop when the timer ends','Tap Done — a partial try counts'];
