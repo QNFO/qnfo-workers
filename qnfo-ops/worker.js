@@ -552,7 +552,7 @@ __name222(gateAudit1CfWorkerDeploy, "gateAudit1CfWorkerDeploy");
 __name2222(gateAudit1CfWorkerDeploy, "gateAudit1CfWorkerDeploy");
 __name22222(gateAudit1CfWorkerDeploy, "gateAudit1CfWorkerDeploy");
 __name222222(gateAudit1CfWorkerDeploy, "gateAudit1CfWorkerDeploy");
-var VERSION = "2.73.1-codeagent";
+var VERSION = "2.73.2-codeagent";
 /* 2.62.20 OPS-ARG-ALIAS-1 (issues 5775, 5780, 6173, 6193, 6671, 6792, 6767, 6826, 6015, 6860, pillar autonomy; patch). Caller-input mistakes are no longer fleet failures: workspace_grep accepts query/regex/search for pattern, cf_worker_read/deploy/bindings accept name/script for worker, fleet_graph infers a missing op from its other arguments and accepts filter/q/name for query; a still-missing argument answers arg_error with a hint, and an arg_error or an exception thrown by the caller own run_code or run_code_net JavaScript (user_code_error) is logged as status rejected, so it files no TOOL-FAILURE or LOOP-BREAKER issue. errorDetailCapture writes worker_logs in batches of 25 and records a D1 overload as a deferral, not an error. qnfo-ops/tool-arg-alias.test.mjs. */
 /* 2.62.11 WORKER-LOAD-GATE-1 (issue #6518, pillar autonomy; patch): inline the OAuth broker in the deployable single-module worker. */
 /* 2.62.1 CONTAINER-WORKSPACE-TIMEOUT-1 (#3922, issue 1000117, pillar autonomy; patch): container_workspace_exec allows 120 seconds for cold-start initialization while preserving its 300-second ceiling. */
@@ -2133,6 +2133,7 @@ var CODE_TOOL_NAMES = ["run_code", "workspace_write", "workspace_read", "workspa
 // repository, shell and PR tools and no ops_d1_query, so a request cannot be spent on D1 reads; the run ends in ship_change (issue, branch, files, pull request) or an INCOMPLETE line.
 var AGENT_CODE_TOOL_NAMES = CODE_TOOL_NAMES.concat(["shell_exec", "exec_python", "exec_node", "run_code_net", "git_op", "git_clone_exec", "container_workspace_exec", "container_install", "github_create_branch", "github_issues_list", "github_issue_get"]);
 var CODE_RUN_NUDGE = "CODE MODE: no change has been shipped yet and the round budget is nearly spent. Your next tool call MUST be ship_change (repo, title, summary, files[{path, content}]) with the change you have so far. Do not read anything else.";
+var CODE_FOCUS_NUDGE = "CODE MODE: stop listing /workspace, /tmp and audit notes. Name the worker the task is about, read only its relevant function with github_repo_read (path and a narrow range) or a shell grep on a clone, and make the edit with ship_change.";
 var OPS_D1_RUN_BUDGET = 6;
 function agentCodeToolsPayload() {
   return OPS_TOOLS.filter(function(t) { return AGENT_CODE_TOOL_NAMES.indexOf(t.name) >= 0; }).map(function(t) {
@@ -4019,6 +4020,9 @@ async function shipChange(env, args) {
   if (!files.length) return { ok: false, error: "files required: [{path, content}] (a change with no file is not a deliverable)" };
   if (files.length > 20) return { ok: false, error: "at most 20 files per change" };
   for (const f of files) if (!f || !String(f.path || "").trim() || typeof f.content !== "string") return { ok: false, error: "every file needs path and content (string)" };
+  // SHIP-NO-STUB-1 (2026-11-14, PR 11792: a round that spent its budget on workspace listings shipped docs/ops/round-handoff.md as its deliverable): a change whose files are all
+  // documentation or handoff notes is refused (CODE-CHANGE-REQUIRED-1), so the run goes back to the code instead of closing on a stub.
+  if (!(args && args.allow_docs === true) && files.every(function(f) { return /^docs\//i.test(String(f.path).trim()) || /\.(md|txt)$/i.test(String(f.path).trim()); })) return { ok: false, stage: "validate", error: "SHIP-NO-STUB-1: every file is documentation (docs/ or .md/.txt); a handoff note is not a deliverable (a real documentation task passes allow_docs: true). Read the one function the task names (worker_outline --find or github_repo_read) and ship the code change; the closing line is INCOMPLETE only after a real attempt." };
   let issueId = args && args.issue_id != null ? Number(args.issue_id) : null;
   if (!Number.isInteger(issueId) || issueId <= 0) {
     const filed = await opsFileCodeIssue(env, title, summary || title, "ship_change");
@@ -10396,6 +10400,8 @@ var AgenticOpsExec = class extends DurableObject {
         }
         iter++;
         turns = iter;
+        // CODE-FOCUS-NUDGE-1 (PR 11792 run: 30+ listings of /workspace and /tmp, no read of the code the task named): at the third round, steer to the repository file itself.
+        if (_codeMode && !_shipped && iter === 3) messages.push({ role: "system", content: CODE_FOCUS_NUDGE });
         if (_codeMode && !_shipped && !_nudged && iter >= maxIters - 3) { _nudged = true; messages.push({ role: "system", content: CODE_RUN_NUDGE }); }
       }
       if (!finalText) {

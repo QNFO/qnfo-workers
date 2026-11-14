@@ -74,7 +74,7 @@ function build(opts) {
 // reuse an issue
 {
   const { env, log, fn } = build();
-  const r = await fn.shipChange(env, { title: "Tune", issue_id: 555, files: [{ path: "p.md", content: "z" }] });
+  const r = await fn.shipChange(env, { title: "Tune", issue_id: 555, files: [{ path: "p/worker.js", content: "z" }] });
   ok(r.ok && r.issue_id === 555 && log.issues.length === 0 && log.branches[0].branch === "ops/issue-555-tune", "an existing issue_id is reused, none is filed", { r, issues: log.issues.length });
 }
 
