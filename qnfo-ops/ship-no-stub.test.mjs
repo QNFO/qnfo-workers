@@ -5,5 +5,6 @@ const src = readFileSync(new URL("./worker.js", import.meta.url), "utf8");
 assert.ok(src.includes("SHIP-NO-STUB-1: every file is documentation"), "stub guard present in shipChange");
 assert.ok(/var CODE_FOCUS_NUDGE = /.test(src) && src.includes("iter === 3) messages.push({ role: \"system\", content: CODE_FOCUS_NUDGE"), "focus nudge wired at round 3");
 const guard = src.indexOf("SHIP-NO-STUB-1: every file");
+assert.ok(src.includes("allow_docs === true") && !src.includes("Analytics tasks live in"), "opt-out present, nudge generic");
 assert.ok(guard > src.indexOf("async function shipChange") && guard < src.indexOf("opsFileCodeIssue(env, title, summary || title, \"ship_change\")"), "guard runs before the issue is filed");
 console.log("ship-no-stub ok");

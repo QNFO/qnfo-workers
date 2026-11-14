@@ -2133,7 +2133,7 @@ var CODE_TOOL_NAMES = ["run_code", "workspace_write", "workspace_read", "workspa
 // repository, shell and PR tools and no ops_d1_query, so a request cannot be spent on D1 reads; the run ends in ship_change (issue, branch, files, pull request) or an INCOMPLETE line.
 var AGENT_CODE_TOOL_NAMES = CODE_TOOL_NAMES.concat(["shell_exec", "exec_python", "exec_node", "run_code_net", "git_op", "git_clone_exec", "container_workspace_exec", "container_install", "github_create_branch", "github_issues_list", "github_issue_get"]);
 var CODE_RUN_NUDGE = "CODE MODE: no change has been shipped yet and the round budget is nearly spent. Your next tool call MUST be ship_change (repo, title, summary, files[{path, content}]) with the change you have so far. Do not read anything else.";
-var CODE_FOCUS_NUDGE = "CODE MODE: stop listing /workspace, /tmp and audit notes. Name the worker the task is about, read only its relevant function with github_repo_read (path and a narrow range) or a shell grep on a clone, and make the edit with ship_change. Analytics tasks live in qnfo-fleet-dashboard/worker.js (ga4Ingest, GA4_MEASUREMENT_ID) and the pages' gtag snippet.";
+var CODE_FOCUS_NUDGE = "CODE MODE: stop listing /workspace, /tmp and audit notes. Name the worker the task is about, read only its relevant function with github_repo_read (path and a narrow range) or a shell grep on a clone, and make the edit with ship_change.";
 var OPS_D1_RUN_BUDGET = 6;
 function agentCodeToolsPayload() {
   return OPS_TOOLS.filter(function(t) { return AGENT_CODE_TOOL_NAMES.indexOf(t.name) >= 0; }).map(function(t) {
@@ -4022,7 +4022,7 @@ async function shipChange(env, args) {
   for (const f of files) if (!f || !String(f.path || "").trim() || typeof f.content !== "string") return { ok: false, error: "every file needs path and content (string)" };
   // SHIP-NO-STUB-1 (2026-11-14, PR 11792: a round that spent its budget on workspace listings shipped docs/ops/round-handoff.md as its deliverable): a change whose files are all
   // documentation or handoff notes is refused (CODE-CHANGE-REQUIRED-1), so the run goes back to the code instead of closing on a stub.
-  if (files.every(function(f) { return /^docs\//i.test(String(f.path).trim()) || /\.(md|txt)$/i.test(String(f.path).trim()); })) return { ok: false, stage: "validate", error: "SHIP-NO-STUB-1: every file is documentation (docs/ or .md/.txt); a handoff note is not a deliverable. Read the one function the task names (worker_outline --find or github_repo_read) and ship the code change; the closing line is INCOMPLETE only after a real attempt." };
+  if (!(args && args.allow_docs === true) && files.every(function(f) { return /^docs\//i.test(String(f.path).trim()) || /\.(md|txt)$/i.test(String(f.path).trim()); })) return { ok: false, stage: "validate", error: "SHIP-NO-STUB-1: every file is documentation (docs/ or .md/.txt); a handoff note is not a deliverable (a real documentation task passes allow_docs: true). Read the one function the task names (worker_outline --find or github_repo_read) and ship the code change; the closing line is INCOMPLETE only after a real attempt." };
   let issueId = args && args.issue_id != null ? Number(args.issue_id) : null;
   if (!Number.isInteger(issueId) || issueId <= 0) {
     const filed = await opsFileCodeIssue(env, title, summary || title, "ship_change");
