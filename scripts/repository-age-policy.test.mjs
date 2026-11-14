@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import { run, olderThan, DRAFT_MINUTES, ISSUE_MINUTES } from "./repository-age-policy.mjs";
+import { run, olderThan, isStewardShell, DRAFT_MINUTES, ISSUE_MINUTES } from "./repository-age-policy.mjs";
 
 const repo = "QNFO/qnfo-workers";
 const now = Date.parse("2026-11-02T16:00:00Z");
@@ -255,4 +255,17 @@ test("TRACKER-D1-CANON-1: a fleet-issue mirror is never closed by the age policy
   assert.deepEqual(result.issues_closed, [12, 13, 14]);
   assert.ok(!calls.some((c) => c.path.endsWith("/issues/11") && c.method !== "GET"), "mirror untouched");
   assert.deepEqual(result.errors, []);
+});
+
+test("DP-SHELL-LIFECYCLE-1: a steward handoff shell stays draft; every other aged draft is still readied", async () => {
+  const { result, calls } = await execute({ pulls: [
+    pull(1, { head: { ref: "agent-steward/issue-5184" } }),
+    pull(2, { head: { ref: "codeagent-abc" } }),
+    pull(3, { head: { ref: "claude/agent-steward/issue-9" } })
+  ] });
+  assert.deepEqual(result.drafts_ready, [2, 3]);
+  assert.deepEqual(result.steward_shells_left_draft, [1]);
+  assert.ok(!calls.some((c) => c.path.endsWith("/pulls/1")), "the shell is not even re-read");
+  assert.equal(isStewardShell({ head: { ref: "agent-steward/issue-1" } }), true);
+  assert.equal(isStewardShell({}), false);
 });

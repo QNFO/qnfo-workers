@@ -99,11 +99,16 @@ FROM remediation_contracts
 WHERE (status = 'active' OR (status = 'holding' AND verify_transport = 'runner-https'))
   AND verify_transport NOT IN ('external-https', 'd1-query@portfolio-state')
   AND (next_due_at IS NULL OR datetime(next_due_at) <= datetime('now'))
-ORDER BY CASE WHEN verify_transport = 'runner-https' THEN 0 ELSE 1 END,
+ORDER BY CASE WHEN verify_transport = 'runner-https' THEN 0
+              WHEN issue_id IS NOT NULL AND EXISTS (SELECT 1 FROM agent_issues a WHERE a.id = remediation_contracts.issue_id AND a.status = 'open') THEN 1
+              ELSE 2 END,
          COALESCE(next_due_at, ts)
 LIMIT ?
 """
 
+# CONSUMER-OPEN-FIRST-1 (2026-11-14): after runtime probes, contracts of OPEN issues are probed before relapse watchers of closed issues and
+# failure-mode detectors. Measured 14:58Z: 1,571 contracts due (oldest 01:47Z), about 425 of them watching already-closed issues; a contract whose
+# pass would close an open issue waited behind them for hours (the 53 contracts CLOSING-PROBE-ADOPT-1 re-armed at 14:54Z were still unprobed 40 min later).
 # PROBE-TRANSPORT-MONOCULTURE-1: the runtime transport this file executes itself (see the docstring, rules 6-9).
 HTTPS_TRANSPORT = "runner-https"
 # CODE-READ-PROBE-1 (2026-10-11): transport_trust has listed code-read as trusted, but nothing executed it, so an issue whose
@@ -750,6 +755,7 @@ def _selftest():
                 class TEXT, issue_id INTEGER, precondition TEXT, action TEXT, verify_probe TEXT, verify_transport TEXT,
                 max_attempts INTEGER, escalate_to TEXT, expected_cadence_h INTEGER, module TEXT, budget_ms INTEGER,
                 next_due_at TEXT, max_items INTEGER, attempts INTEGER, last_verdict TEXT, ts TEXT, status TEXT);
+            CREATE TABLE agent_issues (id INTEGER PRIMARY KEY, status TEXT);
         """)
         db.executemany(
             "INSERT INTO remediation_contracts (class, verify_transport, status, next_due_at, ts) VALUES (?, ?, ?, ?, ?)",
@@ -766,10 +772,17 @@ def _selftest():
                 ("portfolio", "d1-query@portfolio-state", "active", "2000-01-01", "2000-01-01"),
             ],
         )
+        # CONSUMER-OPEN-FIRST-1: a contract of an open issue outranks an older one of a closed issue
+        db.executemany("INSERT INTO agent_issues VALUES (?, ?)", [(7, "open"), (8, "closed")])
+        db.executemany(
+            "INSERT INTO remediation_contracts (class, issue_id, verify_transport, status, next_due_at, ts) VALUES (?, ?, ?, ?, ?, ?)",
+            [("issue-8", 8, "d1-query", "active", "1999-01-01", "1999-01-01"), ("issue-7", 7, "d1-query", "active", "2001-01-01", "2001-01-01")],
+        )
         for limit, want in (
             (1, ["runtime-held"]),
             (2, ["runtime-held", "runtime-new"]),
-            (10, ["runtime-held", "runtime-new", "sql-old", "code-old"]),
+            (3, ["runtime-held", "runtime-new", "issue-7"]),
+            (10, ["runtime-held", "runtime-new", "issue-7", "issue-8", "sql-old", "code-old"]),
         ):
             got = [row[0] for row in db.execute(CONTRACT_SQL, [limit])]
             if got != want:
@@ -1339,6 +1352,27 @@ def sink_guard(c, exp, obs):
             raise ValueError("free-text-value")
 
 
+# PROBE-TOKEN-WRITE-GUARD-1 (2026-11-14, pillar autonomy; GitHub #11901). A probe-author-1 probe that returns a sentence is refused by sink_guard on every pass, so its issue can
+# never close and the only signal was LOOP-BREAKER-1 after three recurrences in 24 h (#11883: three such probes sat there). The first refusal now files one agent_issues row
+# per contract, deduped against an open row of the same title, that names the class and the fix and never the value (the value is what the guard keeps out of public logs).
+FREE_TEXT_TITLE = "PROBE-TOKEN-WRITE-GUARD-1: %s returns free text the sink guard refuses"
+
+
+def file_free_text_probe(cls):
+    title = FREE_TEXT_TITLE % str(cls)[:80]
+    desc = ("Charter pillar: autonomy. The remediation_contracts probe of class %s (module probe-author-1) returned an expected or observed value that is not one short "
+            "token ([A-Za-z0-9_.:+-]{1,64}), so scripts/remediation_consumer.py sink_guard refuses every pass as free-text-value and the issue cannot close. Rewrite verify_probe "
+            "by migration so both columns return tokens (e.g. 'ok', 'age-days:44', 'yield:0.40'); migrations/2026-11-14-probe-author-tokens.sql is the pattern.\n"
+            "closing probe: SELECT CASE WHEN last_verdict IS NULL OR last_verdict <> 'probe-error' THEN 'ok' ELSE 'fail' END FROM remediation_contracts WHERE class = '%s'"
+            ) % (str(cls)[:80], str(cls)[:80].replace("'", "''"))
+    try:
+        d1("INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at) "
+           "SELECT ?, ?, 'remediation-consumer', 'bug', 'medium', 'open', CAST(strftime('%s','now') AS INTEGER) * 1000, CAST(strftime('%s','now') AS INTEGER) * 1000 "
+           "WHERE NOT EXISTS (SELECT 1 FROM agent_issues WHERE title = ? AND status = 'open')", [title, desc, title])
+    except Exception as e:  # noqa: BLE001 - filing never changes the verdict
+        log("contract %s free-text issue not filed: %s" % (cls, str(e)[:120]))
+
+
 def consume_d1(c, rec, out, trusted):
     """Run one d1-query (or d1-query@plane) contract: the REMEDIATION-CONSUMER-1 path, unchanged."""
     cls = c.get("class")
@@ -1490,6 +1524,8 @@ def consume_one(c, trusted):
                 )
             except Exception:  # noqa: BLE001 - the ledger write never changes the verdict
                 pass
+            if str(e) == "free-text-value":
+                file_free_text_probe(cls)
     if rec.get("transient"):
         # PROBE-TRANSIENT-1: a real 'pass' or 'fail' stays the contract's verdict; the streak marker only replaces a missing or refusal verdict
         prior = str(c.get("last_verdict") or "")
