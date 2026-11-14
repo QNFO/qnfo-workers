@@ -1,0 +1,57 @@
+{
+  "id": "QNFO-PORTFOLIO-1",
+  "doc": "Defines QNFO (the Quniverse): the portfolio of products built on the Ultrastable platform. Ultrastable core is NOT part of QNFO; qnfo-workers holds its pilot copy until each core worker is deployed from github.com/ultrastable/workers into the ultrastable Cloudflare account (see platform.migration). scripts/qnfo_portfolio.mjs fails when a live worker is in no product, in two, or disagrees with product/boundary.json.",
+  "platform": {
+    "name": "Ultrastable",
+    "repo": "ultrastable/workers",
+    "cloudflare_account": "ultrastable (81e3a4efb4eb66e613529b87682911bb)",
+    "qnfo_is": "tenant zero: runs on the platform through product/tenant.example.json settings and the policy overlay, owns no kernel code",
+    "migration": "each core worker leaves qnfo-workers (RETIRED marker plus fleet delete) only after the same worker answers /health from the ultrastable account; until then boundary.json class core marks the pilot copy",
+    "contract": ["tick", "issue and claim ledgers", "code loop", "canonical deploy with probes and revert", "model router", "fleet graph", "manager personas (portfolio and program)"]
+  },
+  "managers": "Program managers (QNFO.OPS, INFRA, REACH, RSCH, PERSONAL) are platform personas; each product below names the program that manages it.",
+  "products": {
+    "qnfo-research": {
+      "program": "QNFO.RSCH",
+      "plane": "qnfo.org",
+      "what": "autonomous research: ideas, papers, PDFs, patents, library Q&A",
+      "domains": ["qnfo.org", "papers.qnfo.org", "ideas.qnfo.org", "ipatent.qnfo.org", "research-exec.qnfo.org"],
+      "workers": ["qnfo-research-exec", "idea-hub", "radar-hub", "qnfo-pdf", "qnfo-ipatent", "qnfo-gateway", "qnfo-ai-search"]
+    },
+    "qnfo-reach": {
+      "program": "QNFO.REACH",
+      "plane": "qnfo.org",
+      "what": "distribution: social, mail, subscribers, lifecycle, shorts",
+      "domains": ["qnfo.org/email"],
+      "workers": ["qnfo-social", "qnfo-email", "qnfo-subscribers", "qnfo-lifecycle", "qnfo-youtube-shorts"]
+    },
+    "q08-personal": {
+      "program": "QNFO.PERSONAL",
+      "plane": "q08.org",
+      "what": "the owner's private companion, memory and job search; never shipped, never crosses into research stores",
+      "domains": ["me.q08.org", "jobs.q08.org", "mind.q08.org", "watch.q08.org", "reading.q08.org", "travel.q08.org"],
+      "workers": ["personal-api", "personal-companion", "personal-watch", "q08-mind", "qnfo-companion-guard", "qnfo-jobsearch"]
+    },
+    "signals-to-value": {
+      "program": "QNFO.PERSONAL",
+      "plane": "q08.org",
+      "what": "signal scraping, essays and forecasts turned into scored predictions",
+      "domains": ["q08.org"],
+      "workers": ["q08-signal-engine", "q08-prediction-markets"]
+    },
+    "qwav": {
+      "program": "QNFO.RSCH",
+      "plane": "qwav.org",
+      "what": "quantum computing landing page and demos; served by qnfo-gateway, no worker of its own",
+      "domains": ["qwav.org", "ask.qwav.org"],
+      "workers": []
+    },
+    "fleet-console": {
+      "program": "QNFO.OPS",
+      "plane": "qnfo.org",
+      "what": "fleet.qnfo.org operator console: the platform's UI as QNFO uses it. Core worker qnfo-fleet-dashboard still serves research pages; those split out when the console moves to the ultrastable account",
+      "domains": ["fleet.qnfo.org"],
+      "workers": []
+    }
+  }
+}
