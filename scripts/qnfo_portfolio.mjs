@@ -21,6 +21,26 @@ export function checkPortfolio(root, portfolio, boundary) {
   return { ok: !v.length, violations: v, products: Object.keys(portfolio.products).length };
 }
 
+// QNFO-PORTFOLIO-2: pure half. accountWorkers: names in the ultrastable account. Returns per core worker: migrated | pilot-only.
+export function accountReport(portfolio, boundary, accountWorkers) {
+  const map = portfolio.platform.worker_map || {}, onAcct = new Set(accountWorkers);
+  const core = Object.entries(boundary.workers).filter(([, v]) => v.class === "core").map(([w]) => w);
+  const migrated = new Set(Object.entries(map).filter(([n]) => onAcct.has(n)).map(([, w]) => w));
+  const rows = core.map((w) => [w, migrated.has(w) ? "migrated" : "pilot-only"]);
+  return { migrated: migrated.size, total: core.length, rows };
+}
+
+if (process.argv.includes("--account") && process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+  const root = join(dirname(fileURLToPath(import.meta.url)), "..");
+  const portfolio = JSON.parse(readFileSync(join(root, "qnfo/portfolio.json"), "utf8")), boundary = JSON.parse(readFileSync(join(root, "product/boundary.json"), "utf8"));
+  const acct = /\(([0-9a-f]{32})\)/.exec(portfolio.platform.cloudflare_account)[1];
+  const r = await (await fetch(`https://api.cloudflare.com/client/v4/accounts/${acct}/workers/scripts`, { headers: { Authorization: `Bearer ${process.env.CLOUDFLARE_API_TOKEN}` } })).json();
+  if (!r.success) { console.log("account read failed: " + JSON.stringify(r.errors).slice(0, 200)); process.exit(1); }
+  const rep = accountReport(portfolio, boundary, r.result.map((x) => x.id));
+  console.log(`core workers migrated to ultrastable account: ${rep.migrated}/${rep.total}`); rep.rows.forEach(([w, s]) => console.log(`${s}\t${w}`));
+  process.exit(0);
+}
+
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   const root = join(dirname(fileURLToPath(import.meta.url)), "..");
   const r = checkPortfolio(root, JSON.parse(readFileSync(join(root, "qnfo/portfolio.json"), "utf8")), JSON.parse(readFileSync(join(root, "product/boundary.json"), "utf8")));

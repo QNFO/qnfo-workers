@@ -7,7 +7,21 @@
     "cloudflare_account": "ultrastable (81e3a4efb4eb66e613529b87682911bb)",
     "qnfo_is": "tenant zero: runs on the platform through product/tenant.example.json settings and the policy overlay, owns no kernel code",
     "migration": "each core worker leaves qnfo-workers (RETIRED marker plus fleet delete) only after the same worker answers /health from the ultrastable account; until then boundary.json class core marks the pilot copy",
-    "contract": ["tick", "issue and claim ledgers", "code loop", "canonical deploy with probes and revert", "model router", "fleet graph", "manager personas (portfolio and program)"]
+    "contract": [
+      "tick",
+      "issue and claim ledgers",
+      "code loop",
+      "canonical deploy with probes and revert",
+      "model router",
+      "fleet graph",
+      "manager personas (portfolio and program)"
+    ],
+    "worker_map": {
+      "ultrastable-tick": "qnfo-fleet-control",
+      "ultrastable-agents": "qnfo-agents",
+      "ultrastable-dashboard": "qnfo-fleet-dashboard",
+      "ultrastable-site": "qnfo-gateway"
+    }
   },
   "managers": "Program managers (QNFO.OPS, INFRA, REACH, RSCH, PERSONAL) are platform personas; each product below names the program that manages it.",
   "products": {
