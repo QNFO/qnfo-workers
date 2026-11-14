@@ -202,6 +202,29 @@ export function pickAnswer(text, steps) {
   return { text: t, answered: true };
 }
 
+// CODE-SESSION-NEVER-EMPTY-1 (2026-11-14, owner screenshot of fleet.qnfo.org/cmd: "most popular papers by views last week" answered "(the code session returned no text)" after 58,853 input tokens):
+// a turn that ends on tool calls (step cap, timeout) streamed no text, and the empty answer was stored as the result. The turn now gets one tool-less synthesis pass over what its tools
+// returned; when that also yields nothing, this digest of the last tool results is the answer, so a finished turn always says what it found or why it could not conclude.
+export function digestSteps(steps, maxResults = 3, chars = 700) {
+  const out = [];
+  for (const st of Array.isArray(steps) ? steps : []) {
+    for (const tr of (st && st.toolResults) || []) {
+      const v = tr && (tr.output !== undefined ? tr.output : tr.result);
+      let s = typeof v === "string" ? v : JSON.stringify(v);
+      s = String(s == null ? "" : s).replace(/\s+/g, " ").trim();
+      if (tr && tr.toolName && s) out.push("- " + tr.toolName + ": " + (s.length > chars ? s.slice(0, chars) + " ..." : s));
+    }
+  }
+  return out.slice(-maxResults);
+}
+export function fallbackAnswer(steps, reason) {
+  const d = digestSteps(steps);
+  const why = String(reason || "the model ended the turn without writing a conclusion").slice(0, 160);
+  return d.length
+    ? "I gathered data but could not write a conclusion this turn (" + why + "). The last tool results:\n" + d.join("\n") + "\nAsk again to continue from these results."
+    : "I could not answer this turn: " + why + ", and no tool returned a result. Ask again or say which table or file to read.";
+}
+
 // SWEEP-CLAIMS-FILED-1: a model's "Issues Filed: N" is a claim, not evidence. The ids come from the file_issue tool results.
 export function filedIssueIds(steps) {
   const ids = [];

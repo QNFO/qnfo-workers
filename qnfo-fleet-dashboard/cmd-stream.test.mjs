@@ -279,7 +279,7 @@ const card = byId.cout.children[0];
 const shown = card ? card.textContent : "";
 ok(posted.length === 1 && posted[0].text === "please refactor the widget module", "the page posts the line", posted);
 ok(/Fleet is healthy\./.test(shown), "the page shows the streamed answer", shown);
-ok(/> ops_fleet_status/.test(shown), "the page shows each tool step", shown);
+ok(/1 step so far|1 step taken/.test(shown) && /ops fleet status/.test(shown), "the page shows each tool step in words, with a step count", shown);
 ok(/deepseek-v4-flash-wa/.test(shown) && /120 in \/ 8 out tokens/.test(shown), "the page shows model and tokens", shown);
 ok(!card.querySelector(".wait"), "the working indicator is gone when the answer is complete");
 ok(win.sessionStorage.getItem("fleetcmdsid") === "run_page00000001", "the page remembers the session for the next line");
