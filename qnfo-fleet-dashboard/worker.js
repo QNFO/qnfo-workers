@@ -11,7 +11,7 @@ var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target,
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
 // 1.77.2 ERRATA-CHAIN-DISPATCH-1 (pillar research): wake the folded errata consumer and retry its legacy parked receipts.
 // VERSION-LINE-SPLIT-1 (agent_issues 100220): the release notes sit one per line below this statement, newest first, so a VERSION bump is a one-line patch; add a new note as the first line under it.
-var VERSION = "1.110.5";
+var VERSION = "1.110.6";
 // 1.89.0 NOW-NORTH-1 and HOME-MORE-1 (pillar core; minor): the Now screen opens with four numbers tied to the owner goals (readers, fleet cost, owner load, reliability) and drops the count of metrics off target (95 of 297; nothing can be done with it); a quiet footer on the home links the full dashboard, changelog, data index and managers.
 // 1.89.0 (cont.) MONEY-FIX-1 (pillar cost; patch): the Money card subtracted the subscription figure from a pace that never included it (fleet scope of v_cost_forecast), so it showed the fleet at 701 instead of 1151 a month; it now shows the fleet line, the subscriptions line and both together.
 // 1.85.0 (cont.) NOW-REVIEW-1: independent review fixes: Snooze and Not needed hide the card; a tap removes the card at once and reloads fresh, and the hand-back claims the card before filing (no duplicate tickets); strangers get no card keys or raw error text; only the signed-in owner (not the loop token) can run commands or hand work back; bound cards are read first; an unrefreshed metric reads n/a, not 0; one refresh in flight at a time and a failed refresh retries in 10 s; the Code poll says when the executor does not answer.
@@ -4190,7 +4190,7 @@ async function v3PublicBlock(env) {
   const w = now && now.work || {}, hl = now && now.health || {}, sp = now && now.spend || {}, rc = rd && rd.reach || {};
   const mtd = sp.month_to_date_usd != null ? Math.round(Number(sp.month_to_date_usd)) : null;
   const sentence = "QNFO runs an autonomous fleet of Cloudflare workers that publishes research, answers questions and fixes its own issues; these numbers are live.";
-  const facts = [["Open issues", num(w.open_issues)], ["Engaged readers, 7 days", num(w.engaged_reader_sessions_7d)], ["Papers published, 30 days", num(w.publications_30d != null ? w.publications_30d : rc.publications_30d)], ["Cost this month", num(mtd, "USD ")], ["Live workers", num(hl.workers_reporting)]];
+  const facts = [["Open issues", num(w.open_issues)], ["Engaged readers who allowed analytics, 7 days", num(w.engaged_reader_sessions_7d)], ["Papers published, 30 days", num(w.publications_30d != null ? w.publications_30d : rc.publications_30d)], ["Cost this month", num(mtd, "USD ")], ["Live workers", num(hl.workers_reporting)]];
   const desc = sentence + " " + facts.map(function(f) { return f[0] + ": " + f[1]; }).join("; ") + ".";
   return { desc: desc, html: '<section id="pub" class="card"><p>' + esc(sentence) + '</p><ul>' + facts.map(function(f) { return '<li>' + esc(f[0]) + ': <b>' + esc(f[1]) + '</b></li>'; }).join("") + '</ul></section>' };
 }
