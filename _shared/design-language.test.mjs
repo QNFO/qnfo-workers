@@ -16,6 +16,7 @@ for (const [id, p] of Object.entries(L.products)) {
   ok(L.css[id] === css(p.accent_seed), id + ": the generated css is current (run node _shared/design-language.mjs --write)");
   ok(DS.dsLint("<meta name=\"viewport\" content=\"width=device-width\"><body class=\"ds\">DESIGN-SYSTEM-1 v<style>" + L.css[id] + "</style></body>").length === 0, id + ": the override passes dsLint");
 }
+for (const [id, c] of Object.entries(L.css)) for (const v of ["accent", "accent-hover", "on-accent", "accent-soft", "accent-soft-ink", "focus"]) ok(c.split("--ds-" + v + ":").length === 3, id + ": the css sets --ds-" + v + " once for light and once for dark");
 // Any seed yields a passing theme: a tenant or a product never needs a hand-tuned colour.
 let seedBad = 0; for (let i = 0; i < 300; i++) { const s = "#" + ((i * 2654435761) >>> 8 & 0xffffff).toString(16).padStart(6, "0"); if (prove(deriveAccent(s)).length) seedBad++; }
 ok(seedBad === 0, "300 arbitrary seeds all derive passing themes", seedBad);
