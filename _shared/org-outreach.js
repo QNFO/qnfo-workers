@@ -92,10 +92,11 @@ export function buildMessage(t, cfg = {}) {
 }
 
 // MODE: off | draft | live. Live also needs the fleet kill switch and a postal address; anything else degrades to draft, never to a send.
-export function effectiveMode(cfg = {}, killSwitchOn = false) {
+// `sendsEnabled` is the fleet switch qnfo-outreach pipeline_state external_sends_enabled = "1" (true = external sends are allowed; 0, absent or unreadable = stopped).
+export function effectiveMode(cfg = {}, sendsEnabled = false) {
   const m = String(cfg.mode || DEFAULTS.mode).toLowerCase();
   if (m === "off") return "off";
-  if (m === "live" && killSwitchOn && cfg.postal_address) return "live";
+  if (m === "live" && sendsEnabled === true && cfg.postal_address) return "live";
   return "draft";
 }
 
@@ -155,8 +156,12 @@ export function selectBatch(targets, ctx) {
 export function classifyReply(text) {
   const t = String(text || "").toLowerCase();
   if (/\b(auto[- ]?reply|automatic reply|out of (the )?office|undeliverable|delivery (status )?notification|mailer-daemon|on (annual )?leave)\b/.test(t)) return "auto";
-  if (/\b(stop|unsubscribe|remove me|do not (contact|email)|don'?t (contact|email)|opt[- ]?out)\b/.test(t)) return "stop";
+  // stop is an intent, not a word: the bare reply our opt-out line asks for, or an unsubscribe / stop-contacting phrase ("a good stopping point" and "stop with the formalities" are not).
+  const first = t.trim().split(/\n/)[0].replace(/[^a-z ]/g, "").trim();
+  if (first === "stop" || /\b(unsubscribe|remove me|take me off|opt[- ]?out|(please )?stop (emailing|contacting|writing|messaging|sending)|(do not|don'?t) (contact|email|write|message))\b/.test(t)) return "stop";
   if (/\b(not (interested|a fit|hiring)|no thanks?|no thank you|decline|unable to|cannot (help|engage)|not at this time|pass on)\b/.test(t)) return "decline";
+  // a negated request to talk is a refusal, not interest ("please don't call me", "no need to schedule anything")
+  if (/\b(don'?t|do not|no need to|not necessary|please no|rather not)\b[^.!?\n]{0,40}\b(call|schedule|meet|chat|talk|reply|respond|follow up)\b/.test(t)) return "decline";
   if (/\b(happy to|glad to|would love|let'?s (talk|chat|speak|schedule|set up)|schedule|calendar|call|meet|chat|intrigued|interesting|send (me )?(more|your)|tell me more|introduc)\b/.test(t)) return "interested";
   return "other";
 }
