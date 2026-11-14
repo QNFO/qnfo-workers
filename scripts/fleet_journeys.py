@@ -56,6 +56,8 @@ import urllib.request
 UA = "qnfo-fleet-journeys/1 (+https://fleet.qnfo.org)"
 JOURNEY_EVERY_MIN = int(os.environ.get("JOURNEY_EVERY_MIN", "50"))
 DEPLOY_GRACE_MIN = int(os.environ.get("JOURNEY_DEPLOY_GRACE_MIN", "45"))
+REGISTRY_TRIES = 3
+REGISTRY_RETRY_S = float(os.environ.get("JOURNEY_REGISTRY_RETRY_S", "5"))
 BLIND_MAX = int(os.environ.get("JOURNEY_BLIND_MAX", "0"))
 TIMEOUT = int(os.environ.get("JOURNEY_TIMEOUT_S", "30"))
 ISSUE_PREFIX = "FLEET-JOURNEY-FAILED-1"
@@ -241,9 +243,19 @@ def j_deploy_coherence(h, repo=None, commit_age=commit_age_min, main_ver=main_ve
     j = Journey("deploy-coherence")
     repo = repo if repo is not None else live_dirs()
     j.check("repo lists live workers", len(repo) > 0, "%d" % len(repo))
-    st, reg = h.json("GET", OPS + "/registry")
-    regv = {r.get("service"): r.get("version") for r in ((reg or {}).get("registry") or [])}
-    j.check("qnfo-ops /registry answers", st == 200 and regv, "http %s, %d rows" % (st, len(regv)))
+    # REGISTRY-RETRY-1 (2026-11-14, #11897): qnfo-ops registryList answers http 200 with ok:false and no rows when its D1 read is refused (overload), so one refused read
+    # failed the whole journey (15:01Z run, the route returned 60 rows minutes later). Read up to REGISTRY_TRIES times; a failure that stays names the server's error.
+    st, reg, regv = None, None, {}
+    for attempt in range(REGISTRY_TRIES):
+        st, reg = h.json("GET", OPS + "/registry")
+        regv = {r.get("service"): r.get("version") for r in ((reg or {}).get("registry") or [])}
+        if st == 200 and regv:
+            break
+        if attempt + 1 < REGISTRY_TRIES:
+            time.sleep(REGISTRY_RETRY_S)
+    err = (reg or {}).get("error") if isinstance(reg, dict) else None
+    j.check("qnfo-ops /registry answers", st == 200 and regv,
+            "http %s, %d rows" % (st, len(regv)) + (", error: %s" % str(err)[:120] if err else "") + (", %d reads" % REGISTRY_TRIES if not regv else ""))
     for name, info in sorted(repo.items()):
         st, hj = h.json("GET", "https://%s.q08.workers.dev/health" % name)
         live = (hj or {}).get("version") if isinstance(hj, dict) else None
@@ -663,6 +675,9 @@ def selftest():
         def opener(method, url, body, headers):
             b = json.loads(body) if body else {}
             if url == OPS + "/registry":
+                state["reg_reads"] = state.get("reg_reads", 0) + 1
+                if break_hop == "registry-down" or (break_hop == "registry-flaky" and state["reg_reads"] == 1):
+                    return 200, json.dumps({"ok": False, "error": "D1 DB is overloaded"})
                 return 200, json.dumps({"registry": [{"service": "w1", "version": "1.0.0"}]})
             if url == "https://w1.q08.workers.dev/health":
                 return 200, json.dumps({"version": "1.0.1" if break_hop == "deploy" else "1.0.0"})
@@ -738,6 +753,14 @@ def selftest():
     expect("deploy mismatch in grace passes", run_one(j_deploy_coherence, "deploy", repo=repo, commit_age=young).ok)
     expect("deploy mismatch with the checkout behind main passes", run_one(j_deploy_coherence, "deploy", repo=repo, commit_age=old, main_ver=lambda d: "1.0.1").ok)
     expect("deploy mismatch with main unreadable fails", not run_one(j_deploy_coherence, "deploy", repo=repo, commit_age=old, main_ver=lambda d: None).ok)
+    global REGISTRY_RETRY_S
+    REGISTRY_RETRY_S = 0
+    state["reg_reads"] = 0
+    expect("a registry read refused once and answered on retry passes", run_one(j_deploy_coherence, "registry-flaky", repo=repo, commit_age=old).ok)
+    state["reg_reads"] = 0
+    down = run_one(j_deploy_coherence, "registry-down", repo=repo, commit_age=old)
+    expect("a registry that stays refused fails and names the server error", not down.ok and state["reg_reads"] == REGISTRY_TRIES
+           and any("D1 DB is overloaded" in s["detail"] for s in down.steps if not s["ok"]))
     expect("census passes", run_one(j_binding_census).ok)
     expect("census blind fails", not run_one(j_binding_census, "blind").ok)
     expect("census: a retired row (healthy null, retired true) is not blind", run_one(j_binding_census, "retired").ok)
