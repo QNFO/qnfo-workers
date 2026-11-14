@@ -14,7 +14,7 @@ ok(mod.windowHold(7, { n: 1, lastMs: now - 5 * H }, now) !== null && /^held:spac
 ok(mod.windowHold(7, { n: 1, lastMs: now - 24 * H }, now) === null, "24 hours after: open");
 ok(mod.windowHold(7, { n: 7, lastMs: now - 30 * H }, now) === "held:weekly-cap(7/7)", "at the weekly cap: held whatever the spacing");
 ok(mod.windowHold(14, { n: 3, lastMs: now - 10 * H }, now) !== null && mod.windowHold(14, { n: 3, lastMs: now - 11 * H }, now) === null, "cap 14: spacing is 11 hours (7 d / 14 less 1 h)");
-ok(mod.windowHold(0, { n: 0, lastMs: null }, now) === "held:cap-0" && mod.windowHold(3, { n: 0, lastMs: null }, now) === null, "cap 0 holds, an empty window is open");
+ok(mod.windowHold(0, { n: 0, lastMs: null }, now) === null && mod.windowHold(3, { n: 0, lastMs: null }, now) === null, "cap 0 is open (0 cap does not block), an empty window is open");
 
 // ---------- against a database ----------
 function mk() {
