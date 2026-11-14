@@ -54,6 +54,13 @@ ok(b.capped, "reports the cap");
 ok(selectBatch(targets, { ...ctx, shared: { n: 8, cap: 8 } }).picked.length === 0, "the shared 8/day cap stops this lane too");
 ok(selectBatch(targets, { ...ctx, shared: { n: 6, cap: 8 } }).picked.length === 2, "the shared cap leaves only the remainder");
 ok(selectBatch(targets, { ...ctx, sentToday: 3 }).picked.length === 0, "already at the lane cap today");
+// regression (review P2): lane sends are already inside the shared count, so they are not subtracted twice
+ok(selectBatch(targets, { ...ctx, sentToday: 2, shared: { n: 6, cap: 8 } }).picked.length === 1, "lane 3, sent 2, shared 6 of 8: exactly one more");
+// regression (review P1): the stop rule has no fallback
+const allRetired = Object.keys(SEGMENTS).map((segment) => ({ segment, sends: 40, positive: 0 }));
+ok(selectBatch(targets, { ...ctx, segmentRows: allRetired }).picked.length === 0, "every segment retired: nothing is picked");
+const oneRetired = selectBatch(targets, { ...ctx, segmentRows: [{ segment: "funder", sends: 40, positive: 0 }] });
+ok(oneRetired.picked.length === 3 && oneRetired.picked.every((p) => p.segment !== "funder"), "a retired segment is never used as a fallback", oneRetired.picked.map((p) => p.segment));
 const skip = selectBatch([{ ...good, email: "x@gmail.com" }], ctx);
 ok(skip.picked.length === 0 && skip.skipped[0].reasons.includes("free-mail"), "ineligible rows are skipped with reasons");
 ok(selectBatch([], ctx).picked.length === 0, "empty queue is fine");

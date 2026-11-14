@@ -116,7 +116,9 @@ export function pickSegment(rows, choose) {
 // SELECT today's batch. targets: queued rows; ctx: {suppressed:Set, suppressedDomains:Set, contacted:Set, sentToday, domainsToday:Map, segmentRows, choose, cfg, shared:{n,cap}}.
 // Returns {picked:[{target, segment}], skipped:[{email, reasons}], capped}. Picks one segment at a time from the learner so exploration and reward follow replies.
 export function selectBatch(targets, ctx) {
-  const cap = Math.min(ctx.cfg?.daily_cap ?? DEFAULTS.daily_cap, Math.max(0, (ctx.shared?.cap ?? 8) - (ctx.shared?.n ?? 0)));
+  // remaining allowance = the smaller of what this lane may still send and what the shared cap still has (lane sends are already inside shared.n)
+  const laneLeft = (ctx.cfg?.daily_cap ?? DEFAULTS.daily_cap) - (ctx.sentToday || 0);
+  const sharedLeft = (ctx.shared?.cap ?? 8) - (ctx.shared?.n ?? 0);
   const dcap = ctx.cfg?.per_domain_cap ?? DEFAULTS.per_domain_cap;
   const skipped = [], pool = [];
   for (const t of targets) {
@@ -124,15 +126,17 @@ export function selectBatch(targets, ctx) {
     if (e.ok) pool.push(t); else skipped.push({ email: t.email, reasons: e.reasons });
   }
   const picked = [], used = new Map(ctx.domainsToday || []);
-  let left = cap - (ctx.sentToday || 0);
+  let left = Math.max(0, Math.min(laneLeft, sharedLeft));
   const bySeg = (s) => pool.filter((t) => t.segment === s && !picked.some((p) => p.target.email === t.email))
     .sort((a, b) => Number(b.fit) - Number(a.fit));
   const rows = (ctx.segmentRows || []).map((r) => ({ ...r }));
   while (left > 0) {
     const seg = pickSegment(rows, ctx.choose);
+    if (!seg) break; // every segment is retired: the stop rule ends the day, no fallback
+    const live = new Set(segmentRecords(rows).filter((r) => !r.retired).map((r) => r.knob));
     let t = null;
-    // learner's segment first, then any other segment with a candidate, so an empty segment never stalls the day
-    for (const s of [seg, ...Object.keys(SEGMENTS).filter((k) => k !== seg)]) {
+    // learner's segment first, then any other NON-retired segment with a candidate, so an empty segment never stalls the day
+    for (const s of [seg, ...Object.keys(SEGMENTS).filter((k) => k !== seg && live.has(k))]) {
       if (!s) continue;
       t = bySeg(s).find((c) => (used.get(domainOf(c.email)) || 0) < dcap) || null;
       if (t) break;
