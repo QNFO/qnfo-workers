@@ -36,7 +36,7 @@
 //   LIMITS    public AI use is capped per visitor (hashed IP, hourly) and globally (daily); over a cap, or with the
 //             fleet's 30-day AI spend at SPEND_CAP_TOTAL_USD, the answer is sources-only (no model call).
 
-var VERSION = "2.20.5-codeagent";
+var VERSION = "2.20.6-codeagent";
 // 2.19.0 KERNEL-EVERYWHERE-1 (2026-11-06, owner directive "IMPLEMENT EVERYWHERE ACROSS ALL AI APPS AND SERVICES AND SURFACES", pillar reach): the Ask writer SYSTEM prompt carries the DOCTRINE-1 kernel 8.2.1 reply recognitions (KERNEL-REPLY-4): the answer body ends on the result; the designed FOLLOWUPS block remains the only question shape; no conditional offers or menus; ambiguity gets a stated assumption; limits are dispositions with their reason. prior 2.18.2-codeagent
 // 2.13.0 CROSS-LINK-1 (2026-11-04, pillar reach; minor: the Ask page links QWAV and q08 in its nav and footer and carries a Keep exploring strip to the paper library, QWAV, q08 and the idea threads). Prediction: ask.qwav.org visitors click through to another surface; revert: restore 2.12.17. // 2.12.17 earlier history follows: 
 
@@ -2037,9 +2037,10 @@ function plainReport(body, target) {
   return { echo: echo, dense: dense, run: run, avg: Math.round(avg * 10) / 10, long_share: Math.round(share * 1000) / 1000, words: words.length };
 }
 var DEFINES_LABEL = "Passages that define, restate or give an example of the terms in the wording to explain (the wording's own sentence is left out):";
-var PLAIN_FLAG = { explain: 1, echo: 2, dense: 4, retried: 8 };
-function plainFlags(ex, rep, retried) {
-  return (ex ? PLAIN_FLAG.explain : 0) | (rep && rep.echo ? PLAIN_FLAG.echo : 0) | (rep && rep.dense ? PLAIN_FLAG.dense : 0) | (retried ? PLAIN_FLAG.retried : 0);
+// ASK-PLAIN-TIMEOUT-1 (2026-11-14, #11887): timeout = the optional rewrite ran out of PLAIN_RETRY_MS and the grounded first answer was sent (ask_events.plain bit 16).
+var PLAIN_FLAG = { explain: 1, echo: 2, dense: 4, retried: 8, timeout: 16 };
+function plainFlags(ex, rep, retried, timedOut) {
+  return (ex ? PLAIN_FLAG.explain : 0) | (rep && rep.echo ? PLAIN_FLAG.echo : 0) | (rep && rep.dense ? PLAIN_FLAG.dense : 0) | (retried ? PLAIN_FLAG.retried : 0) | (timedOut ? PLAIN_FLAG.timeout : 0);
 }
 function plainRewriteRequest(rep) {
   var why = [];
@@ -2623,7 +2624,7 @@ async function ask(request, env, ctx) {
       var rawCites = citeStats(sp.body, sources.length); // what the model wrote, before the check: measures the prompt, not the published text
       var chk = groundBody(sp.body, gtext, sources.length);
       // ASK-PLAIN-1: check every answer for density, and explanations for echo. Keep only a better rewrite after grounding it.
-      var rep = chk.text ? plainReport(chk.text, xt ? xt.target : "") : null, retried = 0;
+      var rep = chk.text ? plainReport(chk.text, xt ? xt.target : "") : null, retried = 0, plainTimedOut = false;
       var badness = function (r) { return r ? (r.echo ? 2 : 0) + (r.dense ? 1 : 0) : 3; };
       if (rep && ((xt && rep.echo) || rep.dense) && !stopped && Date.now() - t0 < PLAIN_RETRY_BEFORE_MS) {
         retried = 1;
@@ -2632,13 +2633,19 @@ async function ask(request, env, ctx) {
           spent.push(gen2);
           var sp2 = splitFollowups(gen2.text), chk2 = groundBody(sp2.body, gtext, sources.length), rep2 = chk2.text ? plainReport(chk2.text, xt ? xt.target : "") : null;
           if (rep2 && badness(rep2) < badness(rep)) { text = gen2.text; sp = sp2; chk = chk2; rep = rep2; rawCites = citeStats(sp2.body, sources.length); }
-        } catch (e) { if (gone) throw e; logErr("plain rewrite", e); }
+        } catch (e) {
+          if (gone) throw e;
+          // ASK-PLAIN-TIMEOUT-1: the rewrite is optional and the reader already gets the grounded first answer; a timeout is counted (ask_events.plain & 16),
+          // not logged as an error, which Cloudflare observability filed as CF-OBS-ISSUE-1 per occurrence. Any other failure still logs as an error.
+          if (/timed out after/i.test(String((e && e.message) || e))) { plainTimedOut = true; console.warn(JSON.stringify({ worker: WORKER, version: VERSION, at: "plain rewrite", note: "timed out; the first answer was sent" })); }
+          else logErr("plain rewrite", e);
+        }
       }
       ev.removed = chk.removed;
       sp = { body: chk.text || (text.trim() ? NOT_SUPPORTED_TEXT : ""), followups: chk.text ? sp.followups.filter(function (f) { return !sentenceProblems(f, glow, gnum, sources.length).length; }) : [] };
       if (sp.body) await send("token", { t: sp.body + (sp.followups.length ? "\n\nFOLLOWUPS:\n" + sp.followups.map(function (f) { return "- " + f; }).join("\n") : "") });
       ev.answer_chars = sp.body.length; ev.cites = rawCites.cites; ev.cites_invalid = rawCites.invalid; ev.uncovered = uncovered(sp.body); ev.followups = sp.followups.length;
-      ev.plain = plainFlags(xt, rep, retried);
+      ev.plain = plainFlags(xt, rep, retried, plainTimedOut);
       ev.in_tok = spent.reduce(function (n, g) { return n + g.in_tok; }, 0);
       ev.out_tok = spent.reduce(function (n, g) { return n + g.out_tok; }, 0);
       ev.usd = spent.reduce(function (n, g) { return n + recordSpend(env, ctx, g.model, g.in_tok, g.out_tok); }, 0);

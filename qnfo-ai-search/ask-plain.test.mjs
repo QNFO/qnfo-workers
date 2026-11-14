@@ -290,6 +290,12 @@ ok(mv && /plain_backfilled/.test(String(sq.prepare("SELECT note FROM ask_loop_ru
 ok(/ask_plain_share_7d/.test(src) && /plain: "- Write in plain language "/.test(src) && /m\.fix === "plain"/.test(src), "the metric has its fix anchor and its example query");
 
 // 6. a cached answer from an older prompt is not replayed
+// ASK-PLAIN-TIMEOUT-1 (#11887): a timed-out optional rewrite is counted in bit 16 and logged as a warning, never as an error (CF-OBS-ISSUE-1 per occurrence)
+ok(X.plainFlags({ target: T }, e1, 1, true) === 1 + 2 + 4 + 8 + 16 && X.plainFlags({ target: T }, e1, 1, false) === 1 + 2 + 4 + 8 && X.plainFlags({ target: T }, e1, 1) === 1 + 2 + 4 + 8, "plain flags: 16 marks a timed-out rewrite, absent otherwise");
+const rwCatch = src.slice(src.indexOf('"the plain-language rewrite")'), src.indexOf("ev.removed = chk.removed;"));
+ok(/\/timed out after\/i\.test/.test(rwCatch) && /plainTimedOut = true; console\.warn\(/.test(rwCatch) && /else logErr\("plain rewrite", e\)/.test(rwCatch), "a rewrite timeout sets the flag and warns; any other rewrite failure still logs an error", rwCatch.slice(0, 400));
+ok(/ev\.plain = plainFlags\(xt, rep, retried, plainTimedOut\)/.test(src), "ask_events.plain records the timeout bit");
+ok(/the plain-language rewrite timed out after 30 s/.test(("the plain-language rewrite" + " timed out after " + Math.round(30000 / 1000) + " s")) && /rej\(new Error\(what \+ " timed out after "/.test(src), "deadline()'s message is the one the catch recognises");
 ok(/var ANSWER_REV = "r\d+-"/.test(src) && /__answer\/" \+ ANSWER_REV \+ cfg\.id/.test(src), "the answer cache is keyed by the revision of what an answer says");
 // 7. ASK-FIX-1: the plain-language rule says where the everyday words go (the two sentences the plain check reads)
 ok(/The first two sentences are the ones a visitor reads first: state the result there with as few long specialist words as the excerpts allow/.test(src), "the writer prompt asks for the result with few long specialist words in the first two sentences");
