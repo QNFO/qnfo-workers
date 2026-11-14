@@ -17,6 +17,11 @@ export const journeys = [
       await u.see("Approve the annual domain renewal"); await u.see("Add the fleet Google account to Search Console");
       await u.see("Is it running?"); await u.see("Money this month"); await u.screen("now");
     } },
+  { id: "runs-on-ultrastable", title: "See that the fleet runs on Ultrastable: the shell's status sentence, the seven status numbers and the mark",
+    async run(u) {
+      await u.open("/"); await u.see("Runs on Ultrastable"); await u.see("Criticality (k)"); await u.see("Open ignition gaps");
+      await u.tap("What these numbers mean", { wait: 300 }); await u.see("Self-sustaining is claimed only at 0."); await u.screen("runs-on");
+    } },
   { id: "hand-back-one-tap", title: "Hand an item back to the fleet with one tap",
     async run(u) {
       await signedIn(u);

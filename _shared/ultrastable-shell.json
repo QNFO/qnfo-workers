@@ -1,0 +1,115 @@
+{
+  "id": "RUNS-ON-1",
+  "name": "Ultrastable runtime shell",
+  "version": "1.0.3",
+  "_doc": "What it means for a system to run on Ultrastable, as code: one page skeleton, one status vocabulary, one mark. brand/shell/build.mjs bundles this contract with src/shell.css and src/shell.js into artifact/ (ultrastable-shell.css, .js, .json with content hashes); brand/shell/shell.test.mjs proves it; an instance vendors artifact/ unchanged and proves parity against content_hash. Edit src/, never artifact/.",
+  "requires": "the --ds-* token contract of doctrine/design.json (token_contract plus --ds-font, --ds-mono, --ds-r-s, --ds-r-m, --ds-r-l), supplied by the instance's portfolio layer",
+  "layers": {
+    "core": "Never varies between instances: the skeleton below, the status vocabulary (keys, labels, thresholds, wording), the mark, the type scale, 44 px targets, the focus ring, reduced motion, and good/warn/bad as the only status colours.",
+    "portfolio": "Neutrals, status colours, type pair and shape come from the instance's portfolio through the --ds-* tokens; the shell never names a colour.",
+    "instance": "An instance supplies only its name, a short plane label, its accent (through --ds-accent) and the live values."
+  },
+  "skeleton": [
+    {
+      "slot": "top",
+      "render": "usTopBar",
+      "holds": "instance name, plane label, accent stripe, the instance's own controls, the mark"
+    },
+    {
+      "slot": "status",
+      "render": "usStatusPanel",
+      "holds": "one status sentence, then one tile per vocabulary key, definitions behind a disclosure"
+    },
+    {
+      "slot": "content",
+      "render": "instance",
+      "holds": "the instance's own screens"
+    },
+    {
+      "slot": "foot",
+      "render": "usFooter",
+      "holds": "the mark"
+    }
+  ],
+  "vocabulary": [
+    {
+      "key": "k_eff",
+      "label": "Criticality (k)",
+      "format": "fixed2",
+      "polarity": "higher",
+      "good": 1,
+      "warn": 0.5,
+      "define": "Verified releases in the last 24 hours per unit of cost and human attention. At 1 or more the system sustains itself."
+    },
+    {
+      "key": "open_ignition_gaps",
+      "label": "Open ignition gaps",
+      "format": "int",
+      "polarity": "lower",
+      "good": 0,
+      "warn": 3,
+      "define": "Links in the chain that still need a person or an outside input to run. Self-sustaining is claimed only at 0."
+    },
+    {
+      "key": "loops_running",
+      "label": "Loops running",
+      "format": "int",
+      "polarity": "none",
+      "of": "loops_total",
+      "define": "Loops that reported in on their own clock within their allowed window."
+    },
+    {
+      "key": "loops_stalled",
+      "label": "Loops stalled",
+      "format": "int",
+      "polarity": "lower",
+      "good": 0,
+      "warn": 2,
+      "define": "Loops that missed their window. Each one is restarted or replaced by the system."
+    },
+    {
+      "key": "items_in_24h",
+      "label": "Items in, 24 h",
+      "format": "int",
+      "polarity": "none",
+      "define": "Work items that entered the queue in the last 24 hours."
+    },
+    {
+      "key": "items_out_24h",
+      "label": "Items out, 24 h",
+      "format": "int",
+      "polarity": "higher",
+      "relative_to": "items_in_24h",
+      "good": 1,
+      "warn": 0.67,
+      "define": "Work items closed with evidence in the last 24 hours. Healthy when at least as many leave as arrive."
+    },
+    {
+      "key": "cost_vs_budget",
+      "label": "Cost pace",
+      "format": "times",
+      "polarity": "lower",
+      "good": 1,
+      "warn": 1.25,
+      "define": "Spending pace over the budget. 1 means exactly on budget."
+    }
+  ],
+  "sentence": {
+    "sustaining": "Self-sustaining",
+    "not_yet": "Not yet self-sustaining",
+    "unknown": "Status unknown",
+    "rule": "self-sustaining when k_eff >= 1 and open_ignition_gaps = 0"
+  },
+  "mark": {
+    "text": "Runs on Ultrastable",
+    "href": "https://ultrastable.io",
+    "title": "This system runs on Ultrastable: the same page skeleton, status vocabulary and self-running loops as every Ultrastable system."
+  },
+  "files": {
+    "css": "ultrastable-shell.css",
+    "js": "ultrastable-shell.js"
+  },
+  "css_sha256": "9188a89e9c0cd1550d16c4156c0a2267e7fa20e0a1f7d274ba5bfd50b2423d53",
+  "js_sha256": "d8ab72437a41ef44c7b0e7bee580c0eaad0ed5ebf5eb3ac9249341dfa78b4c71",
+  "content_hash": "54779bc43af4ec08b8d04c1947f869cb1a3b115b60508ed8b979c0569123cc43"
+}

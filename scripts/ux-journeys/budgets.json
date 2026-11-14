@@ -151,6 +151,10 @@
    "taps": 0,
    "typing": 0
   },
+  "runs-on-ultrastable": {
+   "taps": 1,
+   "typing": 0
+  },
   "hand-back-one-tap": {
    "taps": 1,
    "typing": 0

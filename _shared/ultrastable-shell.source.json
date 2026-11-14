@@ -1,0 +1,11 @@
+{
+  "id": "RUNS-ON-1",
+  "doc": "Where the vendored Ultrastable runtime shell (_shared/ultrastable-shell.css, .js, .json) came from. _shared/ultrastable-shell.test.mjs fails when the vendored bytes do not hash to content_hash, when this record and the contract disagree, or when an adopting worker holds a different copy. Refresh: copy brand/shell/artifact/ from ultrastable/ultrastable main, update commit and content_hash here, run node _shared/inline-ultrastable-shell.mjs qnfo-fleet-dashboard.",
+  "repo": "ultrastable/ultrastable",
+  "path": "brand/shell/artifact",
+  "commit": "693c84acb0b662c89c41ab355df4f35512a3a92c",
+  "pr": 350,
+  "version": "1.0.3",
+  "content_hash": "54779bc43af4ec08b8d04c1947f869cb1a3b115b60508ed8b979c0569123cc43",
+  "adopters": ["qnfo-fleet-dashboard"]
+}

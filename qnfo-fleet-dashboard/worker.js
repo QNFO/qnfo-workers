@@ -11,7 +11,7 @@ var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target,
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
 // 1.77.2 ERRATA-CHAIN-DISPATCH-1 (pillar research): wake the folded errata consumer and retry its legacy parked receipts.
 // VERSION-LINE-SPLIT-1 (agent_issues 100220): the release notes sit one per line below this statement, newest first, so a VERSION bump is a one-line patch; add a new note as the first line under it.
-var VERSION = "1.112.0";
+var VERSION = "1.113.0";
 // 1.89.0 NOW-NORTH-1 and HOME-MORE-1 (pillar core; minor): the Now screen opens with four numbers tied to the owner goals (readers, fleet cost, owner load, reliability) and drops the count of metrics off target (95 of 297; nothing can be done with it); a quiet footer on the home links the full dashboard, changelog, data index and managers.
 // 1.89.0 (cont.) MONEY-FIX-1 (pillar cost; patch): the Money card subtracted the subscription figure from a pace that never included it (fleet scope of v_cost_forecast), so it showed the fleet at 701 instead of 1151 a month; it now shows the fleet line, the subscriptions line and both together.
 // 1.85.0 (cont.) NOW-REVIEW-1: independent review fixes: Snooze and Not needed hide the card; a tap removes the card at once and reloads fresh, and the hand-back claims the card before filing (no duplicate tickets); strangers get no card keys or raw error text; only the signed-in owner (not the loop token) can run commands or hand work back; bound cards are read first; an unrefreshed metric reads n/a, not 0; one refresh in flight at a time and a failed refresh retries in 10 s; the Code poll says when the executor does not answer.
@@ -3639,6 +3639,97 @@ var VALUE_CSS = ".vl-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1
 
 var VALUE_JS = "<script>(function(){var H={'Content-Type':'application/json','x-fleet-ui':'1'};function post(b){return fetch('/api/owner/act',{method:'POST',headers:H,credentials:'same-origin',body:JSON.stringify(b)}).then(function(r){return r.json().catch(function(){return{ok:false,error:'HTTP '+r.status}})})}document.addEventListener('click',function(ev){var t=ev.target&&ev.target.closest&&ev.target.closest('[data-vact]');if(!t)return;var bar=t.closest('.act');if(!bar)return;var res=bar.querySelector('.act-res'),tell=bar.querySelector('.act-tell'),kind=t.getAttribute('data-vact'),directive=kind==='fix'?(bar.getAttribute('data-fix-directive')||''):'';if(kind==='tell'){tell.hidden=!tell.hidden;if(!tell.hidden)tell.querySelector('input').focus();return}if(kind==='send'){directive=tell.querySelector('input').value.trim();if(!directive)return}t.disabled=true;if(res)res.textContent='Sending to the fleet\\u2026';post({subject:bar.getAttribute('data-subject'),directive:directive}).then(function(j){if(res)res.textContent=j.ok?'\\u2713 Handed to the fleet'+(j.issue_id?' as issue '+j.issue_id:'')+(j.duplicate?' (already filed, nothing duplicated)':'')+'. '+(j.next||''):(j.error||'It did not go through.')+(j.error&&/token|sign|closed/i.test(j.error)?' Sign in with the command line (type login).':'');if(j.ok&&tell){tell.hidden=true;tell.querySelector('input').value=''}t.disabled=false}).catch(function(){if(res)res.textContent='Network error: nothing was sent.';t.disabled=false})})})()<\/script>";
 /* VALUE-DASH-1:END */
+// ULTRASTABLE-SHELL-1:BEGIN (vendored from ultrastable/ultrastable brand/shell/artifact via _shared/ultrastable-shell.js; applied by _shared/inline-ultrastable-shell.mjs; do not edit inside a worker)
+// RUNS-ON-1: the Ultrastable runtime shell. One page skeleton, one status vocabulary and one mark shared by every system that runs on Ultrastable.
+// Inlinable: no import, no export, no block comment, US_/us names only. An instance inlines this file verbatim (or loads it with new Function)
+// and calls usTopBar, usStatusPanel and usFooter; colours come from the instance's --ds-* tokens, so an instance varies only its accent.
+var US_SHELL_CSS = ".us-top{position:sticky;top:0;z-index:10;background:var(--ds-surface);border-top:4px solid var(--ds-accent);border-bottom:1px solid var(--ds-line)}\n.us-top-in{max-width:960px;margin:0 auto;padding:6px 16px;display:flex;align-items:center;flex-wrap:wrap;gap:4px 12px;min-height:56px}\n.us-top .us-name{display:flex;align-items:center;gap:8px;margin-right:auto;min-height:44px;font:700 17px/1.2 var(--ds-font);color:var(--ds-ink);text-decoration:none}\n.us-top .us-name i{width:10px;height:10px;border-radius:50%;background:var(--ds-accent);display:inline-block;flex:none}\n.us-top .us-name small{font-weight:500;font-size:14px;color:var(--ds-ink-2)}\n.us-right{display:flex;align-items:center;gap:8px}\n.us-mark,.us-top .us-mark,.us-foot .us-mark{display:inline-flex;align-items:center;gap:6px;min-height:44px;padding:0 4px;font:500 14px/1.2 var(--ds-font);color:var(--ds-ink-2);text-decoration:none;white-space:nowrap}\n.us-mark::before{content:\"\";width:12px;height:12px;flex:none;border-radius:50%;border:2px solid var(--ds-accent);box-shadow:inset 0 0 0 2px var(--ds-surface),inset 0 0 0 6px var(--ds-accent)}\n.us-top .us-mark:hover,.us-foot .us-mark:hover,.us-top .us-name:hover{color:var(--ds-ink)}\n.us-status{max-width:960px;margin:16px auto;padding:0 16px}\n.us-status .us-sentence{margin:0 0 12px;padding:4px 0 4px 12px;border-left:4px solid var(--ds-line-strong);font:400 18px/1.45 var(--ds-font);color:var(--ds-ink)}\n.us-sentence.us-good{border-left-color:var(--ds-good)}.us-sentence.us-warn{border-left-color:var(--ds-warn)}.us-sentence.us-bad{border-left-color:var(--ds-bad)}\n.us-tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(132px,1fr));gap:8px;margin:0;padding:0;list-style:none}\n.us-tile{background:var(--ds-surface);border:1px solid var(--ds-line);border-top:4px solid var(--ds-line);border-radius:var(--ds-r-m);padding:10px 12px}\n.us-tile.us-good{border-top-color:var(--ds-good)}.us-tile.us-warn{border-top-color:var(--ds-warn)}.us-tile.us-bad{border-top-color:var(--ds-bad)}\n.us-label{display:block;font-size:14px;line-height:1.3;color:var(--ds-ink-2)}\n.us-val{display:block;font:650 24px/1.25 var(--ds-font);font-variant-numeric:tabular-nums;color:var(--ds-ink)}\n.us-val small{font-size:14px;font-weight:500;color:var(--ds-ink-2)}\n.us-tile.us-unknown .us-val{color:var(--ds-ink-2)}\n.us-defs{margin:8px 0 0;font-size:14px;color:var(--ds-ink-2)}\n.us-defs summary{display:inline-flex;align-items:center;min-height:44px;cursor:pointer;color:var(--ds-accent)}\n.us-defs dl{margin:4px 0 0}.us-defs dt{font-weight:650;color:var(--ds-ink)}.us-defs dd{margin:0 0 8px}\n.us-status .us-asof{margin:4px 0 0;font-size:14px;color:var(--ds-ink-2)}\n.us-foot{max-width:960px;margin:24px auto 0;padding:8px 16px;border-top:1px solid var(--ds-line);display:flex;justify-content:center}\n.us-top :focus-visible,.us-status :focus-visible,.us-foot :focus-visible{outline:3px solid var(--ds-focus);outline-offset:2px;border-radius:var(--ds-r-s)}\n@media (max-width:640px){.us-top-in{padding:4px 12px}.us-val{font-size:22px}.us-status .us-sentence{font-size:17px}}\n@media (prefers-reduced-motion:reduce){.us-top *,.us-status *,.us-foot *{transition:none!important;animation:none!important}}\n.us-main{max-width:960px;margin:0 auto;padding:0 16px}";
+var US_SHELL_CONTRACT = {"id":"RUNS-ON-1","name":"Ultrastable runtime shell","version":"1.0.3","requires":"the --ds-* token contract of doctrine/design.json (token_contract plus --ds-font, --ds-mono, --ds-r-s, --ds-r-m, --ds-r-l), supplied by the instance's portfolio layer","layers":{"core":"Never varies between instances: the skeleton below, the status vocabulary (keys, labels, thresholds, wording), the mark, the type scale, 44 px targets, the focus ring, reduced motion, and good/warn/bad as the only status colours.","portfolio":"Neutrals, status colours, type pair and shape come from the instance's portfolio through the --ds-* tokens; the shell never names a colour.","instance":"An instance supplies only its name, a short plane label, its accent (through --ds-accent) and the live values."},"skeleton":[{"slot":"top","render":"usTopBar","holds":"instance name, plane label, accent stripe, the instance's own controls, the mark"},{"slot":"status","render":"usStatusPanel","holds":"one status sentence, then one tile per vocabulary key, definitions behind a disclosure"},{"slot":"content","render":"instance","holds":"the instance's own screens"},{"slot":"foot","render":"usFooter","holds":"the mark"}],"vocabulary":[{"key":"k_eff","label":"Criticality (k)","format":"fixed2","polarity":"higher","good":1,"warn":0.5,"define":"Verified releases in the last 24 hours per unit of cost and human attention. At 1 or more the system sustains itself."},{"key":"open_ignition_gaps","label":"Open ignition gaps","format":"int","polarity":"lower","good":0,"warn":3,"define":"Links in the chain that still need a person or an outside input to run. Self-sustaining is claimed only at 0."},{"key":"loops_running","label":"Loops running","format":"int","polarity":"none","of":"loops_total","define":"Loops that reported in on their own clock within their allowed window."},{"key":"loops_stalled","label":"Loops stalled","format":"int","polarity":"lower","good":0,"warn":2,"define":"Loops that missed their window. Each one is restarted or replaced by the system."},{"key":"items_in_24h","label":"Items in, 24 h","format":"int","polarity":"none","define":"Work items that entered the queue in the last 24 hours."},{"key":"items_out_24h","label":"Items out, 24 h","format":"int","polarity":"higher","relative_to":"items_in_24h","good":1,"warn":0.67,"define":"Work items closed with evidence in the last 24 hours. Healthy when at least as many leave as arrive."},{"key":"cost_vs_budget","label":"Cost pace","format":"times","polarity":"lower","good":1,"warn":1.25,"define":"Spending pace over the budget. 1 means exactly on budget."}],"sentence":{"sustaining":"Self-sustaining","not_yet":"Not yet self-sustaining","unknown":"Status unknown","rule":"self-sustaining when k_eff >= 1 and open_ignition_gaps = 0"},"mark":{"text":"Runs on Ultrastable","href":"https://ultrastable.io","title":"This system runs on Ultrastable: the same page skeleton, status vocabulary and self-running loops as every Ultrastable system."}};
+var US_SHELL_VERSION = US_SHELL_CONTRACT.version;
+function usEsc(s) { return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); }
+function usSpec(key) { return US_SHELL_CONTRACT.vocabulary.filter(function (v) { return v.key === key; })[0] || null; }
+function usNum(v) { if (v == null || v === "") return null; var n = Number(v); return isFinite(n) ? n : null; }
+function usFmt(key, v) {
+  var s = usSpec(key), n = usNum(v);
+  if (n == null) return "n/a";
+  if (s && s.format === "fixed2") return n.toFixed(2);
+  if (s && s.format === "times") return (Math.round(n * 100) / 100).toString() + "\u00d7";
+  return Math.round(n).toLocaleString("en-US");
+}
+// good | warn | bad from the vocabulary thresholds; none for a key with no polarity; unknown when the value (or its reference) is missing.
+function usVerdict(key, values) {
+  var s = usSpec(key), n = usNum(values && values[key]);
+  if (!s) return "none";
+  if (n == null) return "unknown";
+  if (s.polarity === "none") return "none";
+  if (s.relative_to) {
+    var ref = usNum(values[s.relative_to]);
+    if (ref == null) return "unknown";
+    n = ref === 0 ? s.good : n / ref;
+  }
+  if (s.polarity === "higher") return n >= s.good ? "good" : n >= s.warn ? "warn" : "bad";
+  return n <= s.good ? "good" : n <= s.warn ? "warn" : "bad";
+}
+function usWorst(values) {
+  var rank = { good: 1, warn: 2, bad: 3 }, w = 0, out = "unknown";
+  US_SHELL_CONTRACT.vocabulary.forEach(function (s) { var v = usVerdict(s.key, values); if (rank[v] && rank[v] > w) { w = rank[v]; out = v; } });
+  return out;
+}
+function usSustaining(values) {
+  var k = usNum(values && values.k_eff), g = usNum(values && values.open_ignition_gaps);
+  if (k == null || g == null) return null;
+  return k >= 1 && g === 0;
+}
+// One sentence: the verdict first, then the numbers behind it. Missing numbers are left out, never shown as zero.
+function usStatusSentence(values) {
+  values = values || {};
+  var S = US_SHELL_CONTRACT.sentence, st = usSustaining(values), parts = [];
+  var head = st === true ? S.sustaining : st === false ? S.not_yet : S.unknown;
+  if (usNum(values.k_eff) != null) parts.push("criticality " + usFmt("k_eff", values.k_eff));
+  var g = usNum(values.open_ignition_gaps);
+  if (g != null) parts.push(g === 0 ? "no open ignition gaps" : g + " open ignition gap" + (g === 1 ? "" : "s"));
+  var lr = usNum(values.loops_running), lt = usNum(values.loops_total);
+  if (lr != null) parts.push(lr + (lt != null ? " of " + lt : "") + " loops running");
+  var ii = usNum(values.items_in_24h), io = usNum(values.items_out_24h);
+  if (ii != null && io != null) parts.push(ii + " items in and " + io + " out in 24 h");
+  if (usNum(values.cost_vs_budget) != null) parts.push("cost at " + usFmt("cost_vs_budget", values.cost_vs_budget) + " budget");
+  return head + (parts.length ? ": " + parts.join(", ") : "") + ".";
+}
+function usMark() {
+  var m = US_SHELL_CONTRACT.mark;
+  return '<a class="us-mark" href="' + usEsc(m.href) + '" rel="noopener" title="' + usEsc(m.title) + '" data-runs-on="ultrastable">' + usEsc(m.text) + "</a>";
+}
+// o: { name, sub, href, right } ; right is the instance's own controls (trusted HTML from the instance).
+function usTopBar(o) {
+  o = o || {};
+  return '<header class="us-top" data-us-shell="' + usEsc(US_SHELL_VERSION) + '"><div class="us-top-in"><a class="us-name" href="' + usEsc(o.href || "/") + '"><i aria-hidden="true"></i>' + usEsc(o.name || "System") +
+    (o.sub ? " <small>" + usEsc(o.sub) + "</small>" : "") + '</a><div class="us-right">' + (o.right || "") + usMark() + "</div></div></header>";
+}
+// values: { k_eff, open_ignition_gaps, loops_running, loops_total, loops_stalled, items_in_24h, items_out_24h, cost_vs_budget }; o: { as_of, sources }
+function usStatusPanel(values, o) {
+  values = values || {}; o = o || {};
+  var tiles = US_SHELL_CONTRACT.vocabulary.map(function (s) {
+    var v = usVerdict(s.key, values), of = s.of && usNum(values[s.of]) != null && usNum(values[s.key]) != null ? " <small>of " + usFmt(s.of, values[s.of]) + "</small>" : "";
+    var src = o.sources && o.sources[s.key] ? " Source: " + o.sources[s.key] + "." : "";
+    return '<li class="us-tile us-' + v + '" data-key="' + usEsc(s.key) + '" title="' + usEsc(s.define + src) + '"><span class="us-label">' + usEsc(s.label) + '</span><b class="us-val">' + usEsc(usFmt(s.key, values[s.key])) + of + "</b></li>";
+  }).join("");
+  var defs = US_SHELL_CONTRACT.vocabulary.map(function (s) {
+    var src = o.sources && o.sources[s.key] ? " Source here: " + o.sources[s.key] + "." : "";
+    return "<dt>" + usEsc(s.label) + "</dt><dd>" + usEsc(s.define + src) + "</dd>";
+  }).join("");
+  return '<section class="us-status" aria-label="System status" data-us-shell="' + usEsc(US_SHELL_VERSION) + '"><p class="us-sentence us-' + (usSustaining(values) === null ? "unknown" : usWorst(values)) + '" role="status">' + usEsc(usStatusSentence(values)) + "</p>" +
+    '<ul class="us-tiles">' + tiles + "</ul>" + '<details class="us-defs"><summary>What these numbers mean</summary><dl>' + defs + "</dl></details>" +
+    (o.as_of ? '<p class="us-asof">As of ' + usEsc(o.as_of) + "</p>" : "") + "</section>";
+}
+function usFooter() { return '<footer class="us-foot">' + usMark() + "</footer>"; }
+// A whole page for a surface that has no head of its own. tokenCss is the portfolio layer (the --ds-* block); body is the instance's content.
+function usPage(o) {
+  o = o || {};
+  return '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>' + usEsc(o.title || o.name || "System") + "</title>" +
+    (o.description ? '<meta name="description" content="' + usEsc(o.description) + '">' : "") + "<style>" + (o.tokenCss || "") + "\n" + US_SHELL_CSS + "\n" + (o.css || "") + '</style></head><body class="ds">' +
+    usTopBar(o) + usStatusPanel(o.values, o) + '<main class="us-main">' + (o.body || "") + "</main>" + usFooter() + "</body></html>";
+}
+// ULTRASTABLE-SHELL-1:END
 // ==== V3-DASH-1 (1.82.0): three screens (Now, Readers, Code). The shell is static so it paints at once; each screen reads one small
 // endpoint whose sections time out on their own and say how old they are, so a slow source shows "unreadable" instead of a blank page.
 var V3_TTL_MS = 45e3;
@@ -3759,16 +3850,16 @@ async function v3Handback(env, ctx, b) {
 // What the fleet did in the last 24 hours, so the page answers "what is happening" without a tab.
 async function v3Work(env) {
   const [a, b] = await Promise.all([
-    d1all(env.AUDIT, "SELECT (SELECT COUNT(*) FROM deployment_history WHERE deployed_at > strftime('%Y-%m-%dT%H:%M:%SZ','now','-24 hours')) AS deploys, (SELECT COUNT(*) FROM code_tasks WHERE status = 'merged' AND updated_at > strftime('%Y-%m-%dT%H:%M:%SZ','now','-24 hours')) AS merged"),
+    d1all(env.AUDIT, "SELECT (SELECT COUNT(*) FROM deployment_history WHERE deployed_at > strftime('%Y-%m-%dT%H:%M:%SZ','now','-24 hours')) AS deploys, (SELECT COUNT(*) FROM deployment_history WHERE status = 'success' AND deployed_at > strftime('%Y-%m-%dT%H:%M:%SZ','now','-24 hours')) AS deploys_ok, (SELECT COUNT(*) FROM code_tasks WHERE status = 'merged' AND updated_at > strftime('%Y-%m-%dT%H:%M:%SZ','now','-24 hours')) AS merged"),
     d1all(env.AUDIT, "SELECT event, COUNT(*) AS n FROM issue_lifecycle WHERE ts > strftime('%Y-%m-%dT%H:%M:%SZ','now','-24 hours') GROUP BY event")
   ]);
   const ev = {};
   b.forEach(function(x) { ev[x.event] = Number(x.n) || 0; });
   const open = await d1all(env.AUDIT, "SELECT last_value FROM metric_registry WHERE metric = 'open_agent_issues'").catch(function() { return []; });
-  const mr = await d1all(env.AUDIT, "SELECT metric, last_value FROM metric_registry WHERE metric IN ('referral_30d','publications_30d','engaged_reader_sessions_7d')").catch(function() { return []; });
+  const mr = await d1all(env.AUDIT, "SELECT metric, last_value FROM metric_registry WHERE metric IN ('referral_30d','publications_30d','engaged_reader_sessions_7d','watchmaker_index')").catch(function() { return []; });
   const mv = {};
   mr.forEach(function(x) { const n = x.last_value == null ? NaN : Number(x.last_value); mv[x.metric] = isFinite(n) ? n : null; });
-  return { engaged_reader_sessions_7d: mv.engaged_reader_sessions_7d != null ? mv.engaged_reader_sessions_7d : null, referral_30d: mv.referral_30d != null ? mv.referral_30d : null, publications_30d: mv.publications_30d != null ? mv.publications_30d : null, deploys_24h: a[0] ? Number(a[0].deploys) : null, code_merged_24h: a[0] ? Number(a[0].merged) : null, issues_opened_24h: ev.opened || 0, issues_closed_24h: ev.dispositioned || 0, issues_reopened_24h: ev.reopened || 0, open_issues: open[0] && open[0].last_value != null && isFinite(Number(open[0].last_value)) ? Number(open[0].last_value) : null };
+  return { engaged_reader_sessions_7d: mv.engaged_reader_sessions_7d != null ? mv.engaged_reader_sessions_7d : null, referral_30d: mv.referral_30d != null ? mv.referral_30d : null, publications_30d: mv.publications_30d != null ? mv.publications_30d : null, deploys_24h: a[0] ? Number(a[0].deploys) : null, deploys_ok_24h: a[0] && a[0].deploys_ok != null ? Number(a[0].deploys_ok) : null, watchmaker_index: mv.watchmaker_index != null ? mv.watchmaker_index : null, code_merged_24h: a[0] ? Number(a[0].merged) : null, issues_opened_24h: ev.opened || 0, issues_closed_24h: ev.dispositioned || 0, issues_reopened_24h: ev.reopened || 0, open_issues: open[0] && open[0].last_value != null && isFinite(Number(open[0].last_value)) ? Number(open[0].last_value) : null };
 }
 async function v3Reach(env) {
   const [r, reg] = await Promise.all([reachScorecardData(env), d1all(env.AUDIT, "SELECT metric, last_value, last_refreshed FROM metric_registry WHERE metric IN ('pageviews_30d','referral_30d','publications_30d','subscribers_growth_monthly')").catch(function() { return []; })]);
@@ -3868,6 +3959,7 @@ async function v3Routes(request, env, ctx, path, url, owner) {
   if ((path === "/" || path === "") && (m === "GET" || m === "HEAD") && url.searchParams.get("frag") !== "1") {
     return new Response(m === "HEAD" ? null : v3Html(env, await v3PublicBlock(env)), { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-cache" } });
   }
+  if (path === "/api/runs-on" && (m === "GET" || m === "HEAD")) return v3Json(await runsOnState(env));
   if (path.indexOf("/api/v3/") !== 0) return null;
   if ((path === "/api/v3/now" || path === "/api/v3/readers") && (m === "GET" || m === "HEAD")) {
     return v3Json(await v3Build(env, path === "/api/v3/now" ? "now" : "readers", holder, holder && url.searchParams.get("fresh") === "1"));
@@ -4087,8 +4179,7 @@ function dsLint(html) {
 // (DS_CSS is put in front of this block by v3Html); the names below are kept so the page script needs no change.
 var V3_CSS = String.raw`:root{--bg:var(--ds-bg);--card:var(--ds-surface);--ink:var(--ds-ink);--mut:var(--ds-ink-2);--rule:var(--ds-line);--ok:var(--ds-good);--warn:var(--ds-warn);--bad:var(--ds-bad);--acc:var(--ds-accent)}
 *{box-sizing:border-box}html,body.ds{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 var(--ds-font)}
-header{position:sticky;top:0;z-index:5;background:var(--bg);border-bottom:1px solid var(--rule);display:flex;align-items:center;justify-content:space-between;padding:12px 18px}
-header b{font-size:17px;letter-spacing:.2px}#pill{font-size:14px;color:var(--mut);display:flex;gap:7px;align-items:center}
+#pill{font-size:14px;color:var(--mut);display:flex;gap:7px;align-items:center}
 #pill i{width:9px;height:9px;border-radius:50%;background:var(--mut);display:inline-block}#pill.ok i{background:var(--ok)}#pill.warn i{background:var(--warn)}#pill.bad i{background:var(--bad)}
 main{max-width:720px;margin:0 auto;padding:18px 16px 110px}.scr{display:none}.scr.on{display:block}
 .hero{border-radius:16px;padding:22px 20px;background:var(--card);border:1px solid var(--rule);border-left:6px solid var(--mut);margin-bottom:14px}
@@ -4180,6 +4271,40 @@ who();show((location.hash||'#now').slice(1)==='readers'?'readers':(location.hash
 })();`;
 // FLEET-PUBLIC-SSR-1: one sentence and five numbers in the server HTML, read only from the cached v3 aggregates (public form, 45 s cache),
 // so link previews and crawlers see content. Slow or failed aggregates degrade to plain text, never an error.
+// ==== RUNS-ON-ULTRASTABLE-1 (1.113.0): fleet.qnfo.org shows the Ultrastable runtime shell (ULTRASTABLE-SHELL-1 block above): the same top bar,
+// status sentence, seven-key status vocabulary and "Runs on Ultrastable" mark every Ultrastable system shows. The values come from the reads the Now
+// screen already makes (v3Build "now"); RUNS_ON_SOURCES says which record each one is read from, and GET /api/runs-on serves them as JSON.
+var RUNS_ON_SHELL_SOURCE = { repo: "ultrastable/ultrastable", path: "brand/shell/artifact", commit: "693c84acb0b662c89c41ab355df4f35512a3a92c", content_hash: "54779bc43af4ec08b8d04c1947f869cb1a3b115b60508ed8b979c0569123cc43" };
+var RUNS_ON_INSTANCE = { name: "QNFO fleet", plane: "qnfo.org" };
+var RUNS_ON_SOURCES = {
+  k_eff: "successful deploys in deployment_history over 24 h, divided by (cost pace, at least 0.1, plus open owner cards with an IDENTITY-BOUND line)",
+  open_ignition_gaps: "metric watchmaker_index: recurring operations that still need a person or a session, or whose runner is stalled",
+  loops_running: "workers whose fleet_heartbeat is under 130 minutes old", loops_stalled: "workers whose fleet_heartbeat is 130 minutes old or more",
+  items_in_24h: "issues opened (issue_lifecycle)", items_out_24h: "issues closed with a disposition (issue_lifecycle)",
+  cost_vs_budget: "7-day all-billing daily run rate times 30, over the fleet's monthly budget"
+};
+function runsOnValues(now) {
+  const sec = function(k) { return now && now[k] && now[k].ok !== false ? now[k] : {}; };
+  const w = sec("work"), h = sec("health"), sp = sec("spend"), nd = sec("needs");
+  const num = function(v) { return v == null || v === "" || !isFinite(Number(v)) ? null : Number(v); };
+  const dep = num(w.deploys_ok_24h), cost = num(sp.pace_vs_budget), touch = num(nd.count), tot = num(h.workers_total), up = num(h.workers_reporting);
+  return {
+    values: {
+      k_eff: dep != null && cost != null && touch != null ? Math.round(dep / (Math.max(cost, 0.1) + touch) * 1000) / 1000 : null,
+      open_ignition_gaps: num(w.watchmaker_index), loops_running: up, loops_total: tot, loops_stalled: tot != null && up != null ? Math.max(0, tot - up) : null,
+      items_in_24h: num(w.issues_opened_24h), items_out_24h: num(w.issues_closed_24h), cost_vs_budget: cost
+    },
+    sources: RUNS_ON_SOURCES, as_of: now && now.generated_at ? String(now.generated_at).slice(0, 16).replace("T", " ") + " UTC" : null
+  };
+}
+async function runsOnState(env) {
+  let now = null;
+  try { now = await v3Build(env, "now", false, false); } catch (e) { now = null; }
+  const r = runsOnValues(now), verdicts = {};
+  US_SHELL_CONTRACT.vocabulary.forEach(function(s) { verdicts[s.key] = usVerdict(s.key, r.values); });
+  return { schema_version: "runs-on/1", instance: RUNS_ON_INSTANCE, shell: { id: US_SHELL_CONTRACT.id, version: US_SHELL_VERSION, source: RUNS_ON_SHELL_SOURCE },
+    sentence: usStatusSentence(r.values), self_sustaining: usSustaining(r.values), values: r.values, verdicts: verdicts, sources: r.sources, as_of: r.as_of, version: VERSION };
+}
 async function v3PublicBlock(env) {
   const num = function(v, pre) { return v == null || !isFinite(Number(v)) ? "n/a" : (pre || "") + Number(v).toLocaleString("en-US"); };
   let now = null, rd = null;
@@ -4192,17 +4317,18 @@ async function v3PublicBlock(env) {
   const sentence = "QNFO runs an autonomous fleet of Cloudflare workers that publishes research, answers questions and fixes its own issues; these numbers are live.";
   const facts = [["Open issues", num(w.open_issues)], ["Engaged readers who allowed analytics, 7 days", num(w.engaged_reader_sessions_7d)], ["Papers published, 30 days", num(w.publications_30d != null ? w.publications_30d : rc.publications_30d)], ["Cost this month", num(mtd, "USD ")], ["Live workers", num(hl.workers_reporting)]];
   const desc = sentence + " " + facts.map(function(f) { return f[0] + ": " + f[1]; }).join("; ") + ".";
-  return { desc: desc, html: '<section id="pub" class="card"><p>' + esc(sentence) + '</p><ul>' + facts.map(function(f) { return '<li>' + esc(f[0]) + ': <b>' + esc(f[1]) + '</b></li>'; }).join("") + '</ul></section>' };
+  return { shell: runsOnValues(now), desc: desc, html: '<section id="pub" class="card"><p>' + esc(sentence) + '</p><ul>' + facts.map(function(f) { return '<li>' + esc(f[0]) + ': <b>' + esc(f[1]) + '</b></li>'; }).join("") + '</ul></section>' };
 }
 function v3Html(env, pub) {
   pub = pub || { desc: "QNFO fleet dashboard: open issues, readers, papers, cost and live workers.", html: "" };
-  return '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Fleet</title><meta name="description" content="' + esc(pub.desc) + '"><link rel="canonical" href="https://fleet.qnfo.org/"><meta property="og:title" content="QNFO fleet: live status"><meta property="og:description" content="' + esc(pub.desc) + '"><meta property="og:type" content="website"><meta property="og:url" content="https://fleet.qnfo.org/"><meta name="twitter:card" content="summary"><style>' + DS_CSS + '\n' + V3_CSS + '</style></head><body class="ds">' +
-    '<header><b>Fleet</b><div id="pill"><i></i><span>loading</span></div></header><main><p id="off" class="err"></p>' + pub.html +
+  return '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Fleet</title><meta name="description" content="' + esc(pub.desc) + '"><link rel="canonical" href="https://fleet.qnfo.org/"><meta property="og:title" content="QNFO fleet: live status"><meta property="og:description" content="' + esc(pub.desc) + '"><meta property="og:type" content="website"><meta property="og:url" content="https://fleet.qnfo.org/"><meta name="twitter:card" content="summary"><style>' + DS_CSS + '\n' + V3_CSS + '\n' + US_SHELL_CSS + '</style></head><body class="ds">' +
+    usTopBar({ name: RUNS_ON_INSTANCE.name, sub: RUNS_ON_INSTANCE.plane, href: "/", right: '<div id="pill"><i></i><span>loading</span></div>' }) +
+    usStatusPanel(pub.shell ? pub.shell.values : {}, pub.shell || {}) + '<main><p id="off" class="err"></p>' + pub.html +
     '<section id="s-now" class="scr on"><div class="hero"><h1>Loading...</h1><p>Reading the fleet.</p></div></section>' +
     '<section id="s-readers" class="scr"><div class="hero"><h1>Loading...</h1></div></section>' +
     '<section id="s-code" class="scr"><div class="chips"><button data-q="Give me a one-paragraph status of the fleet: what is broken, what changed in the last 24 hours.">Status</button><button data-q="Show the 5 most expensive workers by AI spend this week and how to cut each.">Cut costs</button><button data-q="List open pull requests and say which are safe to merge.">Open PRs</button></div>' +
     '<p id="warm" class="note"></p><div id="si" class="card" style="display:none"><h2>Sign in</h2><p class="note">The command line runs real commands, so it needs your email code once (12 hours).</p>' + turnstileWidget(env, "fleet_cmd") + '<div id="sib"><button id="send" class="pri">Email me a code</button><input id="vc" inputmode="numeric" maxlength="6" placeholder="6-digit code"><button id="vb">Verify</button></div><p id="sim" class="note"></p></div><div id="log"></div></section></main>' +
-    '<p class="more">More: <a href="/overview">full dashboard</a><a href="/changelog">changelog</a><a href="/api">data (JSON)</a><a href="/managers">managers</a></p>' +
+    usFooter() + '<p class="more">More: <a href="/overview">full dashboard</a><a href="/api/runs-on">status (JSON)</a><a href="/changelog">changelog</a><a href="/api">data (JSON)</a><a href="/managers">managers</a></p>' +
     '<div id="cbar"><form id="cf"><textarea id="ci" placeholder="Tell it what to do. It runs in a small container on Cloudflare." disabled></textarea><button class="pri" type="submit">Run</button></form></div>' +
     '<nav><a id="n-now" href="#now">Now</a><a id="n-readers" href="#readers">Readers</a><a id="n-code" href="#code">Code</a></nav>' + TURNSTILE_SCRIPT + '<script>' + V3_JS + '</script></body></html>';
 }
@@ -4245,7 +4371,7 @@ async function focusAnswer(env, id, key, via) {
 // (Yes / No / Not sure style ds-choices for up to three short answers, stacked ds-options otherwise), plain form posts so the page needs no script.
 function focusPage(state, ask, authed, notice) {
   const e = ownerEsc;
-  const o = ['<header class="ds-top"><div class="ds-top-in"><a class="ds-brand" href="/">Fleet</a><a class="btn btn-quiet" href="/touch">Touchpoints</a></div></header><main class="ds-main" id="main" style="max-width:720px"><div class="ds-head"><h1>Research focus</h1><p>What the fleet works on next follows your answers. A paused line gets no new papers; a line you push goes first. The next answer can change any of them.</p></div>'];
+  const o = ['' + usTopBar({ name: RUNS_ON_INSTANCE.name, sub: "Questions", href: "/", right: '<a class="btn btn-quiet" href="/touch">Touchpoints</a>' }) + '<main class="ds-main" id="main" style="max-width:720px"><div class="ds-head"><h1>Research focus</h1><p>What the fleet works on next follows your answers. A paused line gets no new papers; a line you push goes first. The next answer can change any of them.</p></div>'];
   if (notice) o.push('<p class="ds-note ' + (/^Saved/.test(notice) ? "ds-note-good" : "ds-note-warn") + '" role="status">' + e(notice) + "</p>");
   if (ask) {
     o.push('<section class="ds-card" aria-label="Question"><div class="ds-step">Question' + (state.open_asks > 1 ? " 1 of " + e(String(state.open_asks)) : "") + '</div><p class="ds-q">' + e(ask.question) + "</p>" + (ask.cue ? '<p class="ds-muted">' + e(ask.cue) + "</p>" : ""));
@@ -4279,7 +4405,7 @@ function focusPage(state, ask, authed, notice) {
 // The /focus page wrapper: the owner page headers (no script, no framing) around a design-system document.
 function focusHtml(title, inner, status, desc) {
   const r = ownerHtml(title, "", status);
-  return new Response('<!doctype html><html lang="en"><head>' + dsHead(title, desc || "Tap to set what the fleet researches next.") + '<meta name="robots" content="noindex,nofollow,noarchive"><meta name="referrer" content="no-referrer"></head><body class="ds">' + inner + "</body></html>", { status: r.status, headers: r.headers });
+  return new Response('<!doctype html><html lang="en"><head>' + dsHead(title, desc || "Tap to set what the fleet researches next.", US_SHELL_CSS) + '<meta name="robots" content="noindex,nofollow,noarchive"><meta name="referrer" content="no-referrer"></head><body class="ds">' + inner + usFooter() + "</body></html>", { status: r.status, headers: r.headers });
 }
 async function focusRoute(request, env, path, owner) {
   if (path !== "/focus" && path !== "/focus/" && path !== "/api/focus") return null;
@@ -4471,7 +4597,7 @@ async function touchState(env) {
 function touchPage(st, authed, notice) {
   const e = ownerEsc, mv = function(k, pct) { const m = st.metrics[k]; if (!m || m.value == null || m.value === "") return "\u2013"; return pct ? Math.round(Number(m.value) * 100) + "%" : String(m.value); };
   const n = st.approve.length + st.taps.length;
-  const o = ['<header class="ds-top"><div class="ds-top-in"><a class="ds-brand" href="/">Fleet</a><a class="btn btn-quiet" href="/focus">Questions</a></div></header><main class="ds-main" id="main" style="max-width:720px">',
+  const o = ['' + usTopBar({ name: RUNS_ON_INSTANCE.name, sub: "Touchpoints", href: "/", right: '<a class="btn btn-quiet" href="/focus">Questions</a>' }) + '<main class="ds-main" id="main" style="max-width:720px">',
     '<div class="ds-head"><h1>Touchpoints</h1><p>' + (n ? e(String(n)) + " waiting for you. Follows, likes and prunes on Bluesky and Mastodon run by themselves inside small daily limits." : "Nothing waits for you. Follows, likes and prunes on Bluesky and Mastodon run by themselves inside small daily limits.") + "</p></div>"];
   if (notice) o.push('<p class="ds-note ' + (/^(Approved|Done|Skipped)/.test(notice) ? "ds-note-good" : "ds-note-warn") + '" role="status">' + e(notice) + "</p>");
   o.push('<div class="ds-stats"><div class="ds-stat"><div class="k">Touches, 7 days</div><div class="v">' + e(mv("touchpoints_7d")) + '</div></div><div class="ds-stat"><div class="k">Noticed you back</div><div class="v">' + e(mv("touch_reciprocation_30d", true)) + '</div></div><div class="ds-stat"><div class="k">Stale follows left</div><div class="v">' + e(mv("touch_stale_follows")) + "</div></div></div>");
@@ -10741,8 +10867,10 @@ var FLEET_BOOT = "<script>(function(){try{var t=localStorage.getItem('qnfo-theme
 var FLEET_MARK = '<svg viewBox="0 0 32 32" aria-hidden="true"><path d="M6 16h7M13 16l7-8M13 16l7 8M20 8h6M20 24h6M20 8l4-4M20 24l4 4" stroke="var(--teal)" stroke-width="2.4" fill="none" stroke-linecap="round"/><circle cx="6" cy="16" r="3" fill="var(--ink)"/></svg>';
 var FLEET_THEME_BTN = '<button class="q-theme" id="q-theme" type="button" aria-label="Switch colour theme"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.8a6.2 6.2 0 0 1 0 12.4z" fill="currentColor"/></svg></button>';
 var FLEET_SHELL_JS = "<script>(function(){var r=document.documentElement,b=document.getElementById('q-theme');if(b)b.addEventListener('click',function(){var c=r.getAttribute('data-theme')||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'),n=c==='dark'?'light':'dark';r.setAttribute('data-theme',n);try{localStorage.setItem('qnfo-theme',n)}catch(e){console.debug('qnfo-fleet-dashboard: browser storage unavailable',e)}});var t=document.getElementById('q-top');if(t){var f=function(){t.classList.toggle('scrolled',scrollY>4)};addEventListener('scroll',f,{passive:true});f()}})()<\/script>";
+// The classic pages keep their own palette; the shell's mark on them reads the portfolio's --ds-* tokens, following the page's theme switch too.
+var RUNS_ON_TOKENS_CSS = ":root{" + dsVars(DS_TOKENS.light) + ";--ds-font:" + DS_TOKENS.font + ";--ds-r-s:8px;--ds-r-m:12px;--ds-r-l:16px}@media (prefers-color-scheme:dark){:root:not([data-theme=light]){" + dsVars(DS_TOKENS.dark) + "}}:root[data-theme=dark]{" + dsVars(DS_TOKENS.dark) + "}";
 function fleetHead(title) {
-  return '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#F5F7FB" media="(prefers-color-scheme: light)"><meta name="theme-color" content="#141A33" media="(prefers-color-scheme: dark)"><title>' + esc(title) + '</title>' + FLEET_BOOT + FLEET_FONTS + '<style>' + FLEET_DS + NAV_CSS + CMD_CSS + FLEET_CSS + AREAS_CSS + AREAS2_CSS + '</style></head><body>';
+  return '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#F5F7FB" media="(prefers-color-scheme: light)"><meta name="theme-color" content="#141A33" media="(prefers-color-scheme: dark)"><title>' + esc(title) + '</title>' + FLEET_BOOT + FLEET_FONTS + '<style>' + FLEET_DS + NAV_CSS + CMD_CSS + FLEET_CSS + AREAS_CSS + AREAS2_CSS + RUNS_ON_TOKENS_CSS + US_SHELL_CSS + '</style></head><body>';
 }
 var NAV_CSS = ".q-nav-areas{position:relative}.q-nav-areas>summary{display:flex;align-items:center;gap:7px;list-style:none;cursor:pointer;padding:6px 10px;border-radius:8px;white-space:nowrap}.q-nav-areas>summary::-webkit-details-marker{display:none}.q-nav-areas>summary:after{content:'';width:6px;height:6px;border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;transform:rotate(45deg);margin:-3px 0 0 2px}.q-nav-areas>summary:hover,.q-nav-areas[open]>summary,.q-nav-areas>summary[aria-current]{background:var(--wash);color:var(--ink)}.q-nav-area-panel{position:absolute;top:calc(100% + 8px);left:0;display:grid;min-width:200px;padding:6px;background:var(--surface);border:1px solid var(--rule);border-radius:10px;box-shadow:var(--shadow);z-index:50}.q-nav-area-panel a{text-decoration:none;padding:7px 10px;border-radius:7px;color:var(--muted)}.q-nav-area-panel a:hover,.q-nav-area-panel a[aria-current]{background:var(--wash);color:var(--ink)}";
 // ---- AREA-PAGES-1 (1.45.0): the navigation is the functional areas ----
@@ -10774,7 +10902,7 @@ function fleetTop(current, live, holder) {
   const nav = fleetNavItems();
   const cur = fleetNavCurrent(current);
   const desktopNav = '<a href="/"' + (cur === "overview" ? ' aria-current="page"' : '') + '>Overview</a><details class="q-nav-areas"><summary' + (AREA_REGISTRY.some(function(a) { return a.id === cur; }) ? ' aria-current="page"' : '') + '>Areas</summary><div class="q-nav-area-panel">' + AREA_REGISTRY.map(function(a) { return '<a href="/area/' + a.id + '"' + (a.id === cur ? ' aria-current="page"' : '') + '>' + esc(a.short) + '</a>'; }).join("") + '</div></details><a href="/cmd"' + (cur === "cmd" ? ' aria-current="page"' : '') + '>Command line</a>';
-  return '<header class="q-top" id="q-top"><div class="wrap"><a class="q-mark" href="/" aria-label="QNFO Fleet home">' + FLEET_MARK + 'QNFO <small>Fleet</small></a><nav class="q-nav" aria-label="Dashboard">' + desktopNav + '</nav>' + '<details class="q-menu"><summary aria-label="Menu"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 4h12M2 8h12M2 12h12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></summary><div class="q-menu-panel">' + nav.map(function(n) { return '<a href="' + n[1] + '"' + (n[2] === cur ? ' aria-current="page"' : '') + '>' + n[0] + '</a>'; }).join('') + '<a href="https://qnfo.org/">QNFO public site</a></div></details>' + (live ? '<span class="live"><span id="dot" class="dot g"></span><span id="age">live</span>' + (holder ? '<a href="#" id="so">sign out</a>' : '') + '</span>' : '<span class="live"></span>') + FLEET_THEME_BTN + '</div></header>' + fleetSubBar(current);
+  return '<header class="q-top" id="q-top"><div class="wrap"><a class="q-mark" href="/" aria-label="QNFO Fleet home">' + FLEET_MARK + 'QNFO <small>Fleet</small></a><nav class="q-nav" aria-label="Dashboard">' + desktopNav + '</nav>' + '<details class="q-menu"><summary aria-label="Menu"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 4h12M2 8h12M2 12h12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></summary><div class="q-menu-panel">' + nav.map(function(n) { return '<a href="' + n[1] + '"' + (n[2] === cur ? ' aria-current="page"' : '') + '>' + n[0] + '</a>'; }).join('') + '<a href="https://qnfo.org/">QNFO public site</a></div></details>' + (live ? '<span class="live"><span id="dot" class="dot g"></span><span id="age">live</span>' + (holder ? '<a href="#" id="so">sign out</a>' : '') + '</span>' : '<span class="live"></span>') + usMark() + FLEET_THEME_BTN + '</div></header>' + fleetSubBar(current);
 }
 // ---- FLEET-UI-2:END ----
 // ==== AREA-MAP platform: architecture self-model (ARCH-SELF-MODEL-1) ====
