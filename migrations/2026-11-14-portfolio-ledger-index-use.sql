@@ -11,7 +11,7 @@
 -- query says action = 'deployed'; without it EXPLAIN QUERY PLAN shows "SCAN l" per deploy row, with it "SEARCH l USING COVERING INDEX
 -- ux_project_ledger_deploy (task_id=?)". Every row this step writes has action 'deployed', so the added predicate changes no result.
 -- Prediction: that statement drops from ~137M to < 1M rows read a day (562 index probes a run instead of 562 x 2,908 scans).
--- Verify: d1QueriesAdaptiveGroups for the statement 24 h after the apply; EXPLAIN QUERY PLAN as above.
+-- Verify: d1QueriesAdaptiveGroups for the statement 24 h after the apply; EXPLAIN QUERY PLAN as above. Follow-up statements: agent_issues 1003559.
 UPDATE fleet_tasks
    SET definition = replace(definition, 'WHERE l.task_id=''deploy:''||dh.id)', 'WHERE l.task_id=''deploy:''||dh.id AND l.action=''deployed'')'),
        version = version + 1, updated_at = datetime('now')
