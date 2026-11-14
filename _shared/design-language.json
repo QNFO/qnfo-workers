@@ -1,0 +1,43 @@
+{
+  "id": "DESIGN-LANGUAGE-1",
+  "version": "1.0.0",
+  "doc": "Portfolio-to-product design language for the Quniverse. The Quniverse portfolio is DESIGN-SYSTEM-1 (_shared/design-system.js): neutrals, status colours, type and spacing scales, shape and tap size are fixed. A product (a domain plane or an app) varies only its accent hue inside hue_range_deg of the portfolio seed. _shared/design-language.mjs derives each product's accent tokens and proves every contrast pair in both themes; `node _shared/design-language.mjs --write` regenerates the css strings below and the test fails on a stale one. A worker adopts a product theme by passing its css to dsHead(title, description, extraCss). Same layers as ultrastable's doctrine/design.json, kept in each repository because the two brands are separate.",
+  "portfolio": {
+    "seed": "#1D4ED8",
+    "hue_range_deg": 40
+  },
+  "product_may_vary": [
+    "accent_seed"
+  ],
+  "products": {
+    "research": {
+      "plane": "qnfo.org",
+      "role": "papers, the fleet dashboard, research tools",
+      "accent_seed": "#1D4ED8",
+      "adopted_by": [
+        "qnfo-fleet-dashboard"
+      ]
+    },
+    "personal": {
+      "plane": "q08.org",
+      "role": "the companion, job search, markets: calm and personal",
+      "accent_seed": "#0E7490",
+      "adopted_by": []
+    },
+    "quantum": {
+      "plane": "qwav.org",
+      "role": "quantum computing surfaces",
+      "accent_seed": "#5B3FD1",
+      "adopted_by": []
+    }
+  },
+  "pending_adoption_shrink_only": [
+    "personal",
+    "quantum"
+  ],
+  "css": {
+    "research": ":root{--ds-accent:#3966e4;--ds-accent-hover:#1e51e1;--ds-on-accent:#ffffff;--ds-accent-soft:#dbe3fa;--ds-accent-soft-ink:#16285a;--ds-focus:#3966e4}@media (prefers-color-scheme:dark){:root{--ds-accent:#597ee9;--ds-accent-hover:#6689ea;--ds-on-accent:#0a1530;--ds-accent-soft:#1c263f;--ds-accent-soft-ink:#cbd4ec;--ds-focus:#597ee9}}",
+    "personal": ":root{--ds-accent:#0e7895;--ds-accent-hover:#0c6179;--ds-on-accent:#ffffff;--ds-accent-soft:#daf4fb;--ds-accent-soft-ink:#134d5d;--ds-focus:#0e7895}@media (prefers-color-scheme:dark){:root{--ds-accent:#14a8d1;--ds-accent-hover:#16b4df;--ds-on-accent:#0a1530;--ds-accent-soft:#1b3941;--ds-accent-soft-ink:#cae5ed;--ds-focus:#14a8d1}}",
+    "quantum": ":root{--ds-accent:#725ad8;--ds-accent-hover:#5d42d2;--ds-on-accent:#ffffff;--ds-accent-soft:#e3def7;--ds-accent-soft-ink:#271d54;--ds-focus:#725ad8}@media (prefers-color-scheme:dark){:root{--ds-accent:#8873dd;--ds-accent-hover:#927fe0;--ds-on-accent:#0a1530;--ds-accent-soft:#25203c;--ds-accent-soft-ink:#d3cee8;--ds-focus:#8873dd}}"
+  }
+}
