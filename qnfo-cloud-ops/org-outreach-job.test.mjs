@@ -30,6 +30,7 @@ function setup(cfg = {}, kill = "1") {
   audit.exec(readFileSync(new URL("../migrations/2026-11-14-org-outreach.sql", import.meta.url), "utf8"));
   audit.exec(readFileSync(new URL("../migrations/2026-11-14-org-targets-discovery.sql", import.meta.url), "utf8"));
   audit.exec(readFileSync(new URL("../migrations/2026-11-14-org-outreach-log-checked.sql", import.meta.url), "utf8"));
+  audit.exec(readFileSync(new URL("../migrations/2026-11-14-org-outreach-log-index.sql", import.meta.url), "utf8"));
   for (const [k, v] of Object.entries(cfg)) audit.prepare("UPDATE ops_config SET value = ? WHERE key = ?").run(v, k);
   outreach.exec("CREATE TABLE pipeline_state (key TEXT PRIMARY KEY, value TEXT); CREATE TABLE contacts (email TEXT, suppress INTEGER); CREATE TABLE sends (status TEXT, sent_at TEXT, contact_id INTEGER, kind TEXT);");
   outreach.prepare("INSERT INTO pipeline_state VALUES ('external_sends_enabled', ?)").run(kill);
@@ -125,6 +126,15 @@ function setup(cfg = {}, kill = "1") {
   mail(to[1], "Automatic reply: hi", "I am out of office, back soon.", new Date(Date.now() + 180000).toISOString()); // newest is an auto again
   const r = await s.run();
   ok(!r.notes.replies.stop, "senders that merely contain the address are never counted", r.notes.replies);
+  // a burst of vacation responders after a real answer cannot hide it (auto subjects are excluded in SQL before the LIMIT)
+  const s2 = setup({ org_outreach_mode: "live", org_outreach_postal: "1 Example Street" });
+  await s2.run();
+  const who = s2.sent[2].to;
+  const m2 = (subject, body, at) => s2.audit.prepare("INSERT INTO emails (sender, recipient, subject, body_text, received_at, status) VALUES (?, 'q@example.test', ?, ?, ?, 'received')").run(who, subject, body, at);
+  m2("Re: hi", "Interested. Let's schedule a call.", new Date(Date.now() + 60000).toISOString());
+  for (let i = 0; i < 40; i++) m2("Automatic reply: hi", "Out of office", new Date(Date.now() + 120000 + i * 1000).toISOString());
+  const r2b = await s2.run();
+  ok(r2b.notes.replies.interested === 1, "forty auto-replies after a real answer do not hide it", r2b.notes.replies);
   ok(r.notes.replies.interested === 1, "the newest non-auto reply wins even when an auto-reply arrived after it", r.notes.replies);
   ok(s.audit.prepare("SELECT COUNT(*) n FROM email_suppression WHERE lower(email) = ?").get(to[0].toLowerCase()).n === 0, "a lookalike sender cannot suppress an address");
   ok(s.audit.prepare("SELECT COUNT(*) n FROM org_outreach_log WHERE reply_kind IS NULL AND checked_at IS NOT NULL").get().n >= 1, "unanswered rows are stamped checked_at so they rotate out of the front of the window");

@@ -16,7 +16,8 @@ async function orgReplySync(env, out) {
       const since = String(r.sent_at || "").replace(" ", "T");
       const want = String(r.email).trim().toLowerCase();
       // LIKE only narrows the read; the sender must EQUAL the address we wrote to (bare or "Name <address>"), so another sender that merely contains it is never counted
-      const cands = ((await env.AUDIT.prepare("SELECT subject, body_text, sender FROM emails WHERE lower(sender) LIKE ?1 ESCAPE '\\' AND received_at > ?2 ORDER BY received_at DESC LIMIT 10").bind("%" + want.replace(/[\\%_]/g, "\\$&") + "%", since).all()).results || [])
+      // obvious auto-reply subjects are excluded in SQL before the LIMIT, so a burst of vacation responders cannot push a real answer out of the rows read
+      const cands = ((await env.AUDIT.prepare("SELECT subject, body_text, sender FROM emails WHERE lower(sender) LIKE ?1 ESCAPE '\\' AND received_at > ?2 AND lower(COALESCE(subject, '')) NOT LIKE 'automatic reply%' AND lower(COALESCE(subject, '')) NOT LIKE 'auto-reply%' AND lower(COALESCE(subject, '')) NOT LIKE 'autoreply%' AND lower(COALESCE(subject, '')) NOT LIKE 'out of office%' AND lower(COALESCE(subject, '')) NOT LIKE 'undeliverable%' ORDER BY received_at DESC LIMIT 30").bind("%" + want.replace(/[\\%_]/g, "\\$&") + "%", since).all()).results || [])
         .filter((c) => { const s = String(c.sender || "").trim().toLowerCase(); const a = /<([^>]+)>\s*$/.exec(s); return (a ? a[1].trim() : s) === want; });
       let kind = null;
       for (const m of cands) { // newest first: the first message that is not an auto-reply is the answer

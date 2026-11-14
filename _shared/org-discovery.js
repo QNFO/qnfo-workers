@@ -7,6 +7,7 @@
 
 export const DISCOVERY_VERSION = "1.0.0";
 export const USER_AGENT = "QNFO-research-bot (+https://qnfo.org)";
+export const BOT_TOKEN = "qnfo-research-bot";
 export const MAX_ATTEMPTS = 3;
 export const PAGES = ["/", "/about", "/contact"];
 
@@ -33,6 +34,7 @@ export function guessSegment(company, title) {
 export function seedRows(postings) {
   const seen = new Map();
   for (const p of postings || []) {
+    if (!p) continue;
     const org = String(p.company || "").trim();
     const key = normName(org);
     if (!org || key.length < 3) continue;
@@ -129,7 +131,8 @@ export function robotsAllows(robotsTxt) {
     lastWasUa = false;
     if (cur && /^disallow:\s*\/\s*$/i.test(l)) cur.disallowAll = true;
   }
-  const mine = groups.filter((g) => g.agents.some((a) => a !== "*" && a && USER_AGENT.toLowerCase().includes(a)));
+  // RFC 9309: a group applies when its token equals this crawler's product token, not when it is a fragment of it ("research" or "bot" is another crawler)
+  const mine = groups.filter((g) => g.agents.includes(BOT_TOKEN));
   const applicable = mine.length ? mine : groups.filter((g) => g.agents.includes("*"));
   return !applicable.some((g) => g.disallowAll);
 }
