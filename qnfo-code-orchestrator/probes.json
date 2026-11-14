@@ -8,13 +8,21 @@
         "\"ok\":true",
         "\"worker\":\"fleet-exec\""
       ]
+    },
+    {
+      "url": "https://qnfo-code-orchestrator.q08.workers.dev/health",
+      "contains": [
+        "\"ok\":true",
+        "\"ladder_demoted\":"
+      ]
     }
   ],
   "d1": [
     {
       "binding": "AUDIT_DB",
       "explain": [
-        "INSERT INTO code_tasks (repo, path, goal, status, created_at, updated_at) SELECT 'probe', 'probe', 'probe', 'queued', 0, 0"
+        "INSERT INTO code_tasks (repo, path, goal, status, created_at, updated_at) SELECT 'probe', 'probe', 'probe', 'queued', 0, 0",
+        "SELECT model, COUNT(*) AS n, SUM(CASE WHEN status = 'merged' THEN 1 ELSE 0 END) AS merged FROM code_tasks WHERE updated_at >= '2026-11-07' AND model IS NOT NULL AND status IN ('merged','failed','needs_human','reverted') GROUP BY model"
       ]
     }
   ]
