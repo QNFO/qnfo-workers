@@ -4,8 +4,33 @@
    and sends only when ORG.effectiveMode says live (ops_config org_outreach_mode = live, the external_sends_enabled kill switch and org_outreach_postal all set).
    Every live send is also written to outreach_log and contact_ledger so the shared caps and the first lane's dedupe see it. This file is spliced into worker.js by
    scripts/inline-org-outreach.mjs and uses that file's globals (outreachSuppressed, outreachSharedCount, OUTREACH_FROM, recordEvent, ...). */
+/* REPLY WRITE-BACK (the learner's reward): inbound mail lands in qnfo-audit.emails with its body. For each live send with no outcome yet, the newest message from that address
+   after the send is classified by intent (ORG.classifyReply); interested is the segment's positive, stop and decline end contact, stop also lands on email_suppression
+   (reason/source as qnfo-email writes it), an auto-reply is left for the real answer. The learner's view v_org_outreach_segments reads these rows. */
+async function orgReplySync(env, out) {
+  out.replies = {};
+  try {
+    const rows = (await env.AUDIT.prepare("SELECT id, target_id, email, sent_at FROM org_outreach_log WHERE mode = 'live' AND reply_kind IS NULL AND sent_at > datetime('now','-60 days') ORDER BY id LIMIT 50").all()).results || [];
+    for (const r of rows) {
+      const since = String(r.sent_at || "").replace(" ", "T");
+      const m = await env.AUDIT.prepare("SELECT subject, body_text FROM emails WHERE lower(sender) LIKE ?1 AND received_at > ?2 ORDER BY received_at DESC LIMIT 1").bind("%" + String(r.email).toLowerCase() + "%", since).first();
+      if (!m) continue;
+      const kind = ORG.classifyReply(String(m.body_text || "").slice(0, 4000) + "\n" + String(m.subject || ""));
+      if (kind === "auto") continue;
+      const o = ORG.outcomeFor(kind);
+      await env.AUDIT.prepare("UPDATE org_outreach_log SET reply_kind = ?2, replied_at = datetime('now') WHERE id = ?1 AND reply_kind IS NULL").bind(r.id, kind).run();
+      if (o.status) await env.AUDIT.prepare("UPDATE org_targets SET status = ?2, updated_at = datetime('now') WHERE id = ?1").bind(r.target_id, o.status).run();
+      if (o.suppress) await env.AUDIT.prepare("INSERT INTO email_suppression (email, reason, source) SELECT ?1, 'opt-out reply to organisation outreach', 'org-outreach' WHERE NOT EXISTS (SELECT 1 FROM email_suppression WHERE lower(email) = ?1)").bind(String(r.email).toLowerCase()).run();
+      out.replies[kind] = (out.replies[kind] || 0) + 1;
+      if (kind === "interested") await recordEvent(env, "outreach", "org-interested-" + Date.now().toString(36) + rndB36(4), "organisation replied with interest: " + r.email, { job: "org-outreach", email: r.email, reply: "interested" });
+    }
+  } catch (e) {
+    out.errors.push("reply sync: " + String(e && e.message || e).slice(0, 120));
+  }
+}
+__name(orgReplySync, "orgReplySync");
 async function jobOrgOutreach(env) {
-  const out = { mode: "off", candidates: 0, picked: 0, drafted: 0, sent: 0, skipped: {}, stop_synced: 0, capped: false, errors: [] };
+  const out = { mode: "off", candidates: 0, picked: 0, drafted: 0, sent: 0, skipped: {}, stop_synced: 0, replies: {}, capped: false, errors: [] };
   let cfg;
   try {
     const rows = (await env.AUDIT.prepare("SELECT key, value FROM ops_config WHERE key LIKE 'org_outreach_%'").all()).results || [];
@@ -23,6 +48,7 @@ async function jobOrgOutreach(env) {
   }
   const mode = ORG.effectiveMode(cfg, sendsEnabled);
   out.mode = mode;
+  await orgReplySync(env, out); // replies are read whatever the mode: a live send from an earlier run may have been answered
   if (mode === "off") return { status: "gated", notes: out };
   if (mode === "live" && !env.SEND_EMAIL) return { status: "error", notes: Object.assign(out, { errors: ["SEND_EMAIL binding missing"] }) };
   // STOP SYNC: an address that later landed on the suppression list closes its log row and its target (the learner counts it as a negative).
@@ -89,3 +115,71 @@ async function jobOrgOutreach(env) {
   return { status, notes: out };
 }
 __name(jobOrgOutreach, "jobOrgOutreach");
+/* ORG-OUTREACH-1 producer: seeds org_targets from the employers in jobsearch_matches, then for up to 5 organisations a run finds and verifies the organisation's own site,
+   reads its public pages (robots.txt honoured, same host only, identifying user agent, 3 pages), and queues the row when a verified address on that domain and a quotable
+   description exist and the fit clears the lane's minimum. After 3 attempts a row ends as no-site or no-contact; a low fit ends as low-fit. It never sends. */
+async function jobOrgDiscover(env) {
+  const out = { seeded: 0, processed: 0, queued: 0, ended: 0, rejected: {}, errors: [] };
+  const f = env.ORG_FETCH || fetch;
+  const get = async (url) => {
+    try {
+      const res = await f(url, { headers: { "user-agent": ORG_DISC.USER_AGENT, accept: "text/html,text/plain" }, redirect: "follow", signal: AbortSignal.timeout(8000) });
+      if (!res.ok) return null;
+      const u = new URL(res.url || url);
+      return { url: u.href, host: u.hostname.toLowerCase().replace(/^www\./, ""), html: String(await res.text()).slice(0, 300000) };
+    } catch (e) { return null; }
+  };
+  try {
+    const posts = (await env.AUDIT.prepare("SELECT company, title, url FROM jobsearch_matches WHERE company IS NOT NULL AND company <> '' ORDER BY COALESCE(score, 0) DESC, last_seen DESC LIMIT 200").all()).results || [];
+    for (const s of ORG_DISC.seedRows(posts)) {
+      const r = await env.AUDIT.prepare("INSERT OR IGNORE INTO org_targets (org, segment, website, discovered_from, status) VALUES (?1, ?2, ?3, 'jobsearch', 'discovered')").bind(s.org, s.segment, s.website).run();
+      out.seeded += Number(r && r.meta && r.meta.changes || 0);
+    }
+  } catch (e) {
+    out.errors.push("seed: " + String(e && e.message || e).slice(0, 120));
+  }
+  let rows = [];
+  try {
+    rows = (await env.AUDIT.prepare("SELECT id, org, segment, website, attempts FROM org_targets WHERE status = 'discovered' ORDER BY attempts ASC, id ASC LIMIT 5").all()).results || [];
+  } catch (e) {
+    return { status: "error", reason: "org_targets unreadable: " + String(e && e.message || e).slice(0, 160), notes: out };
+  }
+  const end = async (r, status, why) => { await env.AUDIT.prepare("UPDATE org_targets SET status = ?2, error = ?3, updated_at = datetime('now') WHERE id = ?1").bind(r.id, status, why).run(); out.ended++; };
+  const retry = async (r, why) => {
+    const att = Number(r.attempts || 0) + 1;
+    out.rejected[why] = (out.rejected[why] || 0) + 1;
+    if (att >= ORG_DISC.MAX_ATTEMPTS) { await env.AUDIT.prepare("UPDATE org_targets SET attempts = ?2 WHERE id = ?1").bind(r.id, att).run(); await end(r, why === "no-site" ? "no-site" : "no-contact", why + " after " + att + " attempts"); }
+    else await env.AUDIT.prepare("UPDATE org_targets SET attempts = ?2, error = ?3, updated_at = datetime('now') WHERE id = ?1").bind(r.id, att, why).run();
+  };
+  for (const r of rows) {
+    out.processed++;
+    try {
+      let origin = r.website || null;
+      if (!origin) {
+        for (const c of ORG_DISC.candidateSites(r.org)) {
+          const p = await get(c + "/");
+          if (p && ORG_DISC.verifySite(p.html, r.org)) { origin = new URL(p.url).origin; break; }
+        }
+        if (!origin) { await retry(r, "no-site"); continue; }
+        await env.AUDIT.prepare("UPDATE org_targets SET website = ?2 WHERE id = ?1").bind(r.id, origin).run();
+      }
+      const robots = await get(origin + "/robots.txt");
+      if (robots && !ORG_DISC.robotsAllows(robots.html)) { out.rejected.robots = (out.rejected.robots || 0) + 1; await end(r, "no-contact", "robots.txt disallows the site"); continue; }
+      const host = ORG_DISC.siteHost(origin), pages = [];
+      for (const path of ORG_DISC.PAGES) {
+        const p = await get(origin + path);
+        if (p && p.host === host) pages.push({ url: p.url, html: p.html });
+      }
+      const a = ORG_DISC.assess(r.org, r.segment, origin, pages);
+      if (!a.email) { await retry(r, a.reason); continue; }
+      if (a.fit < ORG.DEFAULTS.min_fit) { out.rejected["low-fit"] = (out.rejected["low-fit"] || 0) + 1; await end(r, "low-fit", "fit " + a.fit.toFixed(2) + " is under " + ORG.DEFAULTS.min_fit); continue; }
+      await env.AUDIT.prepare("UPDATE org_targets SET status = 'queued', email = ?2, fit = ?3, fit_note = ?4, source_url = ?5, website = ?6, error = NULL, updated_at = datetime('now') WHERE id = ?1").bind(r.id, a.email, a.fit, a.fit_note, a.source_url, origin).run();
+      out.queued++;
+    } catch (e) {
+      out.errors.push(String(r.id) + ": " + String(e && e.message || e).slice(0, 120));
+    }
+  }
+  const status = out.errors.length && !out.queued && !out.ended ? "error" : out.errors.length ? "partial" : "ok";
+  return { status, notes: out };
+}
+__name(jobOrgDiscover, "jobOrgDiscover");

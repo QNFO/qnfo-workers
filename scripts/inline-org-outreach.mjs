@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // scripts/inline-org-outreach.mjs: ORG-OUTREACH-1. qnfo-cloud-ops deploys worker.js as one module, so _shared/improve-loop.js (namespace ORG_IL, for chooseKnob),
-// _shared/org-outreach.js (namespace ORG) and the executor qnfo-cloud-ops/org-outreach-job.js are spliced between two markers. Idempotent: the first run also adds the
+// _shared/org-outreach.js (namespace ORG), _shared/org-discovery.js (namespace ORG_DISC) and the executor qnfo-cloud-ops/org-outreach-job.js are spliced between two markers. Idempotent: the first run also adds the
 // markers, the "org-outreach" job-map entry and its weekday schedule slot; later runs only regenerate the block. It writes worker.js, and the deployed-current mirror
 // only when that mirror was byte-identical to worker.js before the run (otherwise it says so and leaves the mirror for mirror-guard.py).
 // Usage: node scripts/inline-org-outreach.mjs   (then: python scripts/worker_release.py bump qnfo-cloud-ops --minor --note "ORG-OUTREACH-1 ...")
@@ -24,7 +24,7 @@ export function buildBlock(rootUrl) {
   const root = fileURLToPath(rootUrl);
   const rd = (p) => fs.readFileSync(root + p, "utf8");
   return BEGIN + "\n" + ns("ORG_IL", rd("_shared/improve-loop.js"), "_shared/improve-loop.js") + ns("ORG", rd("_shared/org-outreach.js"), "_shared/org-outreach.js")
-    + rd("qnfo-cloud-ops/org-outreach-job.js") + END;
+    + ns("ORG_DISC", rd("_shared/org-discovery.js"), "_shared/org-discovery.js") + rd("qnfo-cloud-ops/org-outreach-job.js") + END;
 }
 
 function once(text, anchor, insert, label) {
@@ -37,8 +37,8 @@ export function apply(text, block) {
   let w = text;
   if (w.indexOf(BEGIN) < 0) {
     w = once(w, ANCHOR_JOB, "\n" + BEGIN + "\n" + END, "markers");
-    w = once(w, ANCHOR_MAP, '\n  "org-outreach": jobOrgOutreach,', "job map");
-    w = once(w, ANCHOR_SCHEDULE, '\n  // ORG-OUTREACH-1: organisation lane after the paper-author lane, so the shared 8/day cap serves that lane first; drafts unless ORG.effectiveMode says live.\n  "org-outreach": { times: ["15:05"], days: "1-5", fixed: null },', "schedule");
+    w = once(w, ANCHOR_MAP, '\n  "org-outreach": jobOrgOutreach,\n  "org-discover": jobOrgDiscover,', "job map");
+    w = once(w, ANCHOR_SCHEDULE, '\n  // ORG-OUTREACH-1: organisation lane after the paper-author lane, so the shared 8/day cap serves that lane first; drafts unless ORG.effectiveMode says live.\n  "org-outreach": { times: ["15:05"], days: "1-5", fixed: null },\n  // ORG-OUTREACH-1 producer: seeds from jobsearch_matches and verifies up to 5 organisations every 120 minutes, every day; it never sends.\n  "org-discover": { times: ["00:25", "02:25", "04:25", "06:25", "08:25", "10:25", "12:25", "14:25", "16:25", "18:25", "20:25", "22:25"], days: "*", fixed: null },', "schedule");
   }
   const a = w.indexOf(BEGIN), b = w.indexOf(END);
   if (a < 0 || b < a) throw new Error("markers missing");
