@@ -20,6 +20,7 @@ CREATE TABLE fleet_crons (name TEXT PRIMARY KEY, cron_expr TEXT, task_id TEXT, e
 db.exec(readFileSync(new URL("./2026-11-14-analytics-loop.sql", import.meta.url), "utf8"));
 db.exec(readFileSync(new URL("./2026-11-14-ga4-consent-share.sql", import.meta.url), "utf8"));
 db.exec(readFileSync(new URL("./2026-11-14-analytics-null-1.sql", import.meta.url), "utf8")); // ANALYTICS-NULL-1 replaces both tasks: the steps below are the latest
+db.exec(readFileSync(new URL("./2026-11-14-analytics-null-2.sql", import.meta.url), "utf8")); // ANALYTICS-NULL-2 replaces the GA4 step, keeps enabled
 
 const task = db.prepare("SELECT definition, enabled FROM fleet_tasks WHERE id = 'analytics-loop'").get();
 const steps = JSON.parse(task.definition).steps;
@@ -39,6 +40,15 @@ const metric = (m) => db.prepare("SELECT last_value v FROM metric_registry WHERE
   db.exec("INSERT INTO reach_signals VALUES (date('now','-1 days'), 'cf-rum-human', '', 'host', 'h', 'pageviews', 1000, 'human')");
   runG();
   ok(metric("ga4_consent_share_7d") === "0.0050", "5 GA4 views over 1000 cookie-free views read 0.0050", metric("ga4_consent_share_7d"));
+  // ANALYTICS-NULL-2: cookie-free views present but the GA4 export not landed yet reads NULL, not 0.0000.
+  db.exec("DELETE FROM reach_signals WHERE source = 'ga4'");
+  runG();
+  ok(metric("ga4_consent_share_7d") === null, "GA4 rows absent with cookie-free rows present: the share is NULL, not 0.0000", metric("ga4_consent_share_7d"));
+  // ANALYTICS-NULL-2: re-applying the migration keeps an operator's disabled flag.
+  db.exec("UPDATE fleet_tasks SET enabled = 0 WHERE id = 'ga4-consent-share'");
+  db.exec(readFileSync(new URL("./2026-11-14-analytics-null-2.sql", import.meta.url), "utf8"));
+  ok(db.prepare("SELECT enabled e FROM fleet_tasks WHERE id = 'ga4-consent-share'").get().e === 0, "a disabled GA4 task stays disabled when the migration is applied again");
+  db.exec("UPDATE fleet_tasks SET enabled = 1 WHERE id = 'ga4-consent-share'");
   db.exec("DELETE FROM reach_signals");
   run();
   ok(metric("analytics_trend_precision_28d") === null, "no settled finding: the precision is NULL, not 0.00", metric("analytics_trend_precision_28d"));

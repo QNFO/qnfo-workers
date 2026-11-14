@@ -10,6 +10,15 @@ export const ISSUE_MINUTES = 7 * 24 * 60;
 // opens and closes the mirror from the D1 status, and D1's own age ladder (v_issue_age_ladder) advances the work. The seven-day policy
 // is for issues that have no D1 row, so it never closes a mirror (134 open D1 issues had their mirror closed not_planned on 2026-11-06).
 export const MIRROR_LABEL = "fleet-issue";
+// DP-SHELL-LIFECYCLE-1 (2026-11-14): qnfo-github-steward opens one handoff draft per mirrored issue on agent-steward/issue-<n>, holding
+// only docs/handoff/issue-<n>.md. Marking such a shell ready could never merge it (SELF-AUDIT-1 fails a docs-only PR) and armed a churn
+// loop instead: ready at 30 min, CYCLE-TIME-1 closes non-drafts idle 24 h, the steward re-opens the shell (239 shells by 2026-11-14,
+// issues 3800, 5184, 5402, 5412 each twice, zero code). A shell stays draft until the stale-PR lane, which marks any draft ready once
+// every merge gate passes, readies it because code landed on its branch; the steward closes the shell when a doer PR carries the issue.
+export const STEWARD_SHELL_PREFIX = "agent-steward/issue-";
+export function isStewardShell(pr) {
+  return String(pr?.head?.ref || "").startsWith(STEWARD_SHELL_PREFIX);
+}
 // Both signs the steward writes: the label and the "[#<agent_issues id>]" title prefix. A label alone (set by hand) does not exempt an issue.
 export function isD1Mirror(issue) {
   return (issue?.labels || []).some((l) => String(l?.name ?? l) === MIRROR_LABEL) && /^\[#\d+\]/.test(String(issue?.title || ""));
@@ -108,6 +117,7 @@ export async function run(opts, deps = {}) {
   catch (e) { recordError("list pulls", "", e); }
   for (const listed of pulls) {
     if (!listed.draft || !olderThan(listed.created_at, DRAFT_MINUTES, now)) continue;
+    if (isStewardShell(listed)) { (sum.steward_shells_left_draft ||= []).push(listed.number); continue; }
     try {
       const pr = requireOk(await api.req("GET", "/repos/" + repo + "/pulls/" + listed.number), "read pull");
       if (pr.state !== "open" || !pr.draft || !olderThan(pr.created_at, DRAFT_MINUTES, now)) continue;

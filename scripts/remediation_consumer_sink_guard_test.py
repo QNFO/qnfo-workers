@@ -52,7 +52,15 @@ def fake_d1(sql, params=None):
     if s.startswith("INSERT INTO cloud_ops_events"):
         events.append(params)
         return []
+    if s.startswith("INSERT INTO agent_issues"):
+        # PROBE-TOKEN-WRITE-GUARD-1: the SQL dedupes against an open row of the same title; model that here
+        if not any(i[0] == params[0] for i in issues):
+            issues.append(params)
+        return []
     return []
+
+
+issues = []
 
 
 logged = []
@@ -92,6 +100,16 @@ try:
     check(local["skipped"] == 1 and local["pass"] == 0 and local["fail"] == 0, "it counts as skipped, never as pass or fail", local)
     check(contract[2] == "probe-error", "the contract is stamped probe-error (the autoclose triggers read that as a failing sibling)", contract)
     check(len(events) == 1 and "error=free-text-value" in events[0][1] and SECRET not in events[0][1], "one remediation.probe-error audit row names the reason", events)
+
+    # PROBE-TOKEN-WRITE-GUARD-1: the refusal files one issue naming the class, never the value; a second refusal files none
+    check(len(issues) == 1 and "issue-1" in issues[0][0] and "free-text-value" in issues[0][1], "the first free-text refusal files one issue naming the class", issues)
+    check(SECRET not in repr(issues), "the filed issue does not carry the value", issues)
+    check("closing probe:" in issues[0][1] and "class = 'issue-1'" in issues[0][1], "the issue carries a closing probe on its contract", issues[0][1][-200:])
+    run(SECRET)
+    check(len(issues) == 1, "a second refusal of the same contract files no second issue", len(issues))
+    del issues[:]
+    run("ok", expected="ok")
+    check(issues == [], "a token pass files no issue", issues)
 
     # the same through the expected column
     rows, contract, local, rec = run("ok", expected=SECRET)
