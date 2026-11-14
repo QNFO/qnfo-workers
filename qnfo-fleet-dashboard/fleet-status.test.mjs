@@ -212,11 +212,13 @@ const seed = (db) => {
   let matches = 0, puts = 0, ttl = null;
   globalThis.caches = { default: {
     async match(request) {
-      matches++;
+      // The shared reach-scorecard cache (D1-READS-COST, cache.invalid) is not the page cache this test counts.
+      if (!/cache\.invalid/.test(request.url)) matches++;
       const cached = entries.get(request.url);
       return cached ? cached.clone() : undefined;
     },
     async put(request, response, options) {
+      if (/cache\.invalid/.test(request.url)) { entries.set(request.url, response.clone()); return; }
       puts++;
       ttl = options && options.expirationTtl;
       entries.set(request.url, response.clone());
