@@ -978,7 +978,7 @@ export class CodeSession extends Agent<Env, State> {
   }
 
   // The effective scope of a turn: the session's scope only when this turn's own request carried it too; a turn with no recorded scope (an older row, a recovered fiber) is read-only.
-  private turnScope(turn: number): Scope {
+  private turnScope(turn: number): Scope { // standards-ok: a method definition with a return type, not a call
     const session = this.sessionRow();
     if (!session) return "read";
     const r: any = this.sql`SELECT turn_scope FROM code_session_turns WHERE turn = ${turn}`;
