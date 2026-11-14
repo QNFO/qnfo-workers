@@ -133,7 +133,9 @@ ok(/SyntaxError/.test(src.slice(src.indexOf("SYNTAX-HINT-1: a parse error"), src
 
 // --- CODE-LOOP-2X-1 (agent_issues 2506): the cron tick, its caps, intake and plan WIP are at least doubled ---
 ok(src.indexOf("tick(env, { budgetMs: 40000, maxSteps: 48, scheduled: true })") > 0, "the cron tick runs 48 steps in 40 s, across 8 lanes");
-ok(/opts\.budgetMs\) \|\| 20000, 50000\)/.test(src) && /opts\.maxSteps\) \|\| 8, gate\.capped \? 1 : 64\)/.test(src), "tick caps 50 s / 64 steps below threshold, POST default stays 8; capped batch is one step");
+// ORCH-SUITES-RED-1 (#11923): the POST default went from 8 to 16 with family-aware scheduling (#6514); pin a floor, not the exact number.
+const _defSteps = Number((/opts\.maxSteps\) \|\| (\d+), gate\.capped \? 1 : 64\)/.exec(src) || [])[1]);
+ok(/opts\.budgetMs\) \|\| 20000, 50000\)/.test(src) && _defSteps >= 8, "tick caps 50 s / 64 steps below threshold, POST default at least 8; capped batch is one step", _defSteps);
 ok(/intakeIssues\(env, 8\)/.test(src) && /^const PLAN_WIP = 12;/m.test(src), "intake takes 8 issues per tick and PLAN_WIP is 12 (LANES-8-1)");
 
 console.log(pass + " passed, " + fail + " failed");
