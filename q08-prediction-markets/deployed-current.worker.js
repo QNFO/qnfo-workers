@@ -1,6 +1,6 @@
 // q08-prediction-markets: the paper-trading proving ground for q08's information edge (PM-CHARTER-1).
 // Paper money only. No wallet, no exchange key, no order ever leaves this worker: the only executor in this file writes D1 rows.
-var VERSION = "1.17.0-codeagent";
+var VERSION = "1.17.1-codeagent";
 
 // ---------- charter (the machine-readable form; GET /api/charter serves it with the live evidence) ----------
 export const CHARTER = {
@@ -3073,13 +3073,14 @@ async function erWithRail(res, request) {
     if (!erProp(u.hostname) || ER_SKIP_PATH.test(u.pathname)) return res;
     var dest = request.headers.get("Sec-Fetch-Dest");
     if (dest && dest !== "document") return res; // a frame, an embed or a prefetch is not a place to send people onward
-    var html = await res.text();
+    var html = await res.clone().text();
     var out = erInject(html, request.url, Math.floor(Date.now() / 86400000));
     var hd = new Headers(res.headers);
     hd.delete("Content-Length");
     hd.set("X-Explore-Rail", out === html ? "none" : ER_VERSION);
     return new Response(out, { status: res.status, statusText: res.statusText, headers: hd });
   } catch (e) {
+    // The original response body was never consumed (we read a clone), so it is still safe to hand back untouched.
     return res;
   }
 }
