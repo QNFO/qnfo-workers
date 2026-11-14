@@ -49,7 +49,7 @@ console.log("ok   the same note twice is one note, with no second sorting call")
 // COMPANION-VOICE-FALLBACK-1 and the cheaper twin fallback.
 const page = C.PAGE_HTML;
 assert.ok(!/Type it, or use/.test(page), "never asks to type");
-assert.ok(page.includes("function qcRec(){") && page.includes("dictate(mic,'qc-text',capText)"), "quick-add mic falls back to recording");
+assert.ok(page.includes("function qcMic(){var mic=$('qc-mic');micStart(mic,") && page.includes("micText(bl)"), "quick-add mic records and the server writes the words (COMPANION-VOICE-2)");
 const worker = fs.readFileSync(new URL("./worker.js", import.meta.url), "utf8");
 assert.ok(worker.includes('var TWIN_PREVIOUS = "@cf/deepseek-ai/deepseek-v4-flash-0731"'));
 assert.ok(worker.indexOf('"@cf/deepseek-ai/deepseek-v4-pro-0813"\n  // 120,000') > worker.indexOf('"@cf/moonshotai/kimi-k2.6",'), "deepseek-v4-pro is the last resort");
