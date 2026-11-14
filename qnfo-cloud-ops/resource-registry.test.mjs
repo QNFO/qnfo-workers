@@ -27,3 +27,21 @@ test("CF-RESOURCE-ACTIONS-1: creates only R2 buckets, never deletes, files dedup
   assert.match(job, /status = 'open' LIMIT 1/);
   assert.match(job, /closing probe:/);
 });
+test("CF-RESOURCE-USAGE-HONEST-1: a failed or empty usage read never yields 'unused'", () => {
+  assert.match(job, /const workerUseOk = !errs\.some\(\(e\) => e\.startsWith\("worker-usage"\)\) && Object\.keys\(wuse\)\.length > 0/);
+  assert.match(job, /const d1UseOk = !errs\.some\(\(e\) => e\.startsWith\("d1-usage"\)\) && Object\.keys\(d1use\)\.length > 0/);
+  const w = job.slice(job.indexOf('} else if (it.t === "worker")'), job.indexOf("if (cost) usd += cost;"));
+  assert.ok(w.indexOf("!workerUseOk") >= 0 && w.indexOf("!workerUseOk") < w.indexOf('verdict = "unused"'));
+  const d = job.slice(job.indexOf('if (it.t === "d1")'), job.indexOf('} else if (it.t === "worker")'));
+  assert.ok(d.indexOf("!d1UseOk") >= 0 && d.indexOf("!d1UseOk") < d.indexOf('verdict = "unused"'));
+});
+test("CF-RESOURCE-USAGE-HONEST-1: the issue probe names the registry row id and accepts resolved", () => {
+  assert.match(job, /SELECT id,rtype,name,verdict/);
+  assert.match(job, /verdict IN \('ok', 'resolved'\) THEN 'ok'/);
+  assert.match(job, /WHERE id = '" \+ String\(f\.id\)/);
+  assert.ok(!job.includes("'\" + f.rtype + \":\" + String(f.name)"), "probe must not rebuild the id from rtype:name (dangling rows are dangling:<type>:<name>)");
+});
+test("CF-RESOURCE-USAGE-HONEST-1: dangling rows resolve only after a complete binding scan; the upsert batch is not re-run", () => {
+  assert.match(job, /if \(settingsFailed === 0\) dstmts\.push/);
+  assert.ok(!/if \(missing\.size\) for \(let i = 0; i < stmts\.length/.test(job));
+});
