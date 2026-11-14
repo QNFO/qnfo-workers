@@ -22,10 +22,10 @@ export const journeys = [
       await u.tap("Run", { within: "#cform", wait: 2500 });
       await u.see(LEE_REPLY, { within: "#cout", timeout: 10000 }); await u.see("list_zones", { within: "#cout" }); await u.screen("cmd-lee-ask");
     } },
-  { id: "cmd-lee-chip", title: "Tap the lee chip on /cmd and see what Lee can read",
+  { id: "cmd-lee-chip", title: "Tap the Lee chip on /cmd and see what Lee can read",
     async run(u) {
       await u.open("/__harness/session"); await u.open("/cmd"); await u.see("Signed in: actions enabled");
-      await u.tap("lee", { within: "#cchips", wait: 1000 });
+      await u.tap("Lee: Cloudflare help", { within: "#cchips", wait: 1000 });
       await u.see("Lee reads the Cloudflare account", { within: "#cout" }); await u.see("read only", { within: "#cout" });
     } },
   { id: "lee-health-live", title: "The production worker's Cloudflare token reaches the account (read-only check of /api/cmd/lee/health)", modes: ["live"],

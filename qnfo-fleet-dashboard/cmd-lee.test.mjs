@@ -147,7 +147,7 @@ try {
 } finally {
   globalThis.fetch = realFetch;
 }
-ok(/data-c="cf help">lee</.test(src), "the page has a lee chip");
+ok(/data-c="cf help">Lee: Cloudflare help</.test(src), "the page has a Lee chip that says what Lee is");
 // MODEL-FLOOR-1: the original Lee ran a llama model, which the model floor bans (scripts/model-floor-guard.mjs flagged var LEE_MODEL on 2026-11-05); the default must be in the policy table.
 const leeModel = /var LEE_MODEL = "([^"]+)"/.exec(src)[1];
 const policy = JSON.parse(readFileSync(new URL("../scripts/model-policy.json", import.meta.url), "utf8"));
