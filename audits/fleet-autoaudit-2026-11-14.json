@@ -1,12 +1,7 @@
 {
-  "audited_at": "2026-11-14 11:01:08",
-  "d1_write_failures": [
-    [
-      "us-idea-b7adf8fd63",
-      "HTTP 429: b'{\"messages\":[],\"result\":null,\"success\":false,\"errors\":[{\"code\":7429,\"message\":\"internal error; reference = m"
-    ]
-  ],
-  "d1_writes_ok": 16,
+  "audited_at": "2026-11-14 11:03:17",
+  "d1_write_failures": [],
+  "d1_writes_ok": 17,
   "guard": {
     "_guard_rc": 0,
     "ahead": [],
