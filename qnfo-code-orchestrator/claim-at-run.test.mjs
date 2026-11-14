@@ -85,18 +85,22 @@ const callsFor = (p, key) => guard.calls.filter((x) => x.path === p && x.body.ke
 const inMin = (m) => new Date(Date.now() + m * 60e3).toISOString();
 const setClaim = (id, patch) => db.prepare("UPDATE code_tasks SET ctx = json_set(ctx, '$.claim', json(?)) WHERE id = ?").run(JSON.stringify(Object.assign({}, ctxOf(id).claim, patch)), id);
 
-// 1. enqueue takes no claim
+// 1. ORCH-SUITES-RED-1 (#11923): since ENQUEUE-CLAIM-RESERVATION-1 (#2168) enqueue takes one short reservation (CLAIM_UNSTARTED_TTL_S = 900 s), tagged so the
+//    sweep can tell it from a legacy claim; before it, this part asserted that enqueue took no claim at all.
 const KA = "file:fx-a/worker.js";
 const A = await addTask("fx-a/worker.js", "claim-at-run fixture A: queued, not started");
-ok(A.ok && callsFor("/work-lock/acquire", KA).length === 0 && !ctxOf(A.id).claim && !guard.lease[KA], "1 enqueue sends no acquire and records no claim", { calls: guard.calls, ctx: ctxOf(A.id) });
+const acq1 = callsFor("/work-lock/acquire", KA);
+ok(A.ok && acq1.length === 1 && acq1[0].body.ttl_sec === 900 && ctxOf(A.id).claim && ctxOf(A.id).claim.reservation === true && guard.lease[KA], "1 enqueue takes one tagged 900 s reservation", { calls: guard.calls, ctx: ctxOf(A.id) });
 
 // 2. the sweep never claims an unstarted task (not due: a 15-minute claim-held deferral)
 db.prepare("UPDATE code_tasks SET lease_until = ? WHERE id = ?").run(inMin(3), A.id);
 guard.calls.length = 0;
 let t = await tick();
-ok(t.steps === 0 && guard.calls.length === 0 && t.claims.taken === 0 && t.claims.renewed === 0, "2 the sweep sends no guard call for a queued task that has not started", { t, calls: guard.calls });
+ok(t.steps === 0 && guard.calls.length === 0 && t.claims.taken === 0 && t.claims.renewed === 0 && t.claims.unstarted === 0, "2 the sweep sends no guard call for a queued task that has not started, and keeps its live reservation", { t, calls: guard.calls });
 
-// 3. a claim taken at enqueue before 0.14.5, near expiry: released, never renewed
+// 3. a claim taken at enqueue before 0.14.5, near expiry: released, never renewed. The reservation from part 1 expires first (the fixture guard drops it),
+//    then the untagged legacy claim replaces it.
+delete guard.lease[KA];
 const tokA = await startClaim(A.id, "fx-a/worker.js");
 setClaim(A.id, { expires_at: inMin(10), renewals: 3 });
 guard.calls.length = 0;
