@@ -1352,6 +1352,27 @@ def sink_guard(c, exp, obs):
             raise ValueError("free-text-value")
 
 
+# PROBE-TOKEN-WRITE-GUARD-1 (2026-11-14, pillar autonomy; GitHub #11901). A probe-author-1 probe that returns a sentence is refused by sink_guard on every pass, so its issue can
+# never close and the only signal was LOOP-BREAKER-1 after three recurrences in 24 h (#11883: three such probes sat there). The first refusal now files one agent_issues row
+# per contract, deduped against an open row of the same title, that names the class and the fix and never the value (the value is what the guard keeps out of public logs).
+FREE_TEXT_TITLE = "PROBE-TOKEN-WRITE-GUARD-1: %s returns free text the sink guard refuses"
+
+
+def file_free_text_probe(cls):
+    title = FREE_TEXT_TITLE % str(cls)[:80]
+    desc = ("Charter pillar: autonomy. The remediation_contracts probe of class %s (module probe-author-1) returned an expected or observed value that is not one short "
+            "token ([A-Za-z0-9_.:+-]{1,64}), so scripts/remediation_consumer.py sink_guard refuses every pass as free-text-value and the issue cannot close. Rewrite verify_probe "
+            "by migration so both columns return tokens (e.g. 'ok', 'age-days:44', 'yield:0.40'); migrations/2026-11-14-probe-author-tokens.sql is the pattern.\n"
+            "closing probe: SELECT CASE WHEN last_verdict IS NULL OR last_verdict <> 'probe-error' THEN 'ok' ELSE 'fail' END FROM remediation_contracts WHERE class = '%s'"
+            ) % (str(cls)[:80], str(cls)[:80].replace("'", "''"))
+    try:
+        d1("INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at) "
+           "SELECT ?, ?, 'remediation-consumer', 'bug', 'medium', 'open', CAST(strftime('%s','now') AS INTEGER) * 1000, CAST(strftime('%s','now') AS INTEGER) * 1000 "
+           "WHERE NOT EXISTS (SELECT 1 FROM agent_issues WHERE title = ? AND status = 'open')", [title, desc, title])
+    except Exception as e:  # noqa: BLE001 - filing never changes the verdict
+        log("contract %s free-text issue not filed: %s" % (cls, str(e)[:120]))
+
+
 def consume_d1(c, rec, out, trusted):
     """Run one d1-query (or d1-query@plane) contract: the REMEDIATION-CONSUMER-1 path, unchanged."""
     cls = c.get("class")
@@ -1503,6 +1524,8 @@ def consume_one(c, trusted):
                 )
             except Exception:  # noqa: BLE001 - the ledger write never changes the verdict
                 pass
+            if str(e) == "free-text-value":
+                file_free_text_probe(cls)
     if rec.get("transient"):
         # PROBE-TRANSIENT-1: a real 'pass' or 'fail' stays the contract's verdict; the streak marker only replaces a missing or refusal verdict
         prior = str(c.get("last_verdict") or "")
