@@ -29,6 +29,7 @@ function setup(cfg = {}, kill = "1") {
   audit.exec("DROP TABLE email_suppression; CREATE TABLE email_suppression (email TEXT, reason TEXT, source TEXT);");
   audit.exec(readFileSync(new URL("../migrations/2026-11-14-org-outreach.sql", import.meta.url), "utf8"));
   audit.exec(readFileSync(new URL("../migrations/2026-11-14-org-targets-discovery.sql", import.meta.url), "utf8"));
+  audit.exec(readFileSync(new URL("../migrations/2026-11-14-org-outreach-log-checked.sql", import.meta.url), "utf8"));
   for (const [k, v] of Object.entries(cfg)) audit.prepare("UPDATE ops_config SET value = ? WHERE key = ?").run(v, k);
   outreach.exec("CREATE TABLE pipeline_state (key TEXT PRIMARY KEY, value TEXT); CREATE TABLE contacts (email TEXT, suppress INTEGER); CREATE TABLE sends (status TEXT, sent_at TEXT, contact_id INTEGER, kind TEXT);");
   outreach.prepare("INSERT INTO pipeline_state VALUES ('external_sends_enabled', ?)").run(kill);
@@ -109,6 +110,32 @@ function setup(cfg = {}, kill = "1") {
   ok(s.audit.prepare("SELECT COUNT(*) n FROM org_outreach_log WHERE reply_kind IS NULL AND mode='live'").get().n === 1, "the auto-reply row stays open for the real answer");
   const r2 = await s.run();
   ok(!r2.notes.replies.interested && !r2.notes.replies.stop, "a reply is counted once", r2.notes.replies);
+}
+{ // review-gate findings: exact sender match, a real reply behind an auto-reply, and a window that cannot fill
+  const s = setup({ org_outreach_mode: "live", org_outreach_postal: "1 Example Street" });
+  await s.run();
+  const to = s.sent.map((m) => m.to);
+  const t0 = new Date(Date.now() + 60000).toISOString(), t1 = new Date(Date.now() + 120000).toISOString();
+  const mail = (sender, subject, body, at) => s.audit.prepare("INSERT INTO emails (sender, recipient, subject, body_text, received_at, status) VALUES (?, 'qnfo@example.test', ?, ?, ?, 'received')").run(sender, subject, body, at);
+  mail("x" + to[0], "Re: hi", "stop", t0);                                                      // the address embedded in a longer one (prefix)
+  mail(to[0] + ".evil.net", "Re: hi", "stop", t0);                                              // the address embedded in a longer one (suffix)
+  mail("Look Alike <" + to[0] + ".evil.net>", "Re: hi", "stop", t0);
+  mail(to[1], "Automatic reply: hi", "I am out of office until Monday.", t0);                    // auto first ...
+  mail("Real Person <" + to[1] + ">", "Re: hi", "Happy to talk. Let's schedule a call.", t1);  // ... real answer after it, newest
+  mail(to[1], "Automatic reply: hi", "I am out of office, back soon.", new Date(Date.now() + 180000).toISOString()); // newest is an auto again
+  const r = await s.run();
+  ok(!r.notes.replies.stop, "senders that merely contain the address are never counted", r.notes.replies);
+  ok(r.notes.replies.interested === 1, "the newest non-auto reply wins even when an auto-reply arrived after it", r.notes.replies);
+  ok(s.audit.prepare("SELECT COUNT(*) n FROM email_suppression WHERE lower(email) = ?").get(to[0].toLowerCase()).n === 0, "a lookalike sender cannot suppress an address");
+  ok(s.audit.prepare("SELECT COUNT(*) n FROM org_outreach_log WHERE reply_kind IS NULL AND checked_at IS NOT NULL").get().n >= 1, "unanswered rows are stamped checked_at so they rotate out of the front of the window");
+}
+{ // wildcard characters in an address cannot widen the match
+  const s = setup({ org_outreach_mode: "live", org_outreach_postal: "1 Example Street" });
+  await s.run();
+  s.audit.prepare("UPDATE org_outreach_log SET email = 'info_x@alpha.org' WHERE id = 1").run();
+  s.audit.prepare("INSERT INTO emails (sender, recipient, subject, body_text, received_at, status) VALUES ('infoyx@alpha.org', 'q@example.test', 'Re', 'stop', ?, 'received')").run(new Date(Date.now() + 60000).toISOString());
+  const r = await s.run();
+  ok(!r.notes.replies.stop, "an underscore in the address does not match another character", r.notes.replies);
 }
 { // discovery: seed from jobsearch, verify the site, read the public address, queue; robots and unverified sites are refused
   const s = setup();

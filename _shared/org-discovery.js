@@ -35,7 +35,7 @@ export function seedRows(postings) {
   for (const p of postings || []) {
     const org = String(p.company || "").trim();
     const key = normName(org);
-    if (!org || key.length < 3 || seen.has(key)) continue;
+    if (!org || key.length < 3) continue;
     const segment = guessSegment(org, p.title);
     if (!segment) continue;
     let website = null;
@@ -43,6 +43,8 @@ export function seedRows(postings) {
       const u = new URL(p.url);
       if (u.protocol === "https:" && !ATS_HOST.test(u.hostname) && !/^(jobs|careers|apply)\./i.test(u.hostname)) website = u.origin;
     } catch (e) { /* no usable url */ }
+    const have = seen.get(key);
+    if (have) { if (!have.website && website) have.website = website; continue; } // a later posting on the organisation's own host fills in a site the first one lacked
     seen.set(key, { org, segment, website });
   }
   return [...seen.values()];
@@ -117,14 +119,19 @@ export function scoreFit(pageText, segment) {
 
 // ROBOTS: false when the wildcard group disallows the whole site. Anything unreadable allows nothing it cannot read: the caller treats a missing file as allowed.
 export function robotsAllows(robotsTxt) {
-  let inStar = false, star = false;
+  // groups: each User-agent line starts (or extends) a group; a group naming this bot overrides the wildcard group, as the robots standard says
+  const groups = [];
+  let cur = null, lastWasUa = false;
   for (const raw of String(robotsTxt || "").split(/\r?\n/)) {
     const l = raw.replace(/#.*/, "").trim();
     const ua = /^user-agent:\s*(.+)$/i.exec(l);
-    if (ua) { inStar = ua[1].trim() === "*"; if (inStar) star = true; continue; }
-    if (inStar && /^disallow:\s*\/\s*$/i.test(l)) return false;
+    if (ua) { if (!cur || !lastWasUa) { cur = { agents: [], disallowAll: false }; groups.push(cur); } cur.agents.push(ua[1].trim().toLowerCase()); lastWasUa = true; continue; }
+    lastWasUa = false;
+    if (cur && /^disallow:\s*\/\s*$/i.test(l)) cur.disallowAll = true;
   }
-  return true;
+  const mine = groups.filter((g) => g.agents.some((a) => a !== "*" && a && USER_AGENT.toLowerCase().includes(a)));
+  const applicable = mine.length ? mine : groups.filter((g) => g.agents.includes("*"));
+  return !applicable.some((g) => g.disallowAll);
 }
 
 // ASSESS one organisation from the pages read: pages = [{url, html}]. Returns {email, fit_note, fit, source_url, role_address} when it can be queued, else {reason}.

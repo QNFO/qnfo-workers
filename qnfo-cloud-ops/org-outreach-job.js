@@ -10,13 +10,20 @@
 async function orgReplySync(env, out) {
   out.replies = {};
   try {
-    const rows = (await env.AUDIT.prepare("SELECT id, target_id, email, sent_at FROM org_outreach_log WHERE mode = 'live' AND reply_kind IS NULL AND sent_at > datetime('now','-60 days') ORDER BY id LIMIT 50").all()).results || [];
+    // least recently checked first, and every row is stamped checked_at, so unanswered and auto-replied rows cannot fill the window of 50
+    const rows = (await env.AUDIT.prepare("SELECT id, target_id, email, sent_at FROM org_outreach_log WHERE mode = 'live' AND reply_kind IS NULL AND sent_at > datetime('now','-60 days') ORDER BY COALESCE(checked_at, sent_at) ASC LIMIT 50").all()).results || [];
     for (const r of rows) {
       const since = String(r.sent_at || "").replace(" ", "T");
-      const m = await env.AUDIT.prepare("SELECT subject, body_text FROM emails WHERE lower(sender) LIKE ?1 AND received_at > ?2 ORDER BY received_at DESC LIMIT 1").bind("%" + String(r.email).toLowerCase() + "%", since).first();
-      if (!m) continue;
-      const kind = ORG.classifyReply(String(m.body_text || "").slice(0, 4000) + "\n" + String(m.subject || ""));
-      if (kind === "auto") continue;
+      const want = String(r.email).trim().toLowerCase();
+      // LIKE only narrows the read; the sender must EQUAL the address we wrote to (bare or "Name <address>"), so another sender that merely contains it is never counted
+      const cands = ((await env.AUDIT.prepare("SELECT subject, body_text, sender FROM emails WHERE lower(sender) LIKE ?1 ESCAPE '\\' AND received_at > ?2 ORDER BY received_at DESC LIMIT 10").bind("%" + want.replace(/[\\%_]/g, "\\$&") + "%", since).all()).results || [])
+        .filter((c) => { const s = String(c.sender || "").trim().toLowerCase(); const a = /<([^>]+)>\s*$/.exec(s); return (a ? a[1].trim() : s) === want; });
+      let kind = null;
+      for (const m of cands) { // newest first: the first message that is not an auto-reply is the answer
+        const k = ORG.classifyReply(String(m.body_text || "").slice(0, 4000) + "\n" + String(m.subject || ""));
+        if (k !== "auto") { kind = k; break; }
+      }
+      if (!kind) { await env.AUDIT.prepare("UPDATE org_outreach_log SET checked_at = datetime('now') WHERE id = ?1").bind(r.id).run(); continue; }
       const o = ORG.outcomeFor(kind);
       await env.AUDIT.prepare("UPDATE org_outreach_log SET reply_kind = ?2, replied_at = datetime('now') WHERE id = ?1 AND reply_kind IS NULL").bind(r.id, kind).run();
       if (o.status) await env.AUDIT.prepare("UPDATE org_targets SET status = ?2, updated_at = datetime('now') WHERE id = ?1").bind(r.target_id, o.status).run();
