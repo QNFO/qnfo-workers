@@ -60,11 +60,20 @@ INSERT OR IGNORE INTO queue_sla (stuck_type, queue, definition, cycle_min, sla_m
  ('outreach-needs-email', 'outreach_queue', 'status needs-email or needs-contact for more than 180 min', 60, 180,
   'skip: status skipped-no-email, prior status kept in error', 'qnfo-cloud-ops', 'outreach_waiting'),
  ('code-task-stalled', 'code_tasks', 'unfinished code task not updated for 180 min', 10, 180,
-  'none automatic (the code loop owns retries); the metric trigger files the issue', 'qnfo-code-orchestrator', 'code_tasks_stalled'),
+  'close: tasks whose issue is closed/superseded get status closed with the prior status kept in error; otherwise nudge owner by setting updated_at and a retry note (issue #2971)', 'qnfo-code-orchestrator', 'code_tasks_stalled'),
  ('issue-unprobed', 'agent_issues', 'open issue whose latest probe verdict is older than 60 min, or that never had one', 60, 60,
   'cadence: every contract of an open issue is due hourly; qnfo-fleet-control evaluates up to 150 per tick', 'qnfo-fleet-control', 'issues_unprobed_60m'),
  ('issue-unremediated', 'agent_issues', 'open issue older than 180 min with no doer: no code-task line, no active machine probe and no work claim', 60, 180,
-  'none automatic yet; the metric trigger names the issues and the lever', 'qnfo-ops', 'issues_without_doer_3h');
+  'probe: insert an active remediation contract with verify_probe not LIKE ''needs%'' (machine probe) so the issue has a doer (issue #2971)', 'qnfo-ops', 'issues_without_doer_3h');
+
+-- issue #2971: INSERT OR IGNORE does not update pre-existing rows, so re-apply the new automatic fixes for
+-- issue-unremediated and code-task-stalled; the 10-minute fixer can then act on both columns instead of only filing issues.
+UPDATE queue_sla SET auto_fix =
+  'probe: insert an active remediation contract with verify_probe not LIKE ''needs%'' (machine probe) so the issue has a doer (issue #2971)'
+WHERE stuck_type = 'issue-unremediated' AND auto_fix LIKE 'none automatic%';
+UPDATE queue_sla SET auto_fix =
+  'close: tasks whose issue is closed/superseded get status closed with the prior status kept in error; otherwise nudge owner by setting updated_at and a retry note (issue #2971)'
+WHERE stuck_type = 'code-task-stalled' AND auto_fix LIKE 'none automatic%';
 
 -- Index first: the issue-probe column scanned 531k rows per read without it (measured at authoring).
 CREATE INDEX IF NOT EXISTS idx_remediation_verifications_issue_ts ON remediation_verifications (issue_id, verified_at);
