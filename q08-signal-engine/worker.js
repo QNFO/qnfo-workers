@@ -37,7 +37,7 @@
 // Q08-ASCII-SOURCE-1 (2026-10-01): this file is ASCII-only; every typographic character is a \uXXXX escape. The deploy path
 // double-encoded raw UTF-8, so live pages read "... \u00e2 q08" and posts "\u00e2\u0080\u0094". Keep new literals escaped.
 // VERSION-NOTES-MOVED-1: release notes live in the block below
-var VERSION = "0.56.3-codeagent";
+var VERSION = "0.56.4-codeagent";
 /* 0.43.0 Q08-TICK-ALLOWANCE-1 (2026-11-04, pillar cost; minor: the engine now decides on its own whether a tick starts an attempt; BUDGET-SOFT-ROUTE-1, attempts slow down and never stop): ai_call_counters showed 119,552, 129,547 and 110,450 neurons on 2026-11-01..03 against the 50,000 target (ops_config q08_daily_neurons) because q08Budget() only steered the first writer model and nothing bounded the attempts a tick starts (40 a day, the attempt cap, at about 2,760 neurons each). Now the :00 cron and the :30 stall retry go through governedGenerate: tick k of 48 starts an attempt only while the day is under the pace line budget x (k + 1) / 48, an essay after a forecast attempt that spent model calls starts only while the day is still under it, and 150 minutes without an attempt starts one whatever the line says (8 a day at least). No row is written for a tick that waits. The writer gate, reader panels, fact-check, final read and accuracy audit are unchanged, and an attempt already started runs all its rounds. ops_config q08_tick_governor = off restores the old behaviour. tick-allowance.test.mjs replays a UTC day. */
 /* 0.42.0 RM-FORECAST-UPDATE-SCORING-1 (#5578; research): score the last valid update before the horizon with the resolved outcome. */
 /* 0.41.6 FORECAST-CALIBRATION-BUCKET-COVERAGE-1 (#5576, charter pillar research; patch): calibration buckets include probabilities across the full [0,1] range, including the tails, rather than silently omitting forecasts below 5% or above 96%. */
@@ -3213,6 +3213,23 @@ function q08GateRateLimited(rows, nowMs) {
   if (list.length < Q08_GATE_RATE_WINDOW || list.slice(0, Q08_GATE_RATE_WINDOW).some(function (r) { return r.status !== "gate_failed"; })) return { limited: false, recent: 0 };
   var recent = list.filter(function (r) { var t = Date.parse(String(r.ran_at || "").replace(" ", "T").replace(/Z?$/, "Z")); return Number.isFinite(t) && nowMs - t < 36e5; }).length;
   return { limited: recent >= Q08_GATE_RATE_PER_HOUR, recent: recent };
+}
+// SIGNALS-ENGINE-2.1 (issue 1003137): the hard-coded scrapers are kept only as this fallback, used
+// when the database holds no recent seen rows; generate() itself reads its candidates from signal_log.
+async function gatheredFallbackStories(env, domains) {
+  var stories = [];
+  try { stories = stories.concat(await scrapeHN()); } catch (e) { console.error(JSON.stringify({ evt: "q08-signal-engine:quit:caught", error: String((e && e.message) || e) })); }
+  try { stories = stories.concat(await scrapeGitHub()); } catch (e) { console.error(JSON.stringify({ evt: "q08-signal-engine:quit:caught", error: String((e && e.message) || e) })); }
+  try { stories = stories.concat(await scrapeArxiv(env)); } catch (e) { console.error(JSON.stringify({ evt: "q08-signal-engine:quit:caught", error: String((e && e.message) || e) })); }
+  if (domains.science || domains.policy) {
+    try {
+      var domainStories = await scrapeArxivDomain(env, domains);
+      var seenIds = new Set(stories.map(function (s) { return String((s.source || "hn") + ":" + s.id); }));
+      stories = stories.concat(domainStories.filter(function (s) { return !seenIds.has("arxiv:" + s.id); }));
+    } catch (e) { console.error(JSON.stringify({ evt: "q08-signal-engine:scrapeArxivDomain:caught", error: String((e && e.message) || e) })); }
+    try { stories = stories.concat(await scrapeFederalRegister(env, domains)); } catch (e) { console.error(JSON.stringify({ evt: "q08-signal-engine:scrapeFederalRegister:caught", error: String((e && e.message) || e) })); }
+  }
+  return stories;
 }
 async function generate(env) {
   var t0 = Date.now();
