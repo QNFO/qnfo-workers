@@ -114,12 +114,12 @@ check(!out.on && out.deferred_pool === 0 && out.released === 3, "off releases th
   const penv = { AUDIT: wrap(pdb) };
   const cnt = (w) => pdb.prepare("SELECT COUNT(*) AS n FROM research_queue WHERE " + w).get().n;
   let po = await W.researchBackpressureTick(penv);
-  check(po.ok && po.pool_max === 4 && cnt("status = 'deferred'") === 4, "POOL-BOUND-1: the pool is cut to research_deferred_max", po);
-  check(po.pool_parked === 6 && cnt("status = 'wontfix' AND stage = 'parked' AND error LIKE 'POOL-BOUND-1%Revert:%'") === 6, "POOL-BOUND-1: overflow is parked with a revert line", po);
-  check(pdb.prepare("SELECT status FROM research_queue WHERE id = 'own'").get().status === "deferred" && pdb.prepare("SELECT status FROM research_queue WHERE id = 'rem'").get().status === "deferred", "POOL-BOUND-1: owner and remediation rows are never parked");
+  check(po.ok && po.pool_max === 4 && cnt("status = 'deferred'") === 10, "SINGLE-LANE-2: the bound is read but the pool is left alone", po);
+  check(po.pool_parked === 0 && cnt("status = 'wontfix' OR stage = 'parked'") === 0, "SINGLE-LANE-2: nothing is written with status wontfix or stage parked", po);
+  check(pdb.prepare("SELECT status FROM research_queue WHERE id = 'own'").get().status === "deferred" && pdb.prepare("SELECT status FROM research_queue WHERE id = 'rem'").get().status === "deferred", "SINGLE-LANE-2: owner and remediation rows stay deferred");
   pdb.exec("UPDATE research_queue SET status = 'published' WHERE status IN ('deferred', 'queued')");
   po = await W.researchBackpressureTick(penv);
-  check(po.pool_rearmed === 2 && cnt("status = 'deferred' AND error LIKE 'POOL-BOUND-1%re-armed%'") === 2, "POOL-BOUND-1: below half the bound, parked rows are re-armed by priority", po);
+  check(po.pool_parked === 0 && po.pool_rearmed === 0, "SINGLE-LANE-2: with nothing parked, nothing is re-armed", po);
   pdb.exec("UPDATE ops_config SET value = '0' WHERE key = 'research_deferred_max'");
   po = await W.researchBackpressureTick(penv);
   check(po.pool_parked === 0 && po.pool_rearmed === 0, "POOL-BOUND-1: research_deferred_max 0 turns the bound off", po);

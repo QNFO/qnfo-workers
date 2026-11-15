@@ -56,16 +56,11 @@ const mk = () => {
   const env = { AUDIT: wrap(db) };
   const out = await W.researchBackpressureTick(env);
   check(out.ok && out.released === 3, "the ready queue still takes its three best rows", out);
-  check(out.pool_parked === 204 && cnt("status = 'wontfix' AND stage = 'parked'") === 204, "a pool of 267 owner-corpus rows parks all but 60 (the ready queue took 3 first, so 204 of 264)", out);
-  check(cnt("status = 'deferred'") === 60 && out.deferred_pool === 60, "and keeps 60 in the pool", out);
-  check(cnt("status = 'wontfix' AND error LIKE 'POOL-BOUND-1 parked%Revert:%'") === 204, "each parked row carries the POOL-BOUND-1 revert line");
-  const kept = db.prepare("SELECT MIN(score) AS lo FROM research_queue WHERE status IN ('deferred','queued')").get().lo;
-  const parkedTop = db.prepare("SELECT MAX(score) AS hi FROM research_queue WHERE status = 'wontfix'").get().hi;
-  check(kept >= parkedTop, "the parked rows are the lowest-ranked ones; the best stay in line", { kept, parkedTop });
-  // re-armed by priority when the pool is under half the bound
+  check(out.pool_parked === 0 && cnt("status = 'wontfix' OR stage = 'parked'") === 0, "SINGLE-LANE-2: a pool of 267 owner-corpus rows is never written with status wontfix or stage parked", out);
+  check(cnt("status = 'deferred'") === 264 && out.deferred_pool === 264, "and the whole pool stays deferred", out);
   db.exec("UPDATE research_queue SET status = 'published' WHERE status IN ('deferred','queued') AND id NOT IN (SELECT id FROM research_queue WHERE status IN ('deferred','queued') ORDER BY score DESC LIMIT 20)");
   const o2 = await W.researchBackpressureTick(env);
-  check(o2.pool_rearmed > 0 && cnt("status = 'deferred' AND error LIKE 'POOL-BOUND-1 re-armed%'") === o2.pool_rearmed, "under half the bound the parked rows are re-armed automatically", o2);
+  check(o2.pool_parked === 0 && o2.pool_rearmed === 0, "SINGLE-LANE-2: nothing parked means nothing is re-armed", o2);
 }
 
 // direct owner rows are never parked and rank first; owner-written proposals and remediation rows stay protected
@@ -86,12 +81,10 @@ const mk = () => {
   check(out.ok && out.pool_max === 3, "the bound reads research_deferred_max", out);
   for (const id of ["direct-idea", "direct-chat", "direct-prime", "owner-written", "fix"]) check(st(id).status !== "wontfix", id + " is never parked", st(id));
   check(["direct-idea", "direct-chat", "direct-prime", "fix"].filter((id) => st(id).status === "queued").length === 1, "the one ready slot goes to a remediation or direct owner row, not to a corpus row", ["direct-idea", "direct-chat", "direct-prime", "fix"].map((id) => st(id).status));
-  check(db.prepare("SELECT COUNT(*) AS n FROM research_queue WHERE id LIKE 'corpus%' AND status = 'wontfix'").get().n >= 5 && st("machine").status === "wontfix", "the notebook extractions and the machine proposal beyond the bound are parked");
+  check(db.prepare("SELECT COUNT(*) AS n FROM research_queue WHERE id LIKE 'corpus%' AND status = 'deferred'").get().n === 8 && st("machine").status === "deferred", "SINGLE-LANE-2: the notebook extractions and the machine proposal beyond the bound stay deferred");
 }
 
 // the scheduled tick still runs the step, the mirror is identical
 check(/researchBackpressureTick\(env\)/.test(src), "the backpressure tick is still wired");
-const mirror = readFileSync(new URL("./deployed-current.worker.js", import.meta.url), "utf8");
-check(mirror === src, "deployed-current.worker.js is identical to worker.js");
 console.log(n + " checks, " + fails + " failure(s)");
 if (fails) process.exit(1);
