@@ -65,21 +65,48 @@ SELECT
      AND updated_at >= strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-7 days')) AS merge_note_cur,
   (SELECT group_concat(merge_note, ' | ') FROM code_tasks WHERE status IN ('merged', 'failed', 'closed')
      AND updated_at >= strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-14 days')
-     AND updated_at < strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-7 days')) AS merge_note_prev;
+     AND updated_at < strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-7 days')) AS merge_note_prev,
+  (SELECT group_concat(close_channel || '=' || n, ' | ') FROM
+     (SELECT close_channel, COUNT(*) AS n FROM agent_issues WHERE status IN ('closed', 'resolved')
+      AND updated_at >= (CAST(strftime('%s', 'now') AS INTEGER) - 7 * 86400) * 1000
+      GROUP BY close_channel ORDER BY close_channel)) AS issues_close_channel_cur,
+  (SELECT group_concat(close_channel || '=' || n, ' | ') FROM
+     (SELECT close_channel, COUNT(*) AS n FROM agent_issues WHERE status IN ('closed', 'resolved')
+      AND updated_at >= (CAST(strftime('%s', 'now') AS INTEGER) - 14 * 86400) * 1000
+      AND updated_at < (CAST(strftime('%s', 'now') AS INTEGER) - 7 * 86400) * 1000
+      GROUP BY close_channel ORDER BY close_channel)) AS issues_close_channel_prev,
+  (SELECT group_concat(merge_state || '=' || n || ' [' || COALESCE(group_concat(merge_note, '; '), '') || ']', ' | ') FROM
+     (SELECT CASE WHEN status = 'merged' THEN 'merged' WHEN status = 'failed' THEN 'failed' ELSE 'closed' END AS merge_state,
+             COUNT(*) AS n, group_concat(merge_note, '; ') AS merge_note
+      FROM code_tasks WHERE status IN ('merged', 'failed', 'closed')
+      AND updated_at >= strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-7 days')
+      GROUP BY merge_state ORDER BY merge_state)) AS merge_state_cur,
+  (SELECT group_concat(merge_state || '=' || n || ' [' || COALESCE(group_concat(merge_note, '; '), '') || ']', ' | ') FROM
+     (SELECT CASE WHEN status = 'merged' THEN 'merged' WHEN status = 'failed' THEN 'failed' ELSE 'closed' END AS merge_state,
+             COUNT(*) AS n, group_concat(merge_note, '; ') AS merge_note
+      FROM code_tasks WHERE status IN ('merged', 'failed', 'closed')
+      AND updated_at >= strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-14 days')
+      AND updated_at < strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-7 days')
+      GROUP BY merge_state ORDER BY merge_state)) AS merge_state_prev,
+  ROUND(CAST(issues_cur AS REAL) / MAX(issues_prev, 1), 2) AS issues_growth,
+  ROUND(CAST(merges_cur AS REAL) / MAX(merges_prev, 1), 2) AS merges_growth,
+  MIN(ROUND(CAST(issues_cur AS REAL) / MAX(issues_prev, 1), 2),
+      ROUND(CAST(merges_cur AS REAL) / MAX(merges_prev, 1), 2)) AS growth_min;
 
 INSERT OR IGNORE INTO metric_registry (metric, layer, kind, formula, source_of_truth, baseline, target, owner, disposition_actor, refresh_cadence, warning_band, kill_band, last_value, last_refreshed, state, refresh_class) VALUES
  ('autonomous_outcomes_7d', 'operational', 'target',
   'v_autonomous_outcomes.cur: issues closed by a machine channel with evidence (close_channel auto%, probe-pass%, verified-remediation%) in 7 days plus code-loop tasks merged in 7 days. Unbounded: no ceiling.',
-  'qnfo-audit.v_autonomous_outcomes (AUTONOMY-UNCAPPED-1, migrations/2026-10-07-autonomy-uncapped.sql), refreshed by D1 triggers metric_autonomy_growth_au/_ai on every open_agent_issues write',
+  'qnfo-audit.v_autonomous_outcomes (AUTONOMY-UNCAPPED-1, migrations/2026-10-07-autonomy-uncapped.sql), refreshed by D1 triggers metric_autonomy_growth_au/_ai on every open_agent_issues write and metric_autonomy_growth_ct/_cti on every code_tasks write',
   '171 on 2026-10-07 (69 the week before)', 'higher than the week before, every week; no upper bound', 'qnfo-fleet-control',
   'observe; the growth metric carries the trigger', 'hourly', NULL, NULL,
   CAST((SELECT cur FROM v_autonomous_outcomes) AS TEXT), strftime('%Y-%m-%dT%H:%M:%SZ', 'now'), 'MEASURED', 'computed'),
  ('autonomous_outcomes_growth_7d', 'operational', 'target',
-  'v_autonomous_outcomes.cur / max(prev, 1), rounded to 0.01: this week''s autonomous outcomes over last week''s. Unbounded above.',
-  'qnfo-audit.v_autonomous_outcomes (AUTONOMY-UNCAPPED-1), refreshed by D1 triggers metric_autonomy_growth_au/_ai on every open_agent_issues write',
-  '2.48 on 2026-10-07 (171 / 69)', '> 1.0 every week (the fleet does more on its own than the week before); no upper bound', 'qnfo-fleet-control',
-  'trigger lt 1 -> one METRIC-TRIGGER issue naming the stalled outcome stream', 'hourly', '< 1', '< 0.5',
-  CAST(ROUND(CAST((SELECT cur FROM v_autonomous_outcomes) AS REAL) / MAX((SELECT prev FROM v_autonomous_outcomes), 1), 2) AS TEXT), strftime('%Y-%m-%dT%H:%M:%SZ', 'now'), 'MEASURED', 'computed');
+  'MIN per stream of v_autonomous_outcomes issues_growth (machine-closed issues cur/prev) and merges_growth (code_tasks merged cur/prev), each rounded to 0.01. Unbounded above.',
+  'qnfo-audit.v_autonomous_outcomes (AUTONOMY-UNCAPPED-1), refreshed by D1 triggers metric_autonomy_growth_au/_ai on every open_agent_issues write and metric_autonomy_growth_ct/_cti on every code_tasks write',
+  '2.48 on 2026-10-07 (171 / 69)', '>= 1.0 every week (the fleet does more on its own than the week before); no upper bound', 'qnfo-fleet-control',
+  'trigger lt 1 on the per-stream minimum -> one METRIC-TRIGGER issue naming the stalled outcome stream', 'hourly', '< 1', '< 0.5',
+  CAST(MIN(ROUND(CAST((SELECT issues_cur FROM v_autonomous_outcomes) AS REAL) / MAX((SELECT issues_prev FROM v_autonomous_outcomes), 1), 2),
+           ROUND(CAST((SELECT merges_cur FROM v_autonomous_outcomes) AS REAL) / MAX((SELECT merges_prev FROM v_autonomous_outcomes), 1), 2)) AS TEXT), strftime('%Y-%m-%dT%H:%M:%SZ', 'now'), 'MEASURED', 'computed');
 
 CREATE TRIGGER IF NOT EXISTS metric_autonomy_growth_au AFTER UPDATE ON metric_registry
 WHEN NEW.metric = 'open_agent_issues'
@@ -87,7 +114,8 @@ BEGIN
   UPDATE metric_registry SET last_value = CAST((SELECT cur FROM v_autonomous_outcomes) AS TEXT),
       last_refreshed = strftime('%Y-%m-%dT%H:%M:%SZ', 'now'), state = 'MEASURED'
   WHERE metric = 'autonomous_outcomes_7d';
-  UPDATE metric_registry SET last_value = CAST(ROUND(CAST((SELECT cur FROM v_autonomous_outcomes) AS REAL) / MAX((SELECT prev FROM v_autonomous_outcomes), 1), 2) AS TEXT),
+  UPDATE metric_registry SET last_value = CAST(MIN(ROUND(CAST((SELECT issues_cur FROM v_autonomous_outcomes) AS REAL) / MAX((SELECT issues_prev FROM v_autonomous_outcomes), 1), 2),
+           ROUND(CAST((SELECT merges_cur FROM v_autonomous_outcomes) AS REAL) / MAX((SELECT merges_prev FROM v_autonomous_outcomes), 1), 2)) AS TEXT),
       last_refreshed = strftime('%Y-%m-%dT%H:%M:%SZ', 'now'), state = 'MEASURED'
   WHERE metric = 'autonomous_outcomes_growth_7d';
 END;
@@ -98,7 +126,30 @@ BEGIN
   UPDATE metric_registry SET last_value = CAST((SELECT cur FROM v_autonomous_outcomes) AS TEXT),
       last_refreshed = strftime('%Y-%m-%dT%H:%M:%SZ', 'now'), state = 'MEASURED'
   WHERE metric = 'autonomous_outcomes_7d';
-  UPDATE metric_registry SET last_value = CAST(ROUND(CAST((SELECT cur FROM v_autonomous_outcomes) AS REAL) / MAX((SELECT prev FROM v_autonomous_outcomes), 1), 2) AS TEXT),
+  UPDATE metric_registry SET last_value = CAST(MIN(ROUND(CAST((SELECT issues_cur FROM v_autonomous_outcomes) AS REAL) / MAX((SELECT issues_prev FROM v_autonomous_outcomes), 1), 2),
+           ROUND(CAST((SELECT merges_cur FROM v_autonomous_outcomes) AS REAL) / MAX((SELECT merges_prev FROM v_autonomous_outcomes), 1), 2)) AS TEXT),
+      last_refreshed = strftime('%Y-%m-%dT%H:%M:%SZ', 'now'), state = 'MEASURED'
+  WHERE metric = 'autonomous_outcomes_growth_7d';
+END;
+
+CREATE TRIGGER IF NOT EXISTS metric_autonomy_growth_ct AFTER UPDATE ON code_tasks
+BEGIN
+  UPDATE metric_registry SET last_value = CAST((SELECT cur FROM v_autonomous_outcomes) AS TEXT),
+      last_refreshed = strftime('%Y-%m-%dT%H:%M:%SZ', 'now'), state = 'MEASURED'
+  WHERE metric = 'autonomous_outcomes_7d';
+  UPDATE metric_registry SET last_value = CAST(MIN(ROUND(CAST((SELECT issues_cur FROM v_autonomous_outcomes) AS REAL) / MAX((SELECT issues_prev FROM v_autonomous_outcomes), 1), 2),
+           ROUND(CAST((SELECT merges_cur FROM v_autonomous_outcomes) AS REAL) / MAX((SELECT merges_prev FROM v_autonomous_outcomes), 1), 2)) AS TEXT),
+      last_refreshed = strftime('%Y-%m-%dT%H:%M:%SZ', 'now'), state = 'MEASURED'
+  WHERE metric = 'autonomous_outcomes_growth_7d';
+END;
+
+CREATE TRIGGER IF NOT EXISTS metric_autonomy_growth_cti AFTER INSERT ON code_tasks
+BEGIN
+  UPDATE metric_registry SET last_value = CAST((SELECT cur FROM v_autonomous_outcomes) AS TEXT),
+      last_refreshed = strftime('%Y-%m-%dT%H:%M:%SZ', 'now'), state = 'MEASURED'
+  WHERE metric = 'autonomous_outcomes_7d';
+  UPDATE metric_registry SET last_value = CAST(MIN(ROUND(CAST((SELECT issues_cur FROM v_autonomous_outcomes) AS REAL) / MAX((SELECT issues_prev FROM v_autonomous_outcomes), 1), 2),
+           ROUND(CAST((SELECT merges_cur FROM v_autonomous_outcomes) AS REAL) / MAX((SELECT merges_prev FROM v_autonomous_outcomes), 1), 2)) AS TEXT),
       last_refreshed = strftime('%Y-%m-%dT%H:%M:%SZ', 'now'), state = 'MEASURED'
   WHERE metric = 'autonomous_outcomes_growth_7d';
 END;
