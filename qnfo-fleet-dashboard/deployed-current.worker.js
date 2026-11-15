@@ -11,7 +11,7 @@ var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target,
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
 // 1.77.2 ERRATA-CHAIN-DISPATCH-1 (pillar research): wake the folded errata consumer and retry its legacy parked receipts.
 // VERSION-LINE-SPLIT-1 (agent_issues 100220): the release notes sit one per line below this statement, newest first, so a VERSION bump is a one-line patch; add a new note as the first line under it.
-var VERSION = "1.112.0";
+var VERSION = "1.112.1";
 // 1.89.0 NOW-NORTH-1 and HOME-MORE-1 (pillar core; minor): the Now screen opens with four numbers tied to the owner goals (readers, fleet cost, owner load, reliability) and drops the count of metrics off target (95 of 297; nothing can be done with it); a quiet footer on the home links the full dashboard, changelog, data index and managers.
 // 1.89.0 (cont.) MONEY-FIX-1 (pillar cost; patch): the Money card subtracted the subscription figure from a pace that never included it (fleet scope of v_cost_forecast), so it showed the fleet at 701 instead of 1151 a month; it now shows the fleet line, the subscriptions line and both together.
 // 1.85.0 (cont.) NOW-REVIEW-1: independent review fixes: Snooze and Not needed hide the card; a tap removes the card at once and reloads fresh, and the hand-back claims the card before filing (no duplicate tickets); strangers get no card keys or raw error text; only the signed-in owner (not the loop token) can run commands or hand work back; bound cards are read first; an unrefreshed metric reads n/a, not 0; one refresh in flight at a time and a failed refresh retries in 10 s; the Code poll says when the executor does not answer.
@@ -11239,6 +11239,11 @@ function archHtml(m, view, holder) {
 // standing. Only counts, public post links and public mention links leave this block: no address, no message text.
 // qnfo-outreach is not read here. The page has no script; every chart also has a table.
 var KPI_TTL_MS = 6e4;
+// KPI-COLO-CACHE-1 (1.112.1, issue 12106, pillar cost): a cold isolate first reads the colo copy in caches.default (public data, same for every
+// reader) for KPI_COLO_TTL_MS before it runs the ~40 KPI statements again; SELECT * FROM v_sla_over_120m alone read 1,458,480 qnfo-audit rows in
+// 24 calls on 2026-11-15. Where caches is missing (tests, local) the isolate memo is the only cache, as before.
+var KPI_COLO_TTL_MS = 3e5;
+var KPI_COLO_KEY = "https://kpi-cache.fleet.qnfo.org/api/kpi/v1";
 var KPI_DAYS = 14;
 var KPI_HISTORY_DAYS = 45;
 var KPI_DAY_MS = 864e5;
@@ -11837,8 +11842,26 @@ async function kpiCompute(env, nowMs) {
 async function kpiData(env, nowMs) {
   const now = nowMs || Date.now();
   if (kpiCache && now - kpiCache.at < KPI_TTL_MS && now >= kpiCache.at) return kpiCache.data;
+  let colo = null;
+  try { colo = typeof caches !== "undefined" && caches.default ? caches.default : null; } catch (e) { colo = null; }
+  if (colo) {
+    try {
+      const hit = await colo.match(KPI_COLO_KEY);
+      const at = hit ? Number(hit.headers.get("x-kpi-at")) : NaN;
+      if (hit && Number.isFinite(at) && now >= at && now - at < KPI_COLO_TTL_MS) {
+        const cached = await hit.json();
+        kpiCache = { at: at, data: cached };
+        return cached;
+      }
+    } catch (e) {}
+  }
   const data = await kpiCompute(env, now);
   kpiCache = { at: now, data: data };
+  if (colo && data && data.ok) {
+    try {
+      await colo.put(KPI_COLO_KEY, new Response(JSON.stringify(data), { headers: { "content-type": "application/json", "x-kpi-at": String(now), "cache-control": "public, max-age=" + KPI_COLO_TTL_MS / 1e3 } }));
+    } catch (e) {}
+  }
   return data;
 }
 // ---- page ----
