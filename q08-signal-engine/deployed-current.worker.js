@@ -37,7 +37,7 @@
 // Q08-ASCII-SOURCE-1 (2026-10-01): this file is ASCII-only; every typographic character is a \uXXXX escape. The deploy path
 // double-encoded raw UTF-8, so live pages read "... \u00e2 q08" and posts "\u00e2\u0080\u0094". Keep new literals escaped.
 // VERSION-NOTES-MOVED-1: release notes live in the block below
-var VERSION = "0.56.1-codeagent";
+var VERSION = "0.56.2-codeagent";
 /* 0.43.0 Q08-TICK-ALLOWANCE-1 (2026-11-04, pillar cost; minor: the engine now decides on its own whether a tick starts an attempt; BUDGET-SOFT-ROUTE-1, attempts slow down and never stop): ai_call_counters showed 119,552, 129,547 and 110,450 neurons on 2026-11-01..03 against the 50,000 target (ops_config q08_daily_neurons) because q08Budget() only steered the first writer model and nothing bounded the attempts a tick starts (40 a day, the attempt cap, at about 2,760 neurons each). Now the :00 cron and the :30 stall retry go through governedGenerate: tick k of 48 starts an attempt only while the day is under the pace line budget x (k + 1) / 48, an essay after a forecast attempt that spent model calls starts only while the day is still under it, and 150 minutes without an attempt starts one whatever the line says (8 a day at least). No row is written for a tick that waits. The writer gate, reader panels, fact-check, final read and accuracy audit are unchanged, and an attempt already started runs all its rounds. ops_config q08_tick_governor = off restores the old behaviour. tick-allowance.test.mjs replays a UTC day. */
 /* 0.42.0 RM-FORECAST-UPDATE-SCORING-1 (#5578; research): score the last valid update before the horizon with the resolved outcome. */
 /* 0.41.6 FORECAST-CALIBRATION-BUCKET-COVERAGE-1 (#5576, charter pillar research; patch): calibration buckets include probabilities across the full [0,1] range, including the tails, rather than silently omitting forecasts below 5% or above 96%. */
@@ -3403,7 +3403,12 @@ async function generate(env) {
     // writer that had already failed the writer gate in the first compose, so each failed round paid for them twice
     // and q08_neurons_per_published_piece_7d climbed past the 6000 budget. The retry now spends calls only on the
     // writers that have not yet failed this run; the gate, the panel and the fact-check are unchanged.
-    var retryModels = await composeOrder(env);
+    var retryModels = null;
+    // RED-DRAIN-1: composeOrder depends on the audit store; when it is unavailable or yields no
+    // order (tests, cold store), fall back to the configured COMPOSE_MODELS panel so the retry
+    // still runs on the surviving writers instead of silently spending no corrective attempt.
+    try { retryModels = await composeOrder(env); } catch (e) { retryModels = null; }
+    if (!retryModels || !retryModels.length) retryModels = COMPOSE_MODELS.slice();
     var failedWriters = {}; (piece.trail || []).forEach(function (t) { if (t.problems && t.problems.length) failedWriters[t.model] = 1; });
     retryModels = retryModels.filter(function (m) { return !failedWriters[m]; });
     const RETRY_MODEL_CAP = 2;
