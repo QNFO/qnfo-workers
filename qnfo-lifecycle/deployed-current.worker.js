@@ -1,4 +1,4 @@
-var VERSION = "1.20.9-codeagent";
+var VERSION = "1.20.10-codeagent";
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -3294,20 +3294,25 @@ async function plRetriage(env, o, mechs, now, out) {
     budget--;
     try {
     var v = await plTriageModel(env, R, mechs, now);
+    // PAPER-LEARN-RETRIAGE-1: the decision is stored, then clamped: an apply signal on a probation row
+    // older than 72 hours is replaced with a terminal lapse so no adopted PAPER-LEARN goal sits open past the 96h autonomy gap.
+    if (v.apply && Date.parse(R.updated_at || now) < Date.parse(now) - 72 * 3600e3) {
+      var plGoal = null;
+      try { plGoal = await env.QNFO_AUDIT.prepare("SELECT id FROM goals WHERE goal_key = ?1 AND status = 'adopted'").bind("PAPER-LEARN-" + R.id).first(); } catch (ge) { plGoal = null; }
+      if (plGoal) {
+        var staleLapse = ("PL-TRIAGE-2 rejected (lapsed; apply signal after 72 hours of probation, " + now + "): last signal " + plStr(v.apply.model, 60) + ": " + plStr(v.apply.reason, 300) + " Re-propose with a measured fleet gap.").slice(0, 700);
+        await env.QNFO_AUDIT.prepare("UPDATE paper_learnings SET fleet_status = 'rejected', status_note = ?2, updated_at = ?3 WHERE id = ?1 AND fleet_status = 'probation'").bind(R.id, staleLapse, now).run();
+        await plCloseProbationGoal(env, R.id);
+        out.lapsed++;
+        continue;
+      }
+    }
     if (v.settled) {
       await env.QNFO_AUDIT.prepare("UPDATE paper_learnings SET fleet_status = ?2, status_note = ?3, updated_at = ?4 WHERE id = ?1 AND fleet_status = 'probation'").bind(R.id, v.status, v.note.slice(0, 700), now).run();
       await plCloseProbationGoal(env, R.id);
       if (v.status === "rejected") out.rejected++; else out.in_place++;
     } else if (v.apply) {
-      // PAPER-LEARN-RETRIAGE-1: an apply signal is only honoured while the probation is young; past 72h it is clamped to a lapse.
-      var plGoal = null;
-      try { plGoal = await env.QNFO_AUDIT.prepare("SELECT id FROM goals WHERE goal_key = ?1 AND status = 'adopted'").bind("PAPER-LEARN-" + R.id).first(); } catch (ge) { plGoal = null; }
-      if (plGoal && Date.parse(R.updated_at || now) < Date.parse(now) - 72 * 3600e3) {
-        var staleLapse = ("PL-TRIAGE-2 rejected (lapsed; apply signal after 72 hours of probation, " + now + "): last signal " + plStr(v.apply.model, 60) + ": " + plStr(v.apply.reason, 300) + " Re-propose with a measured fleet gap.").slice(0, 700);
-        await env.QNFO_AUDIT.prepare("UPDATE paper_learnings SET fleet_status = 'rejected', status_note = ?2, updated_at = ?3 WHERE id = ?1 AND fleet_status = 'probation'").bind(R.id, staleLapse, now).run();
-        await plCloseProbationGoal(env, R.id);
-        out.lapsed++;
-      } else {
+      {
       passes++;
       if (passes >= PL_RETRIAGE_PASSES) {
         var lapse = ("PL-TRIAGE-2 rejected (lapsed; " + passes + " triage passes by two model families over " + (PL_RETRIAGE_GAP_H * (passes - 1)) + " hours or more found no covering mechanism and no taker for the apply signal, " + now + "): last signal " + plStr(v.apply.model, 60) + ": " + plStr(v.apply.reason, 300) + " Re-propose with a measured fleet gap.").slice(0, 700);
