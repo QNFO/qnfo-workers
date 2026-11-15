@@ -168,6 +168,7 @@ FROM (
            WHEN q.status = 'wontfix' OR q.stage = 'parked' THEN 'rejected'
            WHEN q.status = 'held' THEN 'held'
            WHEN q.status IN ('failed', 'error', 'gate-blocked') THEN 'blocked'
+           WHEN q.status = 'owner_paused' THEN 'parked'
            WHEN q.status IN ('queued', 'deferred') THEN 'waiting'
            ELSE 'active' END AS state,
       CASE WHEN q.status = 'published' THEN COALESCE(q.published_at, q.completed_at, q.created_at)
