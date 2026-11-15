@@ -3967,7 +3967,17 @@ export async function handleCompanion(request, env, ctx, deps) {
     if (r === "where" && m === "POST") { const out = await cmpWhere(env, deps, await body()); return J(out, out.ok ? 200 : 400); }
     if (r === "events/remove" && m === "POST") { const b = await body(); const out = await deps.calDelete(env, s(b.id, 80)); return J(out, out.ok ? 200 : 400); }
     if (r === "to-fleet" && m === "POST") { const b = await body(); const out = await sendToFleet(env, b.id); return J(out, out.ok ? 200 : 400); }
-    if (r === "selfcheck" && m === "GET") { await ensureSchema(env.PERSONAL); return J(Object.assign({ ok: true }, await selfCheckState(env))); }
+    // COMPANION-SELFCHECK-1: the self-check found the daily product research had never run (issue 1003544); a stale research state is now reported and re-dispatched here too, not only hourly.
+    if (r === "selfcheck" && m === "GET") {
+      await ensureSchema(env.PERSONAL);
+      const st = Object.assign({ ok: true }, await selfCheckState(env));
+      if (env.AUDIT) {
+        const last = await one(env.AUDIT, "SELECT run_at FROM product_research_runs WHERE app = 'companion' AND error IS NULL ORDER BY id DESC LIMIT 1").catch(() => null);
+        st.research_last_run = last ? last.run_at : null;
+        if (!last && ctx && ctx.waitUntil) { st.research_stale = true; ctx.waitUntil(stub().fetch("https://do/companion-do/tick?research=1").catch(() => null)); }
+      }
+      return J(st);
+    }
     if (r === "feedback" && m === "POST") { const out = await recordFeedback(env, await body()); return J(out, out.ok ? 200 : 400); }
     if (r === "feedback" && m === "GET") { await ensureSchema(env.PERSONAL); return J(await tasteSummary(env)); }
     if (r === "inbox" && m === "GET") return J({ ok: true, items: await all(env.PERSONAL, "SELECT id, ts, kind, raw_text, media_key, status, result_json FROM cmp_inbox ORDER BY ts DESC LIMIT 50") });
@@ -4004,7 +4014,9 @@ export async function handleCompanion(request, env, ctx, deps) {
       return J({ ok: true });
     }
     if (r === "research" && m === "GET") {
+      // COMPANION-SELFCHECK-1: the daily product research had never run; reading the digest now dispatches the research tick too.
       const row = env.AUDIT ? await one(env.AUDIT, "SELECT run_at, digest FROM product_research_runs WHERE app = 'companion' AND error IS NULL ORDER BY id DESC LIMIT 1") : null;
+      if (!row && ctx && ctx.waitUntil) ctx.waitUntil(stub().fetch("https://do/companion-do/tick?research=1").catch(() => null));
       return J({ ok: true, last_run: row ? row.run_at : null, lines: row && row.digest ? String(row.digest).split("\n") : ["The first research run happens within the hour."] });
     }
     // COMPANION-MIC-LOOP-1: the page reports what its microphone did (ok, blocked, no_speech, server_failed, unsupported) so a platform where voice breaks shows up as a rate, not as a complaint.
