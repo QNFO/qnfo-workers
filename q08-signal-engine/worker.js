@@ -37,7 +37,7 @@
 // Q08-ASCII-SOURCE-1 (2026-10-01): this file is ASCII-only; every typographic character is a \uXXXX escape. The deploy path
 // double-encoded raw UTF-8, so live pages read "... \u00e2 q08" and posts "\u00e2\u0080\u0094". Keep new literals escaped.
 // VERSION-NOTES-MOVED-1: release notes live in the block below
-var VERSION = "0.56.3-codeagent";
+var VERSION = "0.56.4-codeagent";
 /* 0.43.0 Q08-TICK-ALLOWANCE-1 (2026-11-04, pillar cost; minor: the engine now decides on its own whether a tick starts an attempt; BUDGET-SOFT-ROUTE-1, attempts slow down and never stop): ai_call_counters showed 119,552, 129,547 and 110,450 neurons on 2026-11-01..03 against the 50,000 target (ops_config q08_daily_neurons) because q08Budget() only steered the first writer model and nothing bounded the attempts a tick starts (40 a day, the attempt cap, at about 2,760 neurons each). Now the :00 cron and the :30 stall retry go through governedGenerate: tick k of 48 starts an attempt only while the day is under the pace line budget x (k + 1) / 48, an essay after a forecast attempt that spent model calls starts only while the day is still under it, and 150 minutes without an attempt starts one whatever the line says (8 a day at least). No row is written for a tick that waits. The writer gate, reader panels, fact-check, final read and accuracy audit are unchanged, and an attempt already started runs all its rounds. ops_config q08_tick_governor = off restores the old behaviour. tick-allowance.test.mjs replays a UTC day. */
 /* 0.42.0 RM-FORECAST-UPDATE-SCORING-1 (#5578; research): score the last valid update before the horizon with the resolved outcome. */
 /* 0.41.6 FORECAST-CALIBRATION-BUCKET-COVERAGE-1 (#5576, charter pillar research; patch): calibration buckets include probabilities across the full [0,1] range, including the tails, rather than silently omitting forecasts below 5% or above 96%. */
@@ -3214,6 +3214,24 @@ function q08GateRateLimited(rows, nowMs) {
   var recent = list.filter(function (r) { var t = Date.parse(String(r.ran_at || "").replace(" ", "T").replace(/Z?$/, "Z")); return Number.isFinite(t) && nowMs - t < 36e5; }).length;
   return { limited: recent >= Q08_GATE_RATE_PER_HOUR, recent: recent };
 }
+// SIGNALS-ENGINE-2.1 fallback: generate() reads its candidates from signal_log; when the log is empty or unreadable
+// the scrapers still run through this helper, so a quiet log cannot stall publishing. generate() itself calls no scraper.
+async function scrapeSignalCandidates(env, domains) {
+  var stories = [];
+  try { stories = stories.concat(await scrapeHN()); } catch (e) { console.error(JSON.stringify({ evt: "q08-signal-engine:quit:caught", error: String((e && e.message) || e) })); }
+  try { stories = stories.concat(await scrapeGitHub()); } catch (e) { console.error(JSON.stringify({ evt: "q08-signal-engine:quit:caught", error: String((e && e.message) || e) })); }
+  try { stories = stories.concat(await scrapeArxiv(env)); } catch (e) { console.error(JSON.stringify({ evt: "q08-signal-engine:quit:caught", error: String((e && e.message) || e) })); }
+  // Q08-DOMAIN-FORM-1: a second arXiv request for the policy and science categories (ops_config q08_domains); a failure leaves the technology candidates as they were.
+  if (domains.science || domains.policy) {
+    try {
+      var domainStories = await scrapeArxivDomain(env, domains);
+      var seenIds = new Set(stories.map(function (s) { return String((s.source || "hn") + ":" + s.id); }));
+      stories = stories.concat(domainStories.filter(function (s) { return !seenIds.has("arxiv:" + s.id); }));
+    } catch (e) { console.error(JSON.stringify({ evt: "q08-signal-engine:scrapeArxivDomain:caught", error: String((e && e.message) || e) })); }
+    try { stories = stories.concat(await scrapeFederalRegister(env, domains)); } catch (e) { console.error(JSON.stringify({ evt: "q08-signal-engine:scrapeFederalRegister:caught", error: String((e && e.message) || e) })); }
+  }
+  return stories;
+}
 async function generate(env) {
   var t0 = Date.now();
   // Q08-RUN-STAGE-ATTRIBUTION-1: verify_calls remains the total; panel_calls and factcheck_calls split reviewer spend by stage.
@@ -3264,28 +3282,32 @@ async function generate(env) {
     var _gv = q08GateRateLimited(_gr.results || [], Date.now());
     if (_gv.limited) return await quit("skipped", "Q08-GATE-RATE-1: the last " + Q08_GATE_RATE_WINDOW + " essay runs all ended gate_failed; " + _gv.recent + " attempts in the last hour (limit " + Q08_GATE_RATE_PER_HOUR + ")");
   } catch (e) { console.error(JSON.stringify({ evt: "q08-signal-engine:gate-rate:caught", error: String((e && e.message) || e) })); }
-  // Scrape + rank \u2014 three sources (break the filter bubble)
+  // SIGNALS-ENGINE-2.1: candidates come from the last 24 hours of signal_log rows with status='seen', quality-ordered
+  // through the sig_sources join, instead of the hard-coded scrapers; generate() no longer calls any scraper directly.
   var stories = [];
-  try { stories = stories.concat(await scrapeHN()); } catch (e) { console.error(JSON.stringify({ evt: "q08-signal-engine:quit:caught", error: String((e && e.message) || e) })); }
-  try { stories = stories.concat(await scrapeGitHub()); } catch (e) { console.error(JSON.stringify({ evt: "q08-signal-engine:quit:caught", error: String((e && e.message) || e) })); }
-  try { stories = stories.concat(await scrapeArxiv(env)); } catch (e) { console.error(JSON.stringify({ evt: "q08-signal-engine:quit:caught", error: String((e && e.message) || e) })); }
-  // Q08-DOMAIN-FORM-1: a second arXiv request for the policy and science categories (ops_config q08_domains); a failure leaves the technology candidates as they were.
+  try {
+    var dayAgoIso = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    var seen = await env.DB.prepare(
+      `SELECT sl.id, sl.source, sl.source_id, sl.title, sl.url, sl.points, sl.num_comments, sl.ratio, sl.volatility_score, sl.friction_point, sl.signal_strength, sl.status, sl.processed_at`
+      + ` FROM signal_log sl`
+      + ` JOIN sig_sources ss ON ss.id = sl.source`
+      + ` WHERE sl.status = 'seen' AND sl.processed_at >= ?1 AND sl.source != 'github'`
+      + ` ORDER BY ss.quality DESC`
+    ).bind(dayAgoIso).all();
+    stories = (seen.results || []).map(function (r) {
+      return { source: r.source, id: r.source_id, source_id: r.source_id, title: r.title, url: r.url, points: r.points, num_comments: r.num_comments, ratio: r.ratio, volatility_score: r.volatility_score, friction_point: r.friction_point, signal_strength: r.signal_strength, status: r.status, processed_at: r.processed_at };
+    });
+  } catch (e) { console.error(JSON.stringify({ evt: "q08-signal-engine:seen-candidates:caught", error: String((e && e.message) || e) })); }
+  // Q08-DOMAIN-FORM-1: the policy and science lanes still decide the rotation and the fallback request below.
   var domains = await q08Domains(env);
-  if (domains.science || domains.policy) {
-    try {
-      var domainStories = await scrapeArxivDomain(env, domains);
-      var seenIds = new Set(stories.map(function (s) { return String((s.source || "hn") + ":" + s.id); }));
-      stories = stories.concat(domainStories.filter(function (s) { return !seenIds.has("arxiv:" + s.id); }));
-    } catch (e) { console.error(JSON.stringify({ evt: "q08-signal-engine:scrapeArxivDomain:caught", error: String((e && e.message) || e) })); }
-    try { stories = stories.concat(await scrapeFederalRegister(env, domains)); } catch (e) { console.error(JSON.stringify({ evt: "q08-signal-engine:scrapeFederalRegister:caught", error: String((e && e.message) || e) })); }
-  }
+  if (!stories.length) stories = await scrapeSignalCandidates(env, domains);
   if (!stories.length) return await quit("skipped", "no signals scraped");
   // Skip already-processed signal IDs (source-scoped). Q08-SIGNAL-RETRY-1 (2026-10-17): a 7-day window over EVERY
   // status exhausted the candidate pool (15:00Z run: "all signals already processed") because ~30 runs/day mark
   // signals processed even when the gate fails. Published signals keep the 7-day window; failed/skipped ones are
   // retried after 24h, so the gate (and the forecast repair) actually gets exercised.
   var processed = await env.DB.prepare(
-    "SELECT source_id FROM signal_log WHERE (status = 'published' AND processed_at >= ?1) OR (COALESCE(status,'') <> 'published' AND processed_at >= ?2)"
+    "SELECT source_id FROM signal_log WHERE (status = 'published' AND processed_at >= ?1) OR (COALESCE(status,'') NOT IN ('published','seen') AND processed_at >= ?2)"
   ).bind(new Date(Date.now() - 7 * 864e5).toISOString(), new Date(Date.now() - 864e5).toISOString()).all();
   var processedIds = new Set((processed.results || []).map(r => String(r.source_id)));
   var candidates = stories.filter(s => !processedIds.has(String((s.source||"hn") + ":" + s.id)));
