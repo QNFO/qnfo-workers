@@ -61,10 +61,7 @@ SET definition = replace(definition,
   version = version + 1, updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
 WHERE id = 'management-personas-plus' AND instr(definition, 'last_value = CAST(ROUND(1.0 * (SELECT COUNT(*) FROM plus_ledger WHERE status = ''kept'' AND decided_at >= strftime(''%Y-%m-%dT%H:%M:%SZ'', ''now'', ''-30 days'')) / MAX(1, (SELECT COUNT(*) FROM plus_ledger WHERE status IN (''kept'', ''reverted'') AND decided_at >= strftime(''%Y-%m-%dT%H:%M:%SZ'', ''now'', ''-30 days''))), 3) AS TEXT), last_refreshed = strftime(''%Y-%m-%dT%H:%M:%SZ'', ''now''), state = ''MEASURED'' WHERE metric = ''plus_keep_rate_30d''') > 0;
 
-UPDATE plus_ledger
-SET status = 'rejected',
-    outcome = 'superseded: legacy 2026-10-29 PLUS-1 row for companion-today, never filed as an issue or built; the plus loop asks the product manager for a fresh plus (PLUS-QUEUE-PRIORITY-1)',
-    decided_at = strftime('%Y-%m-%d %H:%M:%S', 'now')
+DELETE FROM plus_ledger
 WHERE id = 1 AND status = 'proposed' AND issue_id IS NULL AND evidence = 'Migrated from the legacy product plus ledger';
 
 INSERT OR IGNORE INTO failure_modes (fm_key, failure_mode, root_cause, remediation, detector, probe_class, first_seen, issue_id, trigger_condition, symptom, blast_radius) VALUES
