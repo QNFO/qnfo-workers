@@ -1,4 +1,4 @@
-var VERSION = "1.20.9-codeagent";
+var VERSION = "1.20.10-codeagent";
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -3294,6 +3294,20 @@ async function plRetriage(env, o, mechs, now, out) {
     budget--;
     try {
     var v = await plTriageModel(env, R, mechs, now);
+    // METRIC-TRIGGER-21725-PAPER-LEARN-GOALS-STALE-96H: an apply signal on a probative learning older than 72 hours is clamped to a terminal action, so no adopted PAPER-LEARN goal sits in probation past 96h.
+    if (v.apply) {
+      var plGoal = null;
+      try { plGoal = await env.QNFO_AUDIT.prepare("SELECT id FROM goals WHERE goal_key = ?1 AND status = 'adopted'").bind("PAPER-LEARN-" + R.id).first(); } catch (ge) { plGoal = null; }
+      var createdAt = new Date(R.updated_at || now);
+      var ageMs = Date.parse(now) - createdAt.getTime();
+      var SEVENDAY_MS = 72 * 60 * 60 * 1000;
+      if (plGoal && ageMs > SEVENDAY_MS) {
+        // If the learning already has a settled outcome it is closed as in place, otherwise it lapses as rejected.
+        v = R.result
+          ? { settled: true, status: "already-in-place", note: ("PL-TRIAGE-2 in place (lapsed; apply signal after 72 hours of probation, " + now + "): last signal " + plStr(v.apply.model, 60) + ": " + plStr(v.apply.reason, 300) + " Re-propose with a measured fleet gap.").slice(0, 700) }
+          : { settled: true, status: "rejected", note: ("PL-TRIAGE-2 rejected (lapsed; apply signal after 72 hours of probation, " + now + "): last signal " + plStr(v.apply.model, 60) + ": " + plStr(v.apply.reason, 300) + " Re-propose with a measured fleet gap.").slice(0, 700) };
+      }
+    }
     if (v.settled) {
       await env.QNFO_AUDIT.prepare("UPDATE paper_learnings SET fleet_status = ?2, status_note = ?3, updated_at = ?4 WHERE id = ?1 AND fleet_status = 'probation'").bind(R.id, v.status, v.note.slice(0, 700), now).run();
       await plCloseProbationGoal(env, R.id);
