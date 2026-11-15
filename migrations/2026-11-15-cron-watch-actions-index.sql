@@ -1,0 +1,13 @@
+-- APPLY-BY: ci
+-- DB: qnfo-audit
+-- Rollback: DROP INDEX IF EXISTS idx_cron_watch_actions_issue_action;
+-- CAUSE-MAPPED: registers no metric.
+-- CRON-WATCH-INDEX-1 (2026-11-15, charter pillar: cost; ultrastable failure mode qnfo-audit-d1-budget, cap 15M rows/h).
+-- Measured 2026-11-15 with d1QueriesAdaptiveGroups (qnfo-audit, 1 h, ordered by rows read): the cron-watch "closed-seen" step,
+-- INSERT INTO cron_watch_actions ... FROM agent_issues a WHERE a.title LIKE 'CRON-FAULT-1: %' AND a.status <> 'open' AND EXISTS (SELECT 1 FROM
+-- cron_watch_actions w WHERE w.issue_id = a.id AND w.action = 'filed' AND w.id > COALESCE((SELECT MAX(w2.id) FROM cron_watch_actions w2 WHERE
+-- w2.issue_id = a.id AND w2.action = 'closed-seen'), 0)), read 993,597 rows in 33 runs. Its SELECT alone reads 29,955 rows a run for a 418-row
+-- table and 82 CRON-FAULT-1 issues: cron_watch_actions has no index, so both correlated subqueries scan the table once per candidate issue.
+-- (issue_id, action, id) serves the EXISTS (equality on issue_id and action, range on id) and the MAX(id) (last entry of the same prefix).
+-- Prediction: that statement drops from ~30k to < 1k rows read a run. Verify: d1QueriesAdaptiveGroups for the statement after the apply.
+CREATE INDEX IF NOT EXISTS idx_cron_watch_actions_issue_action ON cron_watch_actions (issue_id, action, id);
