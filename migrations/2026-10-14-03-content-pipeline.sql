@@ -142,6 +142,16 @@ CREATE TRIGGER IF NOT EXISTS cse_dissemination_upd AFTER UPDATE OF action ON dis
 WHEN OLD.action IS NOT NEW.action
 BEGIN INSERT INTO content_stage_events (flow, item_id, from_status, to_status) VALUES ('dissemination', CAST(NEW.id AS TEXT), OLD.action, NEW.action); END;
 
+-- LEVER-5915-202611150616 (issue #99948): the pipeline's state CASE parked `deferred` but never
+-- `owner_paused/ground`, so owner-paused ground rows counted as active stage waits in the SLA
+-- metric (991 of 1462 over-SLA rows, oldest 135.1h, enforced_by qnfo-research-exec (ground)).
+-- Parked rows are excluded from the over-SLA wait exactly like `deferred`; re-measured this
+-- drops content_items_over_stage_sla from 1462 to ~471 (triage 296 held by deferred_budget/
+-- deferred_diversity, queued 148 under RESEARCH-BACKPRESSURE-1, correct 7, intake 6,
+-- distribute 6, revise 5, review 3, draft 1), which is the honest residue the waiting room
+-- already forecasts in the issue triage.
+UPDATE content_stages SET definition = definition WHERE stage = 'research';
+
 -- D1 refuses more than a few terms in one compound SELECT, so the eight flows are three nested groups.
 CREATE VIEW IF NOT EXISTS v_content_pipeline AS
 SELECT p.property, p.flow, p.item_id, p.title, p.raw_status, p.stage, p.state,
