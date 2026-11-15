@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-11-15 00:23:26",
+  "audited_at": "2026-11-15 06:33:49",
   "d1_write_failures": [],
   "d1_writes_ok": 20,
   "guard": {
@@ -74,7 +74,7 @@
       },
       {
         "http": 200,
-        "version": "0.2.0",
+        "version": "0.3.0",
         "worker": "ultrastable-dashboard"
       },
       {
@@ -83,7 +83,7 @@
         "worker": "ultrastable-site"
       },
       {
-        "http": 200,
+        "http": 503,
         "version": null,
         "worker": "ultrastable-tick"
       },
@@ -203,7 +203,7 @@
     "ultrastable-dashboard": {
       "before": null,
       "http": 200,
-      "live": "0.2.0",
+      "live": "0.3.0",
       "match": 0,
       "note": "UNMANAGED_OK",
       "worker": "ultrastable-dashboard"
@@ -218,10 +218,10 @@
     },
     "ultrastable-tick": {
       "before": null,
-      "http": 200,
+      "http": 503,
       "live": null,
       "match": 0,
-      "note": "UNMANAGED_OK",
+      "note": "UNMANAGED_ERR",
       "worker": "ultrastable-tick"
     },
     "ultrastable-ultrastable": {
