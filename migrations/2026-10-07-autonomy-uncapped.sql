@@ -15,11 +15,11 @@
 --     Refreshed by D1 triggers on every hourly open_agent_issues write (the ORPHAN-ISSUE-GUARD-1 pattern; no code, no cron).
 -- APPLY-BY: ci
 -- DB: qnfo-audit
--- Rollback: UPDATE sai_config SET v = 0.7, source = 'canonical sai formula params (extracted from qnfo-fleet-dashboard v1.5.1 literals, 2026-09-14)' WHERE k = 'autonomy_ceiling'; DROP TRIGGER IF EXISTS metric_autonomy_growth_au; DROP TRIGGER IF EXISTS metric_autonomy_growth_ai; DROP VIEW IF EXISTS v_autonomous_outcomes; DELETE FROM metric_registry WHERE metric IN ('autonomous_outcomes_7d', 'autonomous_outcomes_growth_7d'); DELETE FROM analytics_metric_triggers WHERE metric_key = 'autonomous_outcomes_growth_7d';
+-- Rollback: UPDATE sai_config SET v = 0.7, source = 'canonical sai formula params (extracted from qnfo-fleet-dashboard v1.5.1 literals, 2026-09-14)' WHERE k = 'autonomy_ceiling'; DROP TRIGGER IF EXISTS metric_autonomy_growth_au; DROP TRIGGER IF EXISTS metric_autonomy_growth_ai; DROP TRIGGER IF EXISTS metric_autonomy_growth_ct; DROP TRIGGER IF EXISTS metric_autonomy_growth_cti; DROP VIEW IF EXISTS v_autonomous_outcomes; DELETE FROM metric_registry WHERE metric IN ('autonomous_outcomes_7d', 'autonomous_outcomes_growth_7d'); DELETE FROM analytics_metric_triggers WHERE metric_key = 'autonomous_outcomes_growth_7d';
 UPDATE sai_config SET v = 1.0, source = 'owner directive 2026-10-07 13:20 Amsterdam "There shall be no cap on autonomy" (AUTONOMY-UNCAPPED-1): 1.0 is the autonomy term''s own maximum; was 0.7 (extracted literal, 2026-09-14). Measurement change, not a behaviour change.', updated_at = datetime('now') WHERE k = 'autonomy_ceiling';
 
 CREATE VIEW IF NOT EXISTS v_autonomous_outcomes AS
-SELECT
+WITH split AS (SELECT
   (SELECT COUNT(*) FROM agent_issues WHERE status IN ('closed', 'resolved')
      AND (close_channel LIKE 'auto%' OR close_channel LIKE 'probe-pass%' OR close_channel LIKE 'verified-remediation%')
      AND updated_at >= (CAST(strftime('%s', 'now') AS INTEGER) - 7 * 86400) * 1000)
@@ -65,7 +65,11 @@ SELECT
      AND updated_at >= strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-7 days')) AS merge_note_cur,
   (SELECT group_concat(merge_note, ' | ') FROM code_tasks WHERE status IN ('merged', 'failed', 'closed')
      AND updated_at >= strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-14 days')
-     AND updated_at < strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-7 days')) AS merge_note_prev;
+    AND updated_at < strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-7 days')) AS merge_note_prev),
+ratios AS (SELECT split.*,
+  ROUND(CAST(split.issues_cur AS REAL) / MAX(split.issues_prev, 1), 2) AS issues_growth,
+  ROUND(CAST(split.merges_cur AS REAL) / MAX(split.merges_prev, 1), 2) AS merges_growth FROM split)
+SELECT ratios.*, MIN(ratios.issues_growth, ratios.merges_growth) AS growth FROM ratios;
 
 INSERT OR IGNORE INTO metric_registry (metric, layer, kind, formula, source_of_truth, baseline, target, owner, disposition_actor, refresh_cadence, warning_band, kill_band, last_value, last_refreshed, state, refresh_class) VALUES
  ('autonomous_outcomes_7d', 'operational', 'target',
@@ -75,11 +79,11 @@ INSERT OR IGNORE INTO metric_registry (metric, layer, kind, formula, source_of_t
   'observe; the growth metric carries the trigger', 'hourly', NULL, NULL,
   CAST((SELECT cur FROM v_autonomous_outcomes) AS TEXT), strftime('%Y-%m-%dT%H:%M:%SZ', 'now'), 'MEASURED', 'computed'),
  ('autonomous_outcomes_growth_7d', 'operational', 'target',
-  'v_autonomous_outcomes.cur / max(prev, 1), rounded to 0.01: this week''s autonomous outcomes over last week''s. Unbounded above.',
-  'qnfo-audit.v_autonomous_outcomes (AUTONOMY-UNCAPPED-1), refreshed by D1 triggers metric_autonomy_growth_au/_ai on every open_agent_issues write',
-  '2.48 on 2026-10-07 (171 / 69)', '> 1.0 every week (the fleet does more on its own than the week before); no upper bound', 'qnfo-fleet-control',
-  'trigger lt 1 -> one METRIC-TRIGGER issue naming the stalled outcome stream', 'hourly', '< 1', '< 0.5',
-  CAST(ROUND(CAST((SELECT cur FROM v_autonomous_outcomes) AS REAL) / MAX((SELECT prev FROM v_autonomous_outcomes), 1), 2) AS TEXT), strftime('%Y-%m-%dT%H:%M:%SZ', 'now'), 'MEASURED', 'computed');
+  'min(issues_growth, merges_growth) from v_autonomous_outcomes: per-stream cur/prev (machine-channel issue closes; code_tasks merged), each rounded to 0.01. Unbounded above.',
+  'qnfo-audit.v_autonomous_outcomes (AUTONOMY-UNCAPPED-1), refreshed by D1 triggers metric_autonomy_growth_au/_ai on every open_agent_issues write and metric_autonomy_growth_ct/_cti on every code_tasks write',
+  '2.48 on 2026-10-07 (171 / 69)', '>= 1.0 every week on both streams (issue-close ratio and code_tasks merged ratio; headline = min of the two); no upper bound', 'qnfo-fleet-control',
+  'trigger ge 1 unsatisfied -> one METRIC-TRIGGER issue naming the stalled stream (per-stream split: close_channel buckets, merges vs failed/closed with merge_note)', 'hourly', '< 1', '< 0.5',
+  CAST((SELECT growth FROM v_autonomous_outcomes) AS TEXT), strftime('%Y-%m-%dT%H:%M:%SZ', 'now'), 'MEASURED', 'computed');
 
 CREATE TRIGGER IF NOT EXISTS metric_autonomy_growth_au AFTER UPDATE ON metric_registry
 WHEN NEW.metric = 'open_agent_issues'
@@ -87,7 +91,7 @@ BEGIN
   UPDATE metric_registry SET last_value = CAST((SELECT cur FROM v_autonomous_outcomes) AS TEXT),
       last_refreshed = strftime('%Y-%m-%dT%H:%M:%SZ', 'now'), state = 'MEASURED'
   WHERE metric = 'autonomous_outcomes_7d';
-  UPDATE metric_registry SET last_value = CAST(ROUND(CAST((SELECT cur FROM v_autonomous_outcomes) AS REAL) / MAX((SELECT prev FROM v_autonomous_outcomes), 1), 2) AS TEXT),
+  UPDATE metric_registry SET last_value = CAST((SELECT growth FROM v_autonomous_outcomes) AS TEXT),
       last_refreshed = strftime('%Y-%m-%dT%H:%M:%SZ', 'now'), state = 'MEASURED'
   WHERE metric = 'autonomous_outcomes_growth_7d';
 END;
@@ -98,13 +102,33 @@ BEGIN
   UPDATE metric_registry SET last_value = CAST((SELECT cur FROM v_autonomous_outcomes) AS TEXT),
       last_refreshed = strftime('%Y-%m-%dT%H:%M:%SZ', 'now'), state = 'MEASURED'
   WHERE metric = 'autonomous_outcomes_7d';
-  UPDATE metric_registry SET last_value = CAST(ROUND(CAST((SELECT cur FROM v_autonomous_outcomes) AS REAL) / MAX((SELECT prev FROM v_autonomous_outcomes), 1), 2) AS TEXT),
+  UPDATE metric_registry SET last_value = CAST((SELECT growth FROM v_autonomous_outcomes) AS TEXT),
+      last_refreshed = strftime('%Y-%m-%dT%H:%M:%SZ', 'now'), state = 'MEASURED'
+  WHERE metric = 'autonomous_outcomes_growth_7d';
+END;
+
+CREATE TRIGGER IF NOT EXISTS metric_autonomy_growth_ct AFTER UPDATE ON code_tasks
+BEGIN
+  UPDATE metric_registry SET last_value = CAST((SELECT cur FROM v_autonomous_outcomes) AS TEXT),
+      last_refreshed = strftime('%Y-%m-%dT%H:%M:%SZ', 'now'), state = 'MEASURED'
+  WHERE metric = 'autonomous_outcomes_7d';
+  UPDATE metric_registry SET last_value = CAST((SELECT growth FROM v_autonomous_outcomes) AS TEXT),
+      last_refreshed = strftime('%Y-%m-%dT%H:%M:%SZ', 'now'), state = 'MEASURED'
+  WHERE metric = 'autonomous_outcomes_growth_7d';
+END;
+
+CREATE TRIGGER IF NOT EXISTS metric_autonomy_growth_cti AFTER INSERT ON code_tasks
+BEGIN
+  UPDATE metric_registry SET last_value = CAST((SELECT cur FROM v_autonomous_outcomes) AS TEXT),
+      last_refreshed = strftime('%Y-%m-%dT%H:%M:%SZ', 'now'), state = 'MEASURED'
+  WHERE metric = 'autonomous_outcomes_7d';
+  UPDATE metric_registry SET last_value = CAST((SELECT growth FROM v_autonomous_outcomes) AS TEXT),
       last_refreshed = strftime('%Y-%m-%dT%H:%M:%SZ', 'now'), state = 'MEASURED'
   WHERE metric = 'autonomous_outcomes_growth_7d';
 END;
 
 INSERT INTO analytics_metric_triggers (metric_key, title, source_table, operator, threshold, priority, action, owner, queue_target, cooldown_hours, enabled, notes)
-SELECT 'autonomous_outcomes_growth_7d', 'Autonomy growth stalled: the fleet finished less on its own this week than last week', 'registry', 'lt', 1, 4,
+SELECT 'autonomous_outcomes_growth_7d', 'Autonomy growth stalled: the fleet finished less on its own this week than last week', 'registry', 'ge', 1, 4,
   'Pillar autonomy (AUTONOMY-UNCAPPED-1). Owner directive 2026-10-07: no upper bound on autonomy; the fleet keeps raising what it does on its own. Read SELECT cur, prev FROM v_autonomous_outcomes and split both windows by stream: machine-closed issues by close_channel, and code_tasks merged vs failed/closed with their merge_note. Name the stream that fell and its cause (merge runner refusals, CI failures, a stalled remediation tick, a loop that stopped closing). Lever, in order: (1) unblock the stalled stream (a code-task line with a code-anchor when the cause is one file; a session-task when it is control-plane); (2) add a remediation_contracts probe to open issues that lack one so the hourly tick can close them on recovery; (3) add code-task lines to open issues whose fix is one file so the code loop takes them. Never close issues without evidence to raise the count: issue_wontfix_share_7d and remediation_latest_pass_pct_7d are guards, and a count that rises while either worsens is a regression. Definition of done: autonomous_outcomes_growth_7d >= 1.0 at a refresh with both guards no worse than at filing.',
   'qnfo-fleet-control', 'agent_issues', 168, 1, 'AUTONOMY-UNCAPPED-1 (migrations/2026-10-07-autonomy-uncapped.sql)'
 WHERE NOT EXISTS (SELECT 1 FROM analytics_metric_triggers x WHERE x.metric_key = 'autonomous_outcomes_growth_7d');
