@@ -1,4 +1,4 @@
-var VERSION = "1.20.8-codeagent";
+var VERSION = "1.20.9-codeagent";
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -3506,7 +3506,7 @@ async function paperLedgerChainTick(env, opts) {
     out.unsealed_min = Number(status.unsealed_min) || 0;
     out.sql_breaks = Number(status.sql_breaks) || 0;
     try {
-      var size = opts && Number(opts.verifyRows) > 0 ? Number(opts.verifyRows) : PLC_VERIFY_ROWS;
+      var size = out.chain_rows;
       var w = await plcVerifyRows(db, plcWindowOffset(nowMs, out.chain_rows, size), size);
       var nw = await plcVerifyRows(db, Math.max(0, out.chain_rows - PLC_VERIFY_NEWEST), PLC_VERIFY_NEWEST);
       out.verified = w.checked + nw.checked;
