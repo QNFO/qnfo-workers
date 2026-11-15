@@ -294,6 +294,7 @@ ok(/ask_plain_share_7d/.test(src) && /plain: "- Write in plain language "/.test(
 ok(X.plainFlags({ target: T }, e1, 1, true) === 1 + 2 + 4 + 8 + 16 && X.plainFlags({ target: T }, e1, 1, false) === 1 + 2 + 4 + 8 && X.plainFlags({ target: T }, e1, 1) === 1 + 2 + 4 + 8, "plain flags: 16 marks a timed-out rewrite, absent otherwise");
 const rwCatch = src.slice(src.indexOf('"the plain-language rewrite")'), src.indexOf("ev.removed = chk.removed;"));
 ok(/\/timed out after\/i\.test/.test(rwCatch) && /plainTimedOut = true; console\.warn\(/.test(rwCatch) && /else logErr\("plain rewrite", e\)/.test(rwCatch), "a rewrite timeout sets the flag and warns; any other rewrite failure still logs an error", rwCatch.slice(0, 400));
+ok(/Date\.now\(\) - t0 <= PLAIN_RETRY_BEFORE_MS - PLAIN_RETRY_MS/.test(src), "CF-OBS-ISSUE-1: a rewrite is not started when less than its own deadline remains before the cutoff, so it cannot be born to time out");
 ok(/ev\.plain = plainFlags\(xt, rep, retried, plainTimedOut\)/.test(src), "ask_events.plain records the timeout bit");
 ok(/the plain-language rewrite timed out after 30 s/.test(("the plain-language rewrite" + " timed out after " + Math.round(30000 / 1000) + " s")) && /rej\(new Error\(what \+ " timed out after "/.test(src), "deadline()'s message is the one the catch recognises");
 ok(/var ANSWER_REV = "r\d+-"/.test(src) && /__answer\/" \+ ANSWER_REV \+ cfg\.id/.test(src), "the answer cache is keyed by the revision of what an answer says");

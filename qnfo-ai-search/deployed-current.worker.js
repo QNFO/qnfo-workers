@@ -36,7 +36,7 @@
 //   LIMITS    public AI use is capped per visitor (hashed IP, hourly) and globally (daily); over a cap, or with the
 //             fleet's 30-day AI spend at SPEND_CAP_TOTAL_USD, the answer is sources-only (no model call).
 
-var VERSION = "2.20.7-codeagent";
+var VERSION = "2.20.8-codeagent";
 // 2.19.0 KERNEL-EVERYWHERE-1 (2026-11-06, owner directive "IMPLEMENT EVERYWHERE ACROSS ALL AI APPS AND SERVICES AND SURFACES", pillar reach): the Ask writer SYSTEM prompt carries the DOCTRINE-1 kernel 8.2.1 reply recognitions (KERNEL-REPLY-4): the answer body ends on the result; the designed FOLLOWUPS block remains the only question shape; no conditional offers or menus; ambiguity gets a stated assumption; limits are dispositions with their reason. prior 2.18.2-codeagent
 // 2.13.0 CROSS-LINK-1 (2026-11-04, pillar reach; minor: the Ask page links QWAV and q08 in its nav and footer and carries a Keep exploring strip to the paper library, QWAV, q08 and the idea threads). Prediction: ask.qwav.org visitors click through to another surface; revert: restore 2.12.17. // 2.12.17 earlier history follows: 
 
@@ -2629,7 +2629,11 @@ async function ask(request, env, ctx) {
       // ASK-PLAIN-1: check every answer for density, and explanations for echo. Keep only a better rewrite after grounding it.
       var rep = chk.text ? plainReport(chk.text, xt ? xt.target : "") : null, retried = 0, plainTimedOut = false;
       var badness = function (r) { return r ? (r.echo ? 2 : 0) + (r.dense ? 1 : 0) : 3; };
-      if (rep && ((xt && rep.echo) || rep.dense) && !stopped && Date.now() - t0 < PLAIN_RETRY_BEFORE_MS) {
+      // CF-OBS-ISSUE-1: the rewrite is optional, but one started with less than PLAIN_RETRY_MS left before the cutoff can only
+      // end in "the plain-language rewrite timed out after ..." that Cloudflare observability files per occurrence. It is not
+      // started at all in that window; the reader gets the grounded first answer, and the flag keeps the timeout path for
+      // a rewrite that was started with room and still ran past its own deadline.
+      if (rep && ((xt && rep.echo) || rep.dense) && !stopped && Date.now() - t0 <= PLAIN_RETRY_BEFORE_MS - PLAIN_RETRY_MS) {
         retried = 1;
         try {
           var gen2 = await deadline(runWriter(messages.concat([{ role: "assistant", content: sp.body }, { role: "user", content: plainRewriteRequest(rep) }])), PLAIN_RETRY_MS, "the plain-language rewrite");
