@@ -29,7 +29,43 @@ SELECT
      AND updated_at >= (CAST(strftime('%s', 'now') AS INTEGER) - 14 * 86400) * 1000
      AND updated_at < (CAST(strftime('%s', 'now') AS INTEGER) - 7 * 86400) * 1000)
   + (SELECT COUNT(*) FROM code_tasks WHERE status = 'merged' AND updated_at >= strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-14 days')
-     AND updated_at < strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-7 days')) AS prev;
+     AND updated_at < strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-7 days')) AS prev,
+  (SELECT COUNT(*) FROM agent_issues WHERE status IN ('closed', 'resolved')
+     AND (close_channel LIKE 'auto%' OR close_channel LIKE 'probe-pass%' OR close_channel LIKE 'verified-remediation%')
+     AND updated_at >= (CAST(strftime('%s', 'now') AS INTEGER) - 7 * 86400) * 1000) AS issues_cur,
+  (SELECT COUNT(*) FROM agent_issues WHERE status IN ('closed', 'resolved')
+     AND (close_channel LIKE 'auto%' OR close_channel LIKE 'probe-pass%' OR close_channel LIKE 'verified-remediation%')
+     AND updated_at >= (CAST(strftime('%s', 'now') AS INTEGER) - 14 * 86400) * 1000
+     AND updated_at < (CAST(strftime('%s', 'now') AS INTEGER) - 7 * 86400) * 1000) AS issues_prev,
+  (SELECT COUNT(*) FROM agent_issues WHERE status IN ('closed', 'resolved') AND close_channel LIKE 'auto%'
+     AND updated_at >= (CAST(strftime('%s', 'now') AS INTEGER) - 7 * 86400) * 1000) AS issues_auto_cur,
+  (SELECT COUNT(*) FROM agent_issues WHERE status IN ('closed', 'resolved') AND close_channel LIKE 'auto%'
+     AND updated_at >= (CAST(strftime('%s', 'now') AS INTEGER) - 14 * 86400) * 1000
+     AND updated_at < (CAST(strftime('%s', 'now') AS INTEGER) - 7 * 86400) * 1000) AS issues_auto_prev,
+  (SELECT COUNT(*) FROM agent_issues WHERE status IN ('closed', 'resolved') AND close_channel LIKE 'probe-pass%'
+     AND updated_at >= (CAST(strftime('%s', 'now') AS INTEGER) - 7 * 86400) * 1000) AS issues_probe_pass_cur,
+  (SELECT COUNT(*) FROM agent_issues WHERE status IN ('closed', 'resolved') AND close_channel LIKE 'probe-pass%'
+     AND updated_at >= (CAST(strftime('%s', 'now') AS INTEGER) - 14 * 86400) * 1000
+     AND updated_at < (CAST(strftime('%s', 'now') AS INTEGER) - 7 * 86400) * 1000) AS issues_probe_pass_prev,
+  (SELECT COUNT(*) FROM agent_issues WHERE status IN ('closed', 'resolved') AND close_channel LIKE 'verified-remediation%'
+     AND updated_at >= (CAST(strftime('%s', 'now') AS INTEGER) - 7 * 86400) * 1000) AS issues_verified_remediation_cur,
+  (SELECT COUNT(*) FROM agent_issues WHERE status IN ('closed', 'resolved') AND close_channel LIKE 'verified-remediation%'
+     AND updated_at >= (CAST(strftime('%s', 'now') AS INTEGER) - 14 * 86400) * 1000
+     AND updated_at < (CAST(strftime('%s', 'now') AS INTEGER) - 7 * 86400) * 1000) AS issues_verified_remediation_prev,
+  (SELECT COUNT(*) FROM code_tasks WHERE status = 'merged' AND updated_at >= strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-7 days')) AS merges_cur,
+  (SELECT COUNT(*) FROM code_tasks WHERE status = 'merged' AND updated_at >= strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-14 days')
+     AND updated_at < strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-7 days')) AS merges_prev,
+  (SELECT COUNT(*) FROM code_tasks WHERE status = 'failed' AND updated_at >= strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-7 days')) AS failed_cur,
+  (SELECT COUNT(*) FROM code_tasks WHERE status = 'failed' AND updated_at >= strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-14 days')
+     AND updated_at < strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-7 days')) AS failed_prev,
+  (SELECT COUNT(*) FROM code_tasks WHERE status = 'closed' AND updated_at >= strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-7 days')) AS closed_cur,
+  (SELECT COUNT(*) FROM code_tasks WHERE status = 'closed' AND updated_at >= strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-14 days')
+     AND updated_at < strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-7 days')) AS closed_prev,
+  (SELECT group_concat(merge_note, ' | ') FROM code_tasks WHERE status IN ('merged', 'failed', 'closed')
+     AND updated_at >= strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-7 days')) AS merge_note_cur,
+  (SELECT group_concat(merge_note, ' | ') FROM code_tasks WHERE status IN ('merged', 'failed', 'closed')
+     AND updated_at >= strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-14 days')
+     AND updated_at < strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-7 days')) AS merge_note_prev;
 
 INSERT OR IGNORE INTO metric_registry (metric, layer, kind, formula, source_of_truth, baseline, target, owner, disposition_actor, refresh_cadence, warning_band, kill_band, last_value, last_refreshed, state, refresh_class) VALUES
  ('autonomous_outcomes_7d', 'operational', 'target',
