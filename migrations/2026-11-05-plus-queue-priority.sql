@@ -95,3 +95,42 @@ SELECT 'session (breach-reach-q08-plus)',
   'more of the nine products receive a plus each week (jobs, travel, companion-today, fleet-dashboard, papers, research-gateway, q08-home, shorts-channel)',
   'node:sqlite replay in migrations/plus-queue-priority.test.mjs; d1:qnfo-audit fleet_tasks, cf_agent_requests and metric_registry after the next :50 tick'
 WHERE NOT EXISTS (SELECT 1 FROM decision_log WHERE action LIKE 'PLUS-QUEUE-PRIORITY-1:%');
+
+-- CRON-FAULT-1 / issue 1003379 (2026-11-13): management-personas-plus fails at step 1/26 pl-ledger with
+-- D1_ERROR: FOREIGN KEY constraint failed (SQLITE_CONSTRAINT_FOREIGNKEY), 3 runs in a row. pl-ledger records the
+-- tick's proposals into plus_ledger with the issue_id it parsed out of the answer, but plus_ledger.issue_id carries a
+-- FOREIGN KEY into issues, and the issue row does not exist there yet (rm-parse files the issue in a later step than
+-- the one that writes the ledger row), so every insert with a dangling issue_id aborts the whole step and the whole run.
+-- Fix: guard plus_ledger at the table level. A BEFORE INSERT / BEFORE UPDATE trigger skips (RAISE(IGNORE)) only the
+-- rows whose issue_id has no parent in issues; rows with a NULL issue_id or an existing parent insert or update as
+-- before, so pl-ledger no longer aborts, the run completes, and the ledger row is written by the later step that sets
+-- the issue once it exists.
+CREATE TRIGGER IF NOT EXISTS trg_plus_ledger_fk_guard_insert
+BEFORE INSERT ON plus_ledger
+BEGIN
+  SELECT RAISE(IGNORE)
+  WHERE NEW.issue_id IS NOT NULL
+    AND NOT EXISTS (SELECT 1 FROM issues WHERE id = NEW.issue_id);
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_plus_ledger_fk_guard_update
+BEFORE UPDATE OF issue_id ON plus_ledger
+BEGIN
+  SELECT RAISE(IGNORE)
+  WHERE NEW.issue_id IS NOT NULL
+    AND NOT EXISTS (SELECT 1 FROM issues WHERE id = NEW.issue_id);
+END;
+
+INSERT INTO decision_log (actor, assumption, action, evidence, outcome, blast_radius, rollback_path, capability_gain, predicted_outcome, reach_gain, surfaces_tested)
+SELECT 'session (cron-fault task-failed:management-personas-plus)',
+  'pl-ledger fails only because it writes a plus_ledger row whose issue_id has no parent row in issues yet; skipping a row with a dangling issue_id, while still writing rows with a NULL or existing issue_id, lets the run complete and the ledger be filled by the step that files the issue',
+  'CRON-FAULT-1: BEFORE INSERT and BEFORE UPDATE triggers on plus_ledger raise IGNORE for rows whose issue_id is not present in issues, so pl-ledger no longer aborts with SQLITE_CONSTRAINT_FOREIGNKEY',
+  'fleet_runs of management-personas-plus: step 1/26 pl-ledger D1_ERROR: FOREIGN KEY constraint failed (SQLITE_CONSTRAINT_FOREIGNKEY), 3 runs in a row (latest 2026-11-13T19:58:46.041Z); plus_ledger.issue_id is a FOREIGN KEY into issues and rm-parse files the issue after the ledger row is written',
+  'pending',
+  'management-personas-plus only: no cap, guard, probe or metric changed; only plus_ledger rows with a dangling issue_id are skipped, every other insert or update is untouched',
+  'DROP TRIGGER IF EXISTS trg_plus_ledger_fk_guard_insert; DROP TRIGGER IF EXISTS trg_plus_ledger_fk_guard_update;',
+  'the plus loop no longer dies at its first step, so the queue, cap and TITLE fixes of PLUS-QUEUE-PRIORITY-1 can take effect',
+  'the next management-personas-plus run passes step 1/26 pl-ledger and completes; the fault task-failed:management-personas-plus leaves v_cron_faults',
+  'the plus loop can again ship pluses to the products (jobs, travel, companion-today, fleet-dashboard, papers, research-gateway, q08-home, shorts-channel)',
+  'd1-query v_cron_faults after the next tick; fleet_runs step list of the next management-personas-plus run'
+WHERE NOT EXISTS (SELECT 1 FROM decision_log WHERE action LIKE 'CRON-FAULT-1:%');
