@@ -17,7 +17,7 @@ database_name = "q08-trades"
 database_id = "5f43fb60-01cf-4d1f-842e-1b634f6ccc81"
 
 [triggers]
-crons = ["*/5 * * * *"]
+crons = [] # FLEET-FREEZE-1 2026-11-16: was ["*/5 * * * *"]
 
 # PM-SIGNALS-1: short-term news-driven probability estimates go through the fleet AI router, never a per-worker key
 # (INTERNAL-CALLER-PROPS-1 #1703: qnfo-ai authenticates this binding by ctx.props.caller; installed by the canonical deploy).

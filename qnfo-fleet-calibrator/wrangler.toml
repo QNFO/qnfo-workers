@@ -52,7 +52,7 @@ binding = "SVC_QNFO_INTENT"
 service = "qnfo-intent-orchestrator"
 
 [triggers]
-crons = ["0 3 * * *", "30 3 * * 1", "0 4 1 * *"]
+crons = [] # FLEET-FREEZE-1 2026-11-16: was ["0 3 * * *", "30 3 * * 1", "0 4 1 * *"]
 
 [observability]
 enabled = true

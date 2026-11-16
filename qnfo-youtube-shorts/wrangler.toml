@@ -47,7 +47,7 @@ props = { caller = "qnfo-youtube-shorts" }
 
 # CRON-SINGLE-TRIGGER-1: one hourly trigger; worker.js CRON_TABLE holds the entries.
 [triggers]
-crons = ["0 * * * *"]
+crons = [] # FLEET-FREEZE-1 2026-11-16: was ["0 * * * *"]
 
 # Render container: python 3.12, manim, ffmpeg, pango/cairo (container/Dockerfile). standard-2 = 1 vCPU, 6 GiB.
 [[containers]]

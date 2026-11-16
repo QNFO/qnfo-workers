@@ -9,8 +9,7 @@ name: indexnow-submit
 # Worker fan-out (which keeps yandex.com first, since that engine still accepts CF egress).
 
 on:
-  schedule:
-    - cron: "23 6 * * *"
+  # schedule removed 2026-11-16 (FLEET-FREEZE-1, owner directive: stop all recurring work)
   workflow_dispatch:
 
 permissions:

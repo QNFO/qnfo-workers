@@ -29,7 +29,7 @@ cpu_ms = 30000
 # Minute 17 keeps it off the fleet's 10-minute control tick. TRACKER-SYNC-1 runs at minute 3 of every 10
 # (agent_issues <-> GitHub issues, code_tasks <-> pull requests), also off the control tick.
 [triggers]
-crons = ["5,15,25,35,45,55 * * * *"]
+crons = [] # FLEET-FREEZE-1 2026-11-16: was ["5,15,25,35,45,55 * * * *"]
 
 [[d1_databases]]
 binding = "AUDIT"

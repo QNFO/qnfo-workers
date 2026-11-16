@@ -21,4 +21,4 @@ name = "SEND_EMAIL"
 # secret (set via wrangler secret put): ERRATA_TOKEN
 
 [triggers]
-crons = ["15 * * * *"]
+crons = [] # FLEET-FREEZE-1 2026-11-16: was ["15 * * * *"]

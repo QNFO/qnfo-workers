@@ -31,7 +31,7 @@ head_sampling_rate = 0.05
 
 # CRON-SINGLE-TRIGGER-1: one hourly tick (CRON-HOURLY-FLOOR-1); the pipeline is idempotent (upsert by posting id).
 [triggers]
-crons = ["15 * * * *"]
+crons = [] # FLEET-FREEZE-1 2026-11-16: was ["15 * * * *"]
 
 # CLOCKWORK-1 (2026-11-12): 10 of the 24 hourly sweeps on 2026-11-11/12 died with exceededResources at 30 s CPU (the default; healthy
 # sweeps use 22-24 s, Workers analytics cpuTimeP99), so jobsearch_runs showed "run did not finish: closed by the next run". The canonical

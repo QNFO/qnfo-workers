@@ -73,7 +73,7 @@ name = "SEND_EMAIL"
 allowed_destination_addresses = ["rwnquni@outlook.com"]
 
 [triggers]
-crons = ["*/5 * * * *"]
+crons = [] # FLEET-FREEZE-1 2026-11-16: was ["*/5 * * * *"]
 
 [[services]]
 binding = "SVC_QNFO_AI"

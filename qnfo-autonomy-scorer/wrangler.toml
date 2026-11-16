@@ -14,4 +14,4 @@ database_id = "35e2e573-92f3-46ac-83c6-22f6429fc5e5"
 
 # One run per day. Scores are recomputed from live facts; judgement dimensions are never touched.
 [triggers]
-crons = ["17 5 * * *"]
+crons = [] # FLEET-FREEZE-1 2026-11-16: was ["17 5 * * *"]

@@ -4,7 +4,7 @@ compatibility_date = "2026-01-01"
 workers_dev = true
 
 [triggers]
-crons = ["*/15 * * * *"]
+crons = [] # FLEET-FREEZE-1 2026-11-16: was ["*/15 * * * *"]
 
 [[d1_databases]]
 binding = "AUDIT"

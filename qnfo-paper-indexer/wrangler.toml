@@ -25,7 +25,7 @@ binding = "PAPER_VZ"
 index_name = "qwav-research-v2"
 
 [triggers]
-crons = ["0 4 * * *", "5 6 * * *"]
+crons = [] # FLEET-FREEZE-1 2026-11-16: was ["0 4 * * *", "5 6 * * *"]
 
 # d1 binding (AUDIT-REMEDIATE-1 2026-09-22; verified vs live CF bindings)
 [[d1_databases]]

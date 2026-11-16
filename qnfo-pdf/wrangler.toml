@@ -52,7 +52,7 @@ database_id = "35e2e573-92f3-46ac-83c6-22f6429fc5e5"
 # PDF on 2026-10-12 clear in about 14 hours. The second path for the same outcome is the on-demand GET /pdf/<slug> render; a stalled loop
 # is detected by fm-pdf-backlog-stalled (migrations/2026-10-12-30-scholar-pdf-backlog.sql).
 [triggers]
-crons = ["*/10 * * * *"]
+crons = [] # FLEET-FREEZE-1 2026-11-16: was ["*/10 * * * *"]
 
 [vars]
 PDF_BACKLOG_BATCH = "6"

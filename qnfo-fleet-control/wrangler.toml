@@ -50,7 +50,7 @@ head_sampling_rate = 0.1
 # path into scheduledOnce's hourly fan-out (pollObservability, reassertObservability, refreshOwnedMetrics, codeMergeTick,
 # branchHygieneTick, publicationPreflight, workerCensusIfStale, usageSnapshotIfStale). The hourly trigger is offset to :05
 # so this D1-heavy fan-out does not start alongside the 10-minute tick at :00.
-crons = ["*/10 * * * *", "5 * * * *"]
+crons = [] # FLEET-FREEZE-1 2026-11-16: was ["*/10 * * * *", "5 * * * *"]
 
 [ai]
 binding = "AI"

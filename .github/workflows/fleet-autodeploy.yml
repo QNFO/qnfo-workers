@@ -116,8 +116,7 @@ run-name: ${{ github.event_name == 'workflow_dispatch' && format('fleet-autodepl
 # the same VERSION string — version parity is not content parity.
 
 on:
-  schedule:
-    - cron: "43 8 * * *"
+  # schedule removed 2026-11-16 (FLEET-FREEZE-1, owner directive: stop all recurring work)
   # CI-VELOCITY-1 (2026-11-04): no push trigger. The push run audits while canonical-deploy is still deploying the same commit
   # (DRIFT-AUDIT-AFTER-DEPLOY-1 below), and every worker push ends in a mirror-sync or canonical-deploy completion that starts this
   # workflow anyway. Dropping it also ends the CI-RUNAWAY-LOOP-1 push path (artifact commits cannot start it).

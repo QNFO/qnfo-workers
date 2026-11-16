@@ -33,8 +33,7 @@ on:
       - "qnfo-ops/wrangler.toml"
       - "qnfo-ops/scripts/guard-timebudget.sh"
       - ".github/workflows/guard-timebudget.yml"
-  schedule:
-    - cron: "30 7 * * *"
+  # schedule removed 2026-11-16 (FLEET-FREEZE-1, owner directive: stop all recurring work)
   workflow_dispatch:
 
 concurrency:
