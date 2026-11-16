@@ -6,12 +6,8 @@ name: code-loop-test
 # A red run on main is filed by ci-watchdog (it is on that workflow's watch list).
 
 on:
+  # FLEET-FREEZE-1 (2026-11-16): automatic triggers removed (push, workflow_run, pull_request_target, repository_dispatch); run by hand.
   workflow_call:
-  push:
-    branches: [main]
-    paths:
-      - "qnfo-code-orchestrator/**"
-      - ".github/workflows/code-loop-test.yml"
   workflow_dispatch:
 
 permissions:

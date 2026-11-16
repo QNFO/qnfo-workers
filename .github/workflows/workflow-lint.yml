@@ -13,18 +13,8 @@ name: workflow-lint
 # scripts/workflow-lint.py is the checker; it is also runnable standalone.
 
 on:
+  # FLEET-FREEZE-1 (2026-11-16): automatic triggers removed (push, workflow_run, pull_request_target, repository_dispatch); run by hand.
   workflow_call:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/**'
-      - 'scripts/workflow-lint.py'
-      - 'scripts/secret-mutation-guard.py'
-      - 'scripts/secret-mutation-allowlist.txt'
-      - 'scripts/secret_lock.py'
-      - 'scripts/*.py'
-      - 'scripts/status_unchanged.py'
-      - 'scripts/status_unchanged_test.py'
   workflow_dispatch:
 
 permissions:

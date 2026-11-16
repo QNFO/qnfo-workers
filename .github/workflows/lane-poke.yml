@@ -15,11 +15,10 @@ name: lane-poke
 # never the one that is dropped.
 
 on:
+  # FLEET-FREEZE-1 (2026-11-16): automatic triggers removed (push, workflow_run, pull_request_target, repository_dispatch); run by hand.
   workflow_call:
   # A "resolved" or "hold released" comment releases a HOLD: comment (STALE-PR-LANE-READS-HOLDS-1), and a person's comment is the only other event that changes
   # whether the lane may merge. Bot comments (preview deploys, status notes) are skipped in the job condition.
-  issue_comment:
-    types: [created]
   workflow_dispatch:
 
 permissions: {}

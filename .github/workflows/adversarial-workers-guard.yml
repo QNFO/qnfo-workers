@@ -10,14 +10,8 @@ name: adversarial-workers-guard
 # is event-driven: every PR and every push to main that touches a worker file.
 
 on:
+  # FLEET-FREEZE-1 (2026-11-16): automatic triggers removed (push, workflow_run, pull_request_target, repository_dispatch); run by hand.
   workflow_call:
-  push:
-    branches: [main]
-    paths:
-      - "*/worker.js"
-      - "*/deployed-current.worker.js"
-      - "scripts/adversarial-workers-guard.py"
-      - ".github/workflows/adversarial-workers-guard.yml"
   workflow_dispatch:
 
 permissions:

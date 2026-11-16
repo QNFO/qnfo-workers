@@ -13,15 +13,12 @@ name: deploy-code-orchestrator
 # Style: step names colon-free, no heredocs, no inline python (workflow-lint.py).
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "qnfo-code-orchestrator/**"
-      - ".github/workflows/deploy-code-orchestrator.yml"
+  # FLEET-FREEZE-1 (2026-11-16): automatic triggers removed (push, workflow_run, pull_request_target, repository_dispatch); run by hand.
   workflow_dispatch:
 
 # CONTROL-PLANE-CANARY-2 (2026-10-06): contents write for the canary's revert push and actions write for its redeploy
 # dispatch (scripts/canary_revert.py), the same grants canonical-deploy.yml holds for the workers it deploys.
+
 permissions:
   contents: write
   actions: write

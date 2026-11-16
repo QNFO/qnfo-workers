@@ -5,11 +5,7 @@
 # Cloudflare token. Rollback: dispatch again with the previous ref (the Pages dashboard keeps every deployment).
 name: qwav-pages-deploy
 on:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/qwav-pages-deploy.yml"
-      - "scripts/qwav_pages.py"
+  # FLEET-FREEZE-1 (2026-11-16): automatic triggers removed (push, workflow_run, pull_request_target, repository_dispatch); run by hand.
   workflow_dispatch:
     inputs:
       ref:

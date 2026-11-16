@@ -46,6 +46,7 @@ name: deploy-pages-qnfo-publications
 #   C. If the staged file is missing or implausibly small -> exit 1.
 
 on:
+  # FLEET-FREEZE-1 (2026-11-16): automatic triggers removed (push, workflow_run, pull_request_target, repository_dispatch); run by hand.
   workflow_dispatch:
     inputs:
       confirm:
@@ -56,11 +57,6 @@ on:
         description: "Pages project name"
         required: true
         default: "qnfo-publications"
-  push:
-    branches: [main]
-    paths:
-      - "qnfo-web-unified/archive-qnfo.html"
-      - ".github/workflows/deploy-pages-qnfo-publications.yml"
 
 permissions:
   contents: read

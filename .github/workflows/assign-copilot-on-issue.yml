@@ -29,12 +29,7 @@ name: assign-copilot-on-issue
 # Style: step names colon-free, no heredocs, no inline python, inputs travel through env (workflow-lint.py).
 
 on:
-  issues:
-    types: [opened]
-  workflow_run:
-    workflows: ["remediation-consumer"]
-    types: [completed]
-  # schedule removed 2026-11-16 (FLEET-FREEZE-1, owner directive: stop all recurring work)
+  # FLEET-FREEZE-1 (2026-11-16): automatic triggers removed (push, workflow_run, pull_request_target, repository_dispatch); run by hand.
   workflow_dispatch:
     inputs:
       hours:

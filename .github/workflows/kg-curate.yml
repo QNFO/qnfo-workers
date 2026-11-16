@@ -16,10 +16,7 @@ name: kg-curate
 # LIMITS    docs/KNOWLEDGE-GRAPH.md has the guards. A lease in qnfo-graph.kg_state keeps two runs apart even when the queue is bypassed.
 
 on:
-  push:
-    branches: [main]
-  repository_dispatch:
-    types: [kg-curate-tick, fleet-graph-tick]
+  # FLEET-FREEZE-1 (2026-11-16): automatic triggers removed (push, workflow_run, pull_request_target, repository_dispatch); run by hand.
   workflow_dispatch:
     inputs:
       force:

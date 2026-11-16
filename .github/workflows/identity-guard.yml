@@ -9,9 +9,9 @@ name: identity-guard
 # `identity-guard: allow` are skipped.
 
 on:
+  # FLEET-FREEZE-1 (2026-11-16): automatic triggers removed (push, workflow_run, pull_request_target, repository_dispatch); run by hand.
   workflow_call:
-  push:
-    branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read

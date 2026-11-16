@@ -9,11 +9,7 @@ name: attach-surface-routes
 # WORKFLOW-YAML-LINT-1: every step name below is colon-free.
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/attach-surface-routes.yml'
-      - 'scripts/attach-surface-routes.py'
+  # FLEET-FREEZE-1 (2026-11-16): automatic triggers removed (push, workflow_run, pull_request_target, repository_dispatch); run by hand.
   workflow_dispatch:
 
 permissions:

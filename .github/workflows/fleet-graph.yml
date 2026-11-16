@@ -20,20 +20,9 @@ name: fleet-graph
 #           writes the same schema to a local SQLite file.
 
 on:
+  # FLEET-FREEZE-1 (2026-11-16): automatic triggers removed (push, workflow_run, pull_request_target, repository_dispatch); run by hand.
   workflow_call:
-  push:
-    branches: [main]
-    paths:
-      - '*/worker.js'
-      - '*/wrangler.toml'
-      - '*/RETIRED'
-      - '*/FOLDED'
-      - 'migrations/**'
-      - 'scripts/**'
-      - '.github/workflows/**'
   workflow_dispatch:
-  repository_dispatch:
-    types: [fleet-graph-tick]
 
 permissions:
   contents: read

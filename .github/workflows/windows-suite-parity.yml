@@ -19,12 +19,8 @@ name: windows-suite-parity
 # completed run, so a fix to a Windows-red suite is seen once this workflow runs again: dispatch it after the fix lands.
 
 on:
+  # FLEET-FREEZE-1 (2026-11-16): automatic triggers removed (push, workflow_run, pull_request_target, repository_dispatch); run by hand.
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - "scripts/run-suites.mjs"
-      - ".github/workflows/windows-suite-parity.yml"
 
 permissions:
   contents: read

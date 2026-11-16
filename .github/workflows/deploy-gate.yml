@@ -17,10 +17,7 @@ name: deploy-gate
 # not deploy.
 
 on:
-  push:
-    branches: [main]
-  # TWO-PR-WORKFLOWS-1 (2026-11-04, owner directive: a maximum of two workflows per pull request): no pull_request trigger. pr-checks calls this file
-  # as a job, so github.event_name stays pull_request inside it and every pull-request branch below is unchanged. Revert: restore `pull_request: branches: [main]` here.
+  # FLEET-FREEZE-1 (2026-11-16): automatic triggers removed (push, workflow_run, pull_request_target, repository_dispatch); run by hand.
   workflow_call:
   # GATE-NIGHTLY-FULL-1 (2026-10-17): a PR validates only its changed directories (PRS-SCOPE-1), so
   # without this the full 429-suite sweep ran only on a push to main - i.e. after the merge. Once a day (GHA-COST-1: was every two hours).
@@ -30,8 +27,6 @@ on:
   # MERGE-BOUNDARY-GATE-1 (2026-10-19, agent_issues 2830): path A of the issue, switched on by a repository setting. When a merge queue
   # is enabled on main, the queue runs this workflow on the merge group's head; it takes the full-set branch below (not the
   # pull-request one), so the commit that would land is validated with every suite before it lands. Inert while no queue exists.
-  merge_group:
-    types: [checks_requested]
   workflow_dispatch:
 
 # GATE-RUN-ALL-1 (2026-10-06): every check step runs even after an earlier one failed (if: !cancelled()), so one broken
@@ -41,6 +36,7 @@ on:
 # GHA-AUDIT-1 (2026-10-13): the gate only reads the repository (Cloudflare calls use the CF token), so the GitHub token is
 # read-only. A newer push to the same PR cancels the superseded gate run; push runs on main are grouped per sha and never
 # cancel one another. The longest gate in the 2026-10-13 sample took 460 s, so 30 minutes bounds a hung step.
+
 permissions:
   contents: read
 

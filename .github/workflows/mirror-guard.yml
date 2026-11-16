@@ -7,16 +7,13 @@ name: mirror-guard
 # that a pre-push/pre-deploy check can miss.
 
 on:
+  # FLEET-FREEZE-1 (2026-11-16): automatic triggers removed (push, workflow_run, pull_request_target, repository_dispatch); run by hand.
   workflow_call:
   # CI-VELOCITY-1 (2026-11-04): no push trigger. mirror-sync runs on every worker push and its completion starts this guard on the repaired tip, so the push run was a duplicate.
   # MIRROR-GUARD-RACE-1 (2026-10-17): a push-to-main run races mirror-sync.yml, which
   # regenerates AND COMMITS the lagging mirror on that same push. The push run therefore
   # reports lag as a warning; this post-repair run is the authoritative gate, and it fails
   # when a mirror is STILL lagging after mirror-sync has had its turn.
-  workflow_run:
-    workflows: [mirror-sync]
-    types: [completed]
-    branches: [main]
   workflow_dispatch:
 
 # GHA-AUDIT-1 (2026-10-13): read-only token; a superseded PR head is cancelled, a push run never is (group per sha).
@@ -25,6 +22,7 @@ on:
 # see the step). Measured 2026-11-04 16:51-16:52Z: 7 such runs created within 45 s, each waited 12-20 minutes for a runner
 # (run_started_at to updated_at 726-1237 s for a 15-50 s check), holding runner slots that pull-request checks and deploys
 # queue for. With one group the burst costs one run. A dispatch keeps its own per-sha group and is never cancelled.
+
 permissions:
   contents: read
 
