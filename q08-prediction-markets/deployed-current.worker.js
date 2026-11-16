@@ -1,6 +1,6 @@
 // q08-prediction-markets: the paper-trading proving ground for q08's information edge (PM-CHARTER-1).
 // Paper money only. No wallet, no exchange key, no order ever leaves this worker: the only executor in this file writes D1 rows.
-var VERSION = "1.17.2-codeagent";
+var VERSION = "1.17.3-codeagent";
 
 // ---------- charter (the machine-readable form; GET /api/charter serves it with the live evidence) ----------
 export const CHARTER = {
@@ -495,7 +495,7 @@ async function fetchHeld(slugs) {
 async function readControl(db) {
   const m = Object.fromEntries((await db.prepare("SELECT key,value FROM pt_control").all()).results.map((r) => [r.key, r.value]));
   let off = {}; try { off = JSON.parse(m.domains_off || "{}"); } catch (e) { off = {}; }
-  return { min_edge: Number(m.min_edge) || CFG.MIN_EDGE, paused_until: m.paused_until || null, paused_reason: m.paused_reason || null,
+  return { min_edge: Number(m.min_edge) || CFG.MIN_EDGE, paused_until: m.paused_until || null, paused_reason: m.paused_reason || null, pm_breaker_active: Number(m.pm_breaker_active) || 0,
     recal_a: m.recal_a == null ? 1 : Number(m.recal_a), recal_b: m.recal_b == null ? 0 : Number(m.recal_b), blend_w: m.blend_w == null ? 0.5 : Number(m.blend_w),
     params_version: Number(m.params_version) || 1, version_started_at: m.version_started_at || null, last_tune_at: m.last_tune_at || null, domains_off: off,
     chain_ok: m.chain_ok == null ? null : m.chain_ok === "1", chain_checked_at: m.chain_checked_at || null };
@@ -503,7 +503,7 @@ async function readControl(db) {
 const setControl = (db, key, value, now) => db.prepare("INSERT OR REPLACE INTO pt_control (key,value,updated_at) VALUES (?,?,?)").bind(key, String(value), now);
 const logDecision = (db, now, action, assumption, evidence, rollback) => db.prepare("INSERT INTO pt_decision (ts,actor,assumption,action,evidence,rollback) VALUES (?,?,?,?,?,?)").bind(now, "review-loop", assumption, action, JSON.stringify(evidence), rollback);
 const offDomains = (ctl, nowMs) => new Set(Object.entries(ctl.domains_off || {}).filter(([, u]) => Date.parse(u) > nowMs).map(([d]) => d));
-const isPaused = (ctl, nowMs) => !!ctl.paused_until && Date.parse(ctl.paused_until) > nowMs;
+const isPaused = (ctl, nowMs) => (!!ctl.paused_until && Date.parse(ctl.paused_until) > nowMs) || Boolean(ctl.pm_breaker_active);
 
 // ---------- evidence and the ensemble (q08's signal sources: Hacker News and GDELT) ----------
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
