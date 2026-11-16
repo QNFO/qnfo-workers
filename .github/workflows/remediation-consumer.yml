@@ -59,8 +59,7 @@ on:
   # (2026-11-04 15:32-15:49Z: 12 queued, 6 pending, 12 cancelled, 0 completed). The qnfo-cloud-ops PROBE-CADENCE-1 repository_dispatch below
   # starts the consumer when the last run is 60 minutes old, so probes arrive on a steady cadence instead of in bursts.
   # Revert: restore the workflow_run block (workflows ["apply-pending-patches", "fleet-autodeploy"], types [completed]).
-  schedule:
-    - cron: '17 10 * * *'
+  # schedule removed 2026-11-16 (FLEET-FREEZE-1, owner directive: stop all recurring work)
   workflow_dispatch:
     inputs:
       heavy:

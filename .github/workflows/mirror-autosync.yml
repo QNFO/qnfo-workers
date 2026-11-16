@@ -12,8 +12,7 @@ name: mirror-autosync
 # /health reports 1.6.2-cronconsolidate while both repo files carry 1.6.2, so an
 # unattended cp would have reverted a live fix. Auto-propose; merge deliberately.
 on:
-  schedule:
-    - cron: "23 11 * * *"
+  # schedule removed 2026-11-16 (FLEET-FREEZE-1, owner directive: stop all recurring work)
   workflow_dispatch:
 
 permissions:

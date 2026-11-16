@@ -75,4 +75,4 @@ dataset = "qnfo_reach"
 # [triggers] is applied only by PUT /schemas/deployments/schedules in the canonical path (/ops/deploy), never by
 # PUT /content alone. This comment ships the re-attach deploy.
 [triggers]
-crons = ["0 * * * *"]
+crons = [] # FLEET-FREEZE-1 2026-11-16: was ["0 * * * *"]

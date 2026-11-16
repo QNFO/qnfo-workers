@@ -24,7 +24,7 @@ head_sampling_rate = 0.1
 # POST /run (x-run-key) remains for on-demand sweeps.
 
 [triggers]
-crons = ["5 * * * *"]
+crons = [] # FLEET-FREEZE-1 2026-11-16: was ["5 * * * *"]
 
 [[d1_databases]]
 binding = "AUDIT"

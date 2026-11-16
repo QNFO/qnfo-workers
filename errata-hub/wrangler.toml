@@ -53,7 +53,7 @@ database_id = "35e2e573-92f3-46ac-83c6-22f6429fc5e5"
 [triggers]
 # CRON-SINGLE-TRIGGER-1 (2026-10-02, #1785): ONE hourly trigger; worker.js CRON_TABLE holds the former list
 # (0 * * * *, 15 * * * *, 30 * * * *) and runs each entry in the hour it fired.
-crons = ["0 * * * *"]
+crons = [] # FLEET-FREEZE-1 2026-11-16: was ["0 * * * *"]
 
 # Secrets (set via wrangler secret put):
 # ERRATA_TOKEN

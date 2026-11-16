@@ -35,7 +35,7 @@ binding = "IDEAS"
 service = "idea-hub"
 
 [triggers]
-crons = ["40 * * * *"]
+crons = [] # FLEET-FREEZE-1 2026-11-16: was ["40 * * * *"]
 
 [observability]
 enabled = true

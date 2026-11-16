@@ -15,8 +15,7 @@ on:
     paths:
       - .github/workflows/repository-age-policy.yml
       - scripts/repository-age-policy.mjs
-  schedule:
-    - cron: '43 3 * * *'
+  # schedule removed 2026-11-16 (FLEET-FREEZE-1, owner directive: stop all recurring work)
   workflow_dispatch:
     inputs:
       mode:

@@ -44,7 +44,7 @@ binding = "FLEET_CONFIG"
 id = "d3768b93a76640be83151b00a8b42717"
 
 [triggers]
-crons = ["*/20 * * * *"]
+crons = [] # FLEET-FREEZE-1 2026-11-16: was ["*/20 * * * *"]
 
 # DEPLOY-GUARD-HEALTH-BINDING-1 (issue 9680): refreshRegistryVersion reads personal-watch /health through this binding (CH_<WORKER> convention), public host as fallback.
 [[services]]

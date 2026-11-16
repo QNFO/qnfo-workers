@@ -250,7 +250,7 @@ name = "ops-exec-workflow"
 class_name = "OpsExecWorkflow"
 
 [triggers]
-crons = ["*/30 * * * *"]
+crons = [] # FLEET-FREEZE-1 2026-11-16: was ["*/30 * * * *"]
 
 [[services]]
 binding = "CONTAINERS_PILOT"

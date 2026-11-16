@@ -7,8 +7,7 @@ name: IndexNow fallback (Bing + shared relay)
 # owner reported missing. SLA-AND-PATHS-1: this workflow is the second, independent path to the same DoD. It reads
 # the public URL list the site publishes (GET /api/indexnow/urls) and posts it from GitHub's egress.
 on:
-  schedule:
-    - cron: "23 */6 * * *"
+  # schedule removed 2026-11-16 (FLEET-FREEZE-1, owner directive: stop all recurring work)
   workflow_dispatch:
     inputs:
       full:

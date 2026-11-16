@@ -1,9 +1,7 @@
 name: branch-cleanup
 
 on:
-  schedule:
-    # 04:17 UTC daily (offset from on-the-hour to avoid GitHub scheduler noise)
-    - cron: '17 4 * * *'
+  # schedule removed 2026-11-16 (FLEET-FREEZE-1, owner directive: stop all recurring work)
   workflow_dispatch:
 
 permissions:

@@ -33,7 +33,7 @@ enabled = true
 head_sampling_rate = 1
 
 [triggers]
-crons = ["*/5 * * * *"]
+crons = [] # FLEET-FREEZE-1 2026-11-16: was ["*/5 * * * *"]
 
 [ai]
 binding = "AI"

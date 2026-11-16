@@ -48,4 +48,4 @@ binding = "VAULT"
 bucket_name = "obsidian-vault"
 
 [triggers]
-crons = ["25 * * * *"]
+crons = [] # FLEET-FREEZE-1 2026-11-16: was ["25 * * * *"]

@@ -21,7 +21,7 @@ send_email = [
 # "*/10"; a CONCURRENT actor then re-timed LIVE to "*/15" out-of-band. Repo now mirrors
 # LIVE. "*/15" = 96 fires/24h over a 15-minute spacing -- the same ceiling with headroom,
 # instead of sitting exactly on the 144/24h limit.
-crons = ["*/15 * * * *"]
+crons = [] # FLEET-FREEZE-1 2026-11-16: was ["*/15 * * * *"]
 
 [[d1_databases]]
 binding = "D1"

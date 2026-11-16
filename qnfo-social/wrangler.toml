@@ -50,4 +50,4 @@ bucket_name = "qnfo-media"
 binding = "AI"
 
 [triggers]
-crons = ["30 * * * *"]
+crons = [] # FLEET-FREEZE-1 2026-11-16: was ["30 * * * *"]

@@ -106,10 +106,7 @@ name: container-config-selfheal-cron
 #   fleet no longer writes one commit to main per push.
 
 on:
-  schedule:
-    # Retained as a bonus only. SCHEDULE-EVENT-NEVER-FIRES-1: this event has never fired
-    # on this repository, so it MUST NOT be the only driver (see DEFECT 1 above).
-    - cron: '13 1 * * *'
+  # schedule removed 2026-11-16 (FLEET-FREEZE-1, owner directive: stop all recurring work)
   # AUTODEPLOY-FANOUT-1 (2026-11-04): no workflow_run. mirror-sync, deploy-qnfo-ops and canonical-deploy each start fleet-autodeploy, which calls this file as a job,
   # so one run replaces a separate run per event (418 of 600 sampled runs in 3 hours were cancelled fan-out). Revert: restore the workflow_run block and delete the job in fleet-autodeploy.yml.
   workflow_call:

@@ -41,6 +41,6 @@ database_id = "70a58cb3-b2cd-498d-877f-ecca86859a22"
 # UNSUPPORTED type=send_email name=SEND_EMAIL
 
 [triggers]
-crons = ["0 * * * *"]
+crons = [] # FLEET-FREEZE-1 2026-11-16: was ["0 * * * *"]
 
 # Secrets (wrangler secret put): SUBSCRIBERS_TOKEN

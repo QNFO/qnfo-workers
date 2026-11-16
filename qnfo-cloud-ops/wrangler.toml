@@ -176,7 +176,7 @@ bucket_name = "d-drive"
 # Every 10 minutes is the fastest CRON-RATE-CEILING-1 allows; a job on a :05 or :15 mark runs on the next tick.
 # The comments above describe the 21-trigger list this replaced.
 [triggers]
-crons = ["*/10 * * * *"]
+crons = [] # FLEET-FREEZE-1 2026-11-16: was ["*/10 * * * *"]
 
 # REPO-SNAPSHOT-1 (1.45.0): R2 copy of recent migrations/ so the migration fallback survives GitHub being unreachable.
 [[r2_buckets]]

@@ -26,8 +26,7 @@ on:
   # without this the full 429-suite sweep ran only on a push to main - i.e. after the merge. Once a day (GHA-COST-1: was every two hours).
   # MERGE-BOUNDARY-GATE-1 (2026-10-19): a PR that touches a control-plane worker or a shared path runs the full set before the merge
   # (scripts/run-suites.mjs), every PR loads every worker, and ci-watchdog files a suite-red finding for a red full run on main.
-  schedule:
-    - cron: "43 6 * * *"
+  # schedule removed 2026-11-16 (FLEET-FREEZE-1, owner directive: stop all recurring work)
   # MERGE-BOUNDARY-GATE-1 (2026-10-19, agent_issues 2830): path A of the issue, switched on by a repository setting. When a merge queue
   # is enabled on main, the queue runs this workflow on the merge group's head; it takes the full-set branch below (not the
   # pull-request one), so the commit that would land is validated with every suite before it lands. Inert while no queue exists.

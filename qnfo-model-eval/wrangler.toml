@@ -43,7 +43,7 @@ head_sampling_rate = 0.1
 cpu_ms = 30000
 
 [triggers]
-crons = ["20 * * * *"]
+crons = [] # FLEET-FREEZE-1 2026-11-16: was ["20 * * * *"]
 
 [[d1_databases]]
 binding = "AUDIT"

@@ -44,8 +44,7 @@ on:
       - "qnfo-containers-pilot/**"
       - "scripts/restore_container_config.py"
       - "scripts/raw_put.py"
-  schedule:
-    - cron: "17 2 * * *"
+  # schedule removed 2026-11-16 (FLEET-FREEZE-1, owner directive: stop all recurring work)
   workflow_dispatch:
 
 permissions:

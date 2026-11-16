@@ -27,8 +27,7 @@ on:
   # FLOOR-WATCH-1 (2026-10-17): the scan used to run only when its own two files changed or weekly, so a
   # worker that reintroduced a sub-frontier model was invisible for up to seven days. Every worker change
   # now scans the repo sources at once; the live-bundle sweep stays daily + weekly + manual.
-  schedule:
-    - cron: "17 3 * * *"
+  # schedule removed 2026-11-16 (FLEET-FREEZE-1, owner directive: stop all recurring work)
   workflow_dispatch:
 
 permissions:
