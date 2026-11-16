@@ -1467,6 +1467,26 @@ export async function productManager(env, nowMs, { force = false, everyH = 23 } 
   else if (ss && !ss.apply && cfg.shift_scale !== 1) { await db.prepare("DELETE FROM fe_config WHERE key = 'shift_scale'").run(); decisions.push({ key: "shift_scale", from: cfg.shift_scale, to: 1, reason: ss.why }); cfg.shift_scale = 1; }
   let compete = null;
   try { compete = await competitorLane(env, env.__fetchText || defaultFetchText, nowMs); } catch (err) { compete = { error: String(err && err.message || err).slice(0, 120) }; }
+  // Record a metric / config knob for the "published reasoning" (comments) gap.
+  if (compete && compete.gaps) {
+    const commentGap = compete.gaps.find((g) => g.feature === "comments");
+    if (commentGap) {
+      const gapVal = commentGap.new ? 1 : 0;
+      // Store as a config knob so product manager can revert if needed.
+      await db.prepare(
+        "INSERT OR REPLACE INTO fe_config (key, value, updated_at, reason) VALUES ('comments_gap', ?, ?, ?)"
+      )
+        .bind(String(gapVal), now, "auto-set based on competitor gap for published reasoning")
+        .run();
+      decisions.push({
+        key: "comments_gap",
+        from: cfg.comments_gap ?? 0,
+        to: gapVal,
+        reason: "competitor gap for published reasoning (comments)",
+      });
+      cfg.comments_gap = gapVal;
+    }
+  }
   let research = null;
   try { research = await researchLane(env, env.__fetchText || defaultFetchText, nowMs); } catch (err) { research = { error: String(err && err.message || err).slice(0, 120) }; }
   let experiments = null;
