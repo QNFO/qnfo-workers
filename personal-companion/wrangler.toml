@@ -81,7 +81,7 @@ class_name = "ResearchRunFlow"
 [triggers]
 # CRON-SINGLE-TRIGGER-1 (2026-10-02, #1785): ONE hourly trigger; worker.js CRON_TABLE holds the former list
 # (0 * * * *, 0 21 * * *) and runs each entry in the hour it fired.
-crons = ["0 * * * *"]
+crons = [] # FLEET-FREEZE-1 2026-11-16: was ["0 * * * *"] (essay generation stopped; pages still served)
 
 [observability]
 enabled = true
