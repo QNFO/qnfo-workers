@@ -8,10 +8,7 @@ name: apply-migrations
 # issue and turns this run red. The PR gate (deploy-gate) runs the same script with --check.
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "migrations/*.sql"
+  # FLEET-FREEZE-1 (2026-11-16): automatic triggers removed (push, workflow_run, pull_request_target, repository_dispatch); run by hand.
   workflow_dispatch:
     inputs:
       files:
@@ -22,6 +19,7 @@ on:
 # middle run (runs 93 and 94) and its migrations never ran. One group per run: applies are idempotent by convention and a file
 # already applied at its sha256 is skipped, so two runs side by side are safe. scripts/remediation_consumer.py applies anything
 # the push trigger still misses, within the hour.
+
 concurrency:
   group: apply-migrations-${{ github.run_id }}
   cancel-in-progress: false

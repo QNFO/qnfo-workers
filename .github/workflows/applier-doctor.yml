@@ -42,12 +42,7 @@ name: applier-doctor
 #     is push-triggered plus workflow_dispatch -- never schedule-only.
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "scripts/applier-doctor.py"
-      - "scripts/*patch*.py"
-      - ".github/workflows/applier-doctor.yml"
+  # FLEET-FREEZE-1 (2026-11-16): automatic triggers removed (push, workflow_run, pull_request_target, repository_dispatch); run by hand.
   workflow_dispatch:
 
 permissions:

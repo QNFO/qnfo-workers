@@ -28,15 +28,8 @@ name: applier-rot-triage
 # agent_issues. A failure to file exits non-zero; it never no-ops silently.
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/applier-rot-triage.yml'
-      - 'scripts/applier_rot_triage.py'
-      - 'scripts/applier-doctor.py'
+  # FLEET-FREEZE-1 (2026-11-16): automatic triggers removed (push, workflow_run, pull_request_target, repository_dispatch); run by hand.
   workflow_dispatch:
-  repository_dispatch:
-    types: [applier-rot-triage]
 
 permissions:
   contents: write

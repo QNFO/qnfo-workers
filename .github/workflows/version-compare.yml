@@ -26,13 +26,8 @@ name: version-compare
 # has silently reverted to semver ordering.
 
 on:
+  # FLEET-FREEZE-1 (2026-11-16): automatic triggers removed (push, workflow_run, pull_request_target, repository_dispatch); run by hand.
   workflow_call:
-  push:
-    branches: [main]
-    # CI-VELOCITY-1: the suite reads only the comparator and its test.
-    paths:
-      - "qnfo-fleet-control/**"
-      - ".github/workflows/version-compare.yml"
   workflow_dispatch:
 
 permissions:

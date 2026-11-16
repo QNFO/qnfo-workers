@@ -6,11 +6,7 @@ name: deploy-youtube-shorts
 # (container.configured true), so a deploy that dropped [[containers]] is red, not green.
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'qnfo-youtube-shorts/**'
-      - '.github/workflows/deploy-youtube-shorts.yml'
+  # FLEET-FREEZE-1 (2026-11-16): automatic triggers removed (push, workflow_run, pull_request_target, repository_dispatch); run by hand.
   workflow_dispatch:
 
 permissions:

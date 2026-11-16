@@ -69,20 +69,7 @@ name: deploy-qnfo-ops
 # instead of relying on the qnfo-fleet-control redeploy cron.
 
 on:
-  push:
-    # DEPLOY-BRANCH-FILTER-1 (2026-09-30): this workflow ends in `raw_put.py qnfo-ops`, a
-    # PRODUCTION deploy. Without a branch filter any push to ANY branch that touched the paths
-    # below deployed that branch's qnfo-ops/worker.js: bringing PR branches up to date from main
-    # (which changes qnfo-ops/worker.js on the branch) deployed qnfo-ops from #87 and #97 (run
-    # 36728140486, 14:20Z; harmless only because the content equalled main). Production deploys
-    # come from main; use workflow_dispatch for anything else.
-    branches: [main]
-    paths:
-      - '.github/workflows/deploy-qnfo-ops.yml'
-      - 'qnfo-ops/worker.js'
-      - 'qnfo-ops/deployed-current.worker.js'
-      - 'scripts/raw_put.py'
-      - 'scripts/d1guard-battery.mjs'
+  # FLEET-FREEZE-1 (2026-11-16): automatic triggers removed (push, workflow_run, pull_request_target, repository_dispatch); run by hand.
   workflow_dispatch:
 
 permissions:

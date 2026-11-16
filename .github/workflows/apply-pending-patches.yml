@@ -53,12 +53,7 @@ name: apply-pending-patches
 #     budget drift gate never fired. Staging is now tree-wide.
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "scripts/apply-pending-patches.py"
-      - "scripts/*patch*.py"
-      - ".github/workflows/apply-pending-patches.yml"
+  # FLEET-FREEZE-1 (2026-11-16): automatic triggers removed (push, workflow_run, pull_request_target, repository_dispatch); run by hand.
   workflow_dispatch:
 
 concurrency:

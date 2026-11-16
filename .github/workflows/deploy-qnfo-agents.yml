@@ -11,11 +11,7 @@ name: deploy-qnfo-agents
 # Style: step names colon-free, no heredocs, no inline python (workflow-lint.py).
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "qnfo-agents/**"
-      - ".github/workflows/deploy-qnfo-agents.yml"
+  # FLEET-FREEZE-1 (2026-11-16): automatic triggers removed (push, workflow_run, pull_request_target, repository_dispatch); run by hand.
   workflow_dispatch:
 
 permissions:

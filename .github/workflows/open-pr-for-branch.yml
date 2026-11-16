@@ -6,9 +6,9 @@ run-name: open-pr-for-branch ${{ github.ref_name }}
 # on 8 open claude/** pull requests (2026-11-10) and the lane could not merge any. The fleet user credential opens it instead, so checks start at once;
 # the workflow token stays the fallback when the secret is absent.
 on:
-  push:
-    branches:
-      - 'claude/**'
+  # FLEET-FREEZE-1 (2026-11-16): automatic triggers removed (push, workflow_run, pull_request_target, repository_dispatch); run by hand.
+  workflow_dispatch:
+
 permissions:
   contents: read
   pull-requests: write

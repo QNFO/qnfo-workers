@@ -5,11 +5,7 @@ name: build-me-apk
 # No cron (SCHEDULE-EVENT-NEVER-FIRES-1). No release keystore: that is the owner's signing identity and is never minted here.
 
 on:
-  push:
-    branches: [main, 'claude/**']
-    paths:
-      - 'android-me/**'
-      - '.github/workflows/build-me-apk.yml'
+  # FLEET-FREEZE-1 (2026-11-16): automatic triggers removed (push, workflow_run, pull_request_target, repository_dispatch); run by hand.
   workflow_dispatch:
 
 permissions:
