@@ -1,4 +1,4 @@
-var VERSION = "1.20.10-codeagent";
+var VERSION = "1.20.11-codeagent";
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -3527,7 +3527,20 @@ async function paperLedgerChainTick(env, opts) {
     try {
       var an = await plcCheckAnchors(env, nowMs);
       out.anchors_checked = an.checked;
-      out.anchor_breaks = an.bad.length;
+      // Compute total seal mismatches across ALL recorded seals, not just the sampled subset.
+      var totalSealMismatches = 0;
+      if (audit) {
+        try {
+          const allSeals = (await audit.prepare("SELECT head_seq, head_hash FROM paper_ledger_seals").all()).results || [];
+          for (const s of allSeals) {
+            const row = await db.prepare("SELECT row_hash FROM paper_ledger_chain WHERE seq = ?1").bind(s.head_seq).first();
+            if (!row || row.row_hash !== s.head_hash) totalSealMismatches++;
+          }
+        } catch (e2) {
+          if (!plcMissingTable(e2)) throw e2;
+        }
+      }
+      out.anchor_breaks = totalSealMismatches;
     } catch (e) { out.errors.push("anchors: " + String(e && e.message || e).slice(0, 200)); }
   }
   // sticky hash findings: written once as events, rechecked each tick, resolved only when the row hashes true again
