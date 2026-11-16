@@ -97,6 +97,14 @@ UPDATE metric_registry SET formula =
   'COUNT of v_blocker_claims: open issues asserting a blocker and open owner cards, older than 60 minutes, with no blocker_redteam verdict in 24 hours and whose latest verdict is not confirmed-with-evidence or workaround-built (ANTIFRAGILE-1).'
  WHERE metric = 'unverified_blocker_claims';
 
+-- Repair the stored trigger action the same way: the INSERT ... WHERE NOT EXISTS above cannot update the row that already exists,
+-- and its old action text still told the doer that any single verdict suppresses a claim for only 24 hours, which re-filed
+-- confirmed-with-evidence blockers every day (the open-loop producer lever-3061-202610261137 diagnosed).
+UPDATE analytics_metric_triggers SET action =
+  'Pillar autonomy (ANTIFRAGILE-1). A blocker is a belief until an attempt proves it. Read SELECT * FROM v_blocker_claims (it already excludes targets whose latest verdict is confirmed-with-evidence or workaround-built, and any target with a verdict in the last 24 hours). For each listed target: attempt the blocked action with what exists (the repository CLOUDFLARE_API_TOKEN through a workflow or scripts/cf_ops_actions.py, the service bindings, the code loop, the D1 tools), or build a workaround through a second path. Then INSERT INTO blocker_redteam (target, claim, attempt, verdict, evidence, actor): verdict false-belief-removed (the claim was wrong; remove the hold, card or session-task line and say so on the item), workaround-built (name the second path), or confirmed-with-evidence (the exact refusal: status code, error body, who refused; only then may the item stay with the owner). Never record confirmed without the refusal text. Definition of done: unverified_blocker_claims = 0 at a refresh.'
+ WHERE metric_key = 'unverified_blocker_claims'
+   AND COALESCE(action, '') NOT LIKE '%latest verdict is not confirmed-with-evidence%';
+
 CREATE TRIGGER IF NOT EXISTS antifragile_tick_10m AFTER INSERT ON fleet_tick
 BEGIN
   -- (1) the age ladder: one level per 24 h, never to critical, never twice inside 24 h.
@@ -117,7 +125,7 @@ END;
 
 INSERT INTO analytics_metric_triggers (metric_key, title, source_table, operator, threshold, priority, action, owner, queue_target, cooldown_hours, enabled, notes)
 SELECT 'unverified_blocker_claims', 'Red team: blocker claims nobody has tested adversarially', 'registry', 'gt', 0, 2,
-  'Pillar autonomy (ANTIFRAGILE-1). A blocker is a belief until an attempt proves it. Read SELECT * FROM v_blocker_claims. For each target: attempt the blocked action with what exists (the repository CLOUDFLARE_API_TOKEN through a workflow or scripts/cf_ops_actions.py, the service bindings, the code loop, the D1 tools), or build a workaround through a second path. Then INSERT INTO blocker_redteam (target, claim, attempt, verdict, evidence, actor): verdict false-belief-removed (the claim was wrong; remove the hold, card or session-task line and say so on the item), workaround-built (name the second path), or confirmed-with-evidence (the exact refusal: status code, error body, who refused; only then may the item stay with the owner). Never record confirmed without the refusal text. Definition of done: unverified_blocker_claims = 0 at a refresh.',
+  'Pillar autonomy (ANTIFRAGILE-1). A blocker is a belief until an attempt proves it. Read SELECT * FROM v_blocker_claims (it already excludes targets whose latest verdict is confirmed-with-evidence or workaround-built, and any target with a verdict in the last 24 hours). For each listed target: attempt the blocked action with what exists (the repository CLOUDFLARE_API_TOKEN through a workflow or scripts/cf_ops_actions.py, the service bindings, the code loop, the D1 tools), or build a workaround through a second path. Then INSERT INTO blocker_redteam (target, claim, attempt, verdict, evidence, actor): verdict false-belief-removed (the claim was wrong; remove the hold, card or session-task line and say so on the item), workaround-built (name the second path), or confirmed-with-evidence (the exact refusal: status code, error body, who refused; only then may the item stay with the owner). Never record confirmed without the refusal text. Definition of done: unverified_blocker_claims = 0 at a refresh.',
   'qnfo-ops', 'agent_issues', 1, 1, 'ANTIFRAGILE-1 (migrations/2026-10-08-11-antifragile.sql)'
 WHERE NOT EXISTS (SELECT 1 FROM analytics_metric_triggers x WHERE x.metric_key = 'unverified_blocker_claims');
 
