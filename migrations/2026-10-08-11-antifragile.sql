@@ -38,6 +38,7 @@ CREATE TABLE IF NOT EXISTS issue_age_bumps (
   ts TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
 );
 CREATE INDEX IF NOT EXISTS idx_issue_age_bumps_issue ON issue_age_bumps (issue_id, ts);
+CREATE INDEX IF NOT EXISTS idx_blocker_redteam_target ON blocker_redteam (target, ts);
 
 CREATE TABLE IF NOT EXISTS blocker_redteam (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
