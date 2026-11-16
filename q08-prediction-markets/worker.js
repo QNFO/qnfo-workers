@@ -1,6 +1,6 @@
 // q08-prediction-markets: the paper-trading proving ground for q08's information edge (PM-CHARTER-1).
 // Paper money only. No wallet, no exchange key, no order ever leaves this worker: the only executor in this file writes D1 rows.
-var VERSION = "1.17.2-codeagent";
+var VERSION = "1.17.3-codeagent";
 
 // ---------- charter (the machine-readable form; GET /api/charter serves it with the live evidence) ----------
 export const CHARTER = {
@@ -678,11 +678,15 @@ async function review(env, db, nowMs) {
   let bump = null; // any change to the pipeline's parameters starts a new evaluation sample
   const ddOk = ctx.drawdown_pct < 15;
   const modelOk = ev.brier_gain >= 0 || (evFrozen.n >= CFG.MIN_N && evFrozen.brier_gain >= 0);
-  const wasDrawdownPause = /drawdown/i.test(String(ctl.paused_reason || "")); // resume on the condition that actually tripped, so a drawdown pause is not held hostage by a separate scoring blip
-  if (isPaused(ctl, nowMs) && (wasDrawdownPause ? ddOk : (ddOk && modelOk))) {
+  const pausedReason = String(ctl.paused_reason || ""), wasDrawdownPause = /drawdown/i.test(pausedReason), wasModelPause = /model|brier|worse|price/i.test(pausedReason); // resume on the condition that actually tripped, so neither a drawdown pause nor a model pause is held hostage by a separate blip
+  const resumeOk = wasModelPause && !wasDrawdownPause ? modelOk : wasDrawdownPause ? ddOk : (ddOk && modelOk);
+  const heldBy = wasModelPause && !wasDrawdownPause ? (modelOk ? null : "the model is still worse than the market price") : wasDrawdownPause ? (ddOk ? null : "the drawdown is still at or above 15%") : null;
+  if (isPaused(ctl, nowMs) && resumeOk) {
     writes.push(db.prepare("DELETE FROM pt_control WHERE key IN ('paused_until','paused_reason')"),
-      logDecision(db, now, "resume new signal entries", wasDrawdownPause ? "breaker conditions recovered: the drawdown that tripped the pause is back under 15%" : "breaker conditions recovered: the drawdown is back under 15% and the model is no longer worse than the market price", { n: ev.n, brier_gain: ev.brier_gain, frozen_n: evFrozen.n, frozen_brier_gain: evFrozen.brier_gain, drawdown_pct: ctx.drawdown_pct, paused_reason: ctl.paused_reason }, "none: the pause keys were removed by this change"));
+      logDecision(db, now, "resume new signal entries", wasModelPause && !wasDrawdownPause ? "breaker conditions recovered: the model is no longer worse than the market price" : wasDrawdownPause ? "breaker conditions recovered: the drawdown that tripped the pause is back under 15%" : "breaker conditions recovered: the drawdown is back under 15% and the model is no longer worse than the market price", { n: ev.n, brier_gain: ev.brier_gain, frozen_n: evFrozen.n, frozen_brier_gain: evFrozen.brier_gain, drawdown_pct: ctx.drawdown_pct, paused_reason: ctl.paused_reason }, "none: the pause keys were removed by this change"));
     ctl = { ...ctl, paused_until: null, paused_reason: null };
+  } else if (isPaused(ctl, nowMs) && heldBy) {
+    console.warn("breaker still active:", heldBy, "paused_reason:", pausedReason, "drawdown_pct:", ctx.drawdown_pct, "brier_gain:", ev.brier_gain);
   }
   for (const a of reviewActions(ev, ctx)) {
     if (a.kind === "pause" && !isPaused(ctl, nowMs)) {
@@ -690,6 +694,12 @@ async function review(env, db, nowMs) {
       writes.push(setControl(db, "paused_until", until, now), setControl(db, "paused_reason", a.reason, now),
         logDecision(db, now, "pause new signal entries until " + until, a.reason, { n: ev.n, brier_gain: ev.brier_gain, drawdown_pct: ctx.drawdown_pct }, "DELETE FROM pt_control WHERE key IN ('paused_until','paused_reason')"));
       ctl = { ...ctl, paused_until: until, paused_reason: a.reason };
+    } else if (a.kind === "pause" && isPaused(ctl, nowMs) && !Date.parse(ctl.paused_until || "") > nowMs) {
+      // the condition that tripped is still bad but the window expired: re-arm the breaker instead of reopening entries on a technicality
+      const until = new Date(nowMs + CFG.PAUSE_H * 3600000).toISOString();
+      writes.push(setControl(db, "paused_until", until, now), setControl(db, "paused_reason", ctl.paused_reason, now),
+        logDecision(db, now, "extend pause of new signal entries until " + until, "the breaker window expired but the tripped condition has not recovered", { n: ev.n, brier_gain: ev.brier_gain, drawdown_pct: ctx.drawdown_pct, paused_reason: ctl.paused_reason }, "DELETE FROM pt_control WHERE key IN ('paused_until','paused_reason')"));
+      ctl = { ...ctl, paused_until: until };
     } else if (a.kind === "min_edge" && a.value !== ctl.min_edge && !locked) {
       writes.push(setControl(db, "min_edge", a.value, now), logDecision(db, now, "minimum gap " + ctl.min_edge + " -> " + a.value, a.reason, { n: ev.n, shadow_n: ev.shadow_n, shadow_roi: ev.shadow_roi }, "DELETE FROM pt_control WHERE key='min_edge'"));
       ctl = { ...ctl, min_edge: a.value }; bump = bump || "min_edge";
