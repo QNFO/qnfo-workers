@@ -1,4 +1,4 @@
-var VERSION = "1.20.9-codeagent";
+var VERSION = "1.20.10-codeagent";
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -3294,6 +3294,18 @@ async function plRetriage(env, o, mechs, now, out) {
     budget--;
     try {
     var v = await plTriageModel(env, R, mechs, now);
+    // METRIC-TRIGGER-21725-PAPER-LEARN-GOALS-STALE-96H: an apply decision on a learning older than 72h is replaced by a terminal action so no probative goal sits open past 96h.
+    if (v && v.apply) {
+      var createdTs = null;
+      try { var cRow = await env.QNFO_AUDIT.prepare("SELECT created_at FROM paper_learnings WHERE id = ?1").bind(R.id).first(); createdTs = cRow && cRow.created_at; } catch (ce) { createdTs = null; }
+      if (createdTs) {
+        var ageMs = Date.parse(now) - new Date(createdTs).getTime();
+        var SEVENDAY_MS = 72 * 60 * 60 * 1000;
+        if (ageMs > SEVENDAY_MS) {
+          v = { settled: true, status: "rejected", note: ("PL-TRIAGE-2 rejected (lapsed; apply signal after 72 hours, " + now + "): last signal " + plStr(v.apply.model, 60) + ": " + plStr(v.apply.reason, 300) + " Re-propose with a measured fleet gap.").slice(0, 700) };
+        }
+      }
+    }
     if (v.settled) {
       await env.QNFO_AUDIT.prepare("UPDATE paper_learnings SET fleet_status = ?2, status_note = ?3, updated_at = ?4 WHERE id = ?1 AND fleet_status = 'probation'").bind(R.id, v.status, v.note.slice(0, 700), now).run();
       await plCloseProbationGoal(env, R.id);
