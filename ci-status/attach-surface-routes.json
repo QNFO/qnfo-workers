@@ -5,7 +5,7 @@
   "stage": "partial",
   "status": "failed",
   "error": "ipatent.me: present unverified; www.ipatent.me: present unverified; qwave.tech: present unverified; www.qwave.tech: present unverified; q-wave.tech: present unverified; www.q-wave.tech: present unverified; empoweringchange.today: created unverified; www.empoweringchange.today: present unverified",
-  "gateway_version": "3.66.0-codeagent",
+  "gateway_version": "3.69.19-codeagent",
   "hosts": {
     "archive.qnfo.org": {
       "zone": "qnfo.org",
@@ -17,7 +17,7 @@
     "qwav.tech": {
       "zone": "qwav.tech",
       "route_id": "0a6078b903b7422a9edc10e5179e94c2",
-      "status": "created",
+      "status": "present",
       "detail": null,
       "verified": true
     },
@@ -177,7 +177,7 @@
     },
     "empoweringchange.today": {
       "zone": "empoweringchange.today",
-      "route_id": "20843cbafcbd471ea8438473edc78547",
+      "route_id": "543d653afbb141a29bcb005c56e327ab",
       "status": "created",
       "detail": null,
       "verified": false,
@@ -192,46 +192,44 @@
     },
     "ultrastable.io": {
       "zone": "ultrastable.io",
-      "route_id": "c56236529fc242208930a99f0ed717ff",
+      "route_id": "92328f89ee604116839cf375adeeb55d",
       "status": "created",
       "detail": null,
       "verified": true
     },
     "www.ultrastable.io": {
       "zone": "ultrastable.io",
-      "route_id": "ce3fab5167de4742b3dd86207bba09e3",
+      "route_id": "4f626d8a39fe41878077c7ec8c8902c3",
       "status": "created",
       "detail": null,
       "verified": true
     },
     "ultrastable.app": {
       "zone": "ultrastable.app",
-      "route_id": "8e7b747a16f0491fab6d11f6ef4ac7dc",
+      "route_id": "8cfa39d7fd3f47e5b4e156fe461d5bf1",
       "status": "created",
       "detail": null,
       "verified": true
     },
     "www.ultrastable.app": {
       "zone": "ultrastable.app",
-      "route_id": "11775595c2104939abb673a9f57d7886",
+      "route_id": "4117a11e29684b37897968dfd4093a6f",
       "status": "created",
       "detail": null,
-      "dns_created": "27724abba8ccbbd5925f5bc90068c046",
       "verified": true
     },
     "ultrastable.net": {
       "zone": "ultrastable.net",
-      "route_id": "bea2c42357b04b2abf4cbc99f070eb5f",
+      "route_id": "44caa2ea09544edfad9e96d167472a92",
       "status": "created",
       "detail": null,
       "verified": true
     },
     "www.ultrastable.net": {
       "zone": "ultrastable.net",
-      "route_id": "9f72ea32da2448189568245a725955c3",
+      "route_id": "19221ea9508c47388388e4eeb7df11fd",
       "status": "created",
       "detail": null,
-      "dns_created": "deff8cf15f728e46f3d6a20ddf2d3918",
       "verified": true
     },
     "qwav.org": {
@@ -249,6 +247,6 @@
       "verified": true
     }
   },
-  "ts": "2026-11-10T08:55:15Z",
-  "lifecycle_version": "1.20.3-codeagent"
+  "ts": "2026-11-17T13:43:34Z",
+  "lifecycle_version": "1.20.11-codeagent"
 }
