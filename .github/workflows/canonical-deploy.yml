@@ -49,6 +49,10 @@ on:
         description: "space separated worker names to deploy (empty means only workers changed in this push)"
         required: false
         default: ""
+      then:
+        description: "DEPLOY-SCOPE-CAP-2: space separated worker names still to deploy after this run; the run dispatches itself for the next batch of 6 (set by the cap, not by hand)"
+        required: false
+        default: ""
       all:
         description: "set true to deploy every worker listed in deploy-targets.txt"
         required: false
@@ -94,6 +98,7 @@ jobs:
         env:
           IN_ALL: ${{ github.event.inputs.all }}
           IN_WORKERS: ${{ github.event.inputs.workers }}
+          IN_THEN: ${{ github.event.inputs.then }}
           IN_DRY: ${{ github.event.inputs.dry_run }}
           EV_BEFORE: ${{ github.event.before }}
           EV_AFTER: ${{ github.sha }}
@@ -140,8 +145,11 @@ jobs:
               # found by the drift probe (scripts/deploy-drift-guard.py) and deployed by name, never by sweeping.
               MAX_WIDENED_WORKERS=6
               WIDE_COUNT=$(awk -F/ '/\/worker\.js$/ || /\/wrangler\.toml$/ {print $1}' /tmp/changed.txt | sort -u | wc -l | tr -d ' ')
+              : > /tmp/wide_dirs.txt
               if [ "$BASE" != "$EV_BEFORE" ] && [ "${WIDE_COUNT:-0}" -gt "$MAX_WIDENED_WORKERS" ]; then
                 echo "widened base selects $WIDE_COUNT workers (cap $MAX_WIDENED_WORKERS); using the push's own base $EV_BEFORE"
+                # DEPLOY-SCOPE-CAP-2: the widened workers are not dropped; they follow in batches of 6 by self-dispatch (step "Chain the overflow").
+                awk -F/ '/\/worker\.js$/ || /\/wrangler\.toml$/ {print $1}' /tmp/changed.txt | sort -u > /tmp/wide_dirs.txt
                 BASE="$EV_BEFORE"
                 git diff --name-only "$BASE" "$EV_AFTER" > /tmp/changed.txt || true
               fi
@@ -174,6 +182,20 @@ jobs:
                 if grep -q '^\[\[containers\]\]' "$d/wrangler.toml"; then echo "skip $d (container worker: canonical /content deploy refuses it by design; deployed by deploy-containers-pilot / restore-container-config-1485)"; continue; fi
                 if grep -qx "$d/worker.js" /tmp/added.txt; then echo "$n $d/worker.js create" >> /tmp/targets.txt; else echo "$n $d/worker.js" >> /tmp/targets.txt; fi
               done < /tmp/dirs.txt
+              # DEPLOY-SCOPE-CAP-2: overflow = widened workers the push itself did not touch, resolved with the same skips (markers, containers, duplicates).
+              : > /tmp/overflow.txt
+              while read -r d; do
+                [ -z "$d" ] && continue
+                grep -qx "$d" /tmp/dirs.txt && continue
+                [ -f "$d/worker.js" ] && [ -f "$d/wrangler.toml" ] || continue
+                [ -f "$d/FOLDED" ] || [ -f "$d/RETIRED" ] || [ -f "$d/WRANGLER-ONLY" ] && continue
+                grep -q '^\[\[containers\]\]' "$d/wrangler.toml" && continue
+                n=$(grep -m1 -E '^[[:space:]]*name[[:space:]]*=' "$d/wrangler.toml" | sed -E 's/.*"([^"]+)".*/\1/')
+                [ -z "$n" ] && continue
+                case "$n" in *-legacy-dup) continue;; esac
+                echo "$n" >> /tmp/overflow.txt
+              done < /tmp/wide_dirs.txt
+              echo "overflow for the next batches: $(tr '\n' ' ' < /tmp/overflow.txt)"
             fi
           fi
           sort -u /tmp/targets.txt -o /tmp/targets.txt || true
@@ -349,6 +371,27 @@ jobs:
           path: ci-status/canonical-deploy.json
           if-no-files-found: ignore
           retention-days: 30
+
+      # DEPLOY-SCOPE-CAP-2 (2026-11-17): a capped widened set is deployed in batches of 6, never in one sweep and never dropped. Each batch is a
+      # dispatch of this workflow (GITHUB_TOKEN may dispatch; concurrency serialises the runs) that names its workers and carries the remainder in `then`.
+      - name: Chain the overflow (next batch of at most 6 workers)
+        if: ${{ success() && github.ref == 'refs/heads/main' && github.event.inputs.dry_run != 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          IN_THEN: ${{ github.event.inputs.then }}
+        run: |
+          set -uo pipefail
+          if [ "${GITHUB_EVENT_NAME}" = "push" ] && [ -s /tmp/overflow.txt ]; then
+            LIST=$(tr '\n' ' ' < /tmp/overflow.txt)
+          else
+            LIST="${IN_THEN:-}"
+          fi
+          LIST=$(echo $LIST)
+          if [ -z "$LIST" ]; then echo "no overflow to chain"; exit 0; fi
+          FIRST=$(echo "$LIST" | tr ' ' '\n' | head -6 | tr '\n' ' ' | sed 's/ $//')
+          REST=$(echo "$LIST" | tr ' ' '\n' | tail -n +7 | tr '\n' ' ' | sed 's/ $//')
+          echo "chaining: workers=[$FIRST] then=[$REST]"
+          gh workflow run canonical-deploy.yml -R "$GITHUB_REPOSITORY" --ref main -f workers="$FIRST" -f then="$REST"
 
       - name: Commit the ci-status artifact back
         if: always() && github.ref == 'refs/heads/main'
