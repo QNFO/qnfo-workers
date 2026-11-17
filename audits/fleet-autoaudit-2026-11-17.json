@@ -1,7 +1,7 @@
 {
-  "audited_at": "2026-11-17 13:26:01",
+  "audited_at": "2026-11-17 17:57:52",
   "d1_write_failures": [],
-  "d1_writes_ok": 22,
+  "d1_writes_ok": 25,
   "guard": {
     "_guard_rc": 0,
     "ahead": [],
@@ -78,6 +78,16 @@
         "worker": "qnfo-workers"
       },
       {
+        "http": 404,
+        "version": null,
+        "worker": "tenant-ps-edge"
+      },
+      {
+        "http": 200,
+        "version": null,
+        "worker": "tenant-ps-mail"
+      },
+      {
         "http": 200,
         "version": "1.0.0",
         "worker": "ultrastable-agents"
@@ -91,6 +101,11 @@
         "http": 404,
         "version": null,
         "worker": "ultrastable-site"
+      },
+      {
+        "http": 404,
+        "version": null,
+        "worker": "ultrastable-spinoffs"
       },
       {
         "http": 200,
@@ -144,7 +159,7 @@
       }
     ]
   },
-  "purge_error": "purge skipped: run classified 22 workers, table held 68; a partial report must not shrink the audit surface",
+  "purge_error": "purge skipped: run classified 25 workers, table held 68; a partial report must not shrink the audit surface",
   "rows": {
     "demo-child-ultrastable": {
       "before": null,
@@ -218,6 +233,22 @@
       "note": "UNMANAGED_OK",
       "worker": "qnfo-workers"
     },
+    "tenant-ps-edge": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "UNMANAGED_NO_HEALTH",
+      "worker": "tenant-ps-edge"
+    },
+    "tenant-ps-mail": {
+      "before": null,
+      "http": 200,
+      "live": null,
+      "match": 0,
+      "note": "UNMANAGED_OK",
+      "worker": "tenant-ps-mail"
+    },
     "ultrastable-agents": {
       "before": null,
       "http": 200,
@@ -241,6 +272,14 @@
       "match": 0,
       "note": "UNMANAGED_NO_HEALTH",
       "worker": "ultrastable-site"
+    },
+    "ultrastable-spinoffs": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "UNMANAGED_NO_HEALTH",
+      "worker": "ultrastable-spinoffs"
     },
     "ultrastable-tick": {
       "before": null,
