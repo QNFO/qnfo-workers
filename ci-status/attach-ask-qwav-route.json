@@ -12,6 +12,6 @@
   "route_id": "38a23917a5f448e692c4c225036bea5c",
   "redirect_rule_id": "033686873f804fad9c33e15f2be952ac",
   "old_zone_id": "331e4363fd05e8e4fc123ea7d2775411",
-  "worker_version": "2.19.7-codeagent",
-  "ts": "2026-11-09T11:25:49Z"
+  "worker_version": "2.20.9-codeagent",
+  "ts": "2026-11-17T13:26:02Z"
 }
