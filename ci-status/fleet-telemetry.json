@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-11-17T13:40:25Z",
+ "generated_at": "2026-11-17T13:41:17Z",
  "account": "edb167b78c9fb901ea5bca3ce58ccc4b",
  "errors_24h": {},
  "usage": {
@@ -8,9 +8,9 @@
    {
     "script": "qnfo-gateway",
     "errors": 630,
-    "requests": 855880,
+    "requests": 855800,
     "subrequests": 156560,
-    "cpuTimeP50": 6260,
+    "cpuTimeP50": 6259,
     "cpuTimeP99": 311936,
     "wallTimeP99": 11196929
    },
@@ -53,9 +53,9 @@
    {
     "script": "qnfo-fleet-dashboard",
     "errors": 0,
-    "requests": 95100,
+    "requests": 95110,
     "subrequests": 503870,
-    "cpuTimeP50": 5739,
+    "cpuTimeP50": 5742,
     "cpuTimeP99": 351535,
     "wallTimeP99": 85021224
    },
@@ -89,7 +89,7 @@
    {
     "script": "qnfo-ai-search",
     "errors": 340,
-    "requests": 67360,
+    "requests": 67370,
     "subrequests": 22710,
     "cpuTimeP50": 1051,
     "cpuTimeP99": 85017,
@@ -107,7 +107,7 @@
    {
     "script": "qnfo-containers-pilot",
     "errors": 0,
-    "requests": 51310,
+    "requests": 51300,
     "subrequests": 4290,
     "cpuTimeP50": 483,
     "cpuTimeP99": 1719,
@@ -116,8 +116,8 @@
    {
     "script": "ultrastable-site",
     "errors": 20,
-    "requests": 50130,
-    "subrequests": 12980,
+    "requests": 50170,
+    "subrequests": 13020,
     "cpuTimeP50": 654,
     "cpuTimeP99": 9393,
     "wallTimeP99": 2414543
@@ -134,7 +134,7 @@
    {
     "script": "personal-companion",
     "errors": 0,
-    "requests": 46790,
+    "requests": 46780,
     "subrequests": 35120,
     "cpuTimeP50": 5801,
     "cpuTimeP99": 315865,
@@ -170,7 +170,7 @@
    {
     "script": "qnfo-ipatent",
     "errors": 0,
-    "requests": 32970,
+    "requests": 32960,
     "subrequests": 360,
     "cpuTimeP50": 1671,
     "cpuTimeP99": 11487,
@@ -260,8 +260,8 @@
    {
     "script": "qnfo-tools-mcp",
     "errors": 0,
-    "requests": 25490,
-    "subrequests": 24230,
+    "requests": 25480,
+    "subrequests": 24220,
     "cpuTimeP50": 955,
     "cpuTimeP99": 5009,
     "wallTimeP99": 3038057
@@ -269,8 +269,8 @@
    {
     "script": "qnfo-intent-orchestrator",
     "errors": 0,
-    "requests": 24610,
-    "subrequests": 23100,
+    "requests": 24600,
+    "subrequests": 23090,
     "cpuTimeP50": 1067,
     "cpuTimeP99": 4421,
     "wallTimeP99": 4662219
@@ -296,9 +296,9 @@
    {
     "script": "q08-prediction-markets",
     "errors": 0,
-    "requests": 23840,
+    "requests": 23850,
     "subrequests": 17950,
-    "cpuTimeP50": 10644,
+    "cpuTimeP50": 10693,
     "cpuTimeP99": 148127,
     "wallTimeP99": 76581600
    },
@@ -567,12 +567,12 @@
  },
  "workers_ai": {
   "window": "30d",
-  "neurons_total": 53592920.500643656,
+  "neurons_total": 53592306.51810815,
   "models": [
    {
     "model": "@cf/openai/gpt-oss-120b",
-    "requests": 60525,
-    "neurons": 18325021.879517883
+    "requests": 60522,
+    "neurons": 18324562.25365576
    },
    {
     "model": "@cf/moonshotai/kimi-k2.7-code",
@@ -581,8 +581,8 @@
    },
    {
     "model": "@cf/zai-org/glm-5.3-flash",
-    "requests": 36103,
-    "neurons": 6469714.793874979
+    "requests": 36104,
+    "neurons": 6469771.693876505
    },
    {
     "model": "@cf/moonshotai/kimi-k2.6",
@@ -602,7 +602,7 @@
    {
     "model": "@cf/nvidia/nemotron-3-120b-a12b",
     "requests": 4763,
-    "neurons": 1173266.8409999998
+    "neurons": 1173266.841
    },
    {
     "model": "@cf/deepseek-ai/deepseek-v4-flash-0731",
@@ -622,17 +622,17 @@
    {
     "model": "@cf/openai/gpt-oss-20b",
     "requests": 1935,
-    "neurons": 308631.7459134001
+    "neurons": 308631.7459134
    },
    {
     "model": "@cf/baai/bge-base-en-v1.5",
-    "requests": 16911,
-    "neurons": 235809.07981750002
+    "requests": 16893,
+    "neurons": 235386.8114925
    },
    {
     "model": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
-    "requests": 2331,
-    "neurons": 159074.0087826103
+    "requests": 2333,
+    "neurons": 159285.02043269575
    },
    {
     "model": "@cf/google/gemma-4-26b-a4b-it",
@@ -672,7 +672,7 @@
    {
     "model": "@cf/qwen/qwen2.5-coder-32b-instruct",
     "requests": 520,
-    "neurons": 19443.916363632543
+    "neurons": 19443.916363632547
    },
    {
     "model": "@cf/cloudflare/clef-flash",
@@ -682,7 +682,7 @@
    {
     "model": "@cf/openai/whisper-large-v3-turbo",
     "requests": 48,
-    "neurons": 933.9368245370774
+    "neurons": 933.9368245370772
    },
    {
     "model": "@cf/qwen/qwq-32b",
@@ -707,7 +707,7 @@
    {
     "model": "@cf/cloudflare/clef",
     "requests": 25,
-    "neurons": 94.99635572000001
+    "neurons": 94.99635572
    },
    {
     "model": "@cf/aisingapore/gemma-sea-lion-v4-27b-it",
@@ -717,12 +717,12 @@
    {
     "model": "@cf/cloudflare/clef-omni",
     "requests": 25,
-    "neurons": 60.08184622
+    "neurons": 60.08184621999999
    },
    {
     "model": "@cf/myshell-ai/melotts",
     "requests": 32,
-    "neurons": 27.940637279999997
+    "neurons": 27.94063728
    },
    {
     "model": "@cf/daily-co/phonellm-mini-alpha-2",
@@ -783,14 +783,14 @@
    "provider": "workers-ai",
    "requests": 432,
    "cachedRequests": 0,
-   "cost": 5.125077369445326,
+   "cost": 5.125077369445323,
    "erroredRequests": 5
   },
   {
    "gateway": "default",
    "model": "@cf/moonshotai/kimi-k2.6",
    "provider": "workers-ai",
-   "requests": 2306,
+   "requests": 2301,
    "cachedRequests": 0,
    "cost": 3.711578092923194,
    "erroredRequests": 5
@@ -801,7 +801,7 @@
    "provider": "workers-ai",
    "requests": 725,
    "cachedRequests": 74,
-   "cost": 3.1819482408444135,
+   "cost": 3.181948240844414,
    "erroredRequests": 5
   },
   {
@@ -810,7 +810,7 @@
    "provider": "workers-ai",
    "requests": 157,
    "cachedRequests": 0,
-   "cost": 3.1776038039541246,
+   "cost": 3.177603803954124,
    "erroredRequests": 5
   },
   {
@@ -828,7 +828,7 @@
    "provider": "workers-ai",
    "requests": 469,
    "cachedRequests": 143,
-   "cost": 0.7445484787191167,
+   "cost": 0.7445484787191168,
    "erroredRequests": 0
   },
   {
@@ -837,7 +837,7 @@
    "provider": "workers-ai",
    "requests": 704,
    "cachedRequests": 46,
-   "cost": 0.691593417919576,
+   "cost": 0.6915934179195763,
    "erroredRequests": 0
   },
   {
@@ -846,7 +846,7 @@
    "provider": "workers-ai",
    "requests": 78,
    "cachedRequests": 0,
-   "cost": 0.38704168608856204,
+   "cost": 0.387041686088562,
    "erroredRequests": 0
   },
   {
@@ -864,7 +864,7 @@
    "provider": "workers-ai",
    "requests": 76,
    "cachedRequests": 0,
-   "cost": 0.1874390125608,
+   "cost": 0.18743901256080006,
    "erroredRequests": 0
   },
   {
@@ -918,7 +918,7 @@
    "provider": "workers-ai",
    "requests": 78,
    "cachedRequests": 0,
-   "cost": 0.014048350489467381,
+   "cost": 0.014048350489467384,
    "erroredRequests": 0
   },
   {
@@ -936,7 +936,7 @@
    "provider": "workers-ai",
    "requests": 1163,
    "cachedRequests": 510,
-   "cost": 0.009092159999999997,
+   "cost": 0.009092160000000002,
    "erroredRequests": 0
   },
   {
@@ -945,7 +945,7 @@
    "provider": "workers-ai",
    "requests": 34,
    "cachedRequests": 0,
-   "cost": 0.0037904497978091243,
+   "cost": 0.003790449797809125,
    "erroredRequests": 0
   },
   {
@@ -961,7 +961,7 @@
    "gateway": "default",
    "model": "@cf/zai-org/glm-4.7-flash",
    "provider": "workers-ai",
-   "requests": 2330,
+   "requests": 2331,
    "cachedRequests": 0,
    "cost": 0,
    "erroredRequests": 0
@@ -977,21 +977,21 @@
   },
   {
    "gateway": "default",
-   "model": "@cf/qwen/qwen3-30b-a3b-fp8",
-   "provider": "workers-ai",
-   "requests": 68,
-   "cachedRequests": 0,
-   "cost": 0,
-   "erroredRequests": 0
-  },
-  {
-   "gateway": "default",
    "model": "dynamic/premium",
    "provider": "anthropic",
    "requests": 22,
    "cachedRequests": 0,
    "cost": 0,
    "erroredRequests": 22
+  },
+  {
+   "gateway": "default",
+   "model": "@cf/qwen/qwen3-30b-a3b-fp8",
+   "provider": "workers-ai",
+   "requests": 68,
+   "cachedRequests": 0,
+   "cost": 0,
+   "erroredRequests": 0
   },
   {
    "gateway": "default",
@@ -1067,13 +1067,13 @@
   {
    "gateway": "default",
    "model": "@cf/zai-org/glm-4.7-flash",
-   "requests_7d": 2330,
+   "requests_7d": 2331,
    "logs": []
   },
   {
    "gateway": "default",
    "model": "@cf/moonshotai/kimi-k2.6",
-   "requests_7d": 2306,
+   "requests_7d": 2301,
    "logs": []
   },
   {
