@@ -5,7 +5,17 @@ name: repository-age-policy
 # schedule is only a fallback. Readiness is not merge/deploy authorization:
 # required checks, holds and canonical deployment remain unchanged.
 on:
-  # FLEET-FREEZE-1 (2026-11-16): automatic triggers removed (push, workflow_run, pull_request_target, repository_dispatch); run by hand.
+  workflow_run:
+    workflows: ["remediation-consumer"]
+    types: [completed]
+  issues:
+    types: [opened, reopened]
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/repository-age-policy.yml
+      - scripts/repository-age-policy.mjs
+  # schedule removed 2026-11-16 (FLEET-FREEZE-1, owner directive: stop all recurring work)
   workflow_dispatch:
     inputs:
       mode:

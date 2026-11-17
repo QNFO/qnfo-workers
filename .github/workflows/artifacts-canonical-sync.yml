@@ -31,7 +31,11 @@ name: artifacts-canonical-sync
 # an unparseable workflow as absent, not as an error, so it would have silently never run.
 
 on:
-  # FLEET-FREEZE-1 (2026-11-16): automatic triggers removed (push, workflow_run, pull_request_target, repository_dispatch); run by hand.
+  workflow_run:
+    workflows: ["mirror-sync"]
+    types: [completed]
+  repository_dispatch:
+    types: [artifacts-canonical-sync]
   workflow_dispatch:
     inputs:
       repair:

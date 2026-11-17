@@ -38,7 +38,11 @@ name: deploy-containers-pilot
 # the failure mode being fixed is a trigger that never fired.
 
 on:
-  # FLEET-FREEZE-1 (2026-11-16): automatic triggers removed (push, workflow_run, pull_request_target, repository_dispatch); run by hand.
+  push:
+    branches: [main]
+    paths:
+      - 'qnfo-containers-pilot/**'
+      - '.github/workflows/deploy-containers-pilot.yml'
   workflow_dispatch:
     inputs:
       verify_only:

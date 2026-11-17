@@ -36,7 +36,13 @@ name: canonical-deploy
 #     can never be read as script indentation.
 
 on:
-  # FLEET-FREEZE-1 (2026-11-16): automatic triggers removed (push, workflow_run, pull_request_target, repository_dispatch); run by hand.
+  push:
+    branches: [main]
+    paths:
+      - "**/worker.js"
+      - "**/wrangler.toml"
+      - "deploy-targets.txt"
+      - ".github/workflows/canonical-deploy.yml"
   workflow_dispatch:
     inputs:
       workers:

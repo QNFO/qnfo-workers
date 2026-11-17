@@ -6,7 +6,8 @@ name: artifacts-mirror-sync
 # It needs the repository secret ARTIFACTS_TOKEN (a repo-scoped write token for fleet-artifacts); without it the run
 # warns and exits 0 without touching the remote.
 on:
-  # FLEET-FREEZE-1 (2026-11-16): automatic triggers removed (push, workflow_run, pull_request_target, repository_dispatch); run by hand.
+  push:
+    branches: [main]
   workflow_dispatch:
 
 permissions:

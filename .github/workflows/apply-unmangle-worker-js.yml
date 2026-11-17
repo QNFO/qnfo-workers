@@ -32,7 +32,15 @@ name: apply-unmangle-worker-js
 # contents API without needing the Actions API (which qnfo-ops cannot reach).
 
 on:
-  # FLEET-FREEZE-1 (2026-11-16): automatic triggers removed (push, workflow_run, pull_request_target, repository_dispatch); run by hand.
+  push:
+    branches: [main]
+    paths:
+      - "**/worker.js"
+      - "scripts/unmangle-worker-js.py"
+      - ".github/workflows/apply-unmangle-worker-js.yml"
+  repository_dispatch:
+    types: [unmangle-worker-js, self-audit]
+  # schedule removed 2026-11-16 (FLEET-FREEZE-1, owner directive: stop all recurring work)
   workflow_dispatch:
 
 concurrency:

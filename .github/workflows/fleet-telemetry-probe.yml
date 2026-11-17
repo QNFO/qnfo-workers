@@ -12,8 +12,11 @@ name: fleet-telemetry-probe
 # every 6 hours (the age of the committed ci-status/fleet-telemetry.json), so it keeps running with no session at all.
 # A pull request that changes the probe still runs it once for review.
 on:
-  # FLEET-FREEZE-1 (2026-11-16): automatic triggers removed (push, workflow_run, pull_request_target, repository_dispatch); run by hand.
   workflow_call:
+  workflow_run:
+    workflows: ["canonical-deploy"]
+    types: [completed]
+    branches: [main]
   workflow_dispatch:
 
 permissions:

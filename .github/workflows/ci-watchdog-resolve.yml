@@ -22,7 +22,8 @@
 name: ci-watchdog-resolve
 
 on:
-  # FLEET-FREEZE-1 (2026-11-16): automatic triggers removed (push, workflow_run, pull_request_target, repository_dispatch); run by hand.
+  push:
+    branches: [main]
   workflow_dispatch:
 
 permissions:

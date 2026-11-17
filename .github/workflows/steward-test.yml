@@ -5,8 +5,14 @@ name: steward-test
 # SQL (node:sqlite, the migrations themselves) against a scripted GitHub; they gate every PR/push that touches the worker.
 
 on:
-  # FLEET-FREEZE-1 (2026-11-16): automatic triggers removed (push, workflow_run, pull_request_target, repository_dispatch); run by hand.
   workflow_call:
+  push:
+    branches: [main]
+    paths:
+      - "qnfo-github-steward/**"
+      - "migrations/2026-10-18-tracker-sync.sql"
+      - "migrations/2026-10-18-portfolio-sync.sql"
+      - ".github/workflows/steward-test.yml"
   workflow_dispatch:
 
 permissions:
