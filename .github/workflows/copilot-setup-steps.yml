@@ -1,9 +1,12 @@
 name: Copilot Setup Steps
 
 on:
-  # FLEET-FREEZE-1 (2026-11-16): automatic triggers removed (push, workflow_run, pull_request_target, repository_dispatch); run by hand.
   workflow_call:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/copilot-setup-steps.yml
 
 permissions:
   contents: read

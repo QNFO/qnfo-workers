@@ -728,6 +728,15 @@ def apply_ahead(d=None):
         d = json.load(open(STATE))
     ahead = _listy(d, "ahead")
     print(f"auto-deploy candidates (repo strictly ahead): {len(ahead)}")
+    # DEPLOY-SCOPE-CAP-1b (2026-11-17): the automatic apply path deploys at most N repo-ahead workers per run; the rest stay
+    # ahead and the next audit run takes the next batch, so a backlog can never become one fleet-wide burst (the 29-worker sweep).
+    try:
+        cap = int(os.environ.get("FLEET_AUTODEPLOY_MAX", "6"))
+    except ValueError:
+        cap = 6
+    if cap > 0 and len(ahead) > cap:
+        print(f"::notice::auto-deploy capped at {cap} of {len(ahead)} repo-ahead workers this run (FLEET_AUTODEPLOY_MAX); the rest follow on the next run")
+        ahead = ahead[:cap]
     applied, failed = [], []
     container_skips = []
     canonical = bool(os.environ.get("OPS_ROUTER_AUTH_KEY", "").strip())

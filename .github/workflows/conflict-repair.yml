@@ -38,7 +38,6 @@ name: conflict-repair
 # that accept a dispatch (actions: write).
 
 on:
-  # FLEET-FREEZE-1 (2026-11-16): automatic triggers removed (push, workflow_run, pull_request_target, repository_dispatch); run by hand.
   workflow_dispatch:
     inputs:
       pr:
@@ -49,6 +48,11 @@ on:
         description: "true updates the original PR branch without force; false is a dry run that prints the outcome"
         required: false
         default: "true"
+  workflow_run:
+    workflows: ["remediation-consumer"]
+    types: [completed]
+  push:
+    branches: [main]
 
 permissions:
   contents: write

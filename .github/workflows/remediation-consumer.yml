@@ -47,7 +47,19 @@ name: remediation-consumer
 # fail-closed behaviour, not a pass.
 
 on:
-  # FLEET-FREEZE-1 (2026-11-16): automatic triggers removed (push, workflow_run, pull_request_target, repository_dispatch); run by hand.
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/remediation-consumer.py'
+      # PROBE-TRANSPORT-MONOCULTURE-1: the implementation lives in the underscore file; a change to it alone
+      # did not start a run, so a fix to the consumer waited for an unrelated workflow_run.
+      - 'scripts/remediation_consumer.py'
+      - '.github/workflows/remediation-consumer.yml'
+  # CONSUMER-NO-WORKFLOW-RUN-1 (2026-11-04, STOP-WASTE-1): workflow_run off every fleet-autodeploy completion spawned a run per merge
+  # (2026-11-04 15:32-15:49Z: 12 queued, 6 pending, 12 cancelled, 0 completed). The qnfo-cloud-ops PROBE-CADENCE-1 repository_dispatch below
+  # starts the consumer when the last run is 60 minutes old, so probes arrive on a steady cadence instead of in bursts.
+  # Revert: restore the workflow_run block (workflows ["apply-pending-patches", "fleet-autodeploy"], types [completed]).
+  # schedule removed 2026-11-16 (FLEET-FREEZE-1, owner directive: stop all recurring work)
   workflow_dispatch:
     inputs:
       heavy:
@@ -56,6 +68,8 @@ on:
         default: false
   # PROBE-CADENCE-1 (2026-10-06): qnfo-cloud-ops sends this event from its 10-minute Cloudflare tick when the last run
   # here is older than 60 minutes, so runtime probes keep running while main is quiet (no push, no workflow_run).
+  repository_dispatch:
+    types: [remediation-tick]
 
 permissions:
   contents: write

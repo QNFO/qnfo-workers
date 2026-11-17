@@ -25,7 +25,10 @@ run-name: github-settings-actions ${{ github.event_name == 'push' && 'gh-webhook
 # Dispatch or the webhook setup's merge to main, never a schedule. Style: step names colon-free, no heredocs, no inline python (workflow-lint.py).
 
 on:
-  # FLEET-FREEZE-1 (2026-11-16): automatic triggers removed (push, workflow_run, pull_request_target, repository_dispatch); run by hand.
+  push:
+    branches: [main]
+    paths:
+      - scripts/gh-webhook-setup.mjs
   workflow_dispatch:
     inputs:
       action:

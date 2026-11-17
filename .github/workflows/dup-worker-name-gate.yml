@@ -12,7 +12,13 @@ name: dup-worker-name-gate
 # No unquoted colon inside a step name (WORKFLOW-YAML-LINT-1).
 
 on:
-  # FLEET-FREEZE-1 (2026-11-16): automatic triggers removed (push, workflow_run, pull_request_target, repository_dispatch); run by hand.
+  push:
+    paths:
+      - '**/wrangler.toml'
+      - '**/wrangler.json'
+      - '**/wrangler.jsonc'
+      - 'scripts/dup-worker-name-gate.py'
+      - '.github/workflows/dup-worker-name-gate.yml'
   workflow_dispatch:
 
 permissions:

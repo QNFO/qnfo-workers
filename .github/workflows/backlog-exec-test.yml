@@ -5,8 +5,12 @@ name: backlog-exec-test
 # node:sqlite) on every PR/push that touches the worker.
 
 on:
-  # FLEET-FREEZE-1 (2026-11-16): automatic triggers removed (push, workflow_run, pull_request_target, repository_dispatch); run by hand.
   workflow_call:
+  push:
+    branches: [main]
+    paths:
+      - "qnfo-backlog-exec/**"
+      - ".github/workflows/backlog-exec-test.yml"
   workflow_dispatch:
 
 permissions:

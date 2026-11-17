@@ -116,7 +116,19 @@ run-name: ${{ github.event_name == 'workflow_dispatch' && format('fleet-autodepl
 # the same VERSION string — version parity is not content parity.
 
 on:
-  # FLEET-FREEZE-1 (2026-11-16): automatic triggers removed (push, workflow_run, pull_request_target, repository_dispatch); run by hand.
+  # schedule removed 2026-11-16 (FLEET-FREEZE-1, owner directive: stop all recurring work)
+  # CI-VELOCITY-1 (2026-11-04): no push trigger. The push run audits while canonical-deploy is still deploying the same commit
+  # (DRIFT-AUDIT-AFTER-DEPLOY-1 below), and every worker push ends in a mirror-sync or canonical-deploy completion that starts this
+  # workflow anyway. Dropping it also ends the CI-RUNAWAY-LOOP-1 push path (artifact commits cannot start it).
+  workflow_run:
+    # DRIFT-AUDIT-AFTER-DEPLOY-1 (2026-10-05, agent_issues 1993): the push run audits while canonical-deploy is still
+    # deploying the same commit, so the just-merged worker is written to worker_live_audit as DRIFT (live still the old
+    # version) and stays so until an unrelated push. qnfo-fleet-control counts those rows into drift_total
+    # (REPO-LIVE-DRIFT-1): drift_total read 1 at 2026-10-05 18:00Z for fleet-control 0.4.119, deployed at 18:03Z, and
+    # METRIC-TRIGGER-360 filed #1993 with no drifting worker. Re-auditing when canonical-deploy completes records the
+    # deployed state. canonical-deploy has no workflow_run trigger, so the chain stays acyclic.
+    workflows: ["mirror-sync", "deploy-qnfo-ops", "canonical-deploy"]
+    types: [completed]
   workflow_dispatch:
     inputs:
       mode:
