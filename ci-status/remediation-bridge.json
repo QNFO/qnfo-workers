@@ -2,8 +2,8 @@
  "ok": true,
  "marker": "REMEDIATION-CONTRACT-BRIDGE-1",
  "probe_map_entries": 44,
- "open_issues": 661,
- "with_contract_before": 661,
+ "open_issues": 662,
+ "with_contract_before": 662,
  "upgraded_sentinel_to_active": 0,
  "inserted_active": 0,
  "inserted_needs_machine_probe": 0,
@@ -12,208 +12,208 @@
  "active_with_prose_probe": 606,
  "prose_probe_contracts": [
   {
-   "class": "issue-2017",
-   "issue_id": 2017,
-   "reason": "not-a-select"
-  },
-  {
-   "class": "issue-2305",
-   "issue_id": 2305,
-   "reason": "not-a-select"
-  },
-  {
-   "class": "issue-2342",
-   "issue_id": 2342,
-   "reason": "not-a-select"
-  },
-  {
-   "class": "issue-2397",
-   "issue_id": 2397,
-   "reason": "not-a-select"
-  },
-  {
-   "class": "issue-2402",
-   "issue_id": 2402,
-   "reason": "not-a-select"
-  },
-  {
-   "class": "issue-2403",
-   "issue_id": 2403,
-   "reason": "not-a-select"
-  },
-  {
-   "class": "issue-2404",
-   "issue_id": 2404,
-   "reason": "not-a-select"
-  },
-  {
-   "class": "issue-2405",
-   "issue_id": 2405,
-   "reason": "not-a-select"
-  },
-  {
-   "class": "issue-2407",
-   "issue_id": 2407,
-   "reason": "not-a-select"
-  },
-  {
-   "class": "belief-deploy-loop-attempts-every-target",
+   "class": "goal-TWIN-NATIVE-TOOLS-1",
    "issue_id": null,
    "reason": "not-a-select"
   },
   {
-   "class": "fm-honeypot-named-for-autofill",
+   "class": "issue-1000429",
+   "issue_id": 1000429,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "issue-1000430",
+   "issue_id": 1000430,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "fm-q08-arxiv-lane-blocked-by-thin",
    "issue_id": null,
    "reason": "not-a-select"
   },
   {
-   "class": "fm-math-delim-pairing-shift",
+   "class": "fm-runtime-probe-budget",
    "issue_id": null,
    "reason": "not-a-select"
   },
   {
-   "class": "issue-2480",
-   "issue_id": 2480,
-   "reason": "not-a-select"
-  },
-  {
-   "class": "fm-edge-copy-version-skew",
+   "class": "fm-gradual-preview-version-not-visible",
    "issue_id": null,
    "reason": "not-a-select"
   },
   {
-   "class": "fm-factcheck-waits-for-slowest",
-   "issue_id": null,
+   "class": "issue-1001658",
+   "issue_id": 1001658,
    "reason": "not-a-select"
   },
   {
-   "class": "fm-code-read-stale-checkout",
-   "issue_id": null,
+   "class": "issue-1001668",
+   "issue_id": 1001668,
    "reason": "not-a-select"
   },
   {
-   "class": "fm-write-200-only",
-   "issue_id": null,
+   "class": "issue-1001704",
+   "issue_id": 1001704,
    "reason": "not-a-select"
   },
   {
-   "class": "fm-watchdog-action-blind",
-   "issue_id": null,
+   "class": "issue-1001744",
+   "issue_id": 1001744,
    "reason": "not-a-select"
   },
   {
-   "class": "fm-patch-calls-undefined-helper",
-   "issue_id": null,
+   "class": "issue-1001775",
+   "issue_id": 1001775,
    "reason": "not-a-select"
   },
   {
-   "class": "fm-second-path-flagged-non-canonical",
-   "issue_id": null,
+   "class": "issue-1001778",
+   "issue_id": 1001778,
    "reason": "not-a-select"
   },
   {
-   "class": "fm-companion-context-invented",
-   "issue_id": null,
+   "class": "issue-1001780",
+   "issue_id": 1001780,
    "reason": "not-a-select"
   },
   {
-   "class": "fm-blockquote-quote-unchecked",
-   "issue_id": null,
+   "class": "issue-1001810",
+   "issue_id": 1001810,
    "reason": "not-a-select"
   },
   {
-   "class": "fm-exec-log-shared-signature",
-   "issue_id": null,
+   "class": "issue-1001815",
+   "issue_id": 1001815,
    "reason": "not-a-select"
   },
   {
-   "class": "fm-ci-excerpt-noise-first",
-   "issue_id": null,
+   "class": "issue-1001823",
+   "issue_id": 1001823,
    "reason": "not-a-select"
   },
   {
-   "class": "fm-companion-analysis-judged-as-reporting",
-   "issue_id": null,
+   "class": "issue-1001835",
+   "issue_id": 1001835,
    "reason": "not-a-select"
   },
   {
-   "class": "fm-companion-final-text-unread",
-   "issue_id": null,
+   "class": "issue-1001859",
+   "issue_id": 1001859,
    "reason": "not-a-select"
   },
   {
-   "class": "fm-companion-split-lede-uncounted",
-   "issue_id": null,
+   "class": "issue-1001874",
+   "issue_id": 1001874,
    "reason": "not-a-select"
   },
   {
-   "class": "fm-companion-length-lede-undercount",
-   "issue_id": null,
+   "class": "issue-1001877",
+   "issue_id": 1001877,
    "reason": "not-a-select"
   },
   {
-   "class": "fm-companion-reasoning-stated-as-fact",
-   "issue_id": null,
+   "class": "issue-1001895",
+   "issue_id": 1001895,
    "reason": "not-a-select"
   },
   {
-   "class": "issue-2521",
-   "issue_id": 2521,
+   "class": "issue-1001900",
+   "issue_id": 1001900,
    "reason": "not-a-select"
   },
   {
-   "class": "issue-2538",
-   "issue_id": 2538,
+   "class": "issue-1001909",
+   "issue_id": 1001909,
    "reason": "not-a-select"
   },
   {
-   "class": "fm-companion-analysis-line-misplaced",
-   "issue_id": null,
+   "class": "issue-1001923",
+   "issue_id": 1001923,
    "reason": "not-a-select"
   },
   {
-   "class": "fm-companion-critic-no-date",
-   "issue_id": null,
+   "class": "issue-1001928",
+   "issue_id": 1001928,
    "reason": "not-a-select"
   },
   {
-   "class": "fm-companion-ground-ascii-names",
-   "issue_id": null,
+   "class": "issue-1001929",
+   "issue_id": 1001929,
    "reason": "not-a-select"
   },
   {
-   "class": "fm-companion-symbol-draft-discarded",
-   "issue_id": null,
+   "class": "issue-1001934",
+   "issue_id": 1001934,
    "reason": "not-a-select"
   },
   {
-   "class": "fm-companion-year-range-flagged",
-   "issue_id": null,
+   "class": "issue-1001937",
+   "issue_id": 1001937,
    "reason": "not-a-select"
   },
   {
-   "class": "fm-companion-edit-drops-analysis-line",
-   "issue_id": null,
+   "class": "issue-1001940",
+   "issue_id": 1001940,
    "reason": "not-a-select"
   },
   {
-   "class": "fm-companion-century-ordinal-flagged",
-   "issue_id": null,
+   "class": "issue-1001941",
+   "issue_id": 1001941,
    "reason": "not-a-select"
   },
   {
-   "class": "fm-companion-topic-without-causes",
-   "issue_id": null,
+   "class": "issue-1001945",
+   "issue_id": 1001945,
    "reason": "not-a-select"
   },
   {
-   "class": "fm-companion-source-cut-mid-sentence",
-   "issue_id": null,
+   "class": "issue-1001955",
+   "issue_id": 1001955,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "issue-1001962",
+   "issue_id": 1001962,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "issue-1001973",
+   "issue_id": 1001973,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "issue-1001985",
+   "issue_id": 1001985,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "issue-1002007",
+   "issue_id": 1002007,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "issue-1002023",
+   "issue_id": 1002023,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "issue-1002033",
+   "issue_id": 1002033,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "issue-1002046",
+   "issue_id": 1002046,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "issue-1002058",
+   "issue_id": 1002058,
    "reason": "not-a-select"
   }
  ],
  "contracts_needs_machine_probe": 34,
- "open_issues_without_active_contract": 277,
+ "open_issues_without_active_contract": 278,
  "residual_gap_ids": [
   1797,
   1893,
@@ -276,7 +276,7 @@
   1003020,
   1003024
  ],
- "head": "64bd101c08c3b208288b222ebf0539121a51574f",
+ "head": "757c069e5ed10226cca983e3940183afeef24246",
  "job_status": "success",
- "ts": "2026-11-16T09:06:53Z"
+ "ts": "2026-11-17T13:25:48Z"
 }
