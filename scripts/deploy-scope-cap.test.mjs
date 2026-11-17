@@ -15,3 +15,19 @@ test("the widened diff base is capped and falls back to the push's own base", ()
 test("the cap runs before the added-files list uses BASE", () => {
   assert.ok(wf.indexOf("MAX_WIDENED_WORKERS=") < wf.indexOf('--diff-filter=A "$BASE"'), "cap is applied before /tmp/added.txt is computed");
 });
+
+// DEPLOY-SCOPE-CAP-2: workers beyond the cap are deployed in batches of 6 by self-dispatch, never dropped and never swept in one run.
+test("overflow is chained in batches of 6 through a `then` input", () => {
+  assert.match(wf, /\n      then:\n/);
+  assert.match(wf, /\/tmp\/overflow\.txt/);
+  assert.match(wf, /Chain the overflow/);
+  assert.match(wf, /head -6/);
+  assert.match(wf, /gh workflow run canonical-deploy\.yml[^\n]*-f then=/);
+  assert.ok(wf.indexOf("Chain the overflow") < wf.indexOf("Commit the ci-status artifact back"), "chain runs before the artifact commit");
+});
+
+test("the autodeploy apply path is capped per run", () => {
+  const fa = readFileSync(new URL("./fleet-autoaudit.py", import.meta.url), "utf8");
+  assert.match(fa, /FLEET_AUTODEPLOY_MAX/);
+  assert.match(fa, /ahead = ahead\[:cap\]/);
+});
