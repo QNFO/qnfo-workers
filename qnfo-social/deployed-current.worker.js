@@ -4829,6 +4829,7 @@ async function touchReport(env) {
 async function bufferRelayCreate(env, ch, svc, text, mode) {
   try {
     const draft = mode === 'draft';
+    text = withAutomationMarker(text, MARKER_MAX_CHARS[svc] || 280);  // POST-READBACK-1: the relay discloses automation like every other posting path
     const q = "mutation CreatePost { createPost(input: { text: " + JSON.stringify(text) + ", channelId: \"" + ch.id + "\", schedulingType: automatic, mode: " + (draft ? "addToQueue, saveToDraft: true" : mode === 'queue' ? "addToQueue" : "shareNow") + " }) { ... on PostActionSuccess { post { id status } } ... on MutationError { message } } }";
     const r = await bufferGql(env, q); const cp = r && r.data && r.data.createPost;
     if (cp && cp.post) return { status: cp.post.status, id: cp.post.id };
@@ -4891,8 +4892,10 @@ export default {
         if (p === '/relay/post' && m === 'POST') {
           const b = await request.json(); const text = String(b.text || '').trim();
           if (!text) return J({ error: 'text required' }, 400);
+          if (await socialPausedBy(env)) return J({ ok: false, skipped: 'paused' }, 423);  // the pause flag covers the relay too
           const out = {};
           for (const svc of (b.channels || [])) {
+            if (svc === 'mastodon' && env.MASTODON_TOKEN && b.mode === 'draft') { out.mastodon = { status: 'skipped', error: 'draft mode: Mastodon has no draft' }; continue; }
             if (svc === 'mastodon' && env.MASTODON_TOKEN) { try { out.mastodon = await mastodonCreate(env, text.slice(0, 480)); } catch (e) { out.mastodon = { status: 'error', error: String(e && e.message || e).slice(0, 160) }; } continue; }
             const ch = findChannel(bc.channels, svc === 'x' ? 'twitter' : svc);
             if (!ch) { out[svc] = { status: 'no-channel' }; continue; }
