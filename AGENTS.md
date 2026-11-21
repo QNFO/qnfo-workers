@@ -8,6 +8,11 @@ At the start of every session, fetch https://raw.githubusercontent.com/QNFO/qnfo
 Agents that support `AGENTS.md`, including Pi, load this file as project
 context. These instructions apply throughout this repository.
 
+## Build the companion; the rest is parked (DEV-FOCUS-1, owner directive 2026-11-21, every repo)
+- Owner, verbatim: "all effort that we might call automated development cycles are focused on things that I'll actually use, which are no longer QNFO or QWave or Q08. All those were kind of side projects and experiments. But I do want to keep using the personal companion and want it to keep getting better."
+- Automated development (the Copilot sweep, the code loop, sessions picking work, product research) serves the personal companion only: me.q08.org and its dashboards, built in `rwnq8/personal-life`. QNFO research and publishing, QWav and the Q08 side projects are parked: no new automated work, their deployed workers keep serving, and QNFO mail keeps flowing to the owner.
+- Data: `_shared/dev-focus.json` (focus, build repository, keywords, parked list). Consumer: `scripts/assign-copilot-sweep.mjs` `focusDenied` skips off-focus issues (a red main, a security issue and the issue that fired the run still go; `ASSIGN_COPILOT_FOCUS = off` restores the old sweep). Proof: `_shared/dev-focus.test.mjs`. It moves no limit: the harness's permission checks, the secret lock and live work claims keep their precedence.
+
 ## Repository authority
 
 - Read `CLAUDE.md` before changing code. It contains the fleet's required

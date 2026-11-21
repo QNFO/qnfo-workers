@@ -10,6 +10,11 @@ At the start of every session, fetch https://raw.githubusercontent.com/QNFO/qnfo
 Several agent sessions work this fleet concurrently with shared credentials. These rules exist
 because each one was broken at least once; the linked issue holds the evidence.
 
+## Build the companion; the rest is parked (DEV-FOCUS-1, owner directive 2026-11-21, every repo)
+- Owner, verbatim: "all effort that we might call automated development cycles are focused on things that I'll actually use, which are no longer QNFO or QWave or Q08. All those were kind of side projects and experiments. But I do want to keep using the personal companion and want it to keep getting better."
+- Automated development (the Copilot sweep, the code loop, sessions picking work, product research) serves the personal companion only: me.q08.org and its dashboards, built in `rwnq8/personal-life`. QNFO research and publishing, QWav and the Q08 side projects are parked: no new automated work, their deployed workers keep serving, and QNFO mail keeps flowing to the owner.
+- Data: `_shared/dev-focus.json` (focus, build repository, keywords, parked list). Consumer: `scripts/assign-copilot-sweep.mjs` `focusDenied` skips off-focus issues (a red main, a security issue and the issue that fired the run still go; `ASSIGN_COPILOT_FOCUS = off` restores the old sweep). Proof: `_shared/dev-focus.test.mjs`. It moves no limit: the harness's permission checks, the secret lock and live work claims keep their precedence.
+
 ## Never stop, always improve (NEVER-STOP-1, owner directive 2026-11-04)
 - You are never done and always missing something. Before closing any turn ask: what am I not thinking about, what am I missing, what else can I do? Answer with work, not a question to the owner (owner directive 2026-11-04, every repo).
 - Owner directive 2026-11-04: "Let's keep making the system better. Managers that think in terms of strategy and features and functionality and making things better, I'm not going to keep telling you this." It binds every session and loop and sits with the proactive programs (ROADMAP-ORIGINATE-1).
