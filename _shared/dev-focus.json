@@ -1,0 +1,16 @@
+{
+  "id": "DEV-FOCUS-1",
+  "since": "2026-11-21",
+  "owner_words": "QNFO is just there. Make sure that all effort that we might call automated development cycles are focused on things that I'll actually use, which are no longer QNFO or QWave or Q08. All those were kind of side projects and experiments. But I do want to keep using the personal companion and want it to keep getting better.",
+  "focus": "the personal companion: me.q08.org and the dashboards it links (travel.q08.org, jobs.q08.org)",
+  "build_repos": ["rwnq8/personal-life"],
+  "keywords": ["companion", "me.q08.org", "personal-api", "personal-companion", "personal-life", "travel.q08.org", "jobs.q08.org", "COMPANION-", "CMP-", "OWNER-ASK-"],
+  "always_allowed_labels": ["ci-watchdog", "security"],
+  "parked": [
+    { "name": "QNFO research and publishing (qnfo.org)", "automation": "parked: no new automated development; running workers keep serving" },
+    { "name": "QWav quantum (qwav.org)", "automation": "parked" },
+    { "name": "Q08 side projects and experiments", "automation": "parked" }
+  ],
+  "kept_running": ["the QNFO mailbox and its mail routes (the owner still reads QNFO mail)", "every deployed worker and route that serves today"],
+  "consumers": ["scripts/assign-copilot-sweep.mjs (focusDenied)", "_shared/dev-focus.test.mjs"]
+}

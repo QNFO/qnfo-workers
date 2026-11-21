@@ -46,7 +46,7 @@
 //          sweeps; issues and manual runs always do. A throttled run costs one read.
 // USAGE  GH_PAT_TOKEN=... node scripts/assign-copilot-sweep.mjs [--hours 720] [--max 10] [--max-open 12] [--redrive-max 5] [--stalled-hours 2]
 //        [--mode live|dry] [--no-agent-sync]; ISSUE_REPO=QNFO/x ISSUE_NUMBER=7 (set by the `issues` trigger) puts that one issue first in the run.
-import { appendFileSync } from "node:fs";
+import { appendFileSync, readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { checkBudget, resolveFloor, yieldLine } from "./gh-budget-floor.mjs";
 import { CODE_DELIVERY_DOD, withCodeDeliveryDoD } from "./code-delivery.mjs";
@@ -146,6 +146,21 @@ export function familyDenied(n) {
   if (DENY_FAMILIES.some((re) => re.test(fam))) return "family-record-owned";
   if (CODE_TASK_LINE_RE.test(n.body || "") && !CODE_LOOP_FAILURE_FAMILIES.some((re) => re.test(fam))) return "code-loop-owns";
   return null;
+}
+
+// DEV-FOCUS-1 (owner 2026-11-21, _shared/dev-focus.json): automated development goes to the personal companion only. QNFO, QWav and the Q08
+// side projects are parked: their issues are not handed to Copilot (their services keep running). A red main (ci-watchdog), a security issue
+// and the issue that fired the run still go. ASSIGN_COPILOT_FOCUS = off restores the unfiltered sweep.
+export const DEV_FOCUS = (() => { try { return JSON.parse(readFileSync(new URL("../_shared/dev-focus.json", import.meta.url), "utf8")); } catch (e) { return null; } })();
+export function focusDenied(n, focus) {
+  const f = focus || DEV_FOCUS;
+  if (!f || n.priority) return null;
+  const labels = n.labels || [];
+  if (labels.some((l) => (f.always_allowed_labels || []).includes(l))) return null;
+  if ((f.build_repos || []).includes(n.owner + "/" + n.repo)) return null;
+  const text = (String(n.title || "") + "\n" + String(n.body || "")).toLowerCase();
+  if ((f.keywords || []).some((k) => text.includes(String(k).toLowerCase()))) return null;
+  return "parked-by-dev-focus";
 }
 
 export const trusted = (n) => TRUSTED_ASSOCIATIONS.includes(n.assoc) || TRUSTED_BOTS.includes(n.login);
@@ -371,6 +386,7 @@ export async function run(opts, deps) {
     if (!trusted(n)) { skip("untrusted-author", n); continue; }
     if (refused.has(slug)) { skip("repo-refused", n); continue; }
     if (o.familyFilter !== false) { const why = familyDenied(n); if (why) { skip(why, n); continue; } }
+    if (o.focusFilter === true) { const why = focusDenied(n); if (why) { skip(why, n); continue; } }
     const mid = mirrorId(n.title);
     if (mid && doers.ids.has(mid)) { skip("has-doer", n); continue; }
     if (hasCopilot && redrives >= o.redriveMax) { sum.deferred++; continue; }
@@ -481,7 +497,7 @@ async function main() {
     token: env.GH_PAT_TOKEN || "", sweep: env.ASSIGN_COPILOT_SWEEP || "on",
     hours: num(arg("--hours"), DEFAULTS.hours), max: num(arg("--max"), DEFAULTS.max), maxOpen: num(arg("--max-open"), DEFAULTS.maxOpen),
     redriveMax: num(arg("--redrive-max"), DEFAULTS.redriveMax), stalledHours: num(arg("--stalled-hours"), DEFAULTS.stalledHours),
-    mode: arg("--mode", "live") === "dry" ? "dry" : "live", agentSync: !argv.includes("--no-agent-sync"), familyFilter: String(env.ASSIGN_COPILOT_FAMILY_FILTER || "on").toLowerCase() !== "off",
+    mode: arg("--mode", "live") === "dry" ? "dry" : "live", agentSync: !argv.includes("--no-agent-sync"), familyFilter: String(env.ASSIGN_COPILOT_FAMILY_FILTER || "on").toLowerCase() !== "off", focusFilter: String(env.ASSIGN_COPILOT_FOCUS || "on").toLowerCase() !== "off",
     gate: { event: env.GITHUB_EVENT_NAME || "", runId: env.GITHUB_RUN_ID || "", repo: env.GITHUB_REPOSITORY || "", minutes: num(arg("--window-minutes"), DEFAULTS.windowMinutes) }
   };
   if (/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(env.ISSUE_REPO || "") && /^\d+$/.test(env.ISSUE_NUMBER || "")) opts.priority = { repo: env.ISSUE_REPO, number: Number(env.ISSUE_NUMBER) };
