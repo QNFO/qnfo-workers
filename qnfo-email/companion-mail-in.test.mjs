@@ -39,6 +39,8 @@ await api.companionIndex(env, { messageId: "<m3>", from: "Ada <ada@example.org>"
 ok("person mail written once", rows.length === 1 && /INSERT OR IGNORE INTO email_index/.test(rows[0].q));
 ok("ultrastable store and folder", rows[0].a[1] === "ultrastable" && rows[0].a[2] === "hello@ultrastable.io");
 ok("subject decoded, summary collapsed", rows[0].a[4] === "Café" && rows[0].a[6] === "hi there");
+await api.companionIndex(env, { messageId: "<m5>", from: "bo@example.org", subject: "Hi", bodyText: "", bodyHtml: "<html><style>p{x}</style><p>Hello&nbsp;<b>there</b> &amp; bye</p></html>", receivedAt: "2026-11-20T16:08:37.700Z", headers: H(), usTo: "" });
+ok("HTML-only mail previews as text: " + (rows[1] && rows[1].a[6]), rows.length === 2 && rows[1].a[6] === "Hello there & bye");
 await api.companionIndex({}, { messageId: "<m4>", from: "ada@example.org", subject: "x", headers: H() });
 if (fail.length) { console.error("FAIL\n" + fail.join("\n")); process.exit(1); }
 console.log("companion-mail-in: all checks passed");
