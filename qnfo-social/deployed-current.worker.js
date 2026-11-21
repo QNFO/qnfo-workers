@@ -4865,7 +4865,9 @@ export default {
     if (m === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
     if (p.startsWith('/relay')) {
       const rt = (request.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '');
-      if (!env.RELAY_TOKEN || rt !== env.RELAY_TOKEN) return new Response('unauthorized', { status: 401 });
+      let rtOk = !!env.RELAY_TOKEN && rt.length === String(env.RELAY_TOKEN).length;  // constant-time compare
+      if (rtOk) { let rd = 0; for (let i = 0; i < rt.length; i++) rd |= rt.charCodeAt(i) ^ String(env.RELAY_TOKEN).charCodeAt(i); rtOk = rd === 0; }
+      if (!rtOk) return new Response('unauthorized', { status: 401 });
       const J = (o, s) => new Response(JSON.stringify(o), { status: s || 200, headers: { 'Content-Type': 'application/json' } });
       try {
         const bc = await bufferChannels(env);
