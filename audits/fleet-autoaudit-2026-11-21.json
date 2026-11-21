@@ -1,7 +1,7 @@
 {
-  "audited_at": "2026-11-21 10:19:43",
+  "audited_at": "2026-11-21 11:08:39",
   "d1_write_failures": [],
-  "d1_writes_ok": 27,
+  "d1_writes_ok": 8,
   "guard": {
     "_guard_rc": 0,
     "ahead": [],
@@ -35,11 +35,6 @@
       {
         "http": 200,
         "version": null,
-        "worker": "demo-child-ultrastable"
-      },
-      {
-        "http": 200,
-        "version": null,
         "worker": "personal-career-engine"
       },
       {
@@ -55,47 +50,12 @@
       {
         "http": 200,
         "version": null,
-        "worker": "ps-llm"
-      },
-      {
-        "http": 200,
-        "version": null,
-        "worker": "ps-practical-solutions"
-      },
-      {
-        "http": 200,
-        "version": null,
-        "worker": "ps-web"
-      },
-      {
-        "http": 200,
-        "version": null,
         "worker": "qnfo-profile-loop"
       },
       {
         "http": 200,
         "version": null,
         "worker": "qnfo-workers"
-      },
-      {
-        "http": 404,
-        "version": null,
-        "worker": "tenant-ps-edge"
-      },
-      {
-        "http": 200,
-        "version": null,
-        "worker": "tenant-ps-mail"
-      },
-      {
-        "http": 200,
-        "version": "1.0.0",
-        "worker": "ultrastable-agents"
-      },
-      {
-        "http": 200,
-        "version": "0.3.0",
-        "worker": "ultrastable-dashboard"
       },
       {
         "http": 404,
@@ -111,74 +71,11 @@
         "http": 404,
         "version": null,
         "worker": "ultrastable-site"
-      },
-      {
-        "http": 404,
-        "version": null,
-        "worker": "ultrastable-spinoffs"
-      },
-      {
-        "http": 200,
-        "version": null,
-        "worker": "ultrastable-tick"
-      },
-      {
-        "http": 200,
-        "version": null,
-        "worker": "ultrastable-ultrastable"
-      },
-      {
-        "http": 200,
-        "version": null,
-        "worker": "us-idea-16438b610e"
-      },
-      {
-        "http": 200,
-        "version": null,
-        "worker": "us-idea-3b145446e4"
-      },
-      {
-        "http": 200,
-        "version": null,
-        "worker": "us-idea-4bc6af0cea"
-      },
-      {
-        "http": 200,
-        "version": null,
-        "worker": "us-idea-7f16de273d"
-      },
-      {
-        "http": 200,
-        "version": null,
-        "worker": "us-idea-9fcb2077cc"
-      },
-      {
-        "http": 200,
-        "version": null,
-        "worker": "us-idea-b7adf8fd63"
-      },
-      {
-        "http": 200,
-        "version": null,
-        "worker": "us-idea-df25e6aced"
-      },
-      {
-        "http": 200,
-        "version": null,
-        "worker": "us-idea-efb6b23d9c"
       }
     ]
   },
-  "purge_error": "purge skipped: run classified 27 workers, table held 73; a partial report must not shrink the audit surface",
+  "purge_error": "purge skipped: run classified 8 workers, table held 73; a partial report must not shrink the audit surface",
   "rows": {
-    "demo-child-ultrastable": {
-      "before": null,
-      "http": 200,
-      "live": null,
-      "match": 0,
-      "note": "UNMANAGED_OK",
-      "worker": "demo-child-ultrastable"
-    },
     "personal-career-engine": {
       "before": null,
       "http": 200,
@@ -203,30 +100,6 @@
       "note": "UNMANAGED_ERR",
       "worker": "personal-job-matcher"
     },
-    "ps-llm": {
-      "before": null,
-      "http": 200,
-      "live": null,
-      "match": 0,
-      "note": "UNMANAGED_OK",
-      "worker": "ps-llm"
-    },
-    "ps-practical-solutions": {
-      "before": null,
-      "http": 200,
-      "live": null,
-      "match": 0,
-      "note": "UNMANAGED_OK",
-      "worker": "ps-practical-solutions"
-    },
-    "ps-web": {
-      "before": null,
-      "http": 200,
-      "live": null,
-      "match": 0,
-      "note": "UNMANAGED_OK",
-      "worker": "ps-web"
-    },
     "qnfo-profile-loop": {
       "before": null,
       "http": 200,
@@ -242,38 +115,6 @@
       "match": 0,
       "note": "UNMANAGED_OK",
       "worker": "qnfo-workers"
-    },
-    "tenant-ps-edge": {
-      "before": null,
-      "http": 404,
-      "live": null,
-      "match": 0,
-      "note": "UNMANAGED_NO_HEALTH",
-      "worker": "tenant-ps-edge"
-    },
-    "tenant-ps-mail": {
-      "before": null,
-      "http": 200,
-      "live": null,
-      "match": 0,
-      "note": "UNMANAGED_OK",
-      "worker": "tenant-ps-mail"
-    },
-    "ultrastable-agents": {
-      "before": null,
-      "http": 200,
-      "live": "1.0.0",
-      "match": 0,
-      "note": "UNMANAGED_OK",
-      "worker": "ultrastable-agents"
-    },
-    "ultrastable-dashboard": {
-      "before": null,
-      "http": 200,
-      "live": "0.3.0",
-      "match": 0,
-      "note": "UNMANAGED_OK",
-      "worker": "ultrastable-dashboard"
     },
     "ultrastable-mail-in": {
       "before": null,
@@ -298,94 +139,6 @@
       "match": 0,
       "note": "UNMANAGED_NO_HEALTH",
       "worker": "ultrastable-site"
-    },
-    "ultrastable-spinoffs": {
-      "before": null,
-      "http": 404,
-      "live": null,
-      "match": 0,
-      "note": "UNMANAGED_NO_HEALTH",
-      "worker": "ultrastable-spinoffs"
-    },
-    "ultrastable-tick": {
-      "before": null,
-      "http": 200,
-      "live": null,
-      "match": 0,
-      "note": "UNMANAGED_OK",
-      "worker": "ultrastable-tick"
-    },
-    "ultrastable-ultrastable": {
-      "before": null,
-      "http": 200,
-      "live": null,
-      "match": 0,
-      "note": "UNMANAGED_OK",
-      "worker": "ultrastable-ultrastable"
-    },
-    "us-idea-16438b610e": {
-      "before": null,
-      "http": 200,
-      "live": null,
-      "match": 0,
-      "note": "UNMANAGED_OK",
-      "worker": "us-idea-16438b610e"
-    },
-    "us-idea-3b145446e4": {
-      "before": null,
-      "http": 200,
-      "live": null,
-      "match": 0,
-      "note": "UNMANAGED_OK",
-      "worker": "us-idea-3b145446e4"
-    },
-    "us-idea-4bc6af0cea": {
-      "before": null,
-      "http": 200,
-      "live": null,
-      "match": 0,
-      "note": "UNMANAGED_OK",
-      "worker": "us-idea-4bc6af0cea"
-    },
-    "us-idea-7f16de273d": {
-      "before": null,
-      "http": 200,
-      "live": null,
-      "match": 0,
-      "note": "UNMANAGED_OK",
-      "worker": "us-idea-7f16de273d"
-    },
-    "us-idea-9fcb2077cc": {
-      "before": null,
-      "http": 200,
-      "live": null,
-      "match": 0,
-      "note": "UNMANAGED_OK",
-      "worker": "us-idea-9fcb2077cc"
-    },
-    "us-idea-b7adf8fd63": {
-      "before": null,
-      "http": 200,
-      "live": null,
-      "match": 0,
-      "note": "UNMANAGED_OK",
-      "worker": "us-idea-b7adf8fd63"
-    },
-    "us-idea-df25e6aced": {
-      "before": null,
-      "http": 200,
-      "live": null,
-      "match": 0,
-      "note": "UNMANAGED_OK",
-      "worker": "us-idea-df25e6aced"
-    },
-    "us-idea-efb6b23d9c": {
-      "before": null,
-      "http": 200,
-      "live": null,
-      "match": 0,
-      "note": "UNMANAGED_OK",
-      "worker": "us-idea-efb6b23d9c"
     }
   },
   "stale_rows_purged": null
