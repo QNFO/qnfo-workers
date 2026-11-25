@@ -50,7 +50,7 @@ index_name = "personal-life"
 name = "companion-generation"
 binding = "GEN_FLOW"
 class_name = "GenerationFlow"
-schedules = ["0 4,8,12,16,20 * * *"]
+# PARKED-GENERATION-1 (2026-11-25): the Workflow schedule "0 4,8,12,16,20 * * *" was still firing after FLEET-FREEZE-1 emptied crons; removed (DEV-FOCUS-1).
 
 # PERSONAL-PIPELINE-1 (2026-11-12): one instance per personal input (instance id = pipeline_runs.id), created by the hourly tick.
 # The canonical deploy installs the binding, never the Workflow resource; it is created once with
