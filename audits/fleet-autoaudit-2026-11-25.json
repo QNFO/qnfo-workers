@@ -1,0 +1,145 @@
+{
+  "audited_at": "2026-11-25 14:16:52",
+  "d1_write_failures": [],
+  "d1_writes_ok": 8,
+  "guard": {
+    "_guard_rc": 0,
+    "ahead": [],
+    "cf_script_list": true,
+    "content_checked": true,
+    "content_drift": [],
+    "cron_only": [],
+    "cron_only_count": 0,
+    "drift": [],
+    "live_err": [],
+    "multi_version": [],
+    "multi_version_count": 0,
+    "name_resolution": true,
+    "no_health_route": [],
+    "no_live_version": [],
+    "no_repo_version": [],
+    "not_a_worker": [],
+    "not_a_worker_count": 0,
+    "not_deployed_dirs": [],
+    "not_deployed_notdrift": 0,
+    "not_deployed_workers": [],
+    "retired_present": [],
+    "retired_present_count": 0,
+    "scope": "all",
+    "sync": 0,
+    "sync_workers": [],
+    "unmanaged_route_drift": [],
+    "unmanaged_tombstones": 0,
+    "unmanaged_truncated": false,
+    "unmanaged_workers": [
+      {
+        "http": 200,
+        "version": null,
+        "worker": "personal-career-engine"
+      },
+      {
+        "http": 404,
+        "version": null,
+        "worker": "personal-career-watchdog"
+      },
+      {
+        "http": 401,
+        "version": null,
+        "worker": "personal-job-matcher"
+      },
+      {
+        "http": 200,
+        "version": null,
+        "worker": "qnfo-profile-loop"
+      },
+      {
+        "http": 200,
+        "version": null,
+        "worker": "qnfo-workers"
+      },
+      {
+        "http": 404,
+        "version": null,
+        "worker": "ultrastable-mail-in"
+      },
+      {
+        "http": 200,
+        "version": null,
+        "worker": "ultrastable-mail-relay"
+      },
+      {
+        "http": 404,
+        "version": null,
+        "worker": "ultrastable-site"
+      }
+    ]
+  },
+  "purge_error": "purge skipped: run classified 8 workers, table held 73; a partial report must not shrink the audit surface",
+  "rows": {
+    "personal-career-engine": {
+      "before": null,
+      "http": 200,
+      "live": null,
+      "match": 0,
+      "note": "UNMANAGED_OK",
+      "worker": "personal-career-engine"
+    },
+    "personal-career-watchdog": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "UNMANAGED_NO_HEALTH",
+      "worker": "personal-career-watchdog"
+    },
+    "personal-job-matcher": {
+      "before": null,
+      "http": 401,
+      "live": null,
+      "match": 0,
+      "note": "UNMANAGED_ERR",
+      "worker": "personal-job-matcher"
+    },
+    "qnfo-profile-loop": {
+      "before": null,
+      "http": 200,
+      "live": null,
+      "match": 0,
+      "note": "UNMANAGED_OK",
+      "worker": "qnfo-profile-loop"
+    },
+    "qnfo-workers": {
+      "before": null,
+      "http": 200,
+      "live": null,
+      "match": 0,
+      "note": "UNMANAGED_OK",
+      "worker": "qnfo-workers"
+    },
+    "ultrastable-mail-in": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "UNMANAGED_NO_HEALTH",
+      "worker": "ultrastable-mail-in"
+    },
+    "ultrastable-mail-relay": {
+      "before": null,
+      "http": 200,
+      "live": null,
+      "match": 0,
+      "note": "UNMANAGED_OK",
+      "worker": "ultrastable-mail-relay"
+    },
+    "ultrastable-site": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "UNMANAGED_NO_HEALTH",
+      "worker": "ultrastable-site"
+    }
+  },
+  "stale_rows_purged": null
+}
