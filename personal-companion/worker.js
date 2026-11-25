@@ -5855,7 +5855,7 @@ var __name22 = __name2;
 // line below (VERSION-LINE-NOTES-1, 2026-10-19). Its older trailing notes stay until length-lede.test.mjs stops pinning "LENGTH-LEDE-1" on that line.
 // VERSION-NOTES-MOVED-1: release notes live in the block below
 // W-META-1 (agent_issues 1002316/1002317/1002318): aiRunAttr records in_tok/out_tok/neurons per purpose.
-var VERSION = "1.62.7-codeagent";
+var VERSION = "1.62.8-codeagent";
 // 1.46.0 KERNEL-EVERYWHERE-1 (2026-11-06, owner directive "IMPLEMENT EVERYWHERE ACROSS ALL AI APPS AND SERVICES AND SURFACES", pillar personal): the travel planner CHAT_SYSTEM carries the DOCTRINE-1 kernel 8.2.1 reply recognitions (KERNEL-REPLY-4, scoped to the planner's one designed question): end on the plan or proposal, never a conditional offer or questionnaire; refusals and limits are dispositions with their reason; reversible steps are taken and reported in the same reply. prior 1.45.8-codeagent
 /* 1.44.14 COMPANION-LENGTH-HEADROOM-1 (issue 1000633, pillar personal; patch): repeated length failures alongside exhausted retry budgets expose too little headroom for model output variation. Length-only repairs now target 500 words below the unchanged ceiling while remaining inside each form's normal writer band. */
 /* 1.43.6 BP26-AI-ACT-ART50-1 and BP26-STRUCTURED-DATA-1 (2026-10-26, agent_issues 1000341 and 1000336, pillar core; patch): the visible AI-generated label of every reading.q08.org piece now has its machine-readable half. A piece page carries an Article JSON-LD block (headline, datePublished, url, an Organization as author, never an AI or invented persona, and creditText saying it was written by AI and that no human reviews pieces before they appear) and the index page a Blog block. Measured before: the reading pages carried the visible label and no JSON-LD at all. */
@@ -11470,6 +11470,7 @@ async function steward(env) {
 __name(steward, "steward");
 __name2(steward, "steward");
 __name22(steward, "steward");
+var PARKED_GENERATION = true; // PARKED-GENERATION-1: QNFO research and publishing is parked (DEV-FOCUS-1); set false only with a companion-focused reason
 var GenerationFlow = class extends WorkflowEntrypoint {
   static {
     __name(this, "GenerationFlow");
@@ -11481,6 +11482,9 @@ var GenerationFlow = class extends WorkflowEntrypoint {
     __name22(this, "GenerationFlow");
   }
   async run(event, step) {
+    // PARKED-GENERATION-1 (2026-11-25, DEV-FOCUS-1): QNFO essay generation is parked, but the Workflow schedule kept creating this instance five times a
+    // day and each one called the writer chain (about 390k neurons a day on 2026-11-24). A parked run ends here, before any model call.
+    if (PARKED_GENERATION) return { ok: false, skipped: "parked (DEV-FOCUS-1)" };
     var form = event && event.payload && event.payload.form || RHYTHM[amsWeekday(/* @__PURE__ */ new Date())];
     var out = await step.do("generate", { timeout: "300 seconds" }, async () => {
       return await generate(this.env, form, {});
@@ -11518,6 +11522,7 @@ var JobApplicationFlow = class extends WorkflowEntrypoint {
 // 6 hours while it waits and writes only pipeline_runs and pipeline_evidence in qnfo-audit.
 var ResearchRunFlow = class extends WorkflowEntrypoint {
   async run(event, step) {
+    if (PARKED_GENERATION) return { ok: false, skipped: "parked (DEV-FOCUS-1)" }; // PARKED-GENERATION-1: a waiting instance ends at its next wake
     return await PD.runResearchWorkflow(PE, this.env, event && event.payload || {}, step);
   }
 };
