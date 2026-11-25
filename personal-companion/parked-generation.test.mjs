@@ -13,3 +13,8 @@ test("a parked generation or research run returns before it calls a model", () =
   const r = src.slice(src.indexOf("var ResearchRunFlow = class"), src.indexOf("var ResearchRunFlow = class") + 400);
   assert.match(r, /if \(PARKED_GENERATION\) return/);
 });
+test("the deployed mirror carries the same guard (the canonical deploy reads the mirror)", () => {
+  const mirror = fs.readFileSync(new URL("./deployed-current.worker.js", import.meta.url), "utf8");
+  assert.match(mirror, /var PARKED_GENERATION = true;/);
+  assert.equal(mirror, src);
+});
