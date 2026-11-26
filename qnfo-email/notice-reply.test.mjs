@@ -8,7 +8,7 @@ import fs from "node:fs";
 import { stripWorkerDefaultExport } from "../scripts/worker-source-test.mjs";
 const src = stripWorkerDefaultExport(fs.readFileSync(new URL("./worker.js", import.meta.url), "utf8"));
 const lib = new Function(src.replace(/export default\{/, "const __handler={") +
-  "\nreturn {VERSION,heuristicSpam,noticeTyped,noticeIntent,noticeReply,enqueueHumanReply,opsFetch,isHandoffNoticeReply};")();
+  "\nreturn {VERSION,parseTierJson,heuristicSpam,noticeTyped,noticeIntent,noticeReply,enqueueHumanReply,opsFetch,isHandoffNoticeReply};")();
 const fail = [];
 const eq = (l, g, w) => { if (JSON.stringify(g) !== JSON.stringify(w)) fail.push(l + ": got " + JSON.stringify(g) + " want " + JSON.stringify(w)); };
 
@@ -49,7 +49,7 @@ eq("block: exactly one [done] mail to the owner", f.calls.send.map((m) => m.to +
 // NOTICE-REPLY-NEVER-VERBATIM-1: the owner's words are never mailed to the sender
 f = fake(q61);
 r = await lib.noticeReply(f.env, mail("Thanks, but not interested." + quoted), "rwnquni@outlook.com", { ok: true });
-eq("feedback: intent", r.intent, "feedback");
+eq("a decline note is understood, not echoed", r.intent, "redraft-no");
 eq("feedback: nothing reaches the sender", f.calls.send.filter((m) => m.to === "kavithakavi6162@gmail.com").length, 0);
 eq("feedback: queue row not marked sent", f.calls.sql.some(([q]) => /decision='sent'/.test(q)), false);
 
@@ -98,6 +98,27 @@ if (!/row\.kind === "owner" && isHandoffNoticeReply\(c\.subject\)\) return await
 const hits = []; const fakeOps = { fetch: async (u, i) => { hits.push(u); return new Response('{"ok":1}', { status: 202 }); } };
 const res = await lib.opsFetch("/v1/jobs", { method: "POST" }, { OPS: fakeOps });
 eq("opsFetch uses the OPS binding first", [res.status, hits], [202, ["https://ops.qnfo.org/v1/jobs"]]);
+
+
+// NOTICE-OPPORTUNITY-1: understood feedback rewrites the draft (one model call) and still sends nothing
+eq("intent: interested", lib.noticeIntent("Yes I am interested in this"), "redraft-yes");
+eq("intent: warmer", lib.noticeIntent("Make it warmer and shorter"), "redraft-tone");
+eq("intent: not interested is not yes", lib.noticeIntent("I'm not interested"), "redraft-no");
+{
+  const calls = { sql: [], send: [], ai: [] };
+  const mk = (q) => { const st = { bind: (...a) => { calls.sql.push([q, a]); return st; }, first: async () => (/FROM email_reply_queue/.test(q) ? q61 : /FROM emails/.test(q) ? { body_text: "Hi Rowan, we would love to talk about auditing autonomous agents.", subject: "x" } : null), all: async () => ({ results: [] }), run: async () => ({ meta: { last_row_id: 7 } }) }; return st; };
+  const env = { AUDIT_DB: { prepare: mk }, SEND_EMAIL: { send: async (m) => { calls.send.push(m); } }, AI: { run: async (model, a) => { calls.ai.push(model); return { response: "Hi,\n\nThank you for the thoughtful note about auditing autonomous agents. Would a short call next week suit you?\n\nRowan" }; } } };
+  const r2 = await lib.noticeReply(env, mail("Yes, I'm interested" + quoted), "rwnquni@outlook.com", { ok: true });
+  eq("redraft: intent", r2.intent, "redraft-yes");
+  eq("redraft: exactly one model call", calls.ai.length, 1);
+  eq("redraft: nothing reaches the sender", calls.send.filter((m) => m.to === "kavithakavi6162@gmail.com").length, 0);
+  eq("redraft: the new draft is stored for the tap", calls.sql.some(([q, a]) => /SET draft_text=\?2/.test(q) && /auditing autonomous agents/.test(a[1])), true);
+  eq("redraft: the owner is told where to tap", calls.send.some((m) => m.to === "rwnquni@outlook.com" && /Drafts waiting/.test(m.text)), true);
+}
+// a real person writing about the owner's field is an opportunity, not tier 1 by uncertainty
+eq("opportunity real overrides an uncertain tier 1", lib.parseTierJson('{"machine_written":false,"tier":1,"confident":false,"opportunity":"real","reason":"asks about audit work"}').tier, "3");
+eq("opportunity none keeps tier 1", lib.parseTierJson('{"machine_written":false,"tier":1,"confident":false,"opportunity":"none","reason":"mass pitch"}').tier, "1");
+eq("machine written stays tier 1 even if flagged real", lib.parseTierJson('{"machine_written":true,"tier":1,"confident":true,"opportunity":"real","reason":"x"}').tier, "1");
 
 console.log(JSON.stringify({ version: lib.VERSION, failures: fail }));
 if (fail.length) process.exit(1);
