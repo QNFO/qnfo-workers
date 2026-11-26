@@ -1,4 +1,4 @@
-var VERSION="2.16.0-codeagent";
+var VERSION="2.17.0-codeagent";
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -412,14 +412,9 @@ async function noticeReply(env, c, sender, ownerAuth) {
     try { await db.prepare("INSERT INTO agent_issues (title, description, priority, status) SELECT ?1, ?2, 'medium', 'open' WHERE NOT EXISTS (SELECT 1 FROM agent_issues WHERE title=?1 AND status='open')").bind("NOTICE-MISCLASSIFIED-1: " + to, "The owner said " + to + " was never a correspondent. Queue row " + q.id + " was blocked and the sender suppressed. code-task: repo=qnfo-workers path=qnfo-email/worker.js").run(); } catch (e) { console.error("notice-reply misclass log", e && e.message || e); }
     await say("[done] blocked " + to + ", nothing sent", "Understood: you have not corresponded with " + to + ". I blocked that address and its domain, marked it as a wrong guess on my side, and sent nothing to them.");
   } else if (intent === "send-draft") {
-    const text = String(q.draft_text || "").trim();
-    if (!text) { await say("[done] nothing sent", "There is no draft for this email, so nothing was sent."); out.skipped = "no draft"; return out; }
-    let supp = null; try { supp = await db.prepare("SELECT 1 AS v FROM email_suppression WHERE lower(email)=?1").bind(to).first(); } catch (_) { console.error(JSON.stringify({ evt: "email:noticeReply:caught", error: String((_ && _.message) || _) })); }
-    if (supp) { await say("[done] not sent", to + " is on the suppression list, so I did not send the draft."); out.skipped = "suppressed"; return out; }
-    await env.SEND_EMAIL.send({ to: to, from: "rowan.quni@qnfo.org", subject: "Re: " + decodeSubject(q.subject), text: text });
-    await db.prepare("UPDATE email_reply_queue SET decision='sent', sent_at=datetime('now'), attempt_count=attempt_count+1, updated_at=datetime('now') WHERE id=?1").bind(q.id).run();
-    await db.prepare("UPDATE emails SET status='replied' WHERE id=?1").bind(q.email_id).run();
-    await say("[done] draft sent to " + to, "Sent the draft you approved to " + to + ":\n\n" + truncate(text, 1500));
+    /* NOTICE-DRAFT-TAP-1 (2.17.0): nothing is sent by replying to an email. The draft opens in the mail app from the companion ("Drafts waiting"). */
+    await say("[done] nothing sent", "I do not send mail from an email reply any more. Open the companion and ask \"Drafts waiting\": the draft opens in your mail app and nothing leaves until you press send there.");
+    out.skipped = "send by email retired";
   } else if (intent === "feedback") {
     /* Everything else typed is a note to the system. It is recorded and never sent to the sender. */
     await db.prepare("UPDATE email_reply_queue SET skip_reason=COALESCE(skip_reason,'')||' | owner feedback (not sent): ' || substr(?2,1,300), updated_at=datetime('now') WHERE id=?1").bind(q.id, typed).run();
@@ -1739,7 +1734,7 @@ async function injDrainGuard(env, row) {
     try { await db.prepare("UPDATE email_reply_queue SET skip_reason=REPLACE(COALESCE(skip_reason,''),'cleared for auto-send','HELD by the outbound guard (BP26-PROMPT-INJECTION-1)')||' | '||?2, tier='3', updated_at=datetime('now') WHERE id=?1").bind(row.id, reason.slice(0, 160)).run(); } catch (err) { console.error(JSON.stringify({ evt: "email:injDrainGuard:hold:caught", error: String((err && err.message) || err) })); }
     await injViolation(db, { recipient: row.sender, sender: "rowan.quni@qnfo.org", subject: row.subject, violation: "DRAIN-GUARD-HELD", detail: reason });
     await injTrace(db, { surface: "email-drain", email_id: row.email_id, queue_id: row.id, goal: "send cleared reply", steps: ["drain-guard", "held"], decision: "held", detail: reason });
-    try { await notifyOwner(env, "[handoff] " + decodeSubject(String(row.subject || "held reply")), "A reply cleared for auto-send was held by the outbound guard: " + reason + " (queue id " + row.id + ").\nFrom: " + row.sender + "\n\nDraft:\n" + String(row.draft_text || "").slice(0, 1500) + "\n\nReply SEND to send exactly this draft, IGNORE to drop it, or SPAM to block the sender. Anything else you type is a note to me and is never sent."); } catch (err) { console.error(JSON.stringify({ evt: "email:injDrainGuard:notify:caught", error: String((err && err.message) || err) })); }
+    try { await notifyOwner(env, "[handoff] " + decodeSubject(String(row.subject || "held reply")), "A reply cleared for auto-send was held by the outbound guard: " + reason + " (queue id " + row.id + ").\nFrom: " + row.sender + "\n\nDraft:\n" + String(row.draft_text || "").slice(0, 1500) + "\n\nOpen the companion and ask \"Drafts waiting\" to send this draft with one tap in your mail app. Reply IGNORE to drop it or SPAM to block the sender. Anything else you type is a note to me and is never sent."); } catch (err) { console.error(JSON.stringify({ evt: "email:injDrainGuard:notify:caught", error: String((err && err.message) || err) })); }
     return { ok: false, reason: reason };
   };
   if (!to) return fail("recipient is not a single plain address");
@@ -1895,7 +1890,7 @@ async function tierReplyQueue(env) {
       if (tier === "2") { out.tier2++; continue; }
       out.tier3++;
       try {
-        await notifyOwner(env, "[handoff] " + mail.subject, "Tier 3 (owner sends): " + reason.slice(0, 300) + "\nFrom: " + q.sender + "\nqueue id: " + q.id + "\n\nDraft in your voice" + (keepOwn ? " (an earlier draft on this thread is kept; this one is the proposal)" : "") + ":\n\n" + d.text.slice(0, 3000) + "\n\n---\nReply SEND to send exactly this draft, IGNORE to drop it, or SPAM to block the sender. Anything else you type is a note to me and is never sent.\n\nInbound mail:\n" + body.slice(0, 1500));
+        await notifyOwner(env, "[handoff] " + mail.subject, "Tier 3 (owner sends): " + reason.slice(0, 300) + "\nFrom: " + q.sender + "\nqueue id: " + q.id + "\n\nDraft in your voice" + (keepOwn ? " (an earlier draft on this thread is kept; this one is the proposal)" : "") + ":\n\n" + d.text.slice(0, 3000) + "\n\n---\nOpen the companion and ask \"Drafts waiting\" to send this draft with one tap in your mail app. Reply IGNORE to drop it or SPAM to block the sender. Anything else you type is a note to me and is never sent.\n\nInbound mail:\n" + body.slice(0, 1500));
       } catch (e) { console.error("qnfo-email tier-3 notice", e && e.message || e); }
     } catch (e) {
       out.errors++;
