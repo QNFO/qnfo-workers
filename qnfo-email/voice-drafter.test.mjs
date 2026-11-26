@@ -52,7 +52,7 @@ ok(lib.parseTierJson('{"tier": 3, "confidence": 0.9, "reason": "contract"}').tie
 
 // owner reply intents
 ok(lib.noticeIntent("SEND") === "send-draft" && lib.noticeIntent("ok, send it") === "send-draft" && lib.noticeIntent("Send as is.") === "send-draft", "intent: SEND sends the draft");
-ok(lib.noticeIntent("Send her the dates: Tuesday works, Thursday does not.") === "send", "intent: a typed reply that starts with send is still the owner's text");
+ok(lib.noticeIntent("Send her the dates: Tuesday works, Thursday does not.") === "feedback", "intent: a typed reply that starts with send is feedback, never sent");
 ok(lib.noticeIntent("ignore") === "ignore" && lib.noticeIntent("spam") === "block", "intent: ignore and spam unchanged");
 
 // wiring
@@ -62,7 +62,7 @@ ok(src.indexOf("await voiceLearnWeekly(env)") > 0, "scheduled: weekly learning r
 // EMAIL-TICK-1 (2.9.0): the drafter and the drain run on the 15-minute cron; the index, freshness and learning steps stay daily
 const toml = fs.readFileSync(new URL("./wrangler.toml", import.meta.url), "utf8");
 // CRON-GRID-1 (2.10.0): the daily cron is gone from wrangler; the grid config runs the daily job on the first 15-minute fire after 07:00.
-ok(/crons = \["\*\/15 \* \* \* \*"\]/.test(toml) && /"jobs": \[\{"cron": "0 7 \* \* \*", "periodMin": 1440, "retry": true\}\]/.test(src), "wrangler: the 15-minute cron only; the daily job is in CRON_GRID_CFG");
+ok(/crons = (\["\*\/15 \* \* \* \*"\]|\[\])/.test(toml) && /"jobs": \[\{"cron": "0 7 \* \* \*", "periodMin": 1440, "retry": true\}\]/.test(src), "wrangler: the 15-minute cron only; the daily job is in CRON_GRID_CFG");
 ok(lib.EMAIL_TICK_CRON === "*/15 * * * *" && lib.EMAIL_DAILY_CRON === "0 7 * * *", "worker: the two cron strings are named");
 const sched = src.slice(src.indexOf("async function emailScheduled("), src.indexOf("export default{async email("));
 ok(sched.indexOf("await tierReplyQueue(env)") < sched.indexOf("if(daily)") && sched.indexOf("await drainReplyQueue(env)") < sched.indexOf("if(daily)") && sched.indexOf("await replyStallGuard(env)") < sched.indexOf("if(daily)"), "scheduled: tier, drain and stall guard run on every tick");

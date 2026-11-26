@@ -43,9 +43,9 @@ eq("no candidate, no match", await lib.noticeQueueBySubject(f.env.AUDIT_DB, "Re:
 // 3. noticeReply end to end without the quoted notice
 f = fake([row(1, "A question about turns")]);
 let r = await lib.noticeReply(f.env, { from: "rwnquni@outlook.com", subject: "Re: [handoff] A question about turns", bodyText: "Odd turns are handled in section two." }, "rwnquni@outlook.com", { ok: true });
-eq("unquoted reply: matched by subject", [r.matched_by, r.intent, r.queue_id], ["subject", "send", 1]);
-eq("unquoted reply: the typed text goes to the correspondent and a confirmation to the owner", f.calls.send.map((m) => [m.to, m.from]), [["person1@uni.example", "rowan.quni@qnfo.org"], ["rwnquni@outlook.com", "qnfo@qnfo.org"]]);
-eq("unquoted reply: only the typed text is sent", f.calls.send[0].text, "Odd turns are handled in section two.");
+eq("unquoted reply: matched by subject", [r.matched_by, r.intent, r.queue_id], ["subject", "feedback", 1]);
+eq("unquoted reply: nothing goes to the correspondent, only a confirmation to the owner", f.calls.send.map((m) => [m.to, m.from]), [["rwnquni@outlook.com", "qnfo@qnfo.org"]]);
+eq("unquoted reply: the typed text is not mailed", /Odd turns/.test(f.calls.send.map((m) => m.text).join("|")), false);
 f = fake([row(1, "A question about turns"), row(3, "A question about turns")]);
 r = await lib.noticeReply(f.env, { from: "rwnquni@outlook.com", subject: "Re: [handoff] A question about turns", bodyText: "Odd turns are handled in section two." }, "rwnquni@outlook.com", { ok: true });
 eq("ambiguous reply: nothing is sent to a correspondent", [r.skipped, f.calls.send.length, f.calls.send[0].to], ["no queue id", 1, "rwnquni@outlook.com"]);
