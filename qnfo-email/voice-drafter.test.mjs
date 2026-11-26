@@ -57,7 +57,7 @@ ok(lib.noticeIntent("ignore") === "ignore" && lib.noticeIntent("spam") === "bloc
 
 // wiring
 ok(src.indexOf('await tierReplyQueue(env)') > 0 && src.indexOf("await drainReplyQueue(env)") > src.indexOf("await tierReplyQueue(env)"), "scheduled: tiers before the drain");
-ok(src.indexOf("email_suppression WHERE lower(email)=?1\").bind(normalizeAddress(row.sender))") > 0, "drain: suppression checked before an auto-send");
+ok(/async function drainReplyQueue\(env\)\{[^\n]*\}return out\}/.test(src) && !/drainReplyQueue\(env\)\{[^\n]*SEND_EMAIL/.test(src), "drain: never sends (NOTICE-DRAFT-TAP-1)");
 ok(src.indexOf("await voiceLearnWeekly(env)") > 0, "scheduled: weekly learning runs");
 // EMAIL-TICK-1 (2.9.0): the drafter and the drain run on the 15-minute cron; the index, freshness and learning steps stay daily
 const toml = fs.readFileSync(new URL("./wrangler.toml", import.meta.url), "utf8");

@@ -63,7 +63,8 @@ eq("never corresponded: one [done] to the owner", f.calls.send.map((m) => m.to),
 
 f = fake({ ...q61, draft_text: "Thanks, not for us." });
 r = await lib.noticeReply(f.env, mail("SEND" + quoted), "rwnquni@outlook.com", { ok: true });
-eq("SEND sends exactly the shown draft", f.calls.send.filter((m) => m.to === "kavithakavi6162@gmail.com").map((m) => m.text), ["Thanks, not for us."]);
+eq("SEND by email no longer sends: the draft goes through the companion", f.calls.send.filter((m) => m.to === "kavithakavi6162@gmail.com").length, 0);
+eq("SEND by email: one [done] to the owner pointing at the companion", f.calls.send.map((m) => m.to + "|" + /Drafts waiting/.test(m.text)), ["rwnquni@outlook.com|true"]);
 f = fake(q61);
 r = await lib.noticeReply(f.env, mail("SEND" + quoted), "rwnquni@outlook.com", { ok: true });
 eq("SEND with no draft sends nothing", f.calls.send.filter((m) => m.to === "kavithakavi6162@gmail.com").length, 0);

@@ -21,7 +21,7 @@ ok(vm && (+vm[1] > 2 || (+vm[1] === 2 && (+vm[2] > 11 || (+vm[2] === 11 && +vm[3
 
 // ---------- the switch ----------
 const cfgEnv = (value, broken) => ({ AUDIT_DB: { prepare: (s) => ({ first: async () => { if (broken) throw new Error("D1 down"); return value === undefined ? null : { value }; } }) } });
-for (const v of ["on", "ON", " On ", "1", "true", "yes"]) ok(await lib.tier2AutosendOn(cfgEnv(v)) === true, "switch '" + v + "' is on");
+for (const v of ["on", "ON", " On ", "1", "true", "yes"]) ok(await lib.tier2AutosendOn(cfgEnv(v)) === false, "switch '" + v + "' is retired: auto-send stays off (NOTICE-DRAFT-TAP-1)");
 for (const v of [undefined, "off", "0", "false", "", "maybe", "no", null]) ok(await lib.tier2AutosendOn(cfgEnv(v)) === false, "switch " + JSON.stringify(v) + " is off");
 { const e = console.error; console.error = () => {}; ok(await lib.tier2AutosendOn(cfgEnv("on", true)) === false, "an unreadable config is off (fail closed)"); console.error = e; }
 
@@ -101,7 +101,7 @@ const row = (db, id) => db.prepare("SELECT * FROM email_reply_queue WHERE id = ?
   const id = w.add("friend@example.org", "Re: paper", "Thanks Rowan, where can I find the PDF of the phase 2 paper?", false);
   const out = await lib.tierReplyQueue(w.env);
   const r = row(w.db, id);
-  ok(out.tier2 === 1 && out.tier2_held === 0 && r.tier === "2" && /cleared for auto-send/.test(r.skip_reason) && w.sent.length === 0, "switch on: tier 2 keeps the auto-send marker and the owner is not mailed (his own setting)", { out, r });
+  ok(out.tier2 === 0 && out.tier2_held === 1 && r.tier === "3" && !/cleared for auto-send/.test(r.skip_reason), "switch on: still held for the owner tap, nothing is cleared to auto-send (NOTICE-DRAFT-TAP-1)", { out, r });
 }
 { // switch off explicitly
   const w = world({ switchValue: "off" });
