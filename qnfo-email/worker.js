@@ -1,4 +1,4 @@
-var VERSION="2.18.0-codeagent";
+var VERSION="2.19.0-codeagent";
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -381,6 +381,9 @@ function noticeIntent(t) {
      A bare SEND approves only the exact draft the notice showed; nothing else ever leaves for the sender. */
   if (s.length <= 24 && /^(ok[,.]?\s*)?(yes[,.]?\s*)?send(\s+(it|this|that|as[- ]is|the draft|draft))?[.!]?$/i.test(s)) return "send-draft";
   if (/\b(never|not|haven'?t|hadn'?t|didn'?t|don'?t|do not)\b[^.\n]{0,40}\b(corresponded|correspond|written|talked|spoken|met|know|heard|contact)/i.test(s) || /\b(don'?t|do not) know (this|them|him|her|who)\b/i.test(s) || /\bnot a (real )?person\b/i.test(s)) return "unknown-sender";
+  if (/\b(not interested|no thanks|no thank you|pass on|decline|turn (?:it|them) down|politely (?:say )?no)\b/i.test(s)) return "redraft-no";
+  if (/\b(interested|sounds good|sounds great|let'?s (?:do|talk|chat|meet)|go ahead|pursue|say yes|accept)\b/i.test(s) && !/\bnot\b/i.test(s)) return "redraft-yes";
+  if (/\b(warmer|friendlier|nicer|softer|shorter|longer|more formal|less formal|too (?:formal|long|short|cold|blunt|stiff)|rewrite|redo|try again|polish|more detail)\b/i.test(s)) return "redraft-tone";
   return "feedback";
 }
 async function noticeReply(env, c, sender, ownerAuth) {
@@ -415,6 +418,23 @@ async function noticeReply(env, c, sender, ownerAuth) {
     /* NOTICE-DRAFT-TAP-1 (2.17.0): nothing is sent by replying to an email. The draft opens in the mail app from the companion ("Drafts waiting"). */
     await say("[done] nothing sent", "I do not send mail from an email reply any more. Open the companion and ask \"Drafts waiting\": the draft opens in your mail app and nothing leaves until you press send there.");
     out.skipped = "send by email retired";
+  } else if (intent === "redraft-yes" || intent === "redraft-no" || intent === "redraft-tone") {
+    /* NOTICE-OPPORTUNITY-1: the owner's note changes the draft, never the sender's inbox. One model call, no editor; the new draft waits for the tap. */
+    const instr = intent === "redraft-yes" ? "Rowan is interested. Accept warmly and propose one easy next step." : intent === "redraft-no" ? "Rowan is not interested. Decline graciously, briefly and kindly, with no door slammed." : "Rowan's note about the draft: " + typed.slice(0, 250);
+    let ok = false, newText = "";
+    try {
+      const em = await db.prepare("SELECT body_text, subject FROM emails WHERE id=?1").bind(q.email_id).first();
+      const v = await voiceDoc(env);
+      const d = await draftReply(env, v.text, { sender: q.sender, subject: decodeSubject(q.subject), body: String((em && em.body_text) || ""), history: [] }, { instruction: instr });
+      if (d && d.text && d.text.length > 20 && !(d.leak && d.leak.length) && !d.never_hits.length) { newText = d.text; ok = true; }
+    } catch (e) { console.error("notice-reply redraft", e && e.message || e); }
+    if (ok) {
+      await db.prepare("UPDATE email_reply_queue SET draft_text=?2, draft_proposed=?2, decision='escalate', tier='3', skip_reason=COALESCE(skip_reason,'')||' | redrafted on owner note (NOTICE-OPPORTUNITY-1)', updated_at=datetime('now') WHERE id=?1").bind(q.id, newText.slice(0, 8000)).run();
+      await say("[done] new draft ready, nothing sent", "I rewrote the draft for " + to + " from your note. Open the companion and ask \"Drafts waiting\" to see it and send it with one tap in your mail app. Nothing was sent.");
+    } else {
+      await say("[done] could not rewrite, nothing sent", "I could not produce a better draft just now and sent nothing to " + to + ". Your note is logged.");
+    }
+    await db.prepare("UPDATE email_reply_queue SET skip_reason=COALESCE(skip_reason,'')||' | owner note (not sent): ' || substr(?2,1,200) WHERE id=?1").bind(q.id, typed).run();
   } else if (intent === "feedback") {
     /* Everything else typed is a note to the system. It is recorded and never sent to the sender. */
     await db.prepare("UPDATE email_reply_queue SET skip_reason=COALESCE(skip_reason,'')||' | owner feedback (not sent): ' || substr(?2,1,300), updated_at=datetime('now') WHERE id=?1").bind(q.id, typed).run();
@@ -1759,6 +1779,9 @@ function tierByRules(subject, body, from) {
   return null;
 }
 /* The classifier's JSON, read tolerantly; anything unreadable is tier 1 (the owner's rule for uncertain cases). */
+/* NOTICE-OPPORTUNITY-1 (2.19.0): the owner wants replies that are read in context, judged for opportunity, warm, and free of his own bias; he approves with one tap and composes nothing. */
+var OPP_PROFILE = "Rowan Brad Quni-Gudzinas is a systems researcher studying autonomous AI systems: how they behave, fail and can be audited and governed (adjacent to AI safety). He directs and evaluates systems. He is open to: research collaboration, AI audit and governance work, evaluation roles, speaking, and introductions. He is not looking for: journal or conference fees, marketing or SEO services, generic software-engineering recruiting.";
+var OPP_DRAFT_RULES = "Reply as a warm, gracious, curious colleague. Open with something specific the sender wrote, not a generic thanks. Be generous and assume good faith; never defensive, curt, sarcastic or negative, even when declining. If the message could be a real opportunity (" + OPP_PROFILE + "), steer toward a concrete next step: one clear, easy question or a short suggestion, never a commitment to a date, price or position. Do not mention that you are an assistant, do not mention filters or classification. Keep it to two to four short paragraphs, sign off with: Rowan.";
 function parseTierJson(text) {
   const s = String(text || "");
   const m = s.match(/\{[\s\S]*\}/);
@@ -1768,9 +1791,11 @@ function parseTierJson(text) {
   const mw = j.machine_written === true || /^(yes|true)$/i.test(String(j.machine_written || ""));
   let tier = String(j.tier == null ? "" : j.tier).replace(/[^123]/g, "").slice(0, 1);
   const confident = j.confident === true || Number(j.confidence) >= 0.7;
+  const opp = /^(real|possible)$/i.test(String(j.opportunity || "")) ? String(j.opportunity).toLowerCase() : "none";
   if (mw) tier = "1";
+  if (opp === "real" && !mw && tier === "1") { tier = "3"; return { tier: tier, reason: "opportunity: " + String(j.reason || "").slice(0, 200), machine_written: mw, confident: true, opportunity: opp }; }
   if (!tier || !confident) return { tier: "1", reason: (j.reason ? String(j.reason).slice(0, 200) + "; " : "") + (mw ? "machine-written" : "uncertain: tier 1 by rule"), machine_written: mw, confident: confident };
-  return { tier: tier, reason: String(j.reason || "").slice(0, 200), machine_written: mw, confident: true };
+  return { tier: tier, reason: (opp !== "none" ? "opportunity (" + opp + "): " : "") + String(j.reason || "").slice(0, 200), machine_written: mw, confident: true, opportunity: opp };
 }
 async function voiceAi(env, model, system, user, maxTokens) {
   env = __aiAttrEnv(env, "qnfo-email", "AI", "AUDIT_DB"); // AI-METER-COVER-2: every voice-draft call lands in ai_call_counters under qnfo-email
@@ -1808,7 +1833,7 @@ async function classifyTier(env, voice, mail) {
   const rule = tierByRules(mail.subject, mail.body, mail.sender);
   if (rule) return Object.assign({ by: "rule" }, rule);
   try {
-    const sys = "You classify one inbound email for Rowan Brad Quni-Gudzinas against his email voice document. Answer with one JSON object and nothing else: {\"machine_written\": true|false, \"tier\": 1|2|3, \"confident\": true|false, \"reason\": \"<one sentence>\"}. Tier rules:\n" + voiceSection(voice, "Tiers") + "\nMachine-written inbound (always tier 1):\n" + voiceSection(voice, "Machine-written inbound") + "\nWhen unsure, tier 1 and confident false.\n\n" + INJ_RULES;
+    const sys = "You classify one inbound email for Rowan Brad Quni-Gudzinas against his email voice document. Answer with one JSON object and nothing else: {\"machine_written\": true|false, \"tier\": 1|2|3, \"confident\": true|false, \"opportunity\": \"none|possible|real\", \"reason\": \"<one sentence>\"}. Judge opportunity for this owner: " + OPP_PROFILE + " A real person writing about work like that is possible or real; a mass pitch is none. Tier rules:\n" + voiceSection(voice, "Tiers") + "\nMachine-written inbound (always tier 1):\n" + voiceSection(voice, "Machine-written inbound") + "\nWhen unsure, tier 1 and confident false.\n\n" + INJ_RULES;
     const usr = "From: " + mail.sender + "\nSubject: " + mail.subject + "\nKnown correspondent: " + (mail.known ? "yes" : "no") + "\n\n" + injWrap(String(mail.body || "").slice(0, 4000));
     const txt = await voiceAi(env, VOICE_EDITOR_MODEL, sys, usr, 300);
     return Object.assign({ by: "model" }, parseTierJson(txt));
@@ -1816,13 +1841,17 @@ async function classifyTier(env, voice, mail) {
     return { by: "model-error", tier: "1", reason: "classifier unavailable (" + String(e && e.message || e).slice(0, 80) + "): tier 1 by rule" };
   }
 }
-async function draftReply(env, voice, mail) {
+async function draftReply(env, voice, mail, extra) {
   const never = voiceNeverList(voice);
-  const sys1 = "You write a reply email as Rowan Brad Quni-Gudzinas, in his voice. Use only facts in the inbound mail and this voice document; invent nothing (no dates, numbers, names, papers, links). Output the reply body only, no subject, no quoting.\n\n" + INJ_RULES + "\n\n" + voice;
-  const usr = "Inbound mail from " + mail.sender + "\nSubject: " + mail.subject + "\n\n" + injWrap(String(mail.body || "").slice(0, 6000));
+  const note = extra && extra.instruction ? "\n\nOwner instruction for this rewrite (follow it, keep the rest): " + String(extra.instruction).slice(0, 300) : "";
+  const hist = mail.history && mail.history.length ? "\n\nEarlier mail with this sender (context only): " + mail.history.slice(0, 3).join("; ") : "\n\nNo earlier mail with this sender.";
+  const sys1 = "You write a reply email as Rowan Brad Quni-Gudzinas, in his voice. Use only facts in the inbound mail and this voice document; invent nothing (no dates, numbers, names, papers, links). Output the reply body only, no subject, no quoting.\n\n" + OPP_DRAFT_RULES + "\n\n" + INJ_RULES + "\n\n" + voice;
+  const usr = "Inbound mail from " + mail.sender + "\nSubject: " + mail.subject + hist + note + "\n\n" + injWrap(String(mail.body || "").slice(0, 6000));
   let draft = (await voiceAi(env, VOICE_WRITER_MODEL, sys1, usr, 700)).trim();
-  const sys2 = "You edit a reply drafted in Rowan Brad Quni-Gudzinas's voice. Remove every phrase on the Never list, every sentence that states a fact the inbound mail does not contain, and anything that reads as written by a machine. Keep the meaning and the shape (answer first, at most one question, sign-off Rowan). Output the edited reply body only.\n\n" + INJ_RULES + "\n\nNever list:\n- " + never.join("\n- ") + "\n\nShape:\n" + voiceSection(voice, "Shape");
-  try { const ed = (await voiceAi(env, VOICE_EDITOR_MODEL, sys2, "Inbound mail:\n" + injWrap(String(mail.body || "").slice(0, 4000)) + "\n\nDraft:\n" + draft, 700)).trim(); if (ed && ed.length > 20) draft = ed; } catch (e) { console.error("qnfo-email voice editor", e && e.message || e); }
+  const sys2 = "You edit a reply drafted in Rowan Brad Quni-Gudzinas's voice. Remove every phrase on the Never list, every sentence that states a fact the inbound mail does not contain, and anything that reads as written by a machine. Keep the meaning, the warmth and the shape (answer first, at most one question, sign-off Rowan). Output the edited reply body only.\n\n" + INJ_RULES + "\n\nNever list:\n- " + never.join("\n- ") + "\n\nShape:\n" + voiceSection(voice, "Shape");
+  /* One model call by default; the editor runs only when the first draft broke a rule (lean LLM use). */
+  const needsEdit = neverListHits(draft, never).length > 0 || ungroundedClaims(draft, [mail.subject, mail.body, voice, "Rowan Brad Quni-Gudzinas", "qnfo.org", mail.sender]).length > 0;
+  if (needsEdit) { try { const ed = (await voiceAi(env, VOICE_EDITOR_MODEL, sys2, "Inbound mail:\n" + injWrap(String(mail.body || "").slice(0, 4000)) + "\n\nDraft:\n" + draft, 700)).trim(); if (ed && ed.length > 20) draft = ed; } catch (e) { console.error("qnfo-email voice editor", e && e.message || e); } }
   const san = injSanitizeOutbound(draft, { recipient: injSingleAddr(mail.sender), ground: [mail.subject, mail.body, voice].join("\n") });
   draft = san.text;
   const leak = injLeaksPrompt(draft, [voice, sys1, sys2]);
@@ -1849,7 +1878,9 @@ async function tierReplyQueue(env) {
       const rawForScan = hasText ? String(q.body_text) : String(q.body_html || "");
       const scan = injScan(subjectPlain + "\n" + rawForScan);
       const body = hasText ? injSanitizeInbound(q.body_text, 6000) : injHtmlToText(q.body_html).slice(0, 6000);
-      const mail = { sender: q.sender, subject: injSanitizeInbound(subjectPlain, 300), body: body, known: !!q.known };
+      let history = [];
+      try { const h = await env.AUDIT_DB.prepare("SELECT subject, substr(received_at,1,10) AS d FROM emails WHERE sender = ?1 AND id <> ?2 ORDER BY id DESC LIMIT 3").bind(q.sender, q.email_id).all(); history = ((h && h.results) || []).map(function (r) { return injSanitizeInbound(decodeSubject(String(r.subject || "")), 80) + " (" + r.d + ")"; }); } catch (e) { history = []; }
+      const mail = { sender: q.sender, subject: injSanitizeInbound(subjectPlain, 300), body: body, known: !!q.known, history: history };
       // A machine-written solicitation that also carries injection markers stays tier 1 by the rules (no model, no notice): the owner is not mailed about every spam that tries it.
       const ruleTier1 = (function () { const r = tierByRules(mail.subject, mail.body, mail.sender); return !!(r && r.tier === "1"); })();
       if (scan.score >= 3 && !ruleTier1) {
