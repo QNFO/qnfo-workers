@@ -25,7 +25,10 @@ eq("multi-paragraph answer kept", lib.noticeTyped("Hello,\n\nThanks, Friday work
 eq("intent: the owner's real reply blocks", lib.noticeIntent("Is this really a human email? ... junk-journal spam"), "block");
 eq("intent: SPAM", lib.noticeIntent("SPAM"), "block");
 eq("intent: ignore", lib.noticeIntent("Ignore this one"), "ignore");
-eq("intent: answer", lib.noticeIntent("Thanks, Friday at 7 works for me."), "send");
+eq("intent: typed answer is feedback, never a send", lib.noticeIntent("Thanks, Friday at 7 works for me."), "feedback");
+eq("intent: not corresponded", lib.noticeIntent("I haven't corresponded with this person before"), "unknown-sender");
+eq("intent: bare SEND approves the draft", lib.noticeIntent("SEND"), "send-draft");
+eq("intent: send plus words is feedback", lib.noticeIntent("send them a polite no"), "feedback");
 eq("intent: empty", lib.noticeIntent("  "), "none");
 
 // 3. noticeReply against a fake D1
@@ -43,11 +46,27 @@ eq("block: filter row for the sender", f.calls.sql.some(([q, a]) => /INSERT INTO
 eq("block: email marked spam", f.calls.sql.some(([q, a]) => /UPDATE emails SET status='spam'/.test(q) && a[0] === 966), true);
 eq("block: exactly one [done] mail to the owner", f.calls.send.map((m) => m.to + "|" + /^\[done\] blocked/.test(m.subject)), ["rwnquni@outlook.com|true"]);
 
+// NOTICE-REPLY-NEVER-VERBATIM-1: the owner's words are never mailed to the sender
 f = fake(q61);
 r = await lib.noticeReply(f.env, mail("Thanks, but not interested." + quoted), "rwnquni@outlook.com", { ok: true });
-eq("send: intent", r.intent, "send");
-eq("send: reply goes to the sender as the owner alias", f.calls.send.filter((m) => m.to === "kavithakavi6162@gmail.com").map((m) => m.from + "|" + m.text), ["rowan.quni@qnfo.org|Thanks, but not interested."]);
-eq("send: queue row marked sent", f.calls.sql.some(([q]) => /decision='sent'/.test(q)), true);
+eq("feedback: intent", r.intent, "feedback");
+eq("feedback: nothing reaches the sender", f.calls.send.filter((m) => m.to === "kavithakavi6162@gmail.com").length, 0);
+eq("feedback: queue row not marked sent", f.calls.sql.some(([q]) => /decision='sent'/.test(q)), false);
+
+f = fake(q61);
+r = await lib.noticeReply(f.env, mail("I haven't corresponded with this person before" + quoted), "rwnquni@outlook.com", { ok: true });
+eq("never corresponded: intent", r.intent, "unknown-sender");
+eq("never corresponded: nothing reaches the sender", f.calls.send.filter((m) => m.to === "kavithakavi6162@gmail.com").length, 0);
+eq("never corresponded: sender blocked", f.calls.sql.some(([q, a]) => /INSERT INTO email_filters/.test(q) && a[0] === "kavithakavi6162@gmail.com"), true);
+eq("never corresponded: misclassification logged", f.calls.sql.some(([q]) => /NOTICE-REPLY-NEVER-VERBATIM-1/.test(q)) && f.calls.sql.some(([q, a]) => /INSERT INTO agent_issues/.test(q) && /NOTICE-MISCLASSIFIED-1/.test(a[0])), true);
+eq("never corresponded: one [done] to the owner", f.calls.send.map((m) => m.to), ["rwnquni@outlook.com"]);
+
+f = fake({ ...q61, draft_text: "Thanks, not for us." });
+r = await lib.noticeReply(f.env, mail("SEND" + quoted), "rwnquni@outlook.com", { ok: true });
+eq("SEND sends exactly the shown draft", f.calls.send.filter((m) => m.to === "kavithakavi6162@gmail.com").map((m) => m.text), ["Thanks, not for us."]);
+f = fake(q61);
+r = await lib.noticeReply(f.env, mail("SEND" + quoted), "rwnquni@outlook.com", { ok: true });
+eq("SEND with no draft sends nothing", f.calls.send.filter((m) => m.to === "kavithakavi6162@gmail.com").length, 0);
 
 f = fake(q61);
 r = await lib.noticeReply(f.env, mail("SPAM" + quoted), "rwnquni@outlook.com", { ok: false, why: "dmarc=fail" });
@@ -67,6 +86,11 @@ const id = await lib.enqueueHumanReply(cold.env, { emailId: 966, from: "kavithak
 eq("cold sender: queue row id", id, 9);
 eq("cold sender: inserted as escalate", cold.calls.sql.some(([q]) => /INSERT INTO email_reply_queue/.test(q) && /'escalate'/.test(q) && /NOTICE-REPLY-COLD-HUMAN-1/.test(q)), true);
 eq("cold sender: one owner notice", cold.calls.send.length, 1);
+eq("cold notice does not claim a past correspondence", /corresponded/.test(cold.calls.send[0].text), false);
+eq("cold notice never says a reply is sent to them", /sent to them as you/.test(cold.calls.send[0].text), false);
+const relay = (() => { const calls = { sql: [], send: [] }; const mk = (q) => { const s = { bind: (...a) => { calls.sql.push([q, a]); return s; }, first: async () => null, run: async () => ({ meta: { last_row_id: 9 } }) }; return s; }; return { calls, env: { AUDIT_DB: { prepare: mk }, SEND_EMAIL: { send: async (m) => { calls.send.push(m); } } } }; })();
+const rid = await lib.enqueueHumanReply(relay.env, { emailId: 970, from: "Daichi Toyoda <x@rsend.orbion.bond>", to: "qnfo@qnfo.org", subject: "quick idea", bodyText: "hello", bodyHtml: "", receivedAt: "2026-11-26T09:00:00Z" });
+eq("bulk relay sender: no queue row, no notice", [rid, relay.calls.sql.length, relay.calls.send.length], [null, 0, 0]);
 
 // 5. the hook and the binding
 if (!/row\.kind === "owner" && isHandoffNoticeReply\(c\.subject\)\) return await noticeReply\(/.test(src)) fail.push("processCommand does not route handoff replies to noticeReply");
